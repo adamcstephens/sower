@@ -1,6 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "github:adamcstephens/nixpkgs?ref=buildmix/packagejson";
+    nixpkgs.url = "github:nixos/nixpkgs?ref=nixpkgs-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
     nix-filter.url = "github:numtide/nix-filter";
   };
