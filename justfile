@@ -2,6 +2,7 @@ default:
     just -l
 
 dev:
+    mix ecto.setup
     iex -S mix run --no-halt
 
 nix-lock:
