@@ -26,6 +26,7 @@
 
               pkgs.just
               pkgs.mix2nix
+              pkgs.process-compose
             ]
             ++ (lib.optionals pkgs.stdenv.isLinux [pkgs.inotify-tools]);
         };
