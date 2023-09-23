@@ -77,3 +77,6 @@ config :phoenix, :plug_init_mode, :runtime
 
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
+
+# This will make it so that your plug init/1 functions are not compiled for a quicker development experience
+config :unplug, :init_mode, :runtime
