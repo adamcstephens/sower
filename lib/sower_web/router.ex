@@ -15,6 +15,13 @@ defmodule SowerWeb.Router do
   end
 
   pipeline :scm do
+    plug(Plug.Parsers,
+      parsers: [:urlencoded, :multipart, :json],
+      pass: ["*/*"],
+      json_decoder: Phoenix.json_library(),
+      body_reader: {SowerWeb.Plugs.ScmWebhookVerify, :read_and_store_body, []}
+    )
+
     plug(SowerWeb.Plugs.ScmWebhookVerify)
   end
 
@@ -22,6 +29,11 @@ defmodule SowerWeb.Router do
     pipe_through(:browser)
 
     get("/", PageController, :home)
+
+    live("/hooks", HookLive.Index, :index)
+    live("/hooks/new", HookLive.Index, :new)
+    live("/hooks/:id/edit", HookLive.Index, :edit)
+    live("/hooks/:id", HookLive.Show, :show)
   end
 
   scope "/scm" do

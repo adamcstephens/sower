@@ -10,15 +10,19 @@ defmodule SowerWeb.Plugs.ScmWebhookVerify do
     [received_signature] = get_req_header(conn, "x-forgejo-signature")
     Logger.info("x-forgejo-signature: " <> received_signature)
 
-    {:ok, payload, _conn} = read_body(conn)
-
-    if verify_signature(payload, scm_secret, received_signature) do
+    if verify_signature(conn.assigns[:raw_body], scm_secret, received_signature) do
       Logger.info("Verified signature")
     else
       conn |> send_resp(403, "Forbidden") |> halt()
     end
 
     conn
+  end
+
+  def read_and_store_body(conn, opts) do
+    {:ok, body, conn} = read_body(conn, opts)
+    conn = update_in(conn.assigns[:raw_body], &[body | &1 || []])
+    {:ok, body, conn}
   end
 
   defp verify_signature(payload, shared_secret, received_signature) do

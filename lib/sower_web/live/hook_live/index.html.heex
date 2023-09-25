@@ -1,0 +1,26 @@
+<.header>
+  Listing Hooks
+  <:actions>
+  </:actions>
+</.header>
+
+<.table
+  id="hooks"
+  rows={@streams.hooks}
+  row_click={fn {_id, hook} -> JS.navigate(~p"/hooks/#{hook}") end}
+>
+  <:col :let={{_id, hook}} label="Request"><%= hook.id %></:col>
+  <:action :let={{_id, hook}}>
+    <div class="sr-only">
+      <.link navigate={~p"/hooks/#{hook}"}>Show</.link>
+    </div>
+  </:action>
+  <:action :let={{id, hook}}>
+    <.link
+      phx-click={JS.push("delete", value: %{id: hook.id}) |> hide("##{id}")}
+      data-confirm="Are you sure?"
+    >
+      Delete
+    </.link>
+  </:action>
+</.table>
