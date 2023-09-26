@@ -216,6 +216,32 @@ let
       beamDeps = [ decimal ];
     };
 
+    makeup = buildMix rec {
+      name = "makeup";
+      version = "1.1.0";
+
+      src = fetchHex {
+        pkg = "${name}";
+        version = "${version}";
+        sha256 = "19jpprryixi452jwhws3bbks6ki3wni9kgzah3srg22a3x8fsi8a";
+      };
+
+      beamDeps = [ nimble_parsec ];
+    };
+
+    makeup_json = buildMix rec {
+      name = "makeup_json";
+      version = "0.1.0";
+
+      src = fetchHex {
+        pkg = "${name}";
+        version = "${version}";
+        sha256 = "1jp7shag13qviq5kjdrzfwdrwiw54fngwry1axvjz7nai2zyhybv";
+      };
+
+      beamDeps = [ makeup nimble_parsec ];
+    };
+
     mime = buildMix rec {
       name = "mime";
       version = "2.0.5";
@@ -250,6 +276,19 @@ let
         pkg = "${name}";
         version = "${version}";
         sha256 = "1f7ih1rnkvph0daf4lsv4rrp6dpccksjd7rh5bhnq0r143dsh4px";
+      };
+
+      beamDeps = [];
+    };
+
+    nimble_parsec = buildMix rec {
+      name = "nimble_parsec";
+      version = "1.3.1";
+
+      src = fetchHex {
+        pkg = "${name}";
+        version = "${version}";
+        sha256 = "0rxiw6jzz77v0j460wmzcprhdgn71g1hrz3mcc6djn7bnb0f70i6";
       };
 
       beamDeps = [];
@@ -309,12 +348,12 @@ let
 
     phoenix_live_dashboard = buildMix rec {
       name = "phoenix_live_dashboard";
-      version = "0.8.1";
+      version = "0.8.2";
 
       src = fetchHex {
         pkg = "${name}";
         version = "${version}";
-        sha256 = "1sdb61gmq2bn0rk73l9jgiz49lwikbab71hzfxpr3qac4xagk80w";
+        sha256 = "147ghzwardph1zl19gyqsf3lhrgr363jkq3p38q3sn2z3d29i9b7";
       };
 
       beamDeps = [ ecto mime phoenix_live_view telemetry_metrics ];
@@ -500,6 +539,19 @@ let
       };
 
       beamDeps = [ telemetry ];
+    };
+
+    unplug = buildMix rec {
+      name = "unplug";
+      version = "1.0.0";
+
+      src = fetchHex {
+        pkg = "${name}";
+        version = "${version}";
+        sha256 = "0fkwkg6qm2lsvil8xdba9mmcgi5iw41w42dqhm72shdab1bshwfi";
+      };
+
+      beamDeps = [ plug ];
     };
 
     websock = buildMix rec {

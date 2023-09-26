@@ -1,12 +1,18 @@
 <.header>
   Hook <%= @hook.id %>
   <:subtitle>This is a hook record from your database.</:subtitle>
-  <:actions>
-  </:actions>
+  <:actions></:actions>
 </.header>
 
 <.list>
-  <:item title="Request"><pre style="overflow: auto;"><code class="json"><%= Phoenix.json_library().encode!(@hook.request) %></code></pre></:item>
+  <:item title="Request">
+    <!--<pre><code id="request" class="language-json" phx-hook="CodeViewer">-->
+    <pre><code class="highlight"><%= @hook.request
+    |> Phoenix.json_library().encode!(pretty: true)
+    |> Makeup.Lexers.JsonLexer.lex()
+    |> Makeup.Formatters.HTML.HTMLFormatter.format_inner_as_binary([])
+    |> Phoenix.HTML.raw() %></code></pre>
+  </:item>
 </.list>
 
 <.back navigate={~p"/hooks"}>Back to hooks</.back>
