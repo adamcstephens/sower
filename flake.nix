@@ -24,6 +24,7 @@
               pkgs.beam.packages.erlangR25.elixir_1_15
               pkgs.beam.packages.erlangR25.elixir-ls
 
+              pkgs.beekeeper-studio
               pkgs.just
               pkgs.mix2nix
               pkgs.process-compose
