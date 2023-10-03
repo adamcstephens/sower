@@ -34,6 +34,7 @@ defmodule Sower.MixProject do
     [
       {:ecto_sql, "~> 3.10"},
       {:esbuild, "~> 0.7", runtime: Mix.env() == :dev},
+      {:ex_git, "~> 0.11.0"},
       {:finch, "~> 0.13"},
       {:floki, ">= 0.30.0", only: :test},
       {:gettext, "~> 0.20"},

@@ -125,6 +125,19 @@ let
       beamDeps = [ castore ];
     };
 
+    ex_git = buildMix rec {
+      name = "ex_git";
+      version = "0.11.0";
+
+      src = fetchHex {
+        pkg = "${name}";
+        version = "${version}";
+        sha256 = "1lri3xvslkz8m2f65jfkfmqf9b5jjr5r5r865hwlll5bm316s4ck";
+      };
+
+      beamDeps = [ rustler ];
+    };
+
     expo = buildMix rec {
       name = "expo";
       version = "0.4.1";
@@ -476,6 +489,19 @@ let
       beamDeps = [];
     };
 
+    rustler = buildMix rec {
+      name = "rustler";
+      version = "0.27.0";
+
+      src = fetchHex {
+        pkg = "${name}";
+        version = "${version}";
+        sha256 = "14kfk1bz9v21p98jkzc90zj1i26lx7r8z29h0dq6zag7qspcrxfp";
+      };
+
+      beamDeps = [ jason toml ];
+    };
+
     swoosh = buildMix rec {
       name = "swoosh";
       version = "1.11.6";
@@ -539,6 +565,19 @@ let
       };
 
       beamDeps = [ telemetry ];
+    };
+
+    toml = buildMix rec {
+      name = "toml";
+      version = "0.7.0";
+
+      src = fetchHex {
+        pkg = "${name}";
+        version = "${version}";
+        sha256 = "0w7sl84292h5i8x32ywspqi0la7anj4rn30b23yxxhbq4im29406";
+      };
+
+      beamDeps = [];
     };
 
     unplug = buildMix rec {

@@ -24,6 +24,13 @@
               pkgs.beam.packages.erlangR25.elixir_1_15
               pkgs.beam.packages.erlangR25.elixir-ls
 
+              pkgs.cargo
+              pkgs.openssl.dev
+              pkgs.pkg-config
+              pkgs.rustc
+              pkgs.rust-analyzer
+              pkgs.rustfmt
+
               pkgs.beekeeper-studio
               pkgs.just
               pkgs.mix2nix
