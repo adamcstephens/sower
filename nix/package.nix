@@ -8,7 +8,7 @@
   pkg-config,
   rustPlatform,
 }:
-beamPackages.mixRelease rec {
+beamPackages.mixRelease {
   pname = "sower";
   version = "0.0.1-dev";
 

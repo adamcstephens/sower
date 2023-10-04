@@ -34,6 +34,8 @@ defmodule SowerWeb.Router do
     live("/hooks/new", HookLive.Index, :new)
     live("/hooks/:id/edit", HookLive.Index, :edit)
     live("/hooks/:id", HookLive.Show, :show)
+
+    get("/auth/callback", AuthController, :callback)
   end
 
   scope "/scm" do
