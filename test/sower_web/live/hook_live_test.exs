@@ -2,7 +2,7 @@ defmodule SowerWeb.HookLiveTest do
   use SowerWeb.ConnCase
 
   import Phoenix.LiveViewTest
-  import Sower.SCMFixtures
+  import Sower.ForgeFixtures
 
   @create_attrs %{request: %{}}
   @update_attrs %{request: %{}}

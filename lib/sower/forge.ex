@@ -1,4 +1,4 @@
-defmodule Sower.SCM do
+defmodule Sower.Forge do
   @moduledoc """
   The SCM context.
   """
@@ -6,7 +6,7 @@ defmodule Sower.SCM do
   import Ecto.Query, warn: false
   alias Sower.Repo
 
-  alias Sower.SCM.Hook
+  alias Sower.Forge.Hook
 
   @doc """
   Returns the list of hooks.

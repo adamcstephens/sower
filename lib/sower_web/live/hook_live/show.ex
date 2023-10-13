@@ -1,7 +1,7 @@
 defmodule SowerWeb.HookLive.Show do
   use SowerWeb, :live_view
 
-  alias Sower.SCM
+  alias Sower.Forge
 
   @impl true
   def mount(_params, _session, socket) do

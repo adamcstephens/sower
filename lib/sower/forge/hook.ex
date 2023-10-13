@@ -1,4 +1,4 @@
-defmodule Sower.SCM.Hook do
+defmodule Sower.Forge.Hook do
   use Ecto.Schema
   import Ecto.Changeset
 

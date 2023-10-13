@@ -1,8 +1,8 @@
 defmodule SowerWeb.HookLive.Index do
   use SowerWeb, :live_view
 
-  alias Sower.SCM
-  alias Sower.SCM.Hook
+  alias Sower.Forge
+  alias Sower.Forge.Hook
 
   @impl true
   def mount(_params, _session, socket) do

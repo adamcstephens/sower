@@ -1,12 +1,12 @@
-defmodule Sower.SCMTest do
+defmodule Sower.ForgeTest do
   use Sower.DataCase
 
-  alias Sower.SCM
+  alias Sower.Forge
 
   describe "hooks" do
-    alias Sower.SCM.Hook
+    alias Sower.Forge.Hook
 
-    import Sower.SCMFixtures
+    import Sower.ForgeFixtures
 
     @invalid_attrs %{request: nil}
 

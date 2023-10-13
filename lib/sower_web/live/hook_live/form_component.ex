@@ -1,7 +1,7 @@
 defmodule SowerWeb.HookLive.FormComponent do
   use SowerWeb, :live_component
 
-  alias Sower.SCM
+  alias Sower.Forge
 
   @impl true
   def render(assigns) do

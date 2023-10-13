@@ -1,7 +1,7 @@
-defmodule Sower.SCMFixtures do
+defmodule Sower.ForgeFixtures do
   @moduledoc """
   This module defines test helpers for creating
-  entities via the `Sower.SCM` context.
+  entities via the `Sower.Forge` context.
   """
 
   @doc """
@@ -13,7 +13,7 @@ defmodule Sower.SCMFixtures do
       |> Enum.into(%{
         request: %{}
       })
-      |> Sower.SCM.create_hook()
+      |> Sower.Forge.create_hook()
 
     hook
   end
