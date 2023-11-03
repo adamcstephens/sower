@@ -20,7 +20,7 @@ if System.get_env("PHX_SERVER") do
   config :sower, SowerWeb.Endpoint, server: true
 end
 
-config :sower, scm_secret: "five"
+config :sower, scm_secret: "five", working_dir: System.get_env("SOWER_WORKDIR")
 
 if config_env() == :prod do
   database_url =

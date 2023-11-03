@@ -59,7 +59,8 @@ config :sower, SowerWeb.Endpoint,
       ~r"priv/static/.*(js|css|png|jpeg|jpg|gif|svg)$",
       ~r"priv/gettext/.*(po)$",
       ~r"lib/sower_web/(controllers|live|components)/.*(ex|heex)$",
-      ~r"lib/forge/.*ex$"
+      ~r"lib/forge/.*ex$",
+      ~r"lib/git/.*ex$"
     ]
   ]
 

@@ -1,12 +1,21 @@
 default:
     just -l
 
-dev:
+db:
+    process-compose up -t=false
+
+dev: && start
+    mix deps.get
+    mix deps.compile
     mix ecto.setup
-    iex -S mix phx.server
+
+
 
 nix-lock:
     mix2nix mix.lock > nix/mix.nix
+
+start:
+    iex -S mix phx.server
 
 update: && nix-lock
     mix deps.update --all
