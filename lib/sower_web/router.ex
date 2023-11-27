@@ -35,6 +35,11 @@ defmodule SowerWeb.Router do
     live("/hooks/:id/edit", HookLive.Index, :edit)
     live("/hooks/:id", HookLive.Show, :show)
 
+    live("/repos", RepositoryLive.Index, :index)
+    live("/repos/new", RepositoryLive.Index, :new)
+    live("/repos/:id/edit", RepositoryLive.Index, :edit)
+    live("/repos/:id", RepositoryLive.Show, :show)
+
     get("/auth/callback", AuthController, :callback)
   end
 

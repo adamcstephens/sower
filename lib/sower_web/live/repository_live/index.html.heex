@@ -1,0 +1,41 @@
+<.header>
+  Listing Repositories
+  <:actions>
+    <.link patch={~p"/repos/new"}>
+      <.button>New Repository</.button>
+    </.link>
+  </:actions>
+</.header>
+
+<.table
+  id="repositories"
+  rows={@streams.repositories}
+  row_click={fn {_id, repository} -> JS.navigate(~p"/repos/#{repository}") end}
+>
+  <:col :let={{_id, repository}} label="Url"><%= repository.url %></:col>
+  <:action :let={{_id, repository}}>
+    <div class="sr-only">
+      <.link navigate={~p"/repos/#{repository}"}>Show</.link>
+    </div>
+    <.link patch={~p"/repos/#{repository}/edit"}>Edit</.link>
+  </:action>
+  <:action :let={{id, repository}}>
+    <.link
+      phx-click={JS.push("delete", value: %{id: repository.id}) |> hide("##{id}")}
+      data-confirm="Are you sure?"
+    >
+      Delete
+    </.link>
+  </:action>
+</.table>
+
+<.modal :if={@live_action in [:new, :edit]} id="repository-modal" show on_cancel={JS.patch(~p"/repos")}>
+  <.live_component
+    module={SowerWeb.RepositoryLive.FormComponent}
+    id={@repository.id || :new}
+    title={@page_title}
+    action={@live_action}
+    repository={@repository}
+    patch={~p"/repos"}
+  />
+</.modal>

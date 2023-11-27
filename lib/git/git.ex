@@ -1,6 +1,20 @@
 defmodule Git.Git do
   def clone(repo) do
-    ExGit.clone(repo, prep_workdir(repo))
+    dest_dir = prep_workdir(repo)
+
+    case ExGit.clone(repo, dest_dir) do
+      {:error, :exists} -> {:ok, "already cloned"}
+      o -> o
+    end
+  end
+
+  def clone!(repo) do
+    dest_dir = prep_workdir(repo)
+
+    case ExGit.clone(repo, dest_dir) do
+      {:error, e} -> raise "#{dest_dir}: #{e}"
+      o -> o
+    end
   end
 
   def checkout(repo, branch) do
