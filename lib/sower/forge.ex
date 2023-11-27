@@ -1,6 +1,6 @@
 defmodule Sower.Forge do
   @moduledoc """
-  The SCM context.
+  The Forge context.
   """
 
   import Ecto.Query, warn: false

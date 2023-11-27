@@ -30,7 +30,7 @@ defmodule SowerWeb.HookLive.FormComponent do
 
   @impl true
   def update(%{hook: hook} = assigns, socket) do
-    changeset = SCM.change_hook(hook)
+    changeset = Forge.change_hook(hook)
 
     {:ok,
      socket
@@ -42,7 +42,7 @@ defmodule SowerWeb.HookLive.FormComponent do
   def handle_event("validate", %{"hook" => hook_params}, socket) do
     changeset =
       socket.assigns.hook
-      |> SCM.change_hook(hook_params)
+      |> Forge.change_hook(hook_params)
       |> Map.put(:action, :validate)
 
     {:noreply, assign_form(socket, changeset)}
@@ -53,7 +53,7 @@ defmodule SowerWeb.HookLive.FormComponent do
   end
 
   defp save_hook(socket, :edit, hook_params) do
-    case SCM.update_hook(socket.assigns.hook, hook_params) do
+    case Forge.update_hook(socket.assigns.hook, hook_params) do
       {:ok, hook} ->
         notify_parent({:saved, hook})
 
@@ -68,7 +68,7 @@ defmodule SowerWeb.HookLive.FormComponent do
   end
 
   defp save_hook(socket, :new, hook_params) do
-    case SCM.create_hook(hook_params) do
+    case Forge.create_hook(hook_params) do
       {:ok, hook} ->
         notify_parent({:saved, hook})
 

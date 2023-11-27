@@ -13,7 +13,7 @@ defmodule SowerWeb.HookLive.Show do
     {:noreply,
      socket
      |> assign(:page_title, page_title(socket.assigns.live_action))
-     |> assign(:hook, SCM.get_hook!(id))}
+     |> assign(:hook, Forge.get_hook!(id))}
   end
 
   defp page_title(:show), do: "Show Hook"

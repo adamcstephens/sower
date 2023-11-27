@@ -6,7 +6,7 @@ defmodule SowerWeb.HookLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, stream(socket, :hooks, SCM.list_hooks())}
+    {:ok, stream(socket, :hooks, Forge.list_hooks())}
   end
 
   @impl true
@@ -17,7 +17,7 @@ defmodule SowerWeb.HookLive.Index do
   defp apply_action(socket, :edit, %{"id" => id}) do
     socket
     |> assign(:page_title, "Edit Hook")
-    |> assign(:hook, SCM.get_hook!(id))
+    |> assign(:hook, Forge.get_hook!(id))
   end
 
   defp apply_action(socket, :new, _params) do
@@ -39,8 +39,8 @@ defmodule SowerWeb.HookLive.Index do
 
   @impl true
   def handle_event("delete", %{"id" => id}, socket) do
-    hook = SCM.get_hook!(id)
-    {:ok, _} = SCM.delete_hook(hook)
+    hook = Forge.get_hook!(id)
+    {:ok, _} = Forge.delete_hook(hook)
 
     {:noreply, stream_delete(socket, :hooks, hook)}
   end
