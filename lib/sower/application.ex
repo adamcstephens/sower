@@ -16,6 +16,7 @@ defmodule Sower.Application do
       {Phoenix.PubSub, name: Sower.PubSub},
       # Start Finch
       {Finch, name: Sower.Finch},
+      Git.Git,
       # Start the Endpoint (http/https)
       SowerWeb.Endpoint
       # Start a worker by calling: Sower.Worker.start_link(arg)

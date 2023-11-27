@@ -1,0 +1,14 @@
+diff --git a/c_src/Makefile b/c_src/Makefile
+index 86e1f02..986cf6c 100644
+--- a/c_src/Makefile
++++ b/c_src/Makefile
+@@ -74,9 +74,4 @@ $(SO_OUTPUT): $(OBJECTS)
+ 	$(CXX) $(OBJECTS) $(LDFLAGS) -o $(SO_OUTPUT)
+ 
+ %.o: %.cpp $(wildcard *.hpp)
+-	@if [ -z $(findstring $(HAVE_FORMAT),1) ]; then \
+-	  echo "==> Updating fmt submodule"; \
+-		[ -z "$(shell git config --global safe.directory)" ] && git config --global --add safe.directory '*' || true; \
+-		git submodule update --init --recursive; \
+-	fi
+ 	$(COMPILE_CPP) $(OUTPUT_OPTION) $<

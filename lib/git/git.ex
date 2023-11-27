@@ -1,6 +1,14 @@
 defmodule Git.Git do
+  use Task
+
+  require Logger
+
+  def start_link(arg) do
+    Task.start_link(__MODULE__, :startup, [arg])
+  end
+
   def clone(repo) do
-    dest_dir = prep_workdir(repo)
+    dest_dir = working_dir(repo)
 
     case ExGit.clone(repo, dest_dir) do
       {:error, :exists} -> {:ok, "already cloned"}
@@ -9,7 +17,7 @@ defmodule Git.Git do
   end
 
   def clone!(repo) do
-    dest_dir = prep_workdir(repo)
+    dest_dir = working_dir(repo)
 
     case ExGit.clone(repo, dest_dir) do
       {:error, e} -> raise "#{dest_dir}: #{e}"
@@ -18,14 +26,19 @@ defmodule Git.Git do
   end
 
   def checkout(repo, branch) do
-    ExGit.checkout_branch(prep_workdir(repo), branch)
+    repo = :git.open(working_dir(repo))
+    :git.checkout(repo, branch)
   end
 
-  defp prep_workdir(repo) do
+  def startup(_) do
+    working_dir = Application.fetch_env!(:sower, :working_dir)
+    Logger.info("Initializing git working dir: #{working_dir}")
+    File.mkdir_p(working_dir)
+  end
+
+  def working_dir(repo) do
     working_dir = Application.get_env(:sower, :working_dir)
     repo_stub = repo |> URI.parse() |> Map.get(:path) |> Path.basename()
-
-    File.mkdir_p!(working_dir)
 
     Path.join(working_dir, repo_stub)
   end

@@ -9,8 +9,6 @@ dev: && start
     mix deps.compile
     mix ecto.setup
 
-
-
 nix-lock:
     mix2nix mix.lock > nix/mix.nix
 

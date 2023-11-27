@@ -7,6 +7,9 @@
   openssl,
   pkg-config,
   rustPlatform,
+  fmt,
+  git,
+  libgit2,
 }:
 beamPackages.mixRelease {
   pname = "sower";
@@ -28,6 +31,15 @@ beamPackages.mixRelease {
   mixNixDeps = import ./mix.nix {
     inherit lib beamPackages;
     overrides = _: prev: {
+      egit = prev.egit.override (old: {
+        nativeBuildInputs = [
+          fmt
+          git
+          libgit2
+        ];
+        patches = [./egit-skip-submodule.patch];
+      });
+
       ex_git = let
         name = "ex_git";
         version = "0.11.0";

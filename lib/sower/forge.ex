@@ -199,6 +199,11 @@ defmodule Sower.Forge do
   end
 
   def clone_repository(%Repository{} = repository) do
-    Map.get(repository, :url) |> Git.Git.clone()
+    repository.url |> Git.Git.clone()
+  end
+
+  def mix_repository(%Repository{} = repository) do
+    Git.Git.clone(repository.url)
+    Git.Git.checkout(repository.url, "main")
   end
 end

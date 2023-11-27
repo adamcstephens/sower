@@ -21,6 +21,7 @@
         devShells.default = pkgs.mkShell {
           packages =
             [
+              pkgs.beam.packages.erlangR25.erlang
               pkgs.beam.packages.erlangR25.elixir_1_15
               pkgs.beam.packages.erlangR25.elixir-ls
 
@@ -37,6 +38,11 @@
               pkgs.process-compose
             ]
             ++ (lib.optionals pkgs.stdenv.isLinux [pkgs.inotify-tools]);
+
+          nativeBuildInputs = [
+            pkgs.fmt
+            pkgs.libgit2
+          ];
         };
 
         packages = rec {

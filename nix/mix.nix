@@ -112,6 +112,19 @@ let
       beamDeps = [ db_connection ecto postgrex telemetry ];
     };
 
+    egit = buildRebar3 rec {
+      name = "egit";
+      version = "0.1.9";
+
+      src = fetchHex {
+        pkg = "egit";
+        version = "${version}";
+        sha256 = "ec6e0d2e9a5c51314c53689038551430f3639b2249484562f3e81b24f82f039e";
+      };
+
+      beamDeps = [];
+    };
+
     esbuild = buildMix rec {
       name = "esbuild";
       version = "0.8.1";

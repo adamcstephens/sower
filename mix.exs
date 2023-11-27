@@ -33,6 +33,7 @@ defmodule Sower.MixProject do
   defp deps do
     [
       {:ecto_sql, "~> 3.10"},
+      {:egit, "~> 0.1"},
       {:esbuild, "~> 0.7", runtime: Mix.env() == :dev},
       {:ex_git, "~> 0.11.0"},
       {:finch, "~> 0.13"},
