@@ -9,20 +9,17 @@ defmodule Git.Git do
 
   def clone(repo) do
     dest_dir = working_dir(repo)
-
-    case ExGit.clone(repo, dest_dir) do
-      {:error, :exists} -> {:ok, "already cloned"}
-      o -> o
+    try do
+      :git.clone(repo, dest_dir)
+    rescue
+      e -> {:error, e.original}
     end
   end
 
   def clone!(repo) do
     dest_dir = working_dir(repo)
 
-    case ExGit.clone(repo, dest_dir) do
-      {:error, e} -> raise "#{dest_dir}: #{e}"
-      o -> o
-    end
+    :git.clone(repo, dest_dir)
   end
 
   def checkout(repo, branch) do
@@ -38,7 +35,7 @@ defmodule Git.Git do
 
   def working_dir(repo) do
     working_dir = Application.get_env(:sower, :working_dir)
-    repo_stub = repo |> URI.parse() |> Map.get(:path) |> Path.basename()
+    repo_stub = repo |> URI.parse() |> Map.get(:path) |> Path.basename() |> String.trim(".git")
 
     Path.join(working_dir, repo_stub)
   end

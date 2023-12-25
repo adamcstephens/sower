@@ -4,9 +4,6 @@
   nix-filter,
   esbuild,
   tailwindcss,
-  openssl,
-  pkg-config,
-  rustPlatform,
   fmt,
   git,
   libgit2,
@@ -31,61 +28,18 @@ beamPackages.mixRelease {
   mixNixDeps = import ./mix.nix {
     inherit lib beamPackages;
     overrides = _: prev: {
-      egit = prev.egit.override (old: {
-        nativeBuildInputs = [
-          fmt
-          git
-          libgit2
-        ];
-        patches = [./egit-skip-submodule.patch];
-      });
-
-      ex_git = let
-        name = "ex_git";
-        version = "0.11.0";
-
-        src = beamPackages.fetchHex {
-          pkg = "${name}";
-          version = "${version}";
-          sha256 = "1lri3xvslkz8m2f65jfkfmqf9b5jjr5r5r865hwlll5bm316s4ck";
-        };
-
-        exgitRustler = rustPlatform.buildRustPackage {
-          pname = "ex_git_rustler";
-          inherit version;
-
+      egit = prev.egit.override (
+        old: {
           nativeBuildInputs = [
-            pkg-config
+            fmt
+            git
+            libgit2
           ];
-
-          buildInputs = [
-            openssl
-          ];
-
-          src = "${src}/native/exgit";
-          cargoHash = "sha256-H2dNNrrz+fc4h7YwLVkyumHTpb5Z3koZ2RwRY2OU3EY=";
-        };
-      in
-        beamPackages.buildMix {
-          inherit name version src;
-
-          beamDeps = [prev.rustler];
-
-          appConfigPath = ../config;
-
-          postBuild = ''
-            rm priv/native/libexgit.so
-            ln -s ${exgitRustler}/lib/libexgit.so priv/native/libexgit.so
-          '';
-        };
+          patches = [ ./egit-skip-submodule.patch ];
+        }
+      );
     };
   };
-
-  # mixFodDeps = beamPackages.fetchMixDeps {
-  #   pname = "mix-deps-${pname}";
-  #   inherit src version;
-  #   hash = "sha256-PmFAyEA8JigeTgApVrjvc8Ig+aTNGEgpIMFVFX3GEOc=";
-  # };
 
   postBuild = ''
     # prevent mix from trying to download binaries

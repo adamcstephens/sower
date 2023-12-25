@@ -17,3 +17,4 @@ start:
 
 update: && nix-lock
     mix deps.update --all
+    mix deps.clean --unused --unlock
