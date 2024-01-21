@@ -18,6 +18,26 @@
         "type": "github"
       }
     },
+    "next-ls": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1705548397,
+        "narHash": "sha256-eHDY8pDuU6t9ksIYG7zldTxaWQ13bGV+xmJvh0KKpp0=",
+        "owner": "elixir-tools",
+        "repo": "next-ls",
+        "rev": "8cf06cb26f49465c7d25d142e7eeeef12131d23e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "elixir-tools",
+        "repo": "next-ls",
+        "type": "github"
+      }
+    },
     "nix-filter": {
       "locked": {
         "lastModified": 1701697642,
@@ -70,6 +90,7 @@
     "root": {
       "inputs": {
         "flake-parts": "flake-parts",
+        "next-ls": "next-ls",
         "nix-filter": "nix-filter",
         "nixpkgs": "nixpkgs"
       }

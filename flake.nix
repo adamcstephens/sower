@@ -1,6 +1,8 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable-small";
+    next-ls.url = "github:elixir-tools/next-ls";
+    next-ls.inputs.nixpkgs.follows = "nixpkgs";
     flake-parts.url = "github:hercules-ci/flake-parts";
     nix-filter.url = "github:numtide/nix-filter";
   };
@@ -20,12 +22,19 @@
           self',
           ...
         }:
+        let
+          erlang = pkgs.beam.interpreters.erlangR26;
+          beam = pkgs.beam.packagesWith erlang;
+        in
         {
           devShells.default = pkgs.mkShell {
             packages = [
-              pkgs.beam.packages.erlangR26.erlang
-              pkgs.beam.packages.erlangR26.elixir_1_16
-              # pkgs.beam.packages.erlangR26.elixir-ls
+              beam.elixir_1_16
+              # beam.elixir-ls
+              (inputs'.next-ls.packages.default.override {
+                beamPackages = beam;
+                elixir = beam.elixir_1_16;
+              })
 
               pkgs.cargo
               pkgs.openssl.dev
