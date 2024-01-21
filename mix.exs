@@ -32,7 +32,7 @@ defmodule Sower.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
-      {:ecto_sql, "~> 3.10"},
+      {:ecto_sqlite3, "~> 0.13"},
       {:egit, "~> 0.1"},
       {:esbuild, "~> 0.7", runtime: Mix.env() == :dev},
       {:finch, "~> 0.13"},

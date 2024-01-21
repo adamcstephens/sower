@@ -1,9 +1,9 @@
 default:
     just -l
 
-db:
-    process-compose up -t=false
-
+# db:
+#     process-compose up -t=false
+#
 dev: && start
     mix deps.get
     mix deps.compile
