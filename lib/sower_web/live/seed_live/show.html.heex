@@ -1,0 +1,14 @@
+<.header>
+  seed <%= @seed.id %>
+  <:actions>
+    <.link patch={~p"/seeds/#{@seed}/edit"} phx-click={JS.push_focus()}>
+      <.button>Edit seed</.button>
+    </.link>
+  </:actions>
+</.header>
+
+<.list>
+  <:item title="name"><%= @seed.name %></:item>
+</.list>
+
+<.back navigate={~p"/seeds"}>Back to seeds</.back>

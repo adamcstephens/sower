@@ -30,7 +30,7 @@
           devShells.default = pkgs.mkShell {
             packages = [
               beam.elixir_1_16
-              # beam.elixir-ls
+              beam.elixir-ls
               (inputs'.next-ls.packages.default.override {
                 beamPackages = beam;
                 elixir = beam.elixir_1_16;
@@ -47,6 +47,7 @@
               pkgs.just
               pkgs.mix2nix
               pkgs.process-compose
+              pkgs.sqlite
             ] ++ (lib.optionals pkgs.stdenv.isLinux [ pkgs.inotify-tools ]);
 
             nativeBuildInputs = [

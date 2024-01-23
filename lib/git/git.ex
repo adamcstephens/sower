@@ -9,6 +9,7 @@ defmodule Git.Git do
 
   def clone(repo) do
     dest_dir = working_dir(repo)
+
     try do
       :git.clone(repo, dest_dir)
     rescue

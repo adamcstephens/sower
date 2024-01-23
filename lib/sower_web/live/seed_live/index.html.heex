@@ -1,0 +1,17 @@
+<.header>
+  Listing Seeds
+  <:subtitle>A seed is an installable configuration that can become a plant.</:subtitle>
+</.header>
+
+<.table
+  id="seeds"
+  rows={@streams.seeds}
+  row_click={fn {_id, seed} -> JS.navigate(~p"/seeds/#{seed}") end}
+>
+  <:col :let={{_id, seed}} label="name"><%= seed.name %></:col>
+  <:action :let={{_id, seed}}>
+    <div class="sr-only">
+      <.link navigate={~p"/seeds/#{seed}"}>Show</.link>
+    </div>
+  </:action>
+</.table>

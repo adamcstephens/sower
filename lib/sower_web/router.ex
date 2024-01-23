@@ -1,5 +1,6 @@
 defmodule SowerWeb.Router do
   use SowerWeb, :router
+  use Plug.ErrorHandler
 
   pipeline :browser do
     plug(:accepts, ["html"])
@@ -40,18 +41,21 @@ defmodule SowerWeb.Router do
     live("/repos/:id/edit", RepositoryLive.Index, :edit)
     live("/repos/:id", RepositoryLive.Show, :show)
 
+    live("/seeds", SeedLive.Index, :index)
+    live("/seeds/:id", SeedLive.Show, :show)
+
     get("/auth/callback", AuthController, :callback)
+  end
+
+  scope "/api" do
+    pipe_through(:api)
+    post("/seeds", SowerWeb.SeedController, :new)
   end
 
   scope "/scm" do
     pipe_through([:scm, :api])
     post("/", SowerWeb.WebhookController, :handler)
   end
-
-  # Other scopes may use custom stacks.
-  # scope "/api", SowerWeb do
-  #   pipe_through :api
-  # end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
   if Application.compile_env(:sower, :dev_routes) do
@@ -68,5 +72,10 @@ defmodule SowerWeb.Router do
       live_dashboard("/dashboard", metrics: SowerWeb.Telemetry)
       forward("/mailbox", Plug.Swoosh.MailboxPreview)
     end
+  end
+
+  # and implement the callback handle_errors/2
+  defp handle_errors(conn, _) do
+    conn |> json(%{error: "unknown"}) |> halt()
   end
 end
