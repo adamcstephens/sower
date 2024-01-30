@@ -10,6 +10,6 @@ defmodule Sower.Repo.Migrations.AddSeedsTable do
       timestamps()
     end
 
-    create unique_index(:seeds, [:name, :out_path], name: :seeds_name_outpath_index)
+    create unique_index(:seeds, [:name, :type, :out_path], name: :seeds_unique_indexy)
   end
 end

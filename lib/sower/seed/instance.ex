@@ -16,7 +16,6 @@ defmodule Sower.Seed.Instance do
   def changeset(instance, attrs) do
     instance
     |> cast(attrs, [:name, :type, :out_path])
-    |> unique_constraint(:name, name: "seeds_name_out_path_index")
     |> validate_required([:name, :type, :out_path])
     |> validate_inclusion(:type, ["nixos", "home-manager", "darwin"])
     |> validate_format(:out_path, ~r/\/nix\/store\/[a-z0-9]{32}-[a-z0-9]+/,

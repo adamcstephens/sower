@@ -49,6 +49,8 @@ defmodule SowerWeb.Router do
 
   scope "/api" do
     pipe_through(:api)
+    get("/seeds", SowerWeb.SeedController, :list)
+    get("/seeds/:id", SowerWeb.SeedController, :show)
     post("/seeds", SowerWeb.SeedController, :new)
   end
 

@@ -10,10 +10,13 @@ defmodule Sower.Seed do
     Repo.all(Sower.Seed.Instance)
   end
 
-  def create_seed(attrs \\ %{}) do
+  def create_or_insert_seed(attrs \\ %{}) do
     %Sower.Seed.Instance{}
     |> Sower.Seed.Instance.changeset(attrs)
-    |> Repo.insert()
+    |> Repo.insert(
+      on_conflict: {:replace, [:updated_at]},
+      conflict_target: [:name, :type, :out_path]
+    )
   end
 
   def get_seed!(id), do: Repo.get!(Sower.Seed.Instance, id)
