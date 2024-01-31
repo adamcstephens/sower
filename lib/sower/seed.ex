@@ -1,7 +1,3 @@
-# write a phoenix context for a model named seed with the following fields:
-# name: string
-# type: string
-
 defmodule Sower.Seed do
   import Ecto.Query, warn: false
   alias Sower.Repo

@@ -77,7 +77,7 @@ defmodule SowerWeb.Router do
   end
 
   # and implement the callback handle_errors/2
-  defp handle_errors(conn, _) do
-    conn |> json(%{error: "unknown"}) |> halt()
-  end
+  # defp handle_errors(conn, _) do
+  #   conn |> json(%{error: "unknown"}) |> halt()
+  # end
 end

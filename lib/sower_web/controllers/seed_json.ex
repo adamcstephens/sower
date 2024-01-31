@@ -2,20 +2,18 @@ defmodule SowerWeb.SeedJSON do
   @doc """
   Renders a list of seeds.
   """
-  def index(%{seeds: seeds}) do
-    %{data: for(seed <- seeds, do: data(seed))}
+  def list(%{seeds: seeds}) do
+    for(seed <- seeds, do: seed)
   end
 
   @doc """
   Renders a single seed.
   """
   def show(%{seed: seed}) do
-    %{data: data(seed)}
+    seed
   end
 
-  defp data(%Sower.Seed.Instance{} = seed) do
-    %{
-      id: seed.id
-    }
+  def notfound() do
+    %{error: "seed not found"}
   end
 end

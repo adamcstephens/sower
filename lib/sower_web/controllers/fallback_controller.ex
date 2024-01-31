@@ -11,7 +11,7 @@ defmodule SowerWeb.FallbackController do
     conn
     |> put_status(:not_found)
     |> put_view(html: SowerWeb.ErrorHTML, json: SowerWeb.ErrorJSON)
-    |> render(:"404")
+    |> render(:notfound)
   end
 
   def call(conn, {:error, %Ecto.Changeset{} = changeset}) do
