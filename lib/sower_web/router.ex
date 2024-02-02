@@ -44,6 +44,13 @@ defmodule SowerWeb.Router do
     live("/seeds", SeedLive.Index, :index)
     live("/seeds/:id", SeedLive.Show, :show)
 
+    live "/trees", TreeLive.Index, :index
+    live "/trees/new", TreeLive.Index, :new
+    live "/trees/:id/edit", TreeLive.Index, :edit
+
+    live "/trees/:id", TreeLive.Show, :show
+    live "/trees/:id/show/edit", TreeLive.Show, :edit
+
     get("/auth/callback", AuthController, :callback)
   end
 
