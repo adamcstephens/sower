@@ -4,7 +4,6 @@
     next-ls.url = "github:elixir-tools/next-ls";
     next-ls.inputs.nixpkgs.follows = "nixpkgs";
     flake-parts.url = "github:hercules-ci/flake-parts";
-    nix-filter.url = "github:numtide/nix-filter";
   };
 
   outputs =
@@ -59,7 +58,7 @@
           packages = rec {
             default = sower;
 
-            sower = pkgs.callPackage ./nix/package.nix { nix-filter = inputs.nix-filter.lib; };
+            sower = pkgs.callPackage ./nix/package.nix { beamPackages = beam; };
           };
         };
     };

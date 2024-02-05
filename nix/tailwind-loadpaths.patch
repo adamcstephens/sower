@@ -1,0 +1,13 @@
+diff --git a/lib/mix/tasks/tailwind.ex b/lib/mix/tasks/tailwind.ex
+index 146275c..378455c 100644
+--- a/lib/mix/tasks/tailwind.ex
++++ b/lib/mix/tasks/tailwind.ex
+@@ -46,7 +46,7 @@ defmodule Mix.Tasks.Tailwind do
+     if opts[:runtime_config] do
+       Mix.Task.run("app.config")
+     else
+-      Mix.Task.run("loadpaths")
++      Mix.Task.run("loadpaths", ["--no-deps-check", "--no-elixir-version-check"])
+       Application.ensure_all_started(:tailwind)
+     end
+ 

@@ -1,28 +1,22 @@
 {
   lib,
   beamPackages,
-  nix-filter,
   esbuild,
   tailwindcss,
   fmt,
   git,
   libgit2,
+  sqlite,
 }:
 beamPackages.mixRelease {
   pname = "sower";
   version = "0.0.1-dev";
 
-  src = nix-filter {
-    root = ../.;
-    include = [
-      "assets"
-      "config"
-      "lib"
-      "mix.exs"
-      "mix.lock"
-      "priv"
-      "test"
-    ];
+  src = lib.fileset.toSource {
+    root = ./..;
+    fileset = lib.fileset.union (lib.fileset.gitTracked ./..) (
+      lib.fileset.fileFilter (file: !file.hasExt "nix") ./..
+    );
   };
 
   mixNixDeps = import ./mix.nix {
@@ -38,6 +32,17 @@ beamPackages.mixRelease {
           patches = [ ./egit-skip-submodule.patch ];
         }
       );
+      esbuild = prev.esbuild.override (old: { patches = [ ./esbuild-loadpaths.patch ]; });
+      exqlite = prev.exqlite.override (
+        old: {
+          env = (old.env or { }) // {
+            EXQLITE_USE_SYSTEM = "1";
+            EXQLITE_SYSTEM_CFLAGS = "-I${sqlite.dev}/include";
+            EXQLITE_SYSTEM_LDFLAGS = "-L${sqlite.out}/lib -lsqlite3";
+          };
+        }
+      );
+      tailwind = prev.tailwind.override (old: { patches = [ ./tailwind-loadpaths.patch ]; });
     };
   };
 
