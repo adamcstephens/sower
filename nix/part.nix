@@ -70,22 +70,42 @@ in
       in
       {
         dev-shell =
-          lib.optionalAttrs (builtins.elem "devShells" cfg.buildTypes) perSystemTopToSower
+          lib.optionalAttrs
+            (
+              (builtins.elem "devShells" (builtins.attrNames self)) && (builtins.elem "devShells" cfg.buildTypes)
+            )
+            perSystemTopToSower
             self.devShells;
-        darwin =
-          lib.optionalAttrs (builtins.elem "darwinConfigurations" cfg.buildTypes) lib.mapAttrs
-            (n: v: { systems = [ v.pkgs.hostPlatform.system ]; })
-            self.darwinConfigurations;
-        home-manager =
-          lib.optionalAttrs (builtins.elem "homeConfigurations" cfg.buildTypes) lib.mapAttrs
-            (n: v: { systems = [ v.pkgs.hostPlatform.system ]; })
-            self.homeConfigurations;
+        # darwin =
+        #   lib.optionalAttrs
+        #     (
+        #       (builtins.elem "darwinConfigurations" (builtins.attrNames self))
+        #       && (builtins.elem "darwinConfigurations" cfg.buildTypes)
+        #     )
+        #     lib.mapAttrs
+        #     (n: v: { systems = [ v.pkgs.hostPlatform.system ]; })
+        #     self.darwinConfigurations;
+        # home-manager =
+        #   lib.optionalAttrs lib.mapAttrs
+        #     (
+        #       (builtins.elem "homeConfigurations" (builtins.attrNames self))
+        #       && (builtins.elem "homeConfigurations" cfg.buildTypes)
+        #     )
+        #     (n: v: { systems = [ v.pkgs.hostPlatform.system ]; })
+        #     self.homeConfigurations;
         nixos =
-          lib.optionalAttrs (builtins.elem "devShells" cfg.buildTypes) lib.mapAttrs
+          lib.optionalAttrs
+            (
+              (builtins.elem "nixosConfigurations" (builtins.attrNames self))
+              && (builtins.elem "nixosConfigurations" cfg.buildTypes)
+            )
+            lib.mapAttrs
             (n: v: { systems = [ v.pkgs.hostPlatform.system ]; })
             self.nixosConfigurations;
         package =
-          lib.optionalAttrs (builtins.elem "packages" cfg.buildTypes) perSystemTopToSower
+          lib.optionalAttrs
+            ((builtins.elem "packages" (builtins.attrNames self)) && (builtins.elem "packages" cfg.buildTypes))
+            perSystemTopToSower
             self.packages;
       };
   };

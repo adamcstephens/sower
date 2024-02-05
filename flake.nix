@@ -56,9 +56,7 @@
           };
 
           packages = rec {
-            default = sower;
-
-            sower = pkgs.callPackage ./nix/package.nix { beamPackages = beam; };
+            default = pkgs.callPackage ./nix/package.nix { beamPackages = beam; };
           };
         };
     };
