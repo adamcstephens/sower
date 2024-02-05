@@ -14,9 +14,7 @@ beamPackages.mixRelease {
 
   src = lib.fileset.toSource {
     root = ./..;
-    fileset = lib.fileset.union (lib.fileset.gitTracked ./..) (
-      lib.fileset.fileFilter (file: !file.hasExt "nix") ./..
-    );
+    fileset = lib.fileset.union ./.. (lib.fileset.fileFilter (file: !file.hasExt "nix") ./..);
   };
 
   mixNixDeps = import ./mix.nix {
