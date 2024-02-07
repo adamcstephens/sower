@@ -7,7 +7,11 @@
   git,
   libgit2,
   sqlite,
+  stdenv,
 }:
+let
+  arch = if stdenv.isAarch64 then "arm64" else "x64";
+in
 beamPackages.mixRelease {
   pname = "sower";
   version = "0.0.1-dev";
@@ -48,8 +52,8 @@ beamPackages.mixRelease {
 
   postBuild = ''
     # prevent mix from trying to download binaries
-    ln -sfv ${lib.getExe esbuild} _build/esbuild-linux-x64
-    ln -sfv ${lib.getExe tailwindcss} _build/tailwind-linux-x64
+    ln -sfv ${lib.getExe esbuild} _build/esbuild-linux-${arch}
+    ln -sfv ${lib.getExe tailwindcss} _build/tailwind-linux-${arch}
 
     mix assets.deploy --no-deps-check
   '';

@@ -12,7 +12,11 @@
     flake-parts.lib.mkFlake { inherit inputs; } {
       imports = [ ./nix/flakemodule.nix ];
 
-      systems = [ "x86_64-linux" ]; # needs support in package as well
+      systems = [
+        # requires support in package.nix for tailwind/esbuild
+        "x86_64-linux"
+        "aarch64-linux"
+      ];
 
       perSystem =
         {
@@ -40,6 +44,7 @@
 
               pkgs.just
               pkgs.mix2nix
+              pkgs.nvfetcher
               pkgs.process-compose
               pkgs.sqlite
             ] ++ (lib.optionals pkgs.stdenv.isLinux [ pkgs.inotify-tools ]);
@@ -50,9 +55,10 @@
             ];
           };
 
-          packages = {
+          packages = rec {
             default = pkgs.callPackage ./nix/package.nix { beamPackages = beam; };
             seed-ci = pkgs.callPackage ./nix/seed-ci.nix { inherit (inputs'.attic.packages) attic; };
+            seed-ci-docker = pkgs.callPackage ./nix/docker-image.nix { inherit seed-ci; };
           };
         };
 

@@ -12,6 +12,9 @@ dev: && start
 nix-lock:
     mix2nix mix.lock > nix/mix.nix
 
+nvfetcher:
+    cd nix; nvfetcher
+
 start:
     iex -S mix phx.server
 
