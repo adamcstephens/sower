@@ -17,6 +17,8 @@ beamPackages.mixRelease {
     fileset = lib.fileset.union ./.. (lib.fileset.fileFilter (file: !file.hasExt "nix") ./..);
   };
 
+  elixir = beamPackages.elixir_1_16;
+
   mixNixDeps = import ./mix.nix {
     inherit lib beamPackages;
     overrides = _: prev: {

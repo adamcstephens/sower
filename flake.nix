@@ -9,7 +9,7 @@
   outputs =
     inputs@{ flake-parts, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } {
-      imports = [ ./nix/part.nix ];
+      imports = [ ./nix/flakemodule.nix ];
 
       systems = [ "x86_64-linux" ]; # needs support in package as well
 
@@ -55,9 +55,11 @@
             ];
           };
 
-          packages = rec {
+          packages = {
             default = pkgs.callPackage ./nix/package.nix { beamPackages = beam; };
           };
         };
+
+      flake.nixosModules.sower = ./nix/module.nix;
     };
 }
