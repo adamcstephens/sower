@@ -1,5 +1,6 @@
 {
   inputs = {
+    attic.url = "github:zhaofengli/attic";
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable-small";
     next-ls.url = "github:elixir-tools/next-ls";
     next-ls.inputs.nixpkgs.follows = "nixpkgs";
@@ -57,6 +58,7 @@
 
           packages = {
             default = pkgs.callPackage ./nix/package.nix { beamPackages = beam; };
+            seed-ci = pkgs.callPackage ./nix/seed-ci.nix { inherit (inputs'.attic.packages) attic; };
           };
         };
 
