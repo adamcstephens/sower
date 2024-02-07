@@ -36,14 +36,8 @@
                 elixir = beam.elixir_1_16;
               })
 
-              pkgs.cargo
-              pkgs.openssl.dev
-              pkgs.pkg-config
-              pkgs.rustc
-              pkgs.rust-analyzer
-              pkgs.rustfmt
+              inputs'.attic.packages.attic
 
-              pkgs.beekeeper-studio
               pkgs.just
               pkgs.mix2nix
               pkgs.process-compose
