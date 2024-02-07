@@ -13,8 +13,8 @@ beamPackages.mixRelease {
   version = "0.0.1-dev";
 
   src = lib.fileset.toSource {
-    root = ./..;
-    fileset = lib.fileset.fileFilter (file: !file.hasExt "nix") ./..;
+    root = ../.;
+    fileset = lib.fileset.fileFilter (file: file.name != "nix" && !file.hasExt "nix") ../.;
   };
 
   elixir = beamPackages.elixir_1_16;
