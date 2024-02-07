@@ -25,43 +25,6 @@ export def attic-upload [cache: string] {
   }
 }
 
-export def build-targets [--nom: bool = true] {
-  let targets = $in
-
-  let command = if $nom { "nom" } else { "nix" }
-  $targets | par-each --threads 2 { |target|
-    let outPath = try {
-      let drv = $target | update drvPath ($target.drvPath| str replace --regex ".drv$" ".drv^*") | get drvPath
-      run-external --redirect-stdout $command build "--no-link" "--fallback" "--keep-going" "--json" $drv | from json | select outputs | flatten | get out
-    } catch {
-      null
-    }
-    { ...$target, outPath: $outPath }
-  }
-}
-
-export def eval-targets [] {
-  let targets = $in
-  let eval_args = [
-    "--gc-roots-dir", "gcroot",
-  ] ++ (if $env.NIX_EVAL_ARGS? != null {
-    # dirty, but 🤷
-    $env.NIX_EVAL_ARGS | split row " "
-  } else { [ ] })
-
-  $targets | par-each --threads 4 { |target|
-    nix-eval-jobs --workers 1 --flake $target $eval_args | lines | each {|l|
-      $l | from json | select name drvPath
-    }
-  } | flatten
-}
-
-export def flake-input-targets [] {
-  nix flake archive --json | from json | get inputs | transpose | select column0 column1.path | each { |c|
-    {name: $c.column0, outPath: [$c.column1_path], drvPath: null}
-  }
-}
-
 export def load-seeds [] {
   nix eval .#sower --json | from json | transpose type targets | each {|type| $type | update targets ($type.targets | transpose name config) }
 }
@@ -105,8 +68,7 @@ export def build-configs [] {
       }
 
       let result = try {
-        $buildTarget
-        # nix build --no-link --fallback --keep-going --json ...$buildTarget | from json
+        nix build --no-link --fallback --keep-going --json ...$buildTarget | from json
       } catch {
         null
       }
@@ -179,11 +141,7 @@ export def gen-targets [--system: string] {
   } | flatten
 }
 
-export def result-paths [] {
-  $in | where outPath != null | get outPath | flatten
-}
-
-def main [--v2: bool = true, --attic-upload: bool = true, --attic-use: bool = false, --eval-only, --nom: bool = true, --system: string, ...targets: string ] {
+def main [--attic-upload = true, --attic-use = false, --eval-only, --nom = true, --system: string] {
   let attic_url = $env.ATTIC_URL?
   let attic_cache = $env.ATTIC_CACHE?
   let attic_token = $env.ATTIC_KEY?
@@ -201,53 +159,21 @@ def main [--v2: bool = true, --attic-upload: bool = true, --attic-use: bool = fa
     }
   }
 
-  if $v2 {
-    let seeds = load-seeds | filter-configs --system $system
-    let built_seeds = $seeds | build-configs
+  let seeds = load-seeds | filter-configs --system $system
+  let built_seeds = $seeds | build-configs
 
-    if $attic_upload {
-      $built_seeds | upload-configs --attic-cache $attic_cache
-    }
+  if $attic_upload {
+    $built_seeds | upload-configs --attic-cache $attic_cache
+  }
 
-    print "🎯 Built seeds"
-    print ($built_seeds | get-config-outputs)
+  print "🎯 Built seeds"
+  print ($built_seeds | get-config-outputs)
 
-    if ($built_seeds | any { |c| $c.targets | any { |t| $t.build == null } }) {
-      print "💀 Failed targets"
-      print ($built_seeds | get-config-failures)
-      exit 1
-    } else {
-      print "🥳 Success!"
-    }
+  if ($built_seeds | any { |c| $c.targets | any { |t| $t.build == null } }) {
+    print "💀 Failed targets"
+    print ($built_seeds | get-config-failures)
+    exit 1
   } else {
-    let targets = if $targets != [] { $targets | eval-targets } else { gen-targets --system=$system }
-
-    print "🏛️ Targets"
-    print $targets
-
-    if $eval_only {
-      exit 0
-    }
-
-    if ($targets | is-empty) {
-      print $"⁉️ (ansi red)!! No targets from env PLUGIN_TARGETS or detected in flake, exiting(ansi reset)"
-      exit 1
-    }
-
-    let built_targets = $targets | build-targets --nom=$nom | append (flake-input-targets)
-    print "🎯 Built targets"
-    print $built_targets | table -w 200
-
-    if $attic_upload {
-      $built_targets | result-paths | attic-upload $attic_cache
-    }
-
-    if ($built_targets | any { |t| $t.outPath == null }) {
-      print "💀 Failed targets"
-      print ($built_targets | where outPath == null)
-      exit 1
-    } else {
-      print "🥳 Success!"
-    }
+    print "🥳 Success!"
   }
 }
