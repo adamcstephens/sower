@@ -25,7 +25,7 @@ let
   };
 in
 dockerTools.streamLayeredImage {
-  name = "sower.dev/seed/ci";
+  name = "git.junco.dev/sower/seed-ci";
 
   fromImage = nvfetcher."nix-${hostPlatform.system}".src.outPath;
   tag = "latest-${hostPlatform.system}";

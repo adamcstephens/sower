@@ -42,6 +42,7 @@
 
               inputs'.attic.packages.attic
 
+              pkgs.docker
               pkgs.just
               pkgs.mix2nix
               pkgs.nvfetcher
