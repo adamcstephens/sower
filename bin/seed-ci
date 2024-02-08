@@ -52,14 +52,14 @@ export def build-configs [] {
 
   $configs | each { |c|
     $c | update targets ($c.targets | par-each --threads 4 { |i|
-      let buildTarget = if $c.type == "darwin" {
-        $".#darwinConfigurations.($i.name).system"
+      let buildTarget: list<string> = if $c.type == "darwin" {
+        [$".#darwinConfigurations.($i.name).system"]
       } else if $c.type == "dev-shell" {
         $i.config.systems | each {|t| $".#devShells.($t).($i.name)" }
       } else if $c.type == "home-manager" {
-        $".#homeConfigurations.($i.name).activationPackage"
+        [$".#homeConfigurations.($i.name).activationPackage"]
       } else if $c.type == "nixos" {
-        $".#nixosConfigurations.($i.name).config.system.build.toplevel"
+        [$".#nixosConfigurations.($i.name).config.system.build.toplevel"]
       } else if $c.type == "package" {
         $i.config.systems | each {|t| $".#packages.($t).($i.name)" }
       } else {
