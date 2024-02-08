@@ -5,7 +5,7 @@ env:
 
 jobs:
   flake-build:
-    runs-on: sower/seed/${{ matrix.system }}
+    runs-on: stop/${{ matrix.system }}
     container:
       options: "--volume /nix:/host/nix"
 
