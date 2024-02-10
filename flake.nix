@@ -62,6 +62,9 @@
             seed-ci-docker = pkgs.callPackage ./nix/docker-image.nix { inherit seed-ci; };
           };
         };
+      flake.packages.aarch64-darwin.seed-ci =
+        inputs.nixpkgs.legacyPackages.aarch64-darwin.callPackage ./nix/seed-ci.nix
+          { inherit (inputs.attic.packages.aarch64-darwin) attic; };
 
       flake.nixosModules.sower = ./nix/module.nix;
     };
