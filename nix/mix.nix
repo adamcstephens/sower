@@ -8,6 +8,19 @@ let
   self = packages // (overrides self packages);
 
   packages = with beamPackages; with self; {
+    bandit = buildMix rec {
+      name = "bandit";
+      version = "1.2.0";
+
+      src = fetchHex {
+        pkg = "bandit";
+        version = "${version}";
+        sha256 = "05688b883d87cc3b32991517a61e8c2ce8ee2dd6aa6eb73635426002a6661491";
+      };
+
+      beamDeps = [ hpax plug telemetry thousand_island websock ];
+    };
+
     castore = buildMix rec {
       name = "castore";
       version = "1.0.5";
@@ -564,7 +577,7 @@ let
         sha256 = "9f7739c02f6c7c0ca82ee397f3bfe0465dbe4c8a65372ac2a5584bf147dd5831";
       };
 
-      beamDeps = [ cowboy finch jason mime plug plug_cowboy telemetry ];
+      beamDeps = [ bandit cowboy finch jason mime plug plug_cowboy telemetry ];
     };
 
     tailwind = buildMix rec {
@@ -632,6 +645,19 @@ let
       beamDeps = [ castore finch jason mime mint telemetry ];
     };
 
+    thousand_island = buildMix rec {
+      name = "thousand_island";
+      version = "1.3.2";
+
+      src = fetchHex {
+        pkg = "thousand_island";
+        version = "${version}";
+        sha256 = "0e085b93012cd1057b378fce40cbfbf381ff6d957a382bfdd5eca1a98eec2535";
+      };
+
+      beamDeps = [ telemetry ];
+    };
+
     unplug = buildMix rec {
       name = "unplug";
       version = "1.0.0";
@@ -668,7 +694,7 @@ let
         sha256 = "4b977ba4a01918acbf77045ff88de7f6972c2a009213c515a445c48f224ffce9";
       };
 
-      beamDeps = [ plug plug_cowboy websock ];
+      beamDeps = [ bandit plug plug_cowboy websock ];
     };
   };
 in self

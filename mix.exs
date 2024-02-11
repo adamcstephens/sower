@@ -32,6 +32,7 @@ defmodule Sower.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
+      {:bandit, "~> 1.0"},
       {:ecto_sqlite3, "~> 0.13"},
       {:egit, "~> 0.1"},
       {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
@@ -48,7 +49,6 @@ defmodule Sower.MixProject do
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 0.19.0"},
       {:phoenix, "~> 1.7.7"},
-      {:plug_cowboy, "~> 2.5"},
       {:postgrex, ">= 0.0.0"},
       {:swoosh, "~> 1.3"},
       {:tailwind, "~> 0.2.0", runtime: Mix.env() == :dev},
