@@ -3,9 +3,11 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.services.sower;
-in {
+in
+{
   options = {
     services.sower = {
       enable = lib.mkEnableOption "Enable Sower service";
@@ -25,7 +27,7 @@ in {
 
       environment = lib.mkOption {
         type = lib.types.attrsOf lib.types.str;
-        default = {};
+        default = { };
       };
     };
   };
@@ -34,8 +36,8 @@ in {
     systemd.services.sower = {
       description = "Sower NixOS management platform";
 
-      wantedBy = ["multi-user.target"];
-      after = ["network-online.target"];
+      wantedBy = [ "multi-user.target" ];
+      after = [ "network-online.target" ];
 
       serviceConfig = {
         DynamicUser = true;
