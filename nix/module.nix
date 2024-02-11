@@ -48,7 +48,7 @@ in {
       environment =
         {
           RELEASE_DISTRIBUTION = "none";
-          DATABASE_PATH = "%S/sower/sower-prod.db";
+          SOWER_DATABASE_PATH = "%S/sower/sower-prod.db";
           PHX_SERVER = "true";
         }
         // (lib.optionalAttrs cfg.initSecrets {
