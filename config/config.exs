@@ -13,7 +13,6 @@ config :sower,
 # Configures the endpoint
 config :sower, SowerWeb.Endpoint,
   adapter: Bandit.PhoenixAdapter,
-  url: [host: "localhost"],
   render_errors: [
     formats: [html: SowerWeb.ErrorHTML, json: SowerWeb.ErrorJSON],
     layout: false
