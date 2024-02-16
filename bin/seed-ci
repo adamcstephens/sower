@@ -1,12 +1,13 @@
 #!/usr/bin/env nu
 
 def attic-setup [url: string, cache: string, token: string] {
-  try {
-    attic cache info $"main:($cache)"
-  } catch {
-    print $"⭐ Adding attic cache"
+  print $"⭐ Ensuring attic cache ($url)/($cache)"
+  let check = attic cache info $"main:($cache)" | complete
+
+  if $check.exit_code != 0 {
     attic login main $url --set-default $token
   }
+
   attic cache info $"main:($cache)"
 }
 
