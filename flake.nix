@@ -1,6 +1,8 @@
 {
   inputs = {
     attic.url = "github:zhaofengli/attic";
+    lexical.url = "github:lexical-lsp/lexical";
+    lexical.inputs.nixpkgs.follows = "nixpkgs";
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable-small";
     next-ls.url = "github:elixir-tools/next-ls";
     next-ls.inputs.nixpkgs.follows = "nixpkgs";
@@ -29,16 +31,17 @@
         let
           erlang = pkgs.beam.interpreters.erlangR26;
           beam = pkgs.beam.packagesWith erlang;
+          next-ls = inputs'.next-ls.packages.default.override {
+            beamPackages = beam;
+            elixir = beam.elixir_1_16;
+          };
+          lexical = inputs'.lexical.packages.default.override { elixir = beam.elixir_1_16; };
         in
         {
           devShells.default = pkgs.mkShell {
             packages = [
               beam.elixir_1_16
               beam.elixir-ls
-              (inputs'.next-ls.packages.default.override {
-                beamPackages = beam;
-                elixir = beam.elixir_1_16;
-              })
 
               inputs'.attic.packages.attic
 
@@ -54,6 +57,10 @@
               pkgs.fmt
               pkgs.libgit2
             ];
+
+            shellHook = ''
+              export LEXICAL_START_PATH="${lexical}/binsh/start_lexical.sh"
+            '';
           };
 
           packages = rec {
