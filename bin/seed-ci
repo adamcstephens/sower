@@ -48,11 +48,11 @@ export def filter-configs [--system: string] {
   }
 }
 
-export def build-configs [] {
+export def build-configs [--threads: int] {
   let configs = $in
 
   $configs | each { |c|
-    $c | update targets ($c.targets | par-each --threads 4 { |i|
+    $c | update targets ($c.targets | par-each --threads $threads { |i|
       let buildTarget: list<string> = if $c.type == "darwin" {
         [$".#darwinConfigurations.($i.name).system"]
       } else if $c.type == "dev-shell" {
@@ -79,7 +79,7 @@ export def build-configs [] {
   }
 }
 
-export def upload-configs [--attic-cache: string = "default"] {
+export def upload-configs [--attic-cache: string] {
   let configs = $in
 
   $configs | reduce --fold [] { |c, acc|
@@ -121,28 +121,15 @@ export def get-config-outputs [] {
   } | flatten
 }
 
-export def gen-targets [--system: string] {
-  try { rm -r gcroot/* }
-  let eval_args = [
-    "--gc-roots-dir", "gcroot",
-  ] ++ (if $env.NIX_EVAL_ARGS? != null {
-    # dirty, but 🤷
-    $env.NIX_EVAL_ARGS | split row " "
-  } else { [ ] })
+export def post-sower-seeds [] {
+  let configs = $in
 
-  ['.#devShells', '.#packages'] | each {|target|
-    nix eval $target --apply builtins.attrNames --json | from json | each { |sys|
-      if $system != null and $system != $sys { continue }
-      print $"🛗 Evaluating ($target).($sys)"
+  $configs | each { |c|
 
-      nix-eval-jobs --workers 12 --flake $"($target).($sys)" $eval_args | lines | each {|l|
-        $l | from json | select name drvPath
-      }
-    } | flatten
-  } | flatten
+  }
 }
 
-def main [--attic-upload = true, --attic-use = false, --eval-only, --nom = true, --system: string] {
+def main [--attic-upload = true, --attic-use = false, --eval-only, --nom = true, --system: string, --threads: int = 8] {
   let attic_url = $env.ATTIC_URL?
   let attic_cache = $env.ATTIC_CACHE?
   let attic_token = $env.ATTIC_KEY?
@@ -161,7 +148,7 @@ def main [--attic-upload = true, --attic-use = false, --eval-only, --nom = true,
   }
 
   let seeds = load-seeds | filter-configs --system $system
-  let built_seeds = $seeds | build-configs
+  let built_seeds = $seeds | build-configs --threads $threads
 
   if $attic_upload {
     $built_seeds | upload-configs --attic-cache $attic_cache
