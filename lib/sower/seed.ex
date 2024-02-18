@@ -1,5 +1,5 @@
 defmodule Sower.Seed do
-  import Ecto.Query, warn: false
+  import Ecto.Query
   alias Sower.Repo
 
   def list_seeds do
@@ -13,6 +13,16 @@ defmodule Sower.Seed do
       on_conflict: {:replace, [:updated_at]},
       conflict_target: [:name, :type, :out_path]
     )
+  end
+
+  def find_latest_seed(name, type) do
+    Sower.Seed.Instance
+    |> where([s], s.name == ^name)
+    |> where([s], s.type == ^type)
+    |> order_by([s], desc: s.updated_at)
+    |> first()
+    |> Repo.all()
+    |> List.first()
   end
 
   def get_seed!(id), do: Repo.get!(Sower.Seed.Instance, id)

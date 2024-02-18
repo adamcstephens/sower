@@ -1,4 +1,4 @@
-POST http://127.0.0.1:4000/api/seeds
+POST http://[::1]:4000/api/seeds
 Content-Type: application/json
 
 {
@@ -7,5 +7,6 @@ Content-Type: application/json
   "out_path": "/nix/store/6daslzwpm9fzr6sw11irw1jcnsmspmhm-source/ssdfdsdfs"
 }
 
-GET http://127.0.0.1:4000/api/seeds
+GET http://[::1]:4000/api/seeds
 
+GET http://[::1]:4000/api/seeds/latest?name=yank2&type=nixos
