@@ -1,9 +1,13 @@
 <.header>
-  seed <%= @seed.id %>
+  <%= @seed.type %>/<%= @seed.name %>@<%= @seed.id %>
 </.header>
 
 <.list>
   <:item title="name"><%= @seed.name %></:item>
+  <:item title="type"><%= @seed.type %></:item>
+  <:item title="out_path"><%= @seed.out_path %></:item>
+  <:item title="created"><%= @seed.inserted_at %></:item>
+  <:item title="updated"><%= @seed.updated_at %></:item>
 </.list>
 
 <.back navigate={~p"/seeds"}>Back to seeds</.back>
