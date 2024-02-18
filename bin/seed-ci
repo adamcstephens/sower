@@ -51,6 +51,8 @@ export def filter-configs [--system: string] {
 export def build-configs [--threads: int] {
   let configs = $in
 
+  print $"Building configs with ($threads) threads"
+
   $configs | each { |c|
     $c | update targets ($c.targets | par-each --threads $threads { |i|
       let buildTarget: list<string> = if $c.type == "darwin" {
@@ -121,15 +123,25 @@ export def get-config-outputs [] {
   } | flatten
 }
 
-export def post-sower-seeds [] {
+export def post-sower-seeds [--sower-url: string] {
   let configs = $in
 
-  $configs | each { |c|
+  print $"🫱 Giving seeds to sower ($sower_url)"
 
+  $configs | filter { |c| $c.type == "home-manager" or $c.type == "darwin" or $c.type == "nixos" } | each { |c|
+    $c.targets | filter { |t| $t.build != null } | each { |t|
+      let seed = {
+        name: $t.name,
+        type: $c.type,
+        out_path: $t.build.outputs.out.0
+      }
+
+      http post --content-type application/json $sower_url $seed
+    }
   }
 }
 
-def main [--attic-upload = true, --attic-use = false, --eval-only, --nom = true, --system: string, --threads: int = 8] {
+def main [--attic-upload = true, --attic-use = false, --eval-only, --nom = true, --sower-seed = false, --system: string, --threads: int = 8] {
   let attic_url = $env.ATTIC_URL?
   let attic_cache = $env.ATTIC_CACHE?
   let attic_token = $env.ATTIC_KEY?
@@ -152,6 +164,15 @@ def main [--attic-upload = true, --attic-use = false, --eval-only, --nom = true,
 
   if $attic_upload {
     $built_seeds | upload-configs --attic-cache $attic_cache
+  }
+
+  if $sower_seed {
+    let sower_url = $env.SOWER_URL?
+    if $sower_url == null {
+      print "‼️ sower url missing, but sower seed set to true"
+      exit 1
+    }
+    $built_seeds | post-sower-seeds --sower-url $sower_url
   }
 
   print "🎯 Built seeds"

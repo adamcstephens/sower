@@ -78,7 +78,7 @@ in
             { }
             allOutputs;
       in
-      {
+      lib.mkDefault {
         dev-shell = lib.optionalAttrs (enabledOutput "devShells") (perSystemOutputToSower self.devShells);
         darwin = lib.optionalAttrs (enabledOutput "darwinConfigurations") (
           nonSystemOutputToSower self.darwinConfigurations
