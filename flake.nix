@@ -44,6 +44,7 @@
               beam.elixir-ls
 
               inputs'.attic.packages.attic
+              self'.packages.seed-ci
 
               pkgs.docker
               pkgs.just
