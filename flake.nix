@@ -29,12 +29,7 @@
           ...
         }:
         let
-          erlang = pkgs.beam.interpreters.erlangR26;
-          beam = pkgs.beam.packagesWith erlang;
-          next-ls = inputs'.next-ls.packages.default.override {
-            beamPackages = beam;
-            elixir = beam.elixir_1_16;
-          };
+          beam = pkgs.beam.packagesWith pkgs.erlang;
           lexical = inputs'.lexical.packages.default.override { elixir = beam.elixir_1_16; };
         in
         {
