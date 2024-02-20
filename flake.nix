@@ -47,6 +47,13 @@
               pkgs.nvfetcher
               pkgs.process-compose
               pkgs.sqlite
+
+              pkgs.delve
+              pkgs.go
+              pkgs.golangci-lint
+              pkgs.gopls
+              pkgs.go-tools
+              pkgs.gotools
             ] ++ (lib.optionals pkgs.stdenv.isLinux [ pkgs.inotify-tools ]);
 
             nativeBuildInputs = [
