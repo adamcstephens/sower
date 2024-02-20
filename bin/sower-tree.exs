@@ -3,8 +3,21 @@
 Mix.install([{:req, "~> 0.4.0"}])
 
 defmodule Sower.Tree do
-  def main(argv) do
+  def main() do
     {:ok, hostname} = :inet.gethostname()
+
+    options =
+      System.argv()
+      |> OptionParser.parse(
+        strict: [
+          name: :string,
+          sower_url: :string,
+          type: :string
+        ]
+      )
+      |> IO.inspect()
+
+    {[sower_url: sower_url], _, _} = options
 
     resp =
       Req.get!("#{sower_url}/api/seeds/latest?name=#{hostname}&type=nixos")
@@ -31,7 +44,7 @@ defmodule Sower.Tree do
     ])
 
     # if selecting boot, no need to check reboot_needed
-    System.cmd("sudo", ["--askpass", "#{out_path}/bin/switch-to-configuration", "boot"])
+    System.cmd("sudo", ["--askpass", "#{out_path}/bin/switch-to-configuration", "switch"])
 
     if reboot_needed?() do
       IO.puts("Reboot is needed")
@@ -41,11 +54,11 @@ defmodule Sower.Tree do
   def reboot_needed?() do
     ["initrd", "kernel", "kernel-modules"]
     |> Enum.any?(fn f ->
-      File.read_link!("/run/booted-system/#{f}") !=
-        File.read_link!("/nix/var/nix/profiles/system/#{f}")
+      File.exists?("/run/booted-system/#{f}") &&
+        File.read_link!("/run/booted-system/#{f}") !=
+          File.read_link!("/nix/var/nix/profiles/system/#{f}")
     end)
   end
 end
 
-System.argv()
-|> Sower.Tree.main()
+Sower.Tree.main()
