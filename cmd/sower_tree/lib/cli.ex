@@ -1,9 +1,7 @@
-#!/usr/bin/env -S ERL_FLAGS=+B elixir
-
-defmodule Sower.Tree do
-  def main() do
+defmodule SowerTree.CLI do
+  def main(argv) do
     options =
-      System.argv()
+      argv
       |> OptionParser.parse(
         strict: [
           sower_url: :string,
@@ -38,17 +36,23 @@ defmodule Sower.Tree do
   end
 
   defp activate(out_path, "home-manager") do
-    System.cmd("#{out_path}/activate")
+    {_, 0} = System.cmd("#{out_path}/activate", [])
+    out_path
   end
 
   defp activate(out_path, "nixos") do
     set_profile(out_path, "/nix/var/nix/profiles/system")
-    System.cmd("sudo", ["--askpass", "#{out_path}/bin/switch-to-configuration", "switch"])
+
+    {_, 0} =
+      System.cmd("sudo", ["--askpass", "#{out_path}/bin/switch-to-configuration", "switch"])
+
+    out_path
   end
 
   defp realize(out_path) do
     # need to error handle
-    System.cmd("nix-store", ["--realize", out_path])
+    {_, 0} = System.cmd("nix-store", ["--realize", out_path])
+    out_path
   end
 
   defp reboot_needed?() do
@@ -61,15 +65,16 @@ defmodule Sower.Tree do
   end
 
   defp set_profile(out_path, profile) do
-    System.cmd("sudo", [
-      "--askpass",
-      "nix-env",
-      "--set",
-      "--profile",
-      profile,
-      out_path
-    ])
+    {_, 0} =
+      System.cmd("sudo", [
+        "--askpass",
+        "nix-env",
+        "--set",
+        "--profile",
+        profile,
+        out_path
+      ])
+
+    out_path
   end
 end
-
-Sower.Tree.main()

@@ -13,9 +13,15 @@ beamPackages.mixRelease {
 
   mixNixDeps = import ../cmd/sower_tree/mix.nix { inherit lib beamPackages; };
 
+  postBuild = ''
+    mix escript.build --no-deps-check
+  '';
+
   postInstall = ''
-    cp sower-tree.exs $out/bin/sower-tree
-    wrapProgram $out/bin/sower-tree --set ERL_LIBS $out/lib
+    cp sower_tree $out/bin/sower-tree
+    wrapProgram $out/bin/sower-tree --set ERL_LIBS $out/lib --prefix PATH : ${
+      lib.makeBinPath [ beamPackages.erlang ]
+    }
   '';
 
   meta.mainProgram = "sower-tree";
