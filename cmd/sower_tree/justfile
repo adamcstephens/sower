@@ -1,0 +1,2 @@
+nix-lock:
+    mix2nix mix.lock > mix.nix

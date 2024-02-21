@@ -70,6 +70,7 @@
             default = pkgs.callPackage ./nix/package.nix { beamPackages = beam; };
             seed-ci = pkgs.callPackage ./nix/seed-ci.nix { inherit (inputs'.attic.packages) attic; };
             seed-ci-docker = pkgs.callPackage ./nix/docker-image.nix { inherit seed-ci; };
+            sower-tree = pkgs.callPackage ./nix/sower-tree.nix { };
           };
         };
       flake.packages.aarch64-darwin.seed-ci =
