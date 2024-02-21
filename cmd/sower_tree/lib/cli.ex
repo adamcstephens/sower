@@ -6,12 +6,20 @@ defmodule SowerTree.CLI do
         strict: [
           sower_url: :string,
           name: :string,
-          type: :string
+          type: :string,
+          reboot: :boolean,
+          mode: :string
         ]
       )
       |> IO.inspect()
 
-    {[{:sower_url, sower_url}, {:type, type}, {:name, name} | _rest], _, _} = options
+    {options, _, _} = options
+
+    sower_url = Keyword.get(options, :sower_url)
+    type = Keyword.get(options, :type, "nixos")
+    name = Keyword.get(options, :type, default_name(type))
+    reboot = Keyword.get(options, :reboot, false)
+    mode = Keyword.get(options, :mode, "switch")
 
     seed_url = "#{sower_url}/api/seeds/latest?name=#{name}&type=#{type}"
 
@@ -28,25 +36,35 @@ defmodule SowerTree.CLI do
     resp.body["out_path"]
     |> IO.inspect()
     |> realize()
-    |> activate(type)
+    |> activate(type, mode)
 
-    if reboot_needed?() do
+    if type == "nixos" && reboot_needed?() do
       IO.puts("Reboot is needed")
+
+      if reboot || mode == "boot" do
+        System.cmd("sudo", ["--askpass", "systemctl", "reboot"])
+      end
     end
   end
 
-  defp activate(out_path, "home-manager") do
+  defp activate(out_path, "home-manager", _mode) do
     {_, 0} = System.cmd("#{out_path}/activate", [])
     out_path
   end
 
-  defp activate(out_path, "nixos") do
+  defp activate(out_path, "nixos", mode) do
     set_profile(out_path, "/nix/var/nix/profiles/system")
 
+    # handle failure better
     {_, 0} =
-      System.cmd("sudo", ["--askpass", "#{out_path}/bin/switch-to-configuration", "switch"])
+      System.cmd("sudo", ["--askpass", "#{out_path}/bin/switch-to-configuration", mode])
 
     out_path
+  end
+
+  defp default_name("nixos") do
+    {:ok, hostname} = :inet.gethostname()
+    hostname
   end
 
   defp realize(out_path) do
