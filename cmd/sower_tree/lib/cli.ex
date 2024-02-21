@@ -71,8 +71,8 @@ defmodule SowerTree.CLI do
 
   defp realize(out_path) do
     IO.puts(":: found #{out_path}")
-    # need to error handle
-    {_, 0} = System.cmd("nix-store", ["--realize", out_path])
+    # ignore errors as activating services sometimes fails
+    {_, _} = System.cmd("nix-store", ["--realize", out_path])
     out_path
   end
 
