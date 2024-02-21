@@ -28,13 +28,11 @@ defmodule SowerTree.CLI do
     IO.puts(":: fetched #{seed_url}")
 
     if resp.body["out_path"] == nil do
-      IO.inspect(resp)
       IO.puts("!! No out_path found")
       Kernel.exit(1)
     end
 
     resp.body["out_path"]
-    |> IO.inspect()
     |> realize()
     |> activate(type, mode)
 
@@ -72,6 +70,7 @@ defmodule SowerTree.CLI do
   end
 
   defp realize(out_path) do
+    IO.puts(":: found #{out_path}")
     # need to error handle
     {_, 0} = System.cmd("nix-store", ["--realize", out_path])
     out_path
