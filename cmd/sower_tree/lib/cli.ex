@@ -77,7 +77,7 @@ defmodule SowerTree.CLI do
   end
 
   defp reboot_needed?() do
-    ["initrd", "kernel", "kernel-modules"]
+    ["init", "initrd", "kernel", "kernel-modules"]
     |> Enum.any?(fn f ->
       File.exists?("/run/booted-system/#{f}") &&
         File.read_link!("/run/booted-system/#{f}") !=
