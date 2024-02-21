@@ -17,7 +17,7 @@ defmodule SowerTree.CLI do
 
     sower_url = Keyword.get(options, :sower_url)
     type = Keyword.get(options, :type, "nixos")
-    name = Keyword.get(options, :type, default_name(type))
+    name = Keyword.get(options, :name, default_name(type))
     reboot = Keyword.get(options, :reboot, false)
     mode = Keyword.get(options, :mode, "switch")
 
@@ -60,6 +60,10 @@ defmodule SowerTree.CLI do
       System.cmd("sudo", ["--askpass", "#{out_path}/bin/switch-to-configuration", mode])
 
     out_path
+  end
+
+  defp default_name("home-manager") do
+    System.fetch_env!("USER")
   end
 
   defp default_name("nixos") do
