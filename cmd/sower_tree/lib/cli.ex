@@ -36,10 +36,10 @@ defmodule SowerTree.CLI do
     |> realize()
     |> activate(type, mode)
 
-    if type == "nixos" && reboot_needed?() do
+    if type == "nixos" && (reboot_needed?() || mode == "boot") do
       IO.puts("Reboot is needed")
 
-      if reboot || mode == "boot" do
+      if reboot do
         System.cmd("systemctl", ["reboot"])
       end
     end
