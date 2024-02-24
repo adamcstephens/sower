@@ -40,7 +40,7 @@ defmodule SowerTree.CLI do
       IO.puts("Reboot is needed")
 
       if reboot || mode == "boot" do
-        System.cmd("sudo", ["--askpass", "systemctl", "reboot"])
+        System.cmd("systemctl", ["reboot"])
       end
     end
   end
@@ -54,7 +54,7 @@ defmodule SowerTree.CLI do
     set_profile(out_path, "/nix/var/nix/profiles/system")
 
     # handle failure better
-    System.cmd("sudo", ["--askpass", "#{out_path}/bin/switch-to-configuration", mode])
+    System.cmd("#{out_path}/bin/switch-to-configuration", [mode])
 
     out_path
   end
@@ -86,14 +86,15 @@ defmodule SowerTree.CLI do
 
   defp set_profile(out_path, profile) do
     {_, 0} =
-      System.cmd("sudo", [
-        "--askpass",
+      System.cmd(
         "nix-env",
-        "--set",
-        "--profile",
-        profile,
-        out_path
-      ])
+        [
+          "--set",
+          "--profile",
+          profile,
+          out_path
+        ]
+      )
 
     out_path
   end
