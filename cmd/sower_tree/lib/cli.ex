@@ -54,8 +54,7 @@ defmodule SowerTree.CLI do
     set_profile(out_path, "/nix/var/nix/profiles/system")
 
     # handle failure better
-    {_, 0} =
-      System.cmd("sudo", ["--askpass", "#{out_path}/bin/switch-to-configuration", mode])
+    System.cmd("sudo", ["--askpass", "#{out_path}/bin/switch-to-configuration", mode])
 
     out_path
   end
