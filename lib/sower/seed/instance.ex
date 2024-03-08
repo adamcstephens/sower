@@ -17,7 +17,7 @@ defmodule Sower.Seed.Instance do
     instance
     |> cast(attrs, [:name, :type, :out_path])
     |> validate_required([:name, :type, :out_path])
-    |> validate_inclusion(:type, ["nixos", "home-manager", "darwin"])
+    |> validate_inclusion(:type, ["nixos", "home-manager", "nix-darwin"])
     |> validate_format(:out_path, ~r/\/nix\/store\/[a-z0-9]{32}-[a-z0-9]+/,
       message: "must be a valid nix store path"
     )

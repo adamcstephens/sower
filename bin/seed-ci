@@ -55,7 +55,7 @@ export def build-configs [--threads: int] {
 
   $configs | each { |c|
     $c | update targets ($c.targets | par-each --threads $threads { |i|
-      let buildTarget: list<string> = if $c.type == "darwin" {
+      let buildTarget: list<string> = if $c.type == "nix-darwin" {
         [$".#darwinConfigurations.($i.name).system"]
       } else if $c.type == "dev-shell" {
         $i.config.systems | each {|t| $".#devShells.($t).($i.name)" }
@@ -129,7 +129,7 @@ export def post-sower-seeds [--sower-url: string] {
   print $"🫱 Giving seeds to sower ($sower_url)"
 
   # sower only understands certain build outputs
-  $configs | filter { |c| $c.type == "home-manager" or $c.type == "darwin" or $c.type == "nixos" } | each { |c|
+  $configs | filter { |c| $c.type == "home-manager" or $c.type == "nix-darwin" or $c.type == "nixos" } | each { |c|
     $c.targets | filter { |t| $t.build != null } | each { |t|
       let seed = {
         name: $t.name,

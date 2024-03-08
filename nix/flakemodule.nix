@@ -80,7 +80,7 @@ in
       in
       lib.mkDefault {
         dev-shell = lib.optionalAttrs (enabledOutput "devShells") (perSystemOutputToSower self.devShells);
-        darwin = lib.optionalAttrs (enabledOutput "darwinConfigurations") (
+        nix-darwin = lib.optionalAttrs (enabledOutput "darwinConfigurations") (
           nonSystemOutputToSower self.darwinConfigurations
         );
         home-manager = lib.optionalAttrs (enabledOutput "homeConfigurations") (
