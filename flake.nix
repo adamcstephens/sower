@@ -15,9 +15,9 @@
       imports = [ ./nix/flakemodule.nix ];
 
       systems = [
-        # requires support in package.nix for tailwind/esbuild
         "x86_64-linux"
         "aarch64-linux"
+        "aarch64-darwin"
       ];
 
       perSystem =
@@ -69,18 +69,9 @@
           packages = rec {
             default = pkgs.callPackage ./nix/package.nix { beamPackages = beam; };
             seed-ci = pkgs.callPackage ./nix/seed-ci.nix { inherit (inputs'.attic.packages) attic; };
-            seed-ci-docker = pkgs.callPackage ./nix/docker-image.nix { inherit seed-ci; };
             sower-tree = pkgs.callPackage ./nix/sower-tree.nix { };
           };
         };
-
-      flake.packages.aarch64-darwin = {
-        seed-ci = inputs.nixpkgs.legacyPackages.aarch64-darwin.callPackage ./nix/seed-ci.nix {
-          inherit (inputs.attic.packages.aarch64-darwin) attic;
-        };
-
-        sower-tree = inputs.nixpkgs.legacyPackages.aarch64-darwin.callPackage ./nix/sower-tree.nix { };
-      };
 
       flake.nixosModules.sower = ./nix/module.nix;
     };

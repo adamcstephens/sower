@@ -11,6 +11,7 @@
 }:
 let
   arch = if stdenv.isAarch64 then "arm64" else "x64";
+  os = if stdenv.isDarwin then "darwin" else "linux";
 in
 beamPackages.mixRelease {
   pname = "sower";
@@ -54,8 +55,8 @@ beamPackages.mixRelease {
 
   postBuild = ''
     # prevent mix from trying to download binaries
-    ln -sfv ${lib.getExe esbuild} _build/esbuild-linux-${arch}
-    ln -sfv ${lib.getExe tailwindcss} _build/tailwind-linux-${arch}
+    ln -sfv ${lib.getExe esbuild} _build/esbuild-${os}-${arch}
+    ln -sfv ${lib.getExe tailwindcss} _build/tailwind-${os}-${arch}
 
     mix assets.deploy --no-deps-check
   '';
