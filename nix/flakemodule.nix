@@ -39,8 +39,7 @@ in
           let
             outputs = builtins.attrNames self;
           in
-          output:
-          (builtins.elem output outputs) && (builtins.elem output cfg.buildOutputs);
+          output: (builtins.elem output outputs) && (builtins.elem output cfg.buildOutputs);
 
         nonSystemOutputToSower =
           output: lib.mapAttrs (n: v: { systems = [ v.pkgs.hostPlatform.system ]; }) output;
@@ -49,34 +48,24 @@ in
           output:
           let
             systemOutputs = lib.mapAttrs (on: ov: (lib.mapAttrs (n: v: n) ov)) output;
-            allOutputs =
-              lib.foldlAttrs
-                (
-                  acc: n: v:
-                  acc
-                  ++
-                    builtins.map
-                      (dsv: {
-                        name = dsv;
-                        system = n;
-                      })
-                      (builtins.attrNames v)
-                )
-                [ ]
-                systemOutputs;
-          in
-          lib.foldl
-            (
-              acc: n:
+            allOutputs = lib.foldlAttrs (
+              acc: n: v:
               acc
-              // {
-                "${n.name}" = {
-                  systems = (acc.${n.name}.systems or [ ]) ++ [ n.system ];
-                };
-              }
-            )
-            { }
-            allOutputs;
+              ++ builtins.map (dsv: {
+                name = dsv;
+                system = n;
+              }) (builtins.attrNames v)
+            ) [ ] systemOutputs;
+          in
+          lib.foldl (
+            acc: n:
+            acc
+            // {
+              "${n.name}" = {
+                systems = (acc.${n.name}.systems or [ ]) ++ [ n.system ];
+              };
+            }
+          ) { } allOutputs;
       in
       lib.mkDefault {
         dev-shell = lib.optionalAttrs (enabledOutput "devShells") (perSystemOutputToSower self.devShells);
