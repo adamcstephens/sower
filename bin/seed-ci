@@ -137,7 +137,7 @@ export def post-sower-seeds [--sower-url: string] {
         out_path: $t.build.outputs.out.0
       }
 
-      http post --content-type application/json $sower_url $seed
+      http post --content-type application/json $"($sower_url)/api/seeds" $seed
     }
   }
 }
