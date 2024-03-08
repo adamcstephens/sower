@@ -50,6 +50,11 @@ defmodule SowerTree.CLI do
     out_path
   end
 
+  defp activate(out_path, "nix-darwin", _mode) do
+    {_, 0} = System.cmd("#{out_path}/activate", [])
+    out_path
+  end
+
   defp activate(out_path, "nixos", mode) do
     set_profile(out_path, "/nix/var/nix/profiles/system")
 
@@ -61,6 +66,11 @@ defmodule SowerTree.CLI do
 
   defp default_name("home-manager") do
     System.fetch_env!("USER")
+  end
+
+  defp default_name("nix-darwin") do
+    {:ok, hostname} = :inet.gethostname()
+    hostname
   end
 
   defp default_name("nixos") do
