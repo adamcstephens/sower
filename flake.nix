@@ -73,9 +73,14 @@
             sower-tree = pkgs.callPackage ./nix/sower-tree.nix { };
           };
         };
-      flake.packages.aarch64-darwin.seed-ci =
-        inputs.nixpkgs.legacyPackages.aarch64-darwin.callPackage ./nix/seed-ci.nix
-          { inherit (inputs.attic.packages.aarch64-darwin) attic; };
+
+      flake.packages.aarch64-darwin = {
+        seed-ci = inputs.nixpkgs.legacyPackages.aarch64-darwin.callPackage ./nix/seed-ci.nix {
+          inherit (inputs.attic.packages.aarch64-darwin) attic;
+        };
+
+        sower-tree = inputs.nixpkgs.legacyPackages.aarch64-darwin.callPackage ./nix/sower-tree.nix { };
+      };
 
       flake.nixosModules.sower = ./nix/module.nix;
     };
