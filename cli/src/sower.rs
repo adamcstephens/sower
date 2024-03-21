@@ -54,7 +54,7 @@ impl Seed {
     }
 
     fn activate_nixos(&self, mode: &Option<ActivationMode>) -> Result<&Self, String> {
-        let mode = mode.clone().unwrap_or(ActivationMode::Test);
+        let mode = mode.clone().unwrap_or(ActivationMode::DryActivate);
 
         // nixos profile needs to be manually set to ensure correct switching
         let command = &mut Command::new("nix-env");
@@ -100,9 +100,11 @@ pub enum SeedType {
     Nixos,
 }
 
-#[derive(Clone, Debug, Deserialize, Display, ValueEnum)]
+#[derive(Clone, Debug, Deserialize, Display, ValueEnum, VariantNames)]
+#[strum(serialize_all = "kebab-case")]
 pub enum ActivationMode {
     Boot,
+    DryActivate,
     Switch,
     Test,
     None,
