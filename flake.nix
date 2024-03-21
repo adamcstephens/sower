@@ -91,7 +91,10 @@
               CARGO_BUILD_TARGET = rustTarget;
               CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static";
 
-              buildInputs = [ ] ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.libiconv ];
+              buildInputs = pkgs.lib.optionals pkgs.stdenv.isDarwin [
+                pkgs.libiconv
+                pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
+              ];
             };
           };
         };
