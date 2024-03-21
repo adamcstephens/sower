@@ -1,0 +1,14 @@
+[package]
+name = "sower"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "4.5.1", features = ["derive", "color"] }
+nix = { version = "0.28.0", features = ["hostname"] }
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1.0", features = ["derive"] }
+strum = { version = "0.26", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }

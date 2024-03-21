@@ -1,12 +1,16 @@
 {
   inputs = {
     attic.url = "github:zhaofengli/attic";
-    lexical.url = "github:lexical-lsp/lexical";
-    lexical.inputs.nixpkgs.follows = "nixpkgs";
-    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable-small";
-    next-ls.url = "github:elixir-tools/next-ls";
-    next-ls.inputs.nixpkgs.follows = "nixpkgs";
+    crane.inputs.nixpkgs.follows = "nixpkgs";
+    crane.url = "github:ipetkov/crane";
     flake-parts.url = "github:hercules-ci/flake-parts";
+    lexical.inputs.nixpkgs.follows = "nixpkgs";
+    lexical.url = "github:lexical-lsp/lexical";
+    next-ls.inputs.nixpkgs.follows = "nixpkgs";
+    next-ls.url = "github:elixir-tools/next-ls";
+    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable-small";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+    rust-overlay.url = "github:oxalica/rust-overlay";
   };
 
   outputs =
@@ -31,6 +35,16 @@
         let
           beam = pkgs.beam.packagesWith pkgs.erlang;
           lexical = inputs'.lexical.packages.default.override { elixir = beam.elixir_1_16; };
+
+          rustTarget =
+            if pkgs.stdenv.isLinux then
+              "${pkgs.hostPlatform.qemuArch}-unknown-linux-musl"
+            else
+              "${pkgs.hostPlatform.qemuArch}-apple-darwin";
+
+          rustToolchain = inputs'.rust-overlay.packages.rust.override { targets = [ rustTarget ]; };
+
+          craneLib = (inputs.crane.mkLib pkgs).overrideToolchain rustToolchain;
         in
         {
           devShells.default = pkgs.mkShell {
@@ -48,12 +62,11 @@
               pkgs.process-compose
               pkgs.sqlite
 
-              pkgs.delve
-              pkgs.go
-              pkgs.golangci-lint
-              pkgs.gopls
-              pkgs.go-tools
-              pkgs.gotools
+              pkgs.cargo
+              pkgs.rustc
+              pkgs.clippy
+              pkgs.rust-analyzer
+              pkgs.rustfmt
             ] ++ (lib.optionals pkgs.stdenv.isLinux [ pkgs.inotify-tools ]);
 
             nativeBuildInputs = [
@@ -66,10 +79,20 @@
             '';
           };
 
-          packages = rec {
+          packages = {
             default = pkgs.callPackage ./nix/package.nix { beamPackages = beam; };
             seed-ci = pkgs.callPackage ./nix/seed-ci.nix { inherit (inputs'.attic.packages) attic; };
             sower-tree = pkgs.callPackage ./nix/sower-tree.nix { };
+
+            cli = craneLib.buildPackage {
+              src = craneLib.cleanCargoSource (craneLib.path ./cli);
+              strictDeps = true;
+
+              CARGO_BUILD_TARGET = rustTarget;
+              CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static";
+
+              buildInputs = [ ] ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.libiconv ];
+            };
           };
         };
 
