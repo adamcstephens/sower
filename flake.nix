@@ -95,6 +95,8 @@
                 pkgs.libiconv
                 pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
               ];
+
+              meta.mainProgram = "sower";
             };
           };
         };
