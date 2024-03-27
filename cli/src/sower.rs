@@ -1,7 +1,6 @@
 use clap::ValueEnum;
 use serde::Deserialize;
 use std::fs;
-use std::io::{self, Write};
 use std::process::Command;
 use strum::{Display, VariantNames};
 
@@ -16,15 +15,10 @@ pub struct Seed {
 
 impl Seed {
     pub fn realize(&self) -> Result<&Self, String> {
-        let output = Command::new("nix-store")
-            .args(["--realize", &self.out_path])
-            .output()
-            .unwrap_or_else(|_| panic!("failed to realize {:?}", &self.out_path));
-
-        io::stdout().write_all(&output.stdout).unwrap();
-        io::stderr().write_all(&output.stderr).unwrap();
-
-        match output.status.success() {
+        match run_command(
+            "nix-store".to_string(),
+            vec!["--realize".to_string(), self.out_path.clone()],
+        ) {
             true => Ok(self),
             false => Err(format!("failed to realize: {}", &self.out_path)),
         }
@@ -39,16 +33,7 @@ impl Seed {
     }
 
     fn activate_generic(&self) -> Result<&Self, String> {
-        let result = &mut Command::new(format!("{}/activate", &self.out_path));
-
-        let output = result.output().expect("failed to get output");
-
-        let _exit_code = result.status().expect("failed to set system profile");
-
-        io::stdout().write_all(&output.stdout).unwrap();
-        io::stderr().write_all(&output.stderr).unwrap();
-
-        match output.status.success() {
+        match run_command(format!("{}/activate", &self.out_path), vec![]) {
             true => Ok(self),
             false => Err(format!("failed to realize: {}", &self.out_path)),
         }
@@ -162,20 +147,26 @@ impl Tree {
     }
 
     pub fn run_reboot() {
-        println!("Rebooting")
+        run_command(
+            "systemd-run".to_string(),
+            vec![
+                "--on-active=5s".to_string(),
+                "--no-block".to_string(),
+                "--unit=sower-tree-reboot".to_string(),
+                "systemctl".to_string(),
+                "reboot".to_string(),
+            ],
+        );
+        println!("Rebooting in ~5 seconds");
+        std::process::exit(0)
     }
 }
 
 fn run_command(command: String, args: Vec<String>) -> bool {
-    let command = &mut Command::new(command);
-    let result = command.args(args);
+    let status = &mut Command::new(command)
+        .args(args)
+        .status()
+        .expect("failed to execute command");
 
-    let output = result.output().expect("failed to get output");
-
-    let _exit_code = result.status().expect("failed to set system profile");
-
-    io::stdout().write_all(&output.stdout).unwrap();
-    io::stderr().write_all(&output.stderr).unwrap();
-
-    output.status.success()
+    status.success()
 }
