@@ -58,34 +58,23 @@ impl Seed {
         let mode = mode.clone().unwrap_or(ActivationMode::DryActivate);
 
         // nixos profile needs to be manually set to ensure correct switching
-        let command = &mut Command::new("nix-env");
-        let result = command.args([
-            "--set",
-            "--profile",
-            "/nix/var/nix/profiles/system",
-            &self.out_path,
-        ]);
-
-        let output = result.output().expect("failed to get output");
-
-        let _exit_code = result.status().expect("failed to set system profile");
-
-        io::stdout().write_all(&output.stdout).unwrap();
-        io::stderr().write_all(&output.stderr).unwrap();
+        run_command(
+            "nix-env".to_string(),
+            vec![
+                "--set".to_string(),
+                "--profile".to_string(),
+                "/nix/var/nix/profiles/system".to_string(),
+                self.out_path.clone(),
+            ],
+        );
 
         // activate
+        let switch_result = run_command(
+            format!("{}/bin/switch-to-configuration", &self.out_path),
+            vec![mode.to_string()],
+        );
 
-        let command = &mut Command::new(format!("{}/bin/switch-to-configuration", &self.out_path));
-        let result = command.args([mode.to_string()]);
-
-        let output = result.output().expect("failed to get output");
-
-        let _exit_code = result.status().expect("failed to set system profile");
-
-        io::stdout().write_all(&output.stdout).unwrap();
-        io::stderr().write_all(&output.stderr).unwrap();
-
-        match output.status.success() {
+        match switch_result {
             true => Ok(self),
             false => Err(format!("failed to realize: {}", &self.out_path)),
         }
@@ -175,4 +164,18 @@ impl Tree {
     pub fn run_reboot() {
         println!("Rebooting")
     }
+}
+
+fn run_command(command: String, args: Vec<String>) -> bool {
+    let command = &mut Command::new(command);
+    let result = command.args(args);
+
+    let output = result.output().expect("failed to get output");
+
+    let _exit_code = result.status().expect("failed to set system profile");
+
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stderr().write_all(&output.stderr).unwrap();
+
+    output.status.success()
 }
