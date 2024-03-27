@@ -1,5 +1,6 @@
 use clap::ValueEnum;
 use serde::Deserialize;
+use std::env;
 use std::fs;
 use std::process::Command;
 use strum::{Display, VariantNames};
@@ -99,9 +100,17 @@ impl Sower {
 
     pub async fn find_seed(
         &self,
-        name: String,
+        name: Option<String>,
         seed_type: SeedType,
     ) -> Result<Seed, Box<dyn std::error::Error>> {
+        let name = name.clone().unwrap_or(match seed_type.clone() {
+            SeedType::Nixos | SeedType::NixDarwin => nix::unistd::gethostname()
+                .expect("Failed getting hostname")
+                .into_string()
+                .unwrap(),
+            SeedType::HomeManager => env::var("USER").expect("can not detect username"),
+        });
+
         let client = reqwest::Client::new();
         Ok(client
             .get(&self.url)
