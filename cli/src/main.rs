@@ -58,6 +58,11 @@ enum Actions {
         #[arg(long, short, value_name = "seed name")]
         name: Option<String>,
     },
+
+    Reboot {
+        #[arg(long, short, default_value_t = false)]
+        yes: bool,
+    },
 }
 
 #[tokio::main]
@@ -118,6 +123,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("{:#?}", seed);
             ()
         }
+
+        Actions::Reboot { yes } => Tree::reboot(yes.clone()),
         _ => panic!("unsupported action"),
     }
 

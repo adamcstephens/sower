@@ -1,5 +1,6 @@
 use clap::ValueEnum;
 use serde::Deserialize;
+use std::fs;
 use std::io::{self, Write};
 use std::process::Command;
 use strum::{Display, VariantNames};
@@ -135,5 +136,43 @@ impl Sower {
             .await?
             .json::<Seed>()
             .await?)
+    }
+}
+
+#[derive(Debug)]
+pub struct Tree {}
+
+impl Tree {
+    pub fn reboot(confirm: bool) {
+        if Self::reboot_needed().expect("failed to check reboot state") {
+            println!("Reboot needed.");
+        } else {
+            println!("No reboot necessary.");
+            return;
+        }
+
+        if !confirm {
+            println!("Check mode enabled, skipping reboot");
+            return;
+        }
+
+        Self::run_reboot()
+    }
+
+    pub fn reboot_needed() -> std::io::Result<bool> {
+        let profile_paths = &["initrd", "kernel", "kernel-modules"];
+        let result = profile_paths.iter().any(|&path| {
+            let current_path = format!("/nix/var/nix/profiles/system/{}", path);
+            let booted_path = format!("/run/booted-system/{}", path);
+            let current = fs::read_link(current_path).expect("unstable to read current link");
+            let booted = fs::read_link(booted_path).expect("unable to read booted link");
+
+            current != booted
+        });
+        Ok(result)
+    }
+
+    pub fn run_reboot() {
+        println!("Rebooting")
     }
 }
