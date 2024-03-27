@@ -6,7 +6,6 @@
     flake-parts.url = "github:hercules-ci/flake-parts";
     lexical.inputs.nixpkgs.follows = "nixpkgs";
     lexical.url = "github:lexical-lsp/lexical";
-    next-ls.inputs.nixpkgs.follows = "nixpkgs";
     next-ls.url = "github:elixir-tools/next-ls";
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable-small";
     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
@@ -33,8 +32,10 @@
           ...
         }:
         let
-          beam = pkgs.beam.packagesWith pkgs.erlang;
-          lexical = inputs'.lexical.packages.default.override { elixir = beam.elixir_1_16; };
+          beamPackages = pkgs.beam.packagesWith pkgs.erlang;
+          elixir = beamPackages.elixir_1_16;
+          lexical = inputs'.lexical.packages.default.override { inherit elixir; };
+          next-ls = inputs'.next-ls.packages.default.override { };
 
           rustTarget =
             if pkgs.stdenv.isLinux then
@@ -49,8 +50,9 @@
         {
           devShells.default = pkgs.mkShell {
             packages = [
-              beam.elixir_1_16
-              beam.elixir-ls
+              elixir
+              beamPackages.elixir-ls
+              next-ls
 
               inputs'.attic.packages.attic
               self'.packages.seed-ci
@@ -80,7 +82,7 @@
           };
 
           packages = {
-            default = pkgs.callPackage ./nix/package.nix { beamPackages = beam; };
+            default = pkgs.callPackage ./nix/package.nix { beamPackages = beamPackages; };
             seed-ci = pkgs.callPackage ./nix/seed-ci.nix { inherit (inputs'.attic.packages) attic; };
             sower-tree = pkgs.callPackage ./nix/sower-tree.nix { };
 
