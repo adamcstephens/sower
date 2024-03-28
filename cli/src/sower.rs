@@ -1,3 +1,5 @@
+use crate::*;
+
 use clap::ValueEnum;
 use serde::Deserialize;
 use std::env;
@@ -25,7 +27,7 @@ impl Seed {
         }
     }
 
-    pub fn activate(&self, mode: &Option<ActivationMode>) -> Result<&Self, String> {
+    pub fn activate(&self, mode: Option<ActivationMode>) -> Result<&Self, String> {
         match &self.seed_type {
             SeedType::HomeManager => self.activate_generic(),
             SeedType::NixDarwin => self.activate_generic(),
@@ -40,8 +42,8 @@ impl Seed {
         }
     }
 
-    fn activate_nixos(&self, mode: &Option<ActivationMode>) -> Result<&Self, String> {
-        let mode = mode.clone().unwrap_or(ActivationMode::DryActivate);
+    fn activate_nixos(&self, mode: Option<ActivationMode>) -> Result<&Self, String> {
+        let mode = mode.unwrap_or(ActivationMode::DryActivate);
 
         // nixos profile needs to be manually set to ensure correct switching
         run_command(
@@ -67,7 +69,7 @@ impl Seed {
     }
 }
 
-#[derive(Clone, Debug, Display, VariantNames, Deserialize, ValueEnum)]
+#[derive(Clone, Copy, Debug, Display, VariantNames, Deserialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 #[strum(serialize_all = "kebab-case")]
 pub enum SeedType {
@@ -86,31 +88,26 @@ pub enum ActivationMode {
     None,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Sower {
     pub url: String,
 }
 
 impl Sower {
-    pub fn new(url: String) -> Result<Sower, Box<dyn std::error::Error>> {
-        let seed_url = format!("{}/api/seeds/latest", url);
+    pub fn new(config: &Config) -> Result<Sower, Box<dyn std::error::Error>> {
+        let seed_url = format!(
+            "{}/api/seeds/latest",
+            config.url.clone().expect("URL is required")
+        );
 
         Ok(Self { url: seed_url })
     }
 
     pub async fn find_seed(
         &self,
-        name: Option<String>,
+        name: String,
         seed_type: SeedType,
     ) -> Result<Seed, Box<dyn std::error::Error>> {
-        let name = name.clone().unwrap_or(match seed_type.clone() {
-            SeedType::Nixos | SeedType::NixDarwin => nix::unistd::gethostname()
-                .expect("Failed getting hostname")
-                .into_string()
-                .unwrap(),
-            SeedType::HomeManager => env::var("USER").expect("can not detect username"),
-        });
-
         let client = reqwest::Client::new();
         Ok(client
             .get(&self.url)
@@ -123,9 +120,37 @@ impl Sower {
 }
 
 #[derive(Debug)]
-pub struct Tree {}
+pub struct Tree {
+    pub name: String,
+    pub seed: Seed,
+    pub seed_type: SeedType,
+    pub sower: Sower,
+}
 
 impl Tree {
+    pub async fn new(config: &Config) -> Result<Tree, Box<dyn std::error::Error>> {
+        let name =
+            config
+                .name
+                .clone()
+                .unwrap_or(match config.seed_type.expect("seed type is required") {
+                    SeedType::Nixos | SeedType::NixDarwin => nix::unistd::gethostname()
+                        .expect("Failed getting hostname")
+                        .into_string()
+                        .unwrap(),
+                    SeedType::HomeManager => env::var("USER").expect("can not detect username"),
+                });
+        let seed_type = config.seed_type.unwrap();
+        let sower = Sower::new(&config)?;
+
+        Ok(Tree {
+            name: name.clone(),
+            seed_type,
+            sower: sower.clone(),
+            seed: sower.find_seed(name, seed_type).await?,
+        })
+    }
+
     pub fn reboot(confirm: bool) {
         if Self::reboot_needed().expect("failed to check reboot state") {
             println!("Reboot needed.");
