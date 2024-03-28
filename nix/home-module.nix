@@ -28,9 +28,9 @@ in
 
             type = lib.mkOption {
               type = lib.types.enum [
-                "nixos"
                 "home-manager"
                 "nix-darwin"
+                "nixos"
               ];
               default = "home-manager";
             };
@@ -42,32 +42,56 @@ in
     };
   };
 
-  config = lib.mkIf cfg.enable {
-    assertions = [
+  config = lib.mkIf cfg.enable (
+    lib.mkMerge [
       {
-        assertion = cfg.config.url != null;
-        message = "Sower URL is required";
+        assertions = [
+          {
+            assertion = cfg.config.url != null;
+            message = "Sower URL is required";
+          }
+        ];
+
+        xdg.configFile."sower/config.toml".source = lib.mkIf (cfg.config != null) (
+          toml.generate "sower-config.toml" cfg.config
+        );
       }
-    ];
 
-    systemd.user.services.sower = {
-      Service = {
-        Environment = [ "PATH=${lib.makeBinPath [ pkgs.nix ]}" ];
-        ExecStart = "${lib.getExe cfg.package} tree upgrade";
-      };
-    };
+      (lib.mkIf pkgs.stdenv.isLinux {
+        systemd.user.services.sower = {
+          Service = {
+            Environment = [ "PATH=${lib.makeBinPath [ pkgs.nix ]}" ];
+            ExecStart = "${lib.getExe cfg.package} tree upgrade";
+          };
+        };
 
-    systemd.user.timers.sower = {
-      Install.WantedBy = [ "timers.target" ];
+        systemd.user.timers.sower = {
+          Install.WantedBy = [ "timers.target" ];
 
-      Timer = {
-        OnCalendar = "daily";
-        Persistent = true;
-      };
-    };
+          Timer = {
+            OnCalendar = "daily";
+            Persistent = true;
+          };
+        };
+      })
 
-    xdg.configFile."sower/config.toml".source = lib.mkIf (cfg.config != null) (
-      toml.generate "sower-config.toml" cfg.config
-    );
-  };
+      (lib.mkIf pkgs.stdenv.isDarwin {
+        launchd = {
+          agents.sower = {
+            enable = true;
+            config = {
+              KeepAlive = false;
+              ProgramArguments = [ "${lib.getExe cfg.package} tree upgrade" ];
+              StartCalendarInterval = [
+                {
+                  Hour = 1;
+                  Minute = 0;
+                }
+              ];
+            };
+          };
+        };
+      })
+    ]
+  );
 }
