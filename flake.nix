@@ -121,6 +121,7 @@
           };
 
         flake.nixosModules.sower = ./nix/module.nix;
+        flake.homeModules.sower = ./nix/home-module.nix;
 
         # don't support darwin
         flake.packages.x86_64-linux = rec {

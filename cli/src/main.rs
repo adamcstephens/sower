@@ -22,14 +22,13 @@ struct Cli {
     name: Option<String>,
 
     #[arg(
-    value_enum,
+        value_enum,
         long = "type",
         short = 't',
-        default_value_t = SeedType::Nixos,
         global = true,
         value_name = "TYPE"
     )]
-    seed_type: SeedType,
+    seed_type: Option<SeedType>,
 
     #[arg(short, long, global = true, value_name = "SOWER_URL")]
     url: Option<String>,
@@ -93,6 +92,7 @@ enum TreeCommands {
 #[derive(Debug, Deserialize)]
 pub struct Config {
     name: Option<String>,
+    #[serde(rename(deserialize = "type"))]
     seed_type: Option<SeedType>,
     url: Option<String>,
 }
@@ -106,10 +106,11 @@ impl Config {
         }
     }
 
-    pub fn seed_type(self, seed_type: SeedType) -> Self {
-        Self {
-            seed_type: Some(seed_type),
-            ..self
+    pub fn seed_type(self, seed_type: Option<SeedType>) -> Self {
+        if let Some(_) = &seed_type {
+            Self { seed_type, ..self }
+        } else {
+            self
         }
     }
 
@@ -180,10 +181,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .expect("failed to activate");
 
                 if reboot.clone() {
-                    Tree::reboot(yes.clone());
+                    tree.reboot(yes.clone());
                 }
             }
-            TreeCommands::Reboot { yes } => Tree::reboot(yes.clone()),
+            TreeCommands::Reboot { yes } => tree.reboot(yes.clone()),
         },
     }
 

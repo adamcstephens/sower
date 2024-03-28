@@ -69,7 +69,7 @@ impl Seed {
     }
 }
 
-#[derive(Clone, Copy, Debug, Display, VariantNames, Deserialize, ValueEnum)]
+#[derive(Clone, Copy, Debug, Deserialize, Display, PartialEq, ValueEnum, VariantNames)]
 #[serde(rename_all = "kebab-case")]
 #[strum(serialize_all = "kebab-case")]
 pub enum SeedType {
@@ -151,7 +151,12 @@ impl Tree {
         })
     }
 
-    pub fn reboot(confirm: bool) {
+    pub fn reboot(&self, confirm: bool) {
+        if self.seed_type != SeedType::Nixos {
+            println!("Non-NixOS Trees aren't rebootable");
+            return;
+        }
+
         if Self::reboot_needed().expect("failed to check reboot state") {
             println!("Reboot needed.");
         } else {
@@ -167,7 +172,7 @@ impl Tree {
         Self::run_reboot()
     }
 
-    pub fn reboot_needed() -> std::io::Result<bool> {
+    fn reboot_needed() -> std::io::Result<bool> {
         let profile_paths = &["initrd", "kernel", "kernel-modules"];
         let result = profile_paths.iter().any(|&path| {
             let current_path = format!("/nix/var/nix/profiles/system/{}", path);
@@ -180,7 +185,7 @@ impl Tree {
         Ok(result)
     }
 
-    pub fn run_reboot() {
+    fn run_reboot() {
         run_command(
             "systemd-run".to_string(),
             vec![
