@@ -4,6 +4,8 @@ use clap::Parser;
 use clap::Subcommand;
 use serde::Deserialize;
 use std::fs;
+use std::path::{Path, PathBuf};
+use xdg;
 
 mod sower;
 
@@ -14,7 +16,7 @@ struct Cli {
     action: Actions,
 
     #[arg(long, short, global = true)]
-    config: Option<String>,
+    config: Option<PathBuf>,
 
     #[arg(long, short, global = true)]
     name: Option<String>,
@@ -124,18 +126,34 @@ impl Config {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
-    let config: Config = match cli.config {
-        Some(path) => {
-            let config_string = fs::read_to_string(path)?;
+    let config_file = match cli.config {
+        Some(path) => path,
+        None => match std::env::var("USER") {
+            Ok(user) => match user.as_ref() {
+                "root" => PathBuf::from("/etc/sower/config.toml"),
+                _ => xdg::BaseDirectories::with_prefix("sower")
+                    .expect("cannot locate XDG directories")
+                    .get_config_file("config.toml"),
+            },
+            Err(_) => PathBuf::from("/etc/sower/config.toml"),
+        },
+    };
+
+    dbg!(&config_file);
+
+    let config = match Path::try_exists(&config_file) {
+        Ok(true) => {
+            let config_string = fs::read_to_string(config_file)?;
             toml::from_str(&config_string).expect("failed to parse config file")
         }
-        None => Config {
+        _ => Config {
             name: None,
             seed_type: None,
             url: None,
         },
     };
 
+    // cli overrides config
     let config = config.name(cli.name).seed_type(cli.seed_type).url(cli.url);
 
     let tree = Tree::new(&config).await?;
