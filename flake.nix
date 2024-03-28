@@ -91,20 +91,32 @@
               seed-ci = pkgs.callPackage ./nix/seed-ci.nix { inherit (inputs'.attic.packages) attic; };
               sower-tree = pkgs.callPackage ./nix/sower-tree.nix { };
 
-              cli = craneLib.buildPackage {
-                src = craneLib.cleanCargoSource (craneLib.path ./cli);
-                strictDeps = true;
+              cli = craneLib.buildPackage (
+                craneLib.crateNameFromCargoToml { cargoToml = ./cli/Cargo.toml; }
+                // {
+                  src =
+                    with lib.fileset;
+                    toSource {
+                      root = ./.;
+                      fileset = unions [
+                        ./cli
+                        ./Cargo.lock
+                        ./Cargo.toml
+                      ];
+                    };
+                  strictDeps = true;
 
-                CARGO_BUILD_TARGET = rustTarget;
-                CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static";
+                  CARGO_BUILD_TARGET = rustTarget;
+                  CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static";
 
-                buildInputs = pkgs.lib.optionals pkgs.stdenv.isDarwin [
-                  pkgs.libiconv
-                  pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
-                ];
+                  buildInputs = pkgs.lib.optionals pkgs.stdenv.isDarwin [
+                    pkgs.libiconv
+                    pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
+                  ];
 
-                meta.mainProgram = "sower";
-              };
+                  meta.mainProgram = "sower";
+                }
+              );
             };
           };
 
