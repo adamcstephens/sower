@@ -79,6 +79,7 @@ pub enum SeedType {
 }
 
 #[derive(Clone, Debug, Deserialize, Display, ValueEnum, VariantNames)]
+#[serde(rename_all = "kebab-case")]
 #[strum(serialize_all = "kebab-case")]
 pub enum ActivationMode {
     Boot,
