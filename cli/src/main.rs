@@ -187,7 +187,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .expect("failed to activate");
 
                 if config.autoreboot.unwrap_or(false) || reboot.clone() {
-                    tree.reboot(yes.clone());
+                    let confirm = if *reboot {
+                        yes.clone()
+                    } else if config.autoreboot.unwrap_or(false) {
+                        true
+                    } else {
+                        false
+                    };
+
+                    tree.reboot(confirm);
                 }
             }
             TreeCommands::Reboot { yes } => tree.reboot(yes.clone()),
