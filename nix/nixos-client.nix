@@ -16,7 +16,7 @@ in
 
       package = lib.mkOption { type = lib.types.package; };
 
-      config = lib.mkOption {
+      settings = lib.mkOption {
         type = lib.types.submodule {
           freeformType = tomlType;
 
@@ -43,22 +43,15 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    assertions = [
-      {
-        assertion = cfg.config.url != null;
-        message = "Sower URL is required";
-      }
-    ];
-
-    environment.etc."sower/config.toml".source = lib.mkIf (cfg.config != null) (
-      toml.generate "sower-config.toml" cfg.config
+    environment.etc."sower/config.toml".source = lib.mkIf (cfg.settings != null) (
+      toml.generate "sower-config.toml" cfg.settings
     );
 
     systemd.services.sower-client = {
       path = [ pkgs.nix ];
 
       serviceConfig = {
-        ExecStart = "${lib.getExe cfg.package} tree upgrade --reboot --yes";
+        ExecStart = "${lib.getExe cfg.package} tree upgrade";
         Type = "oneshot";
       };
     };

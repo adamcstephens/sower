@@ -91,6 +91,8 @@ enum TreeCommands {
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
+    autoreboot: Option<bool>,
+    mode: Option<ActivationMode>,
     name: Option<String>,
     #[serde(rename(deserialize = "type"))]
     seed_type: Option<SeedType>,
@@ -148,6 +150,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             toml::from_str(&config_string).expect("failed to parse config file")
         }
         _ => Config {
+            autoreboot: None,
+            mode: None,
             name: None,
             seed_type: None,
             url: None,
@@ -165,7 +169,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match &cli.action {
         Actions::Seed { action } => match action {
             SeedCommands::Activate { mode, .. } => {
-                seed.activate(mode.clone()).expect("failed to activate");
+                let mode = mode.clone().or(config.mode);
+                seed.activate(mode).expect("failed to activate");
             }
 
             SeedCommands::Download {} => {
@@ -175,12 +180,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         Actions::Tree { action } => match action {
             TreeCommands::Upgrade { mode, reboot, yes } => {
+                let mode = mode.clone().or(config.mode);
                 seed.realize()
                     .expect("failed to realize")
-                    .activate(mode.clone())
+                    .activate(mode)
                     .expect("failed to activate");
 
-                if reboot.clone() {
+                if config.autoreboot.unwrap_or(false) || reboot.clone() {
                     tree.reboot(yes.clone());
                 }
             }
