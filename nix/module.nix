@@ -8,9 +8,11 @@ let
   cfg = config.services.sower;
 in
 {
+  imports = [ ./nixos-client.nix ];
+
   options = {
     services.sower = {
-      enable = lib.mkEnableOption "Enable Sower service";
+      enable = lib.mkEnableOption "Sower server";
 
       package = lib.mkOption {
         type = lib.types.package;
@@ -34,7 +36,7 @@ in
 
   config = lib.mkIf cfg.enable {
     systemd.services.sower = {
-      description = "Sower NixOS management platform";
+      description = "Sower management platform";
 
       wantedBy = [ "multi-user.target" ];
       after = [ "network-online.target" ];

@@ -12,7 +12,7 @@ in
 {
   options = {
     services.sower = {
-      enable = lib.mkEnableOption "Sower agent";
+      enable = lib.mkEnableOption "Sower client";
 
       package = lib.mkOption { type = lib.types.package; };
 
@@ -62,6 +62,7 @@ in
           Service = {
             Environment = [ "PATH=${lib.makeBinPath [ pkgs.nix ]}" ];
             ExecStart = "${lib.getExe cfg.package} tree upgrade";
+            Type = "oneshot";
           };
         };
 

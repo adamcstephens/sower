@@ -86,12 +86,15 @@
             legacyPackages = {
               inherit beamPackages;
             };
-            packages = {
+            packages = rec {
 
               seed-ci = pkgs.callPackage ./nix/seed-ci.nix { inherit (inputs'.attic.packages) attic; };
               sower-tree = pkgs.callPackage ./nix/sower-tree.nix { };
 
-              cli = craneLib.buildPackage (
+              # legacy alias
+              cli = client;
+
+              client = craneLib.buildPackage (
                 craneLib.crateNameFromCargoToml { cargoToml = ./cli/Cargo.toml; }
                 // {
                   src =
