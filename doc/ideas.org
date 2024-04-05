@@ -1,0 +1,22 @@
+* TODO bail out nixos if not root
+* TODO boot check for containers
+can we just check if boot-system matches out_path?
+* TODO differentiate built seed branch?
+
+* Stories
+- I want to switch nightly but boot/reboot once a week
+- I want some systems to never downgrade manually applied changes
+
+* Scheduling
+Time/Day windows
+Frequency/cron scheduler
+- download
+- switch
+- boot
+- reboot
+
+* Inhbiting
+Allow for inhibiting of all phases of maintenance.
+Settings for not rolling back manually applied generations.
+May want to have client load track generations<->out_path
+Provide a runtime inhibition. So I can connect to a system, inhibit in /run and when I reboot inhibition will be gone

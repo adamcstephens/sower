@@ -15,7 +15,7 @@ let
 in
 beamPackages.mixRelease {
   pname = "sower";
-  version = "0.0.1-dev";
+  version = "0.1.0";
 
   src = lib.fileset.toSource {
     root = ../.;
