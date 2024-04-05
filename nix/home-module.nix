@@ -89,6 +89,8 @@ in
                   Minute = 0;
                 }
               ];
+              StandardErrorPath = "${config.home.homeDirectory}/Library/Logs/sower-client.log";
+              StandardOutPath = "${config.home.homeDirectory}/Library/Logs/sower-client.log";
             };
           };
         };
