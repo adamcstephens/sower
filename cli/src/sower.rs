@@ -152,6 +152,11 @@ impl Tree {
         })
     }
 
+    pub fn info(&self) -> () {
+        dbg!(self);
+        ()
+    }
+
     pub fn reboot(&self, confirm: bool) {
         if self.seed_type != SeedType::Nixos {
             println!("Non-NixOS Trees aren't rebootable");

@@ -72,6 +72,8 @@ enum SeedCommands {
     subcommand_help_heading = "Tree commands"
 )]
 enum TreeCommands {
+    Info {},
+
     Reboot {
         #[arg(long, short, default_value_t = false)]
         yes: bool,
@@ -164,8 +166,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tree = Tree::new(&config).await?;
     let seed = &tree.seed;
 
-    dbg!(&tree);
-
     match &cli.action {
         Actions::Seed { action } => match action {
             SeedCommands::Activate { mode, .. } => {
@@ -179,7 +179,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
 
         Actions::Tree { action } => match action {
+            TreeCommands::Info {} => tree.info(),
+
+            TreeCommands::Reboot { yes } => {
+                tree.info();
+                tree.reboot(yes.clone())
+            }
+
             TreeCommands::Upgrade { mode, reboot, yes } => {
+                tree.info();
+
                 let mode = mode.clone().or(config.mode);
                 seed.realize()
                     .expect("failed to realize")
@@ -198,7 +207,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     tree.reboot(confirm);
                 }
             }
-            TreeCommands::Reboot { yes } => tree.reboot(yes.clone()),
         },
     }
 

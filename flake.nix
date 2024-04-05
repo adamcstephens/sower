@@ -51,27 +51,33 @@
           in
           {
             devShells.default = pkgs.mkShell {
-              packages = [
-                elixir
-                beamPackages.elixir-ls
-                next-ls
+              packages =
+                [
+                  elixir
+                  beamPackages.elixir-ls
+                  next-ls
 
-                inputs'.attic.packages.attic
-                self'.packages.seed-ci
+                  inputs'.attic.packages.attic
+                  self'.packages.seed-ci
 
-                pkgs.docker
-                pkgs.just
-                pkgs.mix2nix
-                pkgs.nvfetcher
-                pkgs.process-compose
-                pkgs.sqlite
+                  pkgs.docker
+                  pkgs.just
+                  pkgs.mix2nix
+                  pkgs.nvfetcher
+                  pkgs.process-compose
+                  pkgs.sqlite
 
-                pkgs.cargo
-                pkgs.rustc
-                pkgs.clippy
-                pkgs.rust-analyzer
-                pkgs.rustfmt
-              ] ++ (lib.optionals pkgs.stdenv.isLinux [ pkgs.inotify-tools ]);
+                  pkgs.cargo
+                  pkgs.rustc
+                  pkgs.clippy
+                  pkgs.rust-analyzer
+                  pkgs.rustfmt
+                ]
+                ++ lib.optionals pkgs.stdenv.isLinux [ pkgs.inotify-tools ]
+                ++ lib.optionals pkgs.stdenv.isDarwin [
+                  pkgs.libiconv
+                  pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
+                ];
 
               nativeBuildInputs = [
                 pkgs.fmt
