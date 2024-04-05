@@ -5,13 +5,13 @@
   ...
 }:
 let
-  cfg = config.services.sower;
+  cfg = config.services.sower.client;
   toml = pkgs.formats.toml { };
   tomlType = toml.type;
 in
 {
   options = {
-    services.sower = {
+    services.sower.client = {
       enable = lib.mkEnableOption "Sower client";
 
       package = lib.mkOption { type = lib.types.package; };
@@ -58,7 +58,7 @@ in
       }
 
       (lib.mkIf pkgs.stdenv.isLinux {
-        systemd.user.services.sower = {
+        systemd.user.services.sower-client = {
           Service = {
             Environment = [ "PATH=${lib.makeBinPath [ pkgs.nix ]}" ];
             ExecStart = "${lib.getExe cfg.package} tree upgrade";
@@ -66,7 +66,7 @@ in
           };
         };
 
-        systemd.user.timers.sower = {
+        systemd.user.timers.sower-client = {
           Install.WantedBy = [ "timers.target" ];
 
           Timer = {
@@ -78,7 +78,7 @@ in
 
       (lib.mkIf pkgs.stdenv.isDarwin {
         launchd = {
-          agents.sower = {
+          agents.sower-client = {
             enable = true;
             config = {
               KeepAlive = false;
