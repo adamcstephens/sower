@@ -48,6 +48,8 @@ in
     );
 
     systemd.services.sower-client = {
+      after = [ "network-online.target" ];
+      requires = [ "network-online.target" ];
       path = [ pkgs.nix ];
 
       serviceConfig = {

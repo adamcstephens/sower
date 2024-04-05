@@ -148,7 +148,7 @@ def main [--attic-upload = true, --attic-use = false, --eval-only, --nom = true,
   let attic_token = $env.ATTIC_KEY?
 
   if $attic_use or $attic_upload {
-    if ($attic_url == null) or ($attic_cache == null) or ($attic_token == null)) {
+    if ($attic_url == null) or ($attic_cache == null) or ($attic_token == null) {
       print "‼️ attic information missing, but attic-use or attic-upload are set to true"
       exit 1
     }
