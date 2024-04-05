@@ -28,6 +28,7 @@ impl Seed {
     }
 
     pub fn activate(&self, mode: Option<ActivationMode>) -> Result<&Self, String> {
+        // TODO compare new activation to existing profile
         match &self.seed_type {
             SeedType::HomeManager => self.activate_generic(),
             SeedType::NixDarwin => self.activate_generic(),
@@ -179,9 +180,11 @@ impl Tree {
     }
 
     fn reboot_needed() -> std::io::Result<bool> {
+        // TODO handle missing paths
         let profile_paths = &["initrd", "kernel", "kernel-modules"];
         let result = profile_paths.iter().any(|&path| {
-            let current_path = format!("/nix/var/nix/profiles/system/{}", path);
+            let current_path = format!("/nix/var/nix/profiles/system/{}", path); // fails if
+                                                                                 // missing
             let booted_path = format!("/run/booted-system/{}", path);
             let current = fs::read_link(current_path).expect("unstable to read current link");
             let booted = fs::read_link(booted_path).expect("unable to read booted link");
