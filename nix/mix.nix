@@ -10,12 +10,12 @@ let
   packages = with beamPackages; with self; {
     bandit = buildMix rec {
       name = "bandit";
-      version = "1.4.0";
+      version = "1.4.2";
 
       src = fetchHex {
         pkg = "bandit";
         version = "${version}";
-        sha256 = "2d068334fe7a4ea17161b875aa112bfa7d62060e8eefb1a1117b2ab6a817e04f";
+        sha256 = "3db8bacea631bd926cc62ccad58edfee4252d1b4c5cccbbad9825df2722b884f";
       };
 
       beamDeps = [ hpax plug telemetry thousand_island websock ];
@@ -112,19 +112,6 @@ let
       beamDeps = [ decimal ecto ecto_sql exqlite ];
     };
 
-    egit = buildRebar3 rec {
-      name = "egit";
-      version = "0.1.9";
-
-      src = fetchHex {
-        pkg = "egit";
-        version = "${version}";
-        sha256 = "ec6e0d2e9a5c51314c53689038551430f3639b2249484562f3e81b24f82f039e";
-      };
-
-      beamDeps = [];
-    };
-
     elixir_make = buildMix rec {
       name = "elixir_make";
       version = "0.8.3";
@@ -166,12 +153,12 @@ let
 
     exqlite = buildMix rec {
       name = "exqlite";
-      version = "0.20.0";
+      version = "0.21.0";
 
       src = fetchHex {
         pkg = "exqlite";
         version = "${version}";
-        sha256 = "385ed37b8317101b7f9b58333910798ebe395e77ee6ca261be74a1a06b3d61f6";
+        sha256 = "b177180bb2788b761ddd5949763640aef92ed06db80d70a1130b6bede180b45f";
       };
 
       beamDeps = [ cc_precompiler db_connection elixir_make ];
@@ -344,19 +331,6 @@ let
       };
 
       beamDeps = [];
-    };
-
-    oauth2 = buildMix rec {
-      name = "oauth2";
-      version = "2.1.0";
-
-      src = fetchHex {
-        pkg = "oauth2";
-        version = "${version}";
-        sha256 = "8ac07f85b3307dd1acfeb0ec852f64161b22f57d0ce0c15e616a1dfc8ebe2b41";
-      };
-
-      beamDeps = [ tesla ];
     };
 
     phoenix = buildMix rec {
@@ -567,19 +541,6 @@ let
       beamDeps = [ telemetry ];
     };
 
-    tesla = buildMix rec {
-      name = "tesla";
-      version = "1.8.0";
-
-      src = fetchHex {
-        pkg = "tesla";
-        version = "${version}";
-        sha256 = "10501f360cd926a309501287470372af1a6e1cbed0f43949203a4c13300bc79f";
-      };
-
-      beamDeps = [ castore finch jason mime mint telemetry ];
-    };
-
     thousand_island = buildMix rec {
       name = "thousand_island";
       version = "1.3.5";
@@ -591,19 +552,6 @@ let
       };
 
       beamDeps = [ telemetry ];
-    };
-
-    unplug = buildMix rec {
-      name = "unplug";
-      version = "1.0.0";
-
-      src = fetchHex {
-        pkg = "unplug";
-        version = "${version}";
-        sha256 = "d171a85758aa412d4e85b809c203e1b1c4c76a4d6ab58e68dc9a8a8acd9b7c3a";
-      };
-
-      beamDeps = [ plug ];
     };
 
     websock = buildMix rec {
