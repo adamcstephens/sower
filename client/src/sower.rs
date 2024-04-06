@@ -200,7 +200,7 @@ impl Tree {
             vec![
                 "--on-active=5s".to_string(),
                 "--no-block".to_string(),
-                "--unit=sower-tree-reboot".to_string(),
+                "--unit=sower-client-reboot".to_string(),
                 "systemctl".to_string(),
                 "reboot".to_string(),
             ],

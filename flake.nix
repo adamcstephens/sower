@@ -95,7 +95,6 @@
             packages = rec {
 
               seed-ci = pkgs.callPackage ./nix/seed-ci.nix { inherit (inputs'.attic.packages) attic; };
-              sower-tree = pkgs.callPackage ./nix/sower-tree.nix { };
 
               # legacy alias
               cli = client;
