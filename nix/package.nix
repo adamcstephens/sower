@@ -3,9 +3,6 @@
   beamPackages,
   esbuild,
   tailwindcss,
-  fmt,
-  git,
-  libgit2,
   sqlite,
   stdenv,
 }:
@@ -29,14 +26,6 @@ beamPackages.mixRelease {
   mixNixDeps = import ./mix.nix {
     inherit lib beamPackages;
     overrides = _: prev: {
-      egit = prev.egit.override (old: {
-        nativeBuildInputs = [
-          fmt
-          git
-          libgit2
-        ];
-        patches = [ ./egit-skip-submodule.patch ];
-      });
       esbuild = prev.esbuild.override (old: {
         patches = [ ./esbuild-loadpaths.patch ];
       });

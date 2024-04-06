@@ -41,13 +41,10 @@ defmodule SowerWeb.Endpoint do
   plug(Plug.RequestId)
   plug(Plug.Telemetry, event_prefix: [:phoenix, :endpoint])
 
-  plug(Unplug,
-    if: {Unplug.Predicates.RequestPathNotIn, ["/scm"]},
-    do:
-      {Plug.Parsers,
-       parsers: [:urlencoded, :multipart, :json],
-       pass: ["*/*"],
-       json_decoder: Phoenix.json_library()}
+  plug(Plug.Parsers,
+    parsers: [:urlencoded, :multipart, :json],
+    pass: ["*/*"],
+    json_decoder: Phoenix.json_library()
   )
 
   plug(Plug.MethodOverride)

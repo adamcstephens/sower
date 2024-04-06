@@ -15,43 +15,13 @@ defmodule SowerWeb.Router do
     plug(:accepts, ["json"])
   end
 
-  pipeline :scm do
-    plug(Plug.Parsers,
-      parsers: [:urlencoded, :multipart, :json],
-      pass: ["*/*"],
-      json_decoder: Phoenix.json_library(),
-      body_reader: {SowerWeb.Plugs.ScmWebhookVerify, :read_and_store_body, []}
-    )
-
-    plug(SowerWeb.Plugs.ScmWebhookVerify)
-  end
-
   scope "/", SowerWeb do
     pipe_through(:browser)
 
     get("/", PageController, :home)
 
-    live("/hooks", HookLive.Index, :index)
-    live("/hooks/new", HookLive.Index, :new)
-    live("/hooks/:id/edit", HookLive.Index, :edit)
-    live("/hooks/:id", HookLive.Show, :show)
-
-    live("/repos", RepositoryLive.Index, :index)
-    live("/repos/new", RepositoryLive.Index, :new)
-    live("/repos/:id/edit", RepositoryLive.Index, :edit)
-    live("/repos/:id", RepositoryLive.Show, :show)
-
     live("/seeds", SeedLive.Index, :index)
     live("/seeds/:id", SeedLive.Show, :show)
-
-    live "/trees", TreeLive.Index, :index
-    live "/trees/new", TreeLive.Index, :new
-    live "/trees/:id/edit", TreeLive.Index, :edit
-
-    live "/trees/:id", TreeLive.Show, :show
-    live "/trees/:id/show/edit", TreeLive.Show, :edit
-
-    get("/auth/callback", AuthController, :callback)
   end
 
   scope "/api" do
@@ -59,11 +29,6 @@ defmodule SowerWeb.Router do
     get("/seeds", SowerWeb.SeedController, :list)
     get("/seeds/latest", SowerWeb.SeedController, :find_latest)
     post("/seeds", SowerWeb.SeedController, :new)
-  end
-
-  scope "/scm" do
-    pipe_through([:scm, :api])
-    post("/", SowerWeb.WebhookController, :handler)
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
