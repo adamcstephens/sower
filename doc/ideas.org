@@ -7,6 +7,9 @@ can we just check if boot-system matches out_path?
 - I want to switch nightly but boot/reboot once a week
 - I want some systems to never downgrade manually applied changes
 
+* Bootstrapping a host
+- Requires a cache to realize
+
 * Scheduling
 Time/Day windows
 Frequency/cron scheduler

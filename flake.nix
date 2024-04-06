@@ -101,14 +101,14 @@
               cli = client;
 
               client = craneLib.buildPackage (
-                craneLib.crateNameFromCargoToml { cargoToml = ./cli/Cargo.toml; }
+                craneLib.crateNameFromCargoToml { cargoToml = ./client/Cargo.toml; }
                 // {
                   src =
                     with lib.fileset;
                     toSource {
                       root = ./.;
                       fileset = unions [
-                        ./cli
+                        ./client
                         ./Cargo.lock
                         ./Cargo.toml
                       ];

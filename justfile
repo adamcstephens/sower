@@ -28,6 +28,9 @@ nix-lock:
 nvfetcher:
     cd nix; nvfetcher
 
+set-version version:
+    echo -n {{ version }} > VERSION
+
 start:
     iex -S mix phx.server
 
