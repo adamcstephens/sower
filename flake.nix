@@ -10,13 +10,15 @@
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable-small";
     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
     rust-overlay.url = "github:oxalica/rust-overlay";
+    typhon.url = "github:typhon-ci/typhon";
+    typhon.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
-    inputs@{ flake-parts, ... }:
+    inputs@{ flake-parts, self, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } (
       { withSystem, ... }:
-      {
+      rec {
         imports = [ ./nix/flakemodule.nix ];
 
         systems = [
@@ -128,16 +130,29 @@
             };
           };
 
-        flake.nixosModules.sower = ./nix/nixos-module.nix;
-        flake.homeModules.sower = ./nix/home-module.nix;
+        flake = {
+          nixosModules.sower = ./nix/nixos-module.nix;
+          homeModules.sower = ./nix/home-module.nix;
 
-        # don't support darwin
-        flake.packages.x86_64-linux = rec {
-          default = server;
-          server = withSystem "x86_64-linux" (
-            { pkgs, self', ... }:
-            pkgs.callPackage ./nix/package.nix { inherit (self'.legacyPackages) beamPackages; }
-          );
+          # don't support darwin
+          packages.x86_64-linux = rec {
+            default = server;
+            server = withSystem "x86_64-linux" (
+              { pkgs, self', ... }:
+              pkgs.callPackage ./nix/package.nix { inherit (self'.legacyPackages) beamPackages; }
+            );
+          };
+
+          typhonProject = inputs.typhon.lib.gitea.mkProject {
+            instance = "git.junco.dev";
+            owner = "adam";
+            repo = "sower";
+            secrets = ./secrets.age;
+            typhonUrl = "https://typhon.junco.dev";
+          };
+          typhonJobs = inputs.nixpkgs.lib.genAttrs systems (system: {
+            inherit (self.packages.${system}) client;
+          });
         };
       }
     );
