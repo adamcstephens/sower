@@ -17,7 +17,7 @@
   outputs =
     inputs@{ flake-parts, self, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } (
-      { withSystem, ... }:
+      { lib, withSystem, ... }:
       rec {
         imports = [ ./nix/flakemodule.nix ];
 
@@ -150,9 +150,9 @@
             secrets = ./secrets.age;
             typhonUrl = "https://typhon.junco.dev";
           };
-          typhonJobs = inputs.nixpkgs.lib.genAttrs systems (system: {
+          typhonJobs = lib.recursiveUpdate (inputs.nixpkgs.lib.genAttrs systems (system: {
             inherit (self.packages.${system}) client;
-          });
+          })) { x86_64-linux.server = self.packages.x86_64-linux.server; };
         };
       }
     );
