@@ -33,7 +33,7 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    systemd.services.sower.server = {
+    systemd.services.sower = {
       description = "Sower management platform";
 
       wantedBy = [ "multi-user.target" ];
