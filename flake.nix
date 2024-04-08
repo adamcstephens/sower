@@ -128,7 +128,7 @@
             };
           };
 
-        flake.nixosModules.sower = ./nix/module.nix;
+        flake.nixosModules.sower = ./nix/nixos-module.nix;
         flake.homeModules.sower = ./nix/home-module.nix;
 
         # don't support darwin

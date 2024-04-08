@@ -5,18 +5,21 @@
   ...
 }:
 let
-  cfg = config.services.sower;
+  cfg = config.services.sower.server;
 in
 {
-  imports = [ ./nixos-client.nix ];
-
   options = {
-    services.sower = {
+    services.sower.server = {
       enable = lib.mkEnableOption "Sower server";
 
       package = lib.mkOption {
         type = lib.types.package;
         default = pkgs.sower;
+      };
+
+      environment = lib.mkOption {
+        type = lib.types.attrsOf lib.types.str;
+        default = { };
       };
 
       initSecrets = lib.mkOption {
@@ -26,16 +29,11 @@ in
           Whether to initialise non‐existent secrets with random values.
         '';
       };
-
-      environment = lib.mkOption {
-        type = lib.types.attrsOf lib.types.str;
-        default = { };
-      };
     };
   };
 
   config = lib.mkIf cfg.enable {
-    systemd.services.sower = {
+    systemd.services.sower.server = {
       description = "Sower management platform";
 
       wantedBy = [ "multi-user.target" ];

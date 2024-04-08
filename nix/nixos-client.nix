@@ -16,6 +16,12 @@ in
 
       package = lib.mkOption { type = lib.types.package; };
 
+      onCalendar = lib.mkOption {
+        type = lib.types.str;
+        description = "OnCalendar for systemd timer on linux. See https://www.freedesktop.org/software/systemd/man/latest/systemd.time.html#Calendar%20Events";
+        default = "daily";
+      };
+
       settings = lib.mkOption {
         type = lib.types.submodule {
           freeformType = tomlType;
@@ -62,7 +68,7 @@ in
       wantedBy = [ "timers.target" ];
 
       timerConfig = {
-        OnCalendar = "daily";
+        OnCalendar = cfg.onCalendar;
         Persistent = true;
       };
     };
