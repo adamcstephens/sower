@@ -70,6 +70,11 @@ in
             ExecStart = "${lib.getExe cfg.package} tree upgrade";
             Type = "oneshot";
           };
+
+          Unit = {
+            # For sd-switch users, this prevents killing sower mid-upgrade
+            X-SwitchMethod = "keep-old";
+          };
         };
 
         systemd.user.timers.sower-client = {

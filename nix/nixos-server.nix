@@ -50,7 +50,6 @@ in
 
       environment =
         {
-          RELEASE_DISTRIBUTION = "none";
           SOWER_DATABASE_PATH = "%S/sower/sower-prod.db";
           PHX_SERVER = "true";
         }

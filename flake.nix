@@ -101,47 +101,15 @@
               # legacy alias
               cli = client;
 
-              client = craneLib.buildPackage (
-                craneLib.crateNameFromCargoToml { cargoToml = ./client/Cargo.toml; }
-                // {
-                  src =
-                    with lib.fileset;
-                    toSource {
-                      root = ./.;
-                      fileset = unions [
-                        ./client
-                        ./Cargo.lock
-                        ./Cargo.toml
-                      ];
-                    };
-                  strictDeps = true;
+              client = pkgs.callPackage ./nix/client-package.nix { inherit craneLib rustTarget; };
 
-                  CARGO_BUILD_TARGET = rustTarget;
-                  CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static";
-
-                  buildInputs = pkgs.lib.optionals pkgs.stdenv.isDarwin [
-                    pkgs.libiconv
-                    pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
-                  ];
-
-                  meta.mainProgram = "sower";
-                }
-              );
+              server = pkgs.callPackage ./nix/server-package.nix { inherit (self'.legacyPackages) beamPackages; };
             };
           };
 
         flake = {
           nixosModules.sower = ./nix/nixos-module.nix;
           homeModules.sower = ./nix/home-module.nix;
-
-          # don't support darwin
-          packages.x86_64-linux = rec {
-            default = server;
-            server = withSystem "x86_64-linux" (
-              { pkgs, self', ... }:
-              pkgs.callPackage ./nix/package.nix { inherit (self'.legacyPackages) beamPackages; }
-            );
-          };
 
           typhonProject = inputs.typhon.lib.gitea.mkProject {
             instance = "git.junco.dev";
