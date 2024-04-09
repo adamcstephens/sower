@@ -14,7 +14,7 @@ in
 
       package = lib.mkOption {
         type = lib.types.package;
-        default = pkgs.sower;
+        default = pkgs.callPackage ./server-package.nix { };
       };
 
       environment = lib.mkOption {

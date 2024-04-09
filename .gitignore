@@ -36,3 +36,4 @@ npm-debug.log
 .secret.envrc
 
 target/
+data/

@@ -1,3 +1,4 @@
+* TODO add more metadata to seed, e.g. ref and branch
 * TODO bail out nixos if not root
 * TODO boot check for containers
 can we just check if boot-system matches out_path?

@@ -8,8 +8,10 @@
     lexical.url = "github:lexical-lsp/lexical";
     next-ls.url = "github:elixir-tools/next-ls";
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable-small";
+    process-compose-flake.url = "github:Platonic-Systems/process-compose-flake";
     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
     rust-overlay.url = "github:oxalica/rust-overlay";
+    services-flake.url = "github:juspay/services-flake";
     typhon.url = "github:typhon-ci/typhon";
     typhon.inputs.nixpkgs.follows = "nixpkgs";
   };
@@ -19,7 +21,10 @@
     flake-parts.lib.mkFlake { inherit inputs; } (
       { lib, withSystem, ... }:
       rec {
-        imports = [ ./nix/flakemodule.nix ];
+        imports = [
+          ./nix/flakemodule.nix
+          inputs.process-compose-flake.flakeModule
+        ];
 
         systems = [
           "x86_64-linux"
@@ -91,19 +96,19 @@
               '';
             };
 
-            legacyPackages = {
-              inherit beamPackages;
-            };
-            packages = rec {
-
+            packages = {
               seed-ci = pkgs.callPackage ./nix/seed-ci.nix { inherit (inputs'.attic.packages) attic; };
-
-              # legacy alias
-              cli = client;
-
               client = pkgs.callPackage ./nix/client-package.nix { inherit craneLib rustTarget; };
+              server = pkgs.callPackage ./nix/server-package.nix { };
+            };
 
-              server = pkgs.callPackage ./nix/server-package.nix { inherit (self'.legacyPackages) beamPackages; };
+            process-compose."default" = {
+              imports = [ inputs.services-flake.processComposeModules.default ];
+
+              services.postgres."pg1" = {
+                enable = true;
+                superuser = "postgres";
+              };
             };
           };
 
