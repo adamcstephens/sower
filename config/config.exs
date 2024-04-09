@@ -7,8 +7,8 @@
 # General application configuration
 import Config
 
-config :sower,
-  ecto_repos: [Sower.Repo]
+config :sower, ecto_repos: [Sower.Repo]
+config :sower, ash_domains: [Sower]
 
 # Configures the endpoint
 config :sower, SowerWeb.Endpoint,

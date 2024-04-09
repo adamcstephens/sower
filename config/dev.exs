@@ -1,7 +1,14 @@
 import Config
 
 # Configure your database
-config :sower, Sower.Repo, database: "./_build/dev.db"
+config :sower, Sower.Repo,
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  database: "sower_dev",
+  port: 5432,
+  show_sensitive_data_on_connection_error: true,
+  pool_size: 10
 
 # For development, we disable any cache and enable
 # debugging and code reloading.

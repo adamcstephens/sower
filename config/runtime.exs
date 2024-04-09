@@ -25,15 +25,14 @@ config :sower,
   working_dir: System.get_env("SOWER_WORKDIR", "#{File.cwd() |> elem(1)}/tmp")
 
 if config_env() == :prod do
-  database_path =
-    System.get_env("SOWER_DATABASE_PATH") ||
+  database_url =
+    System.get_env("SOWER_DATABASE_URL") ||
       raise """
-      environment variable SOWER_DATABASE_PATH is missing.
-      For example: /var/lib/sower/sower.db
+      environment variable SOWER_DATABASE_URL is missing.
+      For example: ecto://postgres:postgres@localhost/ecto_simple
       """
 
-  maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
-  config :sower, Sower.Repo, database: database_path, socket_options: maybe_ipv6
+  config :sower, Sower.Repo, url: database_url, socket_options: [:inet6]
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you

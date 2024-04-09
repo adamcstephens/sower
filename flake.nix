@@ -72,7 +72,7 @@
                   pkgs.mix2nix
                   pkgs.nvfetcher
                   pkgs.process-compose
-                  pkgs.sqlite
+                  pkgs.postgresql
 
                   pkgs.cargo
                   pkgs.rustc

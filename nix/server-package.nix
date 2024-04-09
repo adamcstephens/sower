@@ -29,13 +29,6 @@ beamPackages.mixRelease {
       esbuild = prev.esbuild.override (old: {
         patches = [ ./esbuild-loadpaths.patch ];
       });
-      exqlite = prev.exqlite.override (old: {
-        env = (old.env or { }) // {
-          EXQLITE_USE_SYSTEM = "1";
-          EXQLITE_SYSTEM_CFLAGS = "-I${sqlite.dev}/include";
-          EXQLITE_SYSTEM_LDFLAGS = "-L${sqlite.out}/lib -lsqlite3";
-        };
-      });
       tailwind = prev.tailwind.override (old: {
         patches = [ ./tailwind-loadpaths.patch ];
       });
