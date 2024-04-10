@@ -11,7 +11,7 @@ defmodule SowerWeb.SeedLive.Show do
     {:noreply,
      socket
      |> assign(:page_title, page_title(socket.assigns.live_action))
-     |> assign(:seed, Sower.Seed.get_seed!(id))}
+     |> assign(:seed, Sower.Seed.by_id!(id))}
   end
 
   defp page_title(:show), do: "Show Seed"

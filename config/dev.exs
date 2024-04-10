@@ -2,11 +2,7 @@ import Config
 
 # Configure your database
 config :sower, Sower.Repo,
-  username: "postgres",
-  password: "postgres",
-  hostname: "localhost",
-  database: "sower_dev",
-  port: 5432,
+  url: "ecto://postgres:postgres@localhost/sower_dev",
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
 

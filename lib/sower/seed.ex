@@ -3,16 +3,51 @@ defmodule Sower.Seed do
     data_layer: AshPostgres.DataLayer,
     domain: Sower
 
+  @types [:nixos, :home_manager, :nix_darwin]
+  @derive {Jason.Encoder, only: [:id, :name, :type, :out_path]}
+
   actions do
     defaults([:read, :create, :destroy])
 
     create :new do
-      accept([:name, :type])
+      accept([:name, :type, :out_path])
+      upsert?(true)
+      upsert_identity(:seed)
+      upsert_fields(:updated_at)
+    end
+
+    read :by_id do
+      argument :id, :uuid do
+        allow_nil? false
+      end
+
+      # only return one
+      get? true
+
+      filter expr(id == ^arg(:id))
+    end
+
+    read :latest do
+      argument :name, :string do
+        allow_nil? false
+      end
+
+      argument :type, :atom do
+        allow_nil? false
+        constraints one_of: @types
+      end
+
+      # only return one
+      get? true
+
+      prepare build(filter: expr(name == ^arg(:name)), limit: 1, sort: [updated_at: :desc])
     end
   end
 
   attributes do
     uuid_primary_key(:id)
+    create_timestamp(:inserted_at)
+    update_timestamp(:updated_at)
 
     attribute :name, :string do
       allow_nil?(false)
@@ -22,39 +57,29 @@ defmodule Sower.Seed do
     attribute :type, :atom do
       allow_nil?(false)
       public?(true)
-      constraints(one_of: [:nixos, :home_manager, :nix_darwin])
+      constraints(one_of: @types)
+    end
+
+    attribute :out_path, :string do
+      allow_nil?(false)
+      public?(true)
+      constraints match: ~r|/nix/store/[a-z0-9]{32}-[a-z0-9]+|
     end
   end
 
   code_interface do
-    define(:new, args: [:name, :type])
+    define(:by_id, args: [:id])
+    define(:new, args: [:name, :type, :out_path])
+    define(:latest, args: [:name, :type])
+    define(:read_all, action: :read)
+  end
+
+  identities do
+    identity(:seed, [:name, :type, :out_path])
   end
 
   postgres do
     table("seeds")
     repo(Sower.Repo)
   end
-
-  # relationships do
-  #   belongs_to :tree, Sower.Tree
-  # end
 end
-
-# def create_or_insert_seed(attrs \\ %{}) do
-#   %Sower.Seed.Instance{}
-#   |> Sower.Seed.Instance.changeset(attrs)
-#   |> Repo.insert(
-#     on_conflict: {:replace, [:updated_at]},
-#     conflict_target: [:name, :type, :out_path]
-#   )
-# end
-#
-# def find_latest_seed(name, type) do
-#   Sower.Seed.Instance
-#   |> where([s], s.name == ^name)
-#   |> where([s], s.type == ^type)
-#   |> order_by([s], desc: s.updated_at)
-#   |> first()
-#   |> Repo.all()
-#   |> List.first()
-# end

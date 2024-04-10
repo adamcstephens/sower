@@ -3,8 +3,8 @@ defmodule SowerWeb.SeedController do
 
   action_fallback SowerWeb.FallbackController
 
-  def new(conn, seed_params) do
-    with {:ok, %Sower.Seed.Instance{} = seed} <- Sower.Seed.create_or_insert_seed(seed_params) do
+  def new(conn, %{"name" => name, "type" => type, "out_path" => out_path}) do
+    with {:ok, %Sower.Seed{} = seed} <- Sower.Seed.new(name, type, out_path) do
       conn
       |> put_status(:created)
       |> render(:show, seed: seed)
@@ -12,12 +12,12 @@ defmodule SowerWeb.SeedController do
   end
 
   def find_latest(conn, %{"name" => name, "type" => type}) do
-    seed = Sower.Seed.find_latest_seed(name, type)
+    seed = Sower.Seed.latest(name, type)
     render(conn, :show, seed: seed)
   end
 
   def list(conn, _) do
-    seeds = Sower.Seed.list_seeds()
+    seeds = Sower.Seed.read_all!()
     render(conn, :list, seeds: seeds)
   end
 end
