@@ -3,7 +3,7 @@ defmodule Sower.Seed do
     data_layer: AshPostgres.DataLayer,
     domain: Sower
 
-  @types [:nixos, :home_manager, :nix_darwin]
+  @types [:nixos, :"home-manager", :"nix-darwin"]
   @derive {Jason.Encoder, only: [:id, :name, :type, :out_path]}
 
   actions do
