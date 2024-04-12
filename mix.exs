@@ -3,32 +3,21 @@ defmodule Sower.MixProject do
 
   def project do
     [
+      aliases: aliases(),
       app: :sower,
-      version: String.trim(File.read!("VERSION")),
+      deps: deps(),
       elixir: "~> 1.14",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
-      aliases: aliases(),
-      deps: deps()
+      version: String.trim(File.read!("VERSION"))
     ]
   end
-
-  def application do
-    [
-      mod: {Sower.Application, []},
-      extra_applications: [:logger, :runtime_tools]
-    ]
-  end
-
-  # Specifies which paths to compile per environment.
-  defp elixirc_paths(:test), do: ["lib", "test/support"]
-  defp elixirc_paths(_), do: ["lib"]
 
   defp deps do
     [
       {:ash, "~> 3.0.0-rc.17"},
-      {:ash_postgres, "~> 2.0.0-rc.5"},
       {:ash_phoenix, "~> 2.0.0-rc.4"},
+      {:ash_postgres, "~> 2.0.0-rc.5"},
       {:bandit, "~> 1.0"},
       {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
       {:finch, "~> 0.13"},
@@ -37,12 +26,12 @@ defmodule Sower.MixProject do
       {:jason, "~> 1.2"},
       {:makeup, "~> 1.1"},
       {:makeup_json, "~> 0.1.0"},
+      {:phoenix, "~> 1.7.7"},
       {:phoenix_ecto, "~> 4.4"},
       {:phoenix_html, "~> 4.1.1"},
       {:phoenix_live_dashboard, "~> 0.8.0"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 0.20.0"},
-      {:phoenix, "~> 1.7.7"},
       {:postgrex, ">= 0.0.0"},
       {:swoosh, "~> 1.3"},
       {:tailwind, "~> 0.2.0", runtime: Mix.env() == :dev},
@@ -62,4 +51,15 @@ defmodule Sower.MixProject do
       "assets.deploy": ["tailwind default --minify", "esbuild default --minify", "phx.digest"]
     ]
   end
+
+  def application do
+    [
+      mod: {Sower.Application, []},
+      extra_applications: [:logger, :runtime_tools]
+    ]
+  end
+
+  # Specifies which paths to compile per environment.
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 end

@@ -90,10 +90,6 @@
                 pkgs.fmt
                 pkgs.libgit2
               ];
-
-              shellHook = ''
-                export LEXICAL_START_PATH="${lexical}/binsh/start_lexical.sh"
-              '';
             };
 
             packages = {
