@@ -116,7 +116,7 @@
             instance = "git.junco.dev";
             owner = "adam";
             repo = "sower";
-            secrets = ./secrets.age;
+            secrets = ./nix/typhon-secrets.age;
             typhonUrl = "https://typhon.junco.dev";
           };
           typhonJobs = lib.recursiveUpdate (inputs.nixpkgs.lib.genAttrs systems (system: {
