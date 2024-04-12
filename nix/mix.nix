@@ -10,12 +10,12 @@ let
   packages = with beamPackages; with self; {
     ash = buildMix rec {
       name = "ash";
-      version = "3.0.0-rc.17";
+      version = "3.0.0-rc.19";
 
       src = fetchHex {
         pkg = "ash";
         version = "${version}";
-        sha256 = "73f2b7db8b11d52995b1ad629b7f78d00f3de97b882d50c443e404227fbd1141";
+        sha256 = "cd0c28da23beba44a9fea783a92d7078f2c88d77c3a903fcc18acbe6e057f31d";
       };
 
       beamDeps = [ comparable decimal ecto ets jason plug reactor spark splode stream_data telemetry ];
@@ -36,12 +36,12 @@ let
 
     ash_postgres = buildMix rec {
       name = "ash_postgres";
-      version = "2.0.0-rc.5";
+      version = "2.0.0-rc.7";
 
       src = fetchHex {
         pkg = "ash_postgres";
         version = "${version}";
-        sha256 = "9577ea507ea9024d6255a1072f54098d923e347b33853b7f46f3b384cdba519c";
+        sha256 = "73d37b09f103bcf1bec21ccf37269a32f0e2c6015f244f6d5789870456bd7c86";
       };
 
       beamDeps = [ ash ash_sql ecto ecto_sql jason postgrex ];
@@ -49,12 +49,12 @@ let
 
     ash_sql = buildMix rec {
       name = "ash_sql";
-      version = "0.1.1-rc.4";
+      version = "0.1.1-rc.5";
 
       src = fetchHex {
         pkg = "ash_sql";
         version = "${version}";
-        sha256 = "329065f9d119f55444908933cfb9e4a47ea82bfd23ac46c040d517f669d9d385";
+        sha256 = "a7affd1ce0dd0840c6fd88889b2f1c553d32976e02504b9bb55619da6aec4c6b";
       };
 
       beamDeps = [ ash ecto ecto_sql ];
@@ -374,12 +374,12 @@ let
 
     phoenix = buildMix rec {
       name = "phoenix";
-      version = "1.7.11";
+      version = "1.7.12";
 
       src = fetchHex {
         pkg = "phoenix";
         version = "${version}";
-        sha256 = "b1ec57f2e40316b306708fe59b92a16b9f6f4bf50ccfa41aa8c7feb79e0ec02a";
+        sha256 = "d646192fbade9f485b01bc9920c139bfdd19d0f8df3d73fd8eaf2dfbe0d2837c";
       };
 
       beamDeps = [ castore jason phoenix_pubsub phoenix_template plug plug_crypto telemetry websock_adapter ];
@@ -543,12 +543,12 @@ let
 
     spark = buildMix rec {
       name = "spark";
-      version = "2.1.13";
+      version = "2.1.17";
 
       src = fetchHex {
         pkg = "spark";
         version = "${version}";
-        sha256 = "2d5580313bbf6717d650a27554a66c83e10d164e7087e3c4082cdb23b5dc5c64";
+        sha256 = "1c3fcedc0d9252d64a2613b0da10b82538bfea088b8b8d5fd53ad5ecb3f9f8bd";
       };
 
       beamDeps = [ jason sourceror ];
