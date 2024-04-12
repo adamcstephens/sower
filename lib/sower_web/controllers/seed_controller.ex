@@ -7,7 +7,7 @@ defmodule SowerWeb.SeedController do
     with {:ok, %Sower.Seed{} = seed} <- Sower.Seed.new(name, type, out_path) do
       conn
       |> put_status(:created)
-      |> render(:show, seed: seed[0])
+      |> render(:show, seed: seed)
     end
   end
 
