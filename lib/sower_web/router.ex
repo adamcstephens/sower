@@ -22,10 +22,6 @@ defmodule SowerWeb.Router do
     live("/seeds/:id", SeedLive.Show, :show)
   end
 
-  scope "/", SowerWeb do
-    get("/ping", PingController, :ping)
-  end
-
   scope "/api" do
     pipe_through(:api)
     get("/seeds", SowerWeb.SeedController, :list)
