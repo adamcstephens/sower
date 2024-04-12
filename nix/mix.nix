@@ -634,12 +634,12 @@ let
 
     sourceror = buildMix rec {
       name = "sourceror";
-      version = "1.0.2";
+      version = "1.0.3";
 
       src = fetchHex {
         pkg = "sourceror";
         version = "${version}";
-        sha256 = "832335e87d0913658f129d58b2a7dc0490ddd4487b02de6d85bca0169ec2bd79";
+        sha256 = "56c21ef146c00b51bc3bb78d1f047cb732d193256a7c4ba91eaf828d3ae826af";
       };
 
       beamDeps = [];
@@ -647,12 +647,12 @@ let
 
     spark = buildMix rec {
       name = "spark";
-      version = "2.1.17";
+      version = "2.1.18";
 
       src = fetchHex {
         pkg = "spark";
         version = "${version}";
-        sha256 = "1c3fcedc0d9252d64a2613b0da10b82538bfea088b8b8d5fd53ad5ecb3f9f8bd";
+        sha256 = "f0060725e20b8d330734ac16da048022e2f37df03b74334725c40cab43c3fa6d";
       };
 
       beamDeps = [ jason sourceror ];
