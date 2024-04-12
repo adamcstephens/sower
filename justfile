@@ -1,9 +1,6 @@
 default:
     just -l
 
-# db:
-#     process-compose up -t=false
-#
 dev: && start
     mix deps.get
     mix deps.compile
@@ -24,9 +21,6 @@ docker-push:
 
 nix-lock:
     mix2nix mix.lock > nix/mix.nix
-
-nvfetcher:
-    cd nix; nvfetcher
 
 set-version version:
     echo -n {{ version }} > VERSION
