@@ -20,19 +20,16 @@ if System.get_env("PHX_SERVER") do
   config :sower, SowerWeb.Endpoint, server: true
 end
 
-config :sower,
-  scm_secret: "five",
-  working_dir: System.get_env("SOWER_WORKDIR", "#{File.cwd() |> elem(1)}/tmp")
-
 if config_env() == :prod do
-  database_url =
-    System.get_env("SOWER_DATABASE_URL") ||
-      raise """
-      environment variable SOWER_DATABASE_URL is missing.
-      For example: ecto://postgres:postgres@localhost/ecto_simple
-      """
+  db_pass_file =
+    System.get_env("SOWER_DATABASE_PASS_FILE") || raise "missing $SOWER_DATABASE_PASS_FILE"
 
-  config :sower, Sower.Repo, url: database_url, socket_options: [:inet6]
+  config :sower, Sower.Repo,
+    username: System.get_env("SOWER_DATABASE_USER", "postgres"),
+    password: db_pass_file |> File.read!() |> String.trim(),
+    hostname: System.get_env("SOWER_DATABASE_HOST", "localhost"),
+    database: System.get_env("SOWER_DATABASE_NAME", "sower"),
+    port: System.get_env("SOWER_DATABASE_PORT", "5432") |> String.to_integer()
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you
@@ -46,11 +43,11 @@ if config_env() == :prod do
       You can generate one by calling: mix phx.gen.secret
       """
 
-  host = System.get_env("SOWER_HOSTNAME") || "example.com"
-  port = String.to_integer(System.get_env("SOWER_LISTEN_PORT") || "4000")
+  host = System.get_env("SOWER_HOSTNAME") || raise "missing $SOWER_HOSTNAME"
+  port = String.to_integer(System.get_env("SOWER_LISTEN_PORT", "4000"))
 
   {:ok, listen_ip} =
-    System.get_env("SOWER_LISTEN_ADDRESS", "::1")
+    System.get_env("SOWER_LISTEN_ADDRESS", "127.0.0.1")
     |> to_charlist()
     |> :inet.parse_address()
 
