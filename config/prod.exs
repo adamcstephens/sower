@@ -7,6 +7,13 @@ import Config
 # before starting your production server.
 config :sower, SowerWeb.Endpoint, cache_static_manifest: "priv/static/cache_manifest.json"
 
+config :sentry,
+  dsn:
+    "https://f106e5c02614e6ad4cc054943811673c@o4507075625287680.ingest.us.sentry.io/4507075627712512",
+  environment_name: Mix.env(),
+  enable_source_code_context: true,
+  root_source_code_paths: [File.cwd!()]
+
 # Configures Swoosh API Client
 config :swoosh, api_client: Swoosh.ApiClient.Finch, finch_name: Sower.Finch
 

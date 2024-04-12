@@ -1,5 +1,6 @@
 defmodule SowerWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :sower
+  use Sentry.PlugCapture
 
   plug(SowerWeb.Plug.HealthCheck)
 
@@ -48,6 +49,8 @@ defmodule SowerWeb.Endpoint do
     pass: ["*/*"],
     json_decoder: Phoenix.json_library()
   )
+
+  plug(Sentry.PlugContext)
 
   plug(Plug.MethodOverride)
   plug(Plug.Head)
