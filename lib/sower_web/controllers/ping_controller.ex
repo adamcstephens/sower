@@ -2,7 +2,7 @@ defmodule SowerWeb.PingController do
   use SowerWeb, :controller
 
   def ping(conn, _) do
-    {:ok, _} = Sower.Repo.query("PRAGMA database_list")
+    {:ok, _} = Sower.Repo.query("SELECT 1")
 
     text(conn, "ok")
   end

@@ -3,7 +3,6 @@
   beamPackages,
   esbuild,
   tailwindcss,
-  sqlite,
   stdenv,
 }:
 let
