@@ -9,7 +9,7 @@ use strum::{Display, VariantNames};
 
 #[derive(Debug, Deserialize)]
 pub struct Seed {
-    pub id: u64,
+    pub id: String,
     pub name: String,
     #[serde(rename(deserialize = "type"))]
     pub seed_type: SeedType,
