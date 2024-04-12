@@ -7,12 +7,12 @@ defmodule SowerWeb.SeedController do
     with {:ok, %Sower.Seed{} = seed} <- Sower.Seed.new(name, type, out_path) do
       conn
       |> put_status(:created)
-      |> render(:show, seed: seed)
+      |> render(:show, seed: seed[0])
     end
   end
 
   def find_latest(conn, %{"name" => name, "type" => type}) do
-    seed = Sower.Seed.latest(name, type)
+    seed = Sower.Seed.latest!(name, type)
     render(conn, :show, seed: seed)
   end
 
