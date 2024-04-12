@@ -21,15 +21,21 @@ if System.get_env("PHX_SERVER") do
 end
 
 if config_env() == :prod do
-  db_pass_file =
-    System.get_env("SOWER_DATABASE_PASS_FILE") || raise "missing $SOWER_DATABASE_PASS_FILE"
+  if System.get_env() |> Map.has_key?("SOWER_DATABASE_SOCKET") do
+    config :sower, Sower.Repo,
+      socket: System.get_env("SOWER_DATABASE_SOCKET"),
+      database: System.get_env("SOWER_DATABASE_NAME", "sower")
+  else
+    db_pass_file =
+      System.get_env("SOWER_DATABASE_PASS_FILE") || raise "missing $SOWER_DATABASE_PASS_FILE"
 
-  config :sower, Sower.Repo,
-    username: System.get_env("SOWER_DATABASE_USER", "postgres"),
-    password: db_pass_file |> File.read!() |> String.trim(),
-    hostname: System.get_env("SOWER_DATABASE_HOST", "localhost"),
-    database: System.get_env("SOWER_DATABASE_NAME", "sower"),
-    port: System.get_env("SOWER_DATABASE_PORT", "5432") |> String.to_integer()
+    config :sower, Sower.Repo,
+      username: System.get_env("SOWER_DATABASE_USER", "sower"),
+      password: db_pass_file |> File.read!() |> String.trim(),
+      hostname: System.get_env("SOWER_DATABASE_HOST", "localhost"),
+      database: System.get_env("SOWER_DATABASE_NAME", "sower"),
+      port: System.get_env("SOWER_DATABASE_PORT", "5432") |> String.to_integer()
+  end
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you
@@ -45,6 +51,8 @@ if config_env() == :prod do
 
   host = System.get_env("SOWER_HOSTNAME") || raise "missing $SOWER_HOSTNAME"
   port = String.to_integer(System.get_env("SOWER_LISTEN_PORT", "4000"))
+  scheme = System.get_env("SOWER_PUBLIC_SCHEME", "https")
+  public_port = String.to_integer(System.get_env("SOWER_PUBLIC_PORT", "443"))
 
   {:ok, listen_ip} =
     System.get_env("SOWER_LISTEN_ADDRESS", "127.0.0.1")
@@ -52,7 +60,7 @@ if config_env() == :prod do
     |> :inet.parse_address()
 
   config :sower, SowerWeb.Endpoint,
-    url: [host: host, port: 443, scheme: "https"],
+    url: [host: host, port: public_port, scheme: scheme],
     http: [ip: listen_ip, port: port],
     secret_key_base: secret_key_base
 

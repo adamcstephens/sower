@@ -92,6 +92,8 @@
               ];
             };
 
+            checks.default = pkgs.callPackage ./nix/test-end-to-end.nix { client = self'.packages.client; };
+
             packages = {
               seed-ci = pkgs.callPackage ./nix/seed-ci.nix { inherit (inputs'.attic.packages) attic; };
               client = pkgs.callPackage ./nix/client-package.nix { inherit craneLib rustTarget; };
