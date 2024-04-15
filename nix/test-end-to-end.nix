@@ -8,7 +8,8 @@
   curl,
   testers,
 }:
-testers.runNixOSTest rec {
+
+testers.runNixOSTest {
   name = "sower";
 
   nodes.server = {

@@ -36,6 +36,7 @@ defmodule Sower.MixProject do
       {:postgrex, ">= 0.0.0"},
       {:sentry, "~> 10.2.0"},
       {:swoosh, "~> 1.3"},
+      {:systemd, "~> 0.6"},
       {:tailwind, "~> 0.2.0", runtime: Mix.env() == :dev},
       {:telemetry_metrics, "~> 0.6"},
       {:telemetry_poller, "~> 1.1.0"}

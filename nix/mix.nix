@@ -164,6 +164,19 @@ let
       beamDeps = [ db_connection ecto postgrex telemetry ];
     };
 
+    enough = buildRebar3 rec {
+      name = "enough";
+      version = "0.1.0";
+
+      src = fetchHex {
+        pkg = "enough";
+        version = "${version}";
+        sha256 = "0460c7abda5f5e0ea592b12bc6976b8a5c4b96e42f332059cd396525374bf9a1";
+      };
+
+      beamDeps = [];
+    };
+
     esbuild = buildMix rec {
       name = "esbuild";
       version = "0.8.1";
@@ -708,6 +721,19 @@ let
       };
 
       beamDeps = [ bandit finch hackney jason mime plug telemetry ];
+    };
+
+    systemd = buildRebar3 rec {
+      name = "systemd";
+      version = "0.6.2";
+
+      src = fetchHex {
+        pkg = "systemd";
+        version = "${version}";
+        sha256 = "5062b911800c1ab05157c7bf9a9fbe23dd24c58891c87fd12d2e3ed8fc1708b8";
+      };
+
+      beamDeps = [ enough ];
     };
 
     tailwind = buildMix rec {

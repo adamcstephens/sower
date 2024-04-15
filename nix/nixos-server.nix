@@ -37,14 +37,29 @@ in
       description = "Sower management platform";
 
       wantedBy = [ "multi-user.target" ];
-      after = [ "network-online.target" ];
+      after = [
+        "network-online.target"
+        "postgresql.service"
+      ];
       requires = [ "network-online.target" ];
 
       serviceConfig = {
+        Type = "notify";
+        WatchdogSec = "10s";
+        Restart = "on-failure";
+
         DynamicUser = true;
         StateDirectory = "sower";
         RuntimeDirectory = "sower";
 
+        ExecStart = pkgs.writeShellScript "sower-start" ''
+          ${lib.optionalString cfg.initSecrets ''
+            export SECRET_KEY_BASE=$(cat $SECRET_KEY_BASE_FILE)
+          ''}
+
+          ${cfg.package}/bin/sower eval Sower.Release.migrate
+          exec ${cfg.package}/bin/sower start
+        '';
         ExecStop = "${cfg.package}/bin/sower stop";
       };
 
@@ -63,15 +78,6 @@ in
         ${pkgs.coreutils}/bin/dd if=/dev/urandom bs=1 count=16 | ${pkgs.hexdump}/bin/hexdump -e '16/1 "%02x"' > "$RELEASE_COOKIE"
         ${lib.getExe pkgs.pwgen} --capitalize --secure 64 1 | ${pkgs.coreutils}/bin/tr -d '\n' > "$SECRET_KEY_BASE_FILE"
       '';
-
-      script =
-        (lib.optionalString cfg.initSecrets ''
-          export SECRET_KEY_BASE=$(cat $SECRET_KEY_BASE_FILE)
-        '')
-        + ''
-          ${cfg.package}/bin/sower eval Sower.Release.migrate
-          ${cfg.package}/bin/sower start
-        '';
     };
   };
 }

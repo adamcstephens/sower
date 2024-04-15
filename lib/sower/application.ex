@@ -1,6 +1,4 @@
 defmodule Sower.Application do
-  # See https://hexdocs.pm/elixir/Application.html
-  # for more information on OTP Applications
   @moduledoc false
 
   use Application
@@ -8,18 +6,12 @@ defmodule Sower.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      # Start the Telemetry supervisor
       SowerWeb.Telemetry,
-      # Start the Ecto repository
       Sower.Repo,
-      # Start the PubSub system
       {Phoenix.PubSub, name: Sower.PubSub},
-      # Start Finch
       {Finch, name: Sower.Finch},
-      # Start the Endpoint (http/https)
-      SowerWeb.Endpoint
-      # Start a worker by calling: Sower.Worker.start_link(arg)
-      # {Sower.Worker, arg}
+      SowerWeb.Endpoint,
+      :systemd.ready()
     ]
 
     :logger.add_handler(:my_sentry_handler, Sentry.LoggerHandler, %{
