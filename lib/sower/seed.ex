@@ -7,13 +7,13 @@ defmodule Sower.Seed do
   @derive {Jason.Encoder, only: [:id, :name, :type, :out_path]}
 
   actions do
-    defaults([:read, :create, :destroy])
+    defaults [:read, :create, :destroy]
 
     create :new do
-      accept([:name, :type, :out_path])
-      upsert?(true)
-      upsert_identity(:seed)
-      upsert_fields(:updated_at)
+      accept [:name, :type, :out_path]
+      upsert? true
+      upsert_identity :seed
+      upsert_fields :updated_at
     end
 
     read :by_id do
@@ -40,46 +40,50 @@ defmodule Sower.Seed do
       # only return one
       get? true
 
-      prepare build(filter: expr(name == ^arg(:name)), limit: 1, sort: [updated_at: :desc])
+      prepare build(
+                filter: expr(name == ^arg(:name) and type == ^arg(:type)),
+                limit: 1,
+                sort: [updated_at: :desc]
+              )
     end
   end
 
   attributes do
-    uuid_primary_key(:id)
-    create_timestamp(:inserted_at)
-    update_timestamp(:updated_at)
+    uuid_primary_key :id
+    create_timestamp :inserted_at
+    update_timestamp :updated_at
 
     attribute :name, :string do
-      allow_nil?(false)
-      public?(true)
+      allow_nil? false
+      public? true
     end
 
     attribute :type, :atom do
-      allow_nil?(false)
-      public?(true)
-      constraints(one_of: @types)
+      allow_nil? false
+      public? true
+      constraints one_of: @types
     end
 
     attribute :out_path, :string do
-      allow_nil?(false)
-      public?(true)
+      allow_nil? false
+      public? true
       constraints match: ~r|/nix/store/[a-z0-9]{32}-[a-z0-9]+|
     end
   end
 
   code_interface do
-    define(:by_id, args: [:id])
-    define(:new, args: [:name, :type, :out_path])
-    define(:latest, args: [:name, :type])
-    define(:read_all, action: :read)
+    define :by_id, args: [:id]
+    define :new, args: [:name, :type, :out_path]
+    define :latest, args: [:name, :type]
+    define :read_all, action: :read
   end
 
   identities do
-    identity(:seed, [:name, :type, :out_path])
+    identity :seed, [:name, :type, :out_path]
   end
 
   postgres do
-    table("seeds")
-    repo(Sower.Repo)
+    table "seeds"
+    repo Sower.Repo
   end
 end
