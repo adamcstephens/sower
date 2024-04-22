@@ -93,7 +93,7 @@ enum TreeCommands {
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
-    autoreboot: Option<bool>,
+    reboot: Option<bool>,
     mode: Option<ActivationMode>,
     name: Option<String>,
     #[serde(rename(deserialize = "type"))]
@@ -105,6 +105,14 @@ impl Config {
     pub fn name(self, name: Option<String>) -> Self {
         if let Some(_) = &name {
             Self { name, ..self }
+        } else {
+            self
+        }
+    }
+
+    pub fn reboot(self, reboot: Option<bool>) -> Self {
+        if let Some(_) = &reboot {
+            Self { reboot, ..self }
         } else {
             self
         }
@@ -152,7 +160,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             toml::from_str(&config_string).expect("failed to parse config file")
         }
         _ => Config {
-            autoreboot: None,
+            reboot: None,
             mode: None,
             name: None,
             seed_type: None,
@@ -195,16 +203,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .activate(mode)
                     .expect("failed to activate");
 
-                if config.autoreboot.unwrap_or(false) || reboot.clone() {
-                    let confirm = if *reboot {
-                        yes.clone()
-                    } else if config.autoreboot.unwrap_or(false) {
-                        true
-                    } else {
-                        false
-                    };
-
-                    tree.reboot(confirm);
+                if config.reboot.unwrap_or(false) || reboot.clone() {
+                    tree.reboot(yes.clone());
                 }
             }
         },

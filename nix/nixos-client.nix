@@ -14,6 +14,8 @@ in
     services.sower.client = {
       enable = lib.mkEnableOption "Sower client";
 
+      autoreboot = lib.mkEnableOption "automatic rebooting";
+
       package = lib.mkOption { type = lib.types.package; };
 
       onCalendar = lib.mkOption {
@@ -59,7 +61,7 @@ in
       path = [ pkgs.nix ];
 
       serviceConfig = {
-        ExecStart = "${lib.getExe cfg.package} tree upgrade";
+        ExecStart = "${lib.getExe cfg.package} tree upgrade ${lib.optionalString cfg.autoreboot "--yes"}";
         Type = "oneshot";
       };
     };
