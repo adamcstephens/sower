@@ -62,6 +62,7 @@
                 [
                   elixir
                   beamPackages.elixir-ls
+                  lexical
                   next-ls
 
                   inputs'.attic.packages.attic
