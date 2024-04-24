@@ -59,5 +59,7 @@ testers.runNixOSTest {
     nixos_profile = server.succeed("readlink -f /run/booted-system").strip()
     server.succeed('curl --fail -X POST --header "Content-Type: application/json" http://localhost:4000/api/seeds -d \'{"name": "server", "type": "nixos", "out_path": "' + nixos_profile + "\"}'")
     server.succeed("systemctl start sower-client")
+    server.succeed('curl --fail -X POST --header "Content-Type: application/json" http://localhost:4000/api/seeds -d \'{"name": "server", "type": "nixos", "branch": "testbranch", "repo_url": "https://test.com", "out_path": "' + nixos_profile + "\"}'")
+    server.succeed("systemctl start sower-client")
   '';
 }

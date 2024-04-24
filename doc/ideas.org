@@ -3,6 +3,7 @@
 * TODO boot check for containers
 can we just check if boot-system matches out_path?
 * TODO differentiate built seed branch?
+* handle our own substituter configs?
 
 * Stories
 - I want to switch nightly but boot/reboot once a week

@@ -134,11 +134,37 @@ export def post-sower-seeds [--sower-url: string] {
       let seed = {
         name: $t.name,
         type: $c.type,
-        out_path: $t.build.outputs.out.0
+        out_path: $t.build.outputs.out.0,,
+        branch: (get-git-branch),
+        repo_url: (get-repo-url)
       }
 
       http post --content-type application/json $"($sower_url)/api/seeds" $seed
     }
+  }
+}
+
+export def get-git-branch [] {
+  if $env.CI_COMMIT_SOURCE_BRANCH? != null {
+    $env.CI_COMMIT_SOURCE_BRANCH
+  } else if $env.CI_COMMIT_BRANCH? != null {
+    $env.CI_COMMIT_BRANCH
+  } else if $env.GITHUB_HEAD_REF? != null {
+    $env.GITHUB_HEAD_REF
+  } else if $env.GITHUB_REF_NAME? != null {
+    $env.GITHUB_REF_NAME
+  } else {
+    null
+  }
+}
+
+export def get-repo-url [] {
+  if $env.CI_REPO_URL? != null {
+    $env.CI_REPO_URL
+  } else if $env.GITHUB_REPOSITORY? != null {
+    $env.GITHUB_REPOSITORY
+  } else {
+    null
   }
 }
 

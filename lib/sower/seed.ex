@@ -10,6 +10,14 @@ defmodule Sower.Seed do
   actions do
     defaults [:read, :create, :destroy]
 
+    create :new_legacy do
+      accept [:name, :type, :out_path]
+
+      upsert? true
+      upsert_identity :seed
+      upsert_fields :updated_at
+    end
+
     create :new do
       accept [:name, :type, :out_path, :branch]
 
@@ -88,6 +96,7 @@ defmodule Sower.Seed do
   code_interface do
     define :by_id, args: [:id]
     define :new, args: [:name, :type, :out_path, :branch, :repo_url]
+    define :new_legacy, args: [:name, :type, :out_path]
     define :latest, args: [:name, :type]
     define :read_all, action: :read
   end
