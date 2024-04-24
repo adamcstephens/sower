@@ -29,7 +29,9 @@ defmodule Sower.Inputs.Commit do
 
       change manage_relationship(:branch, :branches,
                type: :create,
-               on_match: :update,
+               on_lookup: :relate,
+               # on_no_match: :create,
+               on_no_match: {:create, :create, :create, [:repo]},
                value_is_key: :name
              )
 
