@@ -3,17 +3,29 @@ defmodule Sower.Seed do
     data_layer: AshPostgres.DataLayer,
     domain: Sower
 
-  @types [:nixos, :"home-manager", :"nix-darwin"]
   @derive {Jason.Encoder, only: [:id, :name, :type, :out_path]}
+
+  @types [:nixos, :"home-manager", :"nix-darwin"]
 
   actions do
     defaults [:read, :create, :destroy]
 
     create :new do
-      accept [:name, :type, :out_path]
+      accept [:name, :type, :out_path, :branch]
+
+      argument :repo_url, :string do
+        allow_nil? false
+      end
+
       upsert? true
       upsert_identity :seed
       upsert_fields :updated_at
+
+      change manage_relationship(:repo_url, :repository,
+               type: :create,
+               on_match: :update,
+               value_is_key: :url
+             )
     end
 
     read :by_id do
@@ -53,6 +65,8 @@ defmodule Sower.Seed do
     create_timestamp :inserted_at
     update_timestamp :updated_at
 
+    attribute :branch, :string
+
     attribute :name, :string do
       allow_nil? false
       public? true
@@ -73,17 +87,25 @@ defmodule Sower.Seed do
 
   code_interface do
     define :by_id, args: [:id]
-    define :new, args: [:name, :type, :out_path]
+    define :new, args: [:name, :type, :out_path, :branch, :repo_url]
     define :latest, args: [:name, :type]
     define :read_all, action: :read
   end
 
   identities do
-    identity :seed, [:name, :type, :out_path]
+    identity :seed, [:name, :type, :out_path, :branch]
   end
 
   postgres do
     table "seeds"
     repo Sower.Repo
+
+    references do
+      reference :repository, on_delete: :delete
+    end
+  end
+
+  relationships do
+    belongs_to :repository, Sower.Inputs.Repository
   end
 end
