@@ -125,6 +125,8 @@ export def get-config-outputs [] {
 
 export def post-sower-seeds [--sower-url: string] {
   let configs = $in
+  let git_branch = get-git-branch
+  let repo_url = get-repo-url
 
   print $"🫱 Giving seeds to sower ($sower_url)"
 
@@ -135,8 +137,8 @@ export def post-sower-seeds [--sower-url: string] {
         name: $t.name,
         type: $c.type,
         out_path: $t.build.outputs.out.0,,
-        branch: (get-git-branch),
-        repo_url: (get-repo-url)
+        branch: $git_branch,
+        repo_url: $repo_url
       }
 
       http post --content-type application/json $"($sower_url)/api/seeds" $seed
@@ -153,6 +155,9 @@ export def get-git-branch [] {
     $env.GITHUB_HEAD_REF
   } else if $env.GITHUB_REF_NAME? != null {
     $env.GITHUB_REF_NAME
+  } else if (".git" | path exists) {
+    let dirty = if ((git diff-index --quiet HEAD -- | complete | get exit_code) == 0) { "" } else { "-" + (git rev-parse --short HEAD) + "-dirty" }
+    $"(git rev-parse --abbrev-ref HEAD)($dirty)"
   } else {
     null
   }
@@ -163,6 +168,8 @@ export def get-repo-url [] {
     $env.CI_REPO_URL
   } else if $env.GITHUB_REPOSITORY? != null {
     $env.GITHUB_REPOSITORY
+  } else if (".git" | path exists) {
+    git remote get-url origin
   } else {
     null
   }
