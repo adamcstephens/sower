@@ -58,6 +58,7 @@ config :sower, SowerWeb.Endpoint,
       ~r"priv/gettext/.*(po)$",
       ~r"lib/sower_web/(controllers|live|components)/.*(ex|heex)$",
       ~r"lib/sower/.*ex$",
+      ~r"lib/sower/inputs/.*ex$",
       ~r"lib/forge/.*ex$",
       ~r"lib/git/.*ex$"
     ]

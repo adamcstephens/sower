@@ -31,4 +31,19 @@ defmodule Sower.Application do
     SowerWeb.Endpoint.config_change(changed, removed)
     :ok
   end
+
+  def credential!(name) do
+    credential_dir = System.get_env("CREDENTIALS_DIRECTORY")
+    credential = System.get_env(name)
+
+    case read_credential(name, credential_dir, credential) do
+      {:ok, value} -> value |> String.trim()
+      {:error, err} -> raise ~s"unable to load credential #{name}, #{err}"
+    end
+  end
+
+  defp read_credential(_, nil, cred), do: read_credential(cred)
+  defp read_credential(name, dir, nil), do: read_credential(~s"#{dir}/#{name}")
+  defp read_credential(_, dir, cred), do: read_credential(~s"#{dir}/#{cred}")
+  defp read_credential(path), do: File.read(path)
 end

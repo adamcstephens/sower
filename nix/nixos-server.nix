@@ -19,13 +19,14 @@ in
 
       environment = lib.mkOption {
         type = lib.types.attrsOf lib.types.str;
+        description = "environment variables to pass to service. Do not set secrets here, but instead use systemd credentials";
         default = { };
       };
 
       initSecrets = lib.mkOption {
         type = lib.types.bool;
         default = true;
-        description = lib.mdDoc ''
+        description = ''
           Whether to initialise non‐existent secrets with random values.
         '';
       };
@@ -43,41 +44,55 @@ in
       ];
       requires = [ "network-online.target" ];
 
-      serviceConfig = {
-        Type = "notify";
-        WatchdogSec = "10s";
-        Restart = "on-failure";
-
-        DynamicUser = true;
-        StateDirectory = "sower";
-        RuntimeDirectory = "sower";
-
-        ExecStart = pkgs.writeShellScript "sower-start" ''
-          ${lib.optionalString cfg.initSecrets ''
-            export SECRET_KEY_BASE=$(cat $SECRET_KEY_BASE_FILE)
-          ''}
-
-          ${cfg.package}/bin/sower eval Sower.Release.migrate
-          exec ${cfg.package}/bin/sower start
-        '';
-        ExecStop = "${cfg.package}/bin/sower stop";
-      };
-
-      environment =
+      serviceConfig = lib.mkMerge [
         {
-          SOWER_DATABASE_PATH = "%S/sower/sower-prod.db";
-          PHX_SERVER = "true";
-        }
-        // (lib.optionalAttrs cfg.initSecrets {
-          RELEASE_COOKIE = "%t/sower/COOKIE";
-          SECRET_KEY_BASE_FILE = "%S/sower/secret-key-base";
-        })
-        // cfg.environment;
+          Type = "notify";
+          WatchdogSec = "10s";
+          Restart = "on-failure";
 
-      preStart = lib.optionalString cfg.initSecrets ''
-        ${pkgs.coreutils}/bin/dd if=/dev/urandom bs=1 count=16 | ${pkgs.hexdump}/bin/hexdump -e '16/1 "%02x"' > "$RELEASE_COOKIE"
-        ${lib.getExe pkgs.pwgen} --capitalize --secure 64 1 | ${pkgs.coreutils}/bin/tr -d '\n' > "$SECRET_KEY_BASE_FILE"
-      '';
+          DynamicUser = true;
+          StateDirectory = "sower";
+          RuntimeDirectory = "sower";
+
+          ExecStart = pkgs.writeShellScript "sower-start" ''
+            ${lib.optionalString cfg.initSecrets ''
+              export RELEASE_COOKIE=$(cat $CREDENTIALS_DIRECTORY/RELEASE_COOKIE_FILE)
+            ''}
+
+            ${cfg.package}/bin/sower eval Sower.Release.migrate
+            exec ${cfg.package}/bin/sower start
+          '';
+          ExecStop = "${cfg.package}/bin/sower stop";
+        }
+        (lib.optionalAttrs cfg.initSecrets {
+          LoadCredential = [
+            "RELEASE_COOKIE_FILE:%S/sower/release-cookie"
+            "SECRET_KEY_BASE_FILE:%S/sower/secret-key-base"
+          ];
+        })
+      ];
+
+      environment = {
+        PHX_SERVER = "true";
+      } // cfg.environment;
+    };
+
+    systemd.services.sower-init-secrets = lib.mkIf cfg.initSecrets {
+      wantedBy = [ "multi-user.target" ];
+      before = [ "sower.service" ];
+      requiredBy = [ "sower.service" ];
+
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = pkgs.writeShellScript "sower-init-secrets" ''
+          if [ ! -e /var/lib/sower/release-cookie ]; then
+            ${pkgs.coreutils}/bin/dd if=/dev/urandom bs=1 count=16 | ${pkgs.hexdump}/bin/hexdump -e '64/1 "%02x"' > /var/lib/sower/release-cookie
+          fi
+          if [ ! -e /var/lib/sower/secret-key-base ]; then
+            ${lib.getExe pkgs.pwgen} --capitalize --secure 64 1 | ${pkgs.coreutils}/bin/tr -d '\n' > /var/lib/sower/secret-key-base
+          fi
+        '';
+      };
     };
   };
 }

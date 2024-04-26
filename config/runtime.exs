@@ -26,12 +26,9 @@ if config_env() == :prod do
       socket: System.get_env("SOWER_DATABASE_SOCKET"),
       database: System.get_env("SOWER_DATABASE_NAME", "sower")
   else
-    db_pass_file =
-      System.get_env("SOWER_DATABASE_PASS_FILE") || raise "missing $SOWER_DATABASE_PASS_FILE"
-
     config :sower, Sower.Repo,
       username: System.get_env("SOWER_DATABASE_USER", "sower"),
-      password: db_pass_file |> File.read!() |> String.trim(),
+      password: Sower.Application.credential!("SOWER_DATABASE_PASS_FILE"),
       hostname: System.get_env("SOWER_DATABASE_HOST", "localhost"),
       database: System.get_env("SOWER_DATABASE_NAME", "sower"),
       port: System.get_env("SOWER_DATABASE_PORT", "5432") |> String.to_integer()
@@ -42,12 +39,7 @@ if config_env() == :prod do
   # want to use a different value for prod and you most likely don't want
   # to check this value into version control, so we use an environment
   # variable instead.
-  secret_key_base =
-    System.get_env("SECRET_KEY_BASE") ||
-      raise """
-      environment variable SECRET_KEY_BASE is missing.
-      You can generate one by calling: mix phx.gen.secret
-      """
+  secret_key_base = Sower.Application.credential!("SECRET_KEY_BASE_FILE")
 
   host = System.get_env("SOWER_HOSTNAME") || raise "missing $SOWER_HOSTNAME"
   port = String.to_integer(System.get_env("SOWER_LISTEN_PORT", "4000"))
