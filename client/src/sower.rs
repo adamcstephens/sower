@@ -19,10 +19,7 @@ pub struct Seed {
 
 impl Seed {
     pub fn realize(&self) -> Result<&Self, String> {
-        match run_command(
-            "nix-store".to_string(),
-            vec!["--realize".to_string(), self.out_path.clone()],
-        ) {
+        match run_command("nix-store", vec!["--realize", &self.out_path.clone()]) {
             true => Ok(self),
             false => Err(format!("failed to realize: {}", &self.out_path)),
         }
@@ -38,7 +35,7 @@ impl Seed {
     }
 
     fn activate_generic(&self) -> Result<&Self, String> {
-        match run_command(format!("{}/activate", &self.out_path), vec![]) {
+        match run_command(format!("{}/activate", &self.out_path).as_ref(), vec![]) {
             true => Ok(self),
             false => Err(format!("failed to realize: {}", &self.out_path)),
         }
@@ -49,19 +46,19 @@ impl Seed {
 
         // nixos profile needs to be manually set to ensure correct switching
         run_command(
-            "nix-env".to_string(),
+            "nix-env",
             vec![
-                "--set".to_string(),
-                "--profile".to_string(),
-                "/nix/var/nix/profiles/system".to_string(),
-                self.out_path.clone(),
+                "--set",
+                "--profile",
+                "/nix/var/nix/profiles/system",
+                &self.out_path.clone(),
             ],
         );
 
         // activate
         let switch_result = run_command(
-            format!("{}/bin/switch-to-configuration", &self.out_path),
-            vec![mode.to_string()],
+            format!("{}/bin/switch-to-configuration", &self.out_path).as_ref(),
+            vec![&mode.to_string()],
         );
 
         match switch_result {
@@ -205,13 +202,13 @@ impl Tree {
 
     fn run_reboot() {
         run_command(
-            "systemd-run".to_string(),
+            "systemd-run",
             vec![
-                "--on-active=5s".to_string(),
-                "--no-block".to_string(),
-                "--unit=sower-client-reboot".to_string(),
-                "systemctl".to_string(),
-                "reboot".to_string(),
+                "--on-active=5s",
+                "--no-block",
+                "--unit=sower-client-reboot",
+                "systemctl",
+                "reboot",
             ],
         );
         println!("Rebooting in ~5 seconds");
@@ -219,7 +216,7 @@ impl Tree {
     }
 }
 
-fn run_command(command: String, args: Vec<String>) -> bool {
+fn run_command(command: &str, args: Vec<&str>) -> bool {
     let status = &mut Command::new(command)
         .args(args)
         .status()
