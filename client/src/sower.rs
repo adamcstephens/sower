@@ -181,15 +181,15 @@ impl Tree {
     }
 
     fn reboot_needed() -> std::io::Result<bool> {
-        let profile_paths = &["initrd", "kernel", "kernel-modules"];
+        let profile_paths = &["/initrd", "/kernel", "/kernel-modules"];
         let result = profile_paths.iter().any(|&path| {
-            let current_path = format!("/nix/var/nix/profiles/system/{}", path);
+            let current_path = format!("/nix/var/nix/profiles/system{}", path);
             let current_path = Path::new(&current_path);
             if !current_path.try_exists().unwrap_or(false) {
                 return false;
             };
 
-            let booted_path = format!("/run/booted-system/{}", path);
+            let booted_path = format!("/run/booted-system{}", path);
             let booted_path = Path::new(&booted_path);
             if !booted_path.try_exists().unwrap_or(false) {
                 return false;
