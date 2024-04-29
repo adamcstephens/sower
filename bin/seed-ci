@@ -1,5 +1,8 @@
 #!/usr/bin/env nu
 
+let git_branch = get-git-branch
+let repo_url = get-repo-url
+
 def attic-setup [url: string, cache: string, token: string] {
   print $"⭐ Ensuring attic cache ($url)/($cache)"
   let check = attic cache info $"main:($cache)" | complete
@@ -118,16 +121,13 @@ export def get-config-outputs [] {
   $configs | each { |c|
     # simplify for output
     $c.targets | filter { |t| $t.build != null } | each { |t|
-      { type: $c.type, name: $t.name, output: $t.build.outputs.out.0 }
+      { type: $c.type, name: $t.name, output: $t.build.outputs.out.0, branch: $git_branch, repo_url: $repo_url }
     }
   } | flatten
 }
 
 export def post-sower-seeds [--sower-url: string] {
   let configs = $in
-  let git_branch = get-git-branch
-  let repo_url = get-repo-url
-
   print $"🫱 Giving seeds to sower ($sower_url)"
 
   # sower only understands certain build outputs
