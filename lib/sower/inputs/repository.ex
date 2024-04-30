@@ -13,6 +13,18 @@ defmodule Sower.Inputs.Repository do
       upsert? true
       upsert_identity :url
     end
+
+    read :by_id do
+      argument :id, :uuid do
+        allow_nil? false
+      end
+
+      # only return one
+      get? true
+
+      filter expr(id == ^arg(:id))
+    end
+
   end
 
   attributes do
@@ -25,6 +37,11 @@ defmodule Sower.Inputs.Repository do
 
   identities do
     identity :url, [:url]
+  end
+
+  code_interface do
+    define :by_id, args: [:id]
+    define :read_all, action: :read
   end
 
   postgres do

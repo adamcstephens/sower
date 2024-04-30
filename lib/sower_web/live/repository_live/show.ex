@@ -1,4 +1,4 @@
-defmodule SowerWeb.SeedLive.Show do
+defmodule SowerWeb.RepositoryLive.Show do
   use SowerWeb, :live_view
 
   @impl true
@@ -11,8 +11,8 @@ defmodule SowerWeb.SeedLive.Show do
     {:noreply,
      socket
      |> assign(:page_title, page_title(socket.assigns.live_action))
-     |> assign(:seed, Sower.Seed.by_id!(id) |> Ash.load!(:repository))}
+     |> assign(:repo, Sower.Inputs.Repository.by_id!(id))}
   end
 
-  defp page_title(:show), do: "Show Seed"
+  defp page_title(:show), do: "Show Repository"
 end

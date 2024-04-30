@@ -18,8 +18,12 @@ defmodule SowerWeb.Router do
   scope "/", SowerWeb do
     pipe_through(:browser)
 
+    get "/", PageController, :home
+
     live("/seeds", SeedLive.Index, :index)
     live("/seeds/:id", SeedLive.Show, :show)
+    live("/inputs/repos", RepositoryLive.Index, :index)
+    live("/inputs/repos/:id", RepositoryLive.Show, :show)
   end
 
   scope "/api" do
