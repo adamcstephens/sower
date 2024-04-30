@@ -93,7 +93,9 @@
               ];
             };
 
-            checks.default = pkgs.callPackage ./nix/test-end-to-end.nix { client = self'.packages.client; };
+            checks = lib.optionalAttrs pkgs.stdenv.isLinux {
+              default = pkgs.callPackage ./nix/test-end-to-end.nix { client = self'.packages.client; };
+            };
 
             packages = {
               seed-ci = pkgs.callPackage ./nix/seed-ci.nix { inherit (inputs'.attic.packages) attic; };
