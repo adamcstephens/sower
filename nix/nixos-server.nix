@@ -92,6 +92,11 @@ in
             ${lib.getExe pkgs.pwgen} --capitalize --secure 64 1 | ${pkgs.coreutils}/bin/tr -d '\n' > /var/lib/sower/secret-key-base
           fi
         '';
+
+        DynamicUser = true;
+        StateDirectory = "sower";
+        User = "sower";
+        Group = "sower";
       };
     };
   };

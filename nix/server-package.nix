@@ -28,6 +28,10 @@ beamPackages.mixRelease {
       esbuild = prev.esbuild.override (old: {
         patches = [ ./esbuild-loadpaths.patch ];
       });
+      mime = prev.mime.override {
+        # mime config needs to be added at compile time
+        appConfigPath = ../config;
+      };
       tailwind = prev.tailwind.override (old: {
         patches = [ ./tailwind-loadpaths.patch ];
       });
