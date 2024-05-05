@@ -1,7 +1,8 @@
 defmodule Sower.Seed do
   use Ash.Resource,
     data_layer: AshPostgres.DataLayer,
-    domain: Sower
+    domain: Sower,
+    extensions: [AshJsonApi.Resource]
 
   @derive {Jason.Encoder, only: [:id, :name, :type, :out_path, :branch, :repository_id]}
 
@@ -119,6 +120,16 @@ defmodule Sower.Seed do
 
   identities do
     identity :seed, [:name, :type, :out_path, :branch]
+  end
+
+  json_api do
+    type "seed"
+
+    routes do
+      base "/seeds"
+
+      get :read
+    end
   end
 
   postgres do

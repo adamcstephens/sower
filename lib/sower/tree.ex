@@ -1,7 +1,8 @@
 defmodule Sower.Tree do
   use Ash.Resource,
     data_layer: AshPostgres.DataLayer,
-    domain: Sower
+    domain: Sower,
+    extensions: [AshJsonApi.Resource]
 
   @types [:nixos, :"home-manager", :"nix-darwin"]
 
@@ -60,6 +61,16 @@ defmodule Sower.Tree do
 
   identities do
     identity :tree, [:name, :type]
+  end
+
+  json_api do
+    type "tree"
+
+    routes do
+      base "/trees"
+
+      get :read
+    end
   end
 
   postgres do

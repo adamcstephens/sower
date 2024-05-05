@@ -1,5 +1,5 @@
 defmodule Sower do
-  use Ash.Domain
+  use Ash.Domain, extensions: [AshJsonApi.Domain]
 
   resources do
     resource Sower.Inputs.Repository

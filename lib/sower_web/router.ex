@@ -33,6 +33,8 @@ defmodule SowerWeb.Router do
     get("/seeds", SowerWeb.SeedController, :list)
     get("/seeds/latest", SowerWeb.SeedController, :find_latest)
     post("/seeds", SowerWeb.SeedController, :new)
+
+    forward "/json", SowerWeb.JsonApiRouter
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development

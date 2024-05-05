@@ -24,7 +24,6 @@ defmodule Sower.Inputs.Repository do
 
       filter expr(id == ^arg(:id))
     end
-
   end
 
   attributes do
