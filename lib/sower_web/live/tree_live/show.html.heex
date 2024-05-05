@@ -1,0 +1,19 @@
+<.header>
+  Tree <%= @tree.id %>
+  <:subtitle>This is a tree record from your database.</:subtitle>
+</.header>
+
+<.list></.list>
+
+<.back navigate={~p"/trees"}>Back to trees</.back>
+
+<.modal :if={@live_action == :edit} id="tree-modal" show on_cancel={JS.patch(~p"/trees/#{@tree}")}>
+  <.live_component
+    module={SowerWeb.TreeLive.FormComponent}
+    id={@tree.id}
+    title={@page_title}
+    action={@live_action}
+    tree={@tree}
+    patch={~p"/trees/#{@tree}"}
+  />
+</.modal>

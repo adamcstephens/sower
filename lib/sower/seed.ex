@@ -66,6 +66,21 @@ defmodule Sower.Seed do
                 sort: [updated_at: :desc]
               )
     end
+
+    read :by_path do
+      argument :out_path, :string do
+        allow_nil? false
+      end
+
+      # # only return one
+      # get? true
+      #
+      prepare build(
+                filter: expr(out_path == ^arg(:out_path)),
+                limit: 1,
+                sort: [updated_at: :desc]
+              )
+    end
   end
 
   attributes do
@@ -95,6 +110,7 @@ defmodule Sower.Seed do
 
   code_interface do
     define :by_id, args: [:id]
+    define :by_path, args: [:out_path]
     define :new, args: [:name, :type, :out_path, :branch, :repo_url]
     define :new_legacy, args: [:name, :type, :out_path]
     define :latest, args: [:name, :type]

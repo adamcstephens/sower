@@ -1,0 +1,18 @@
+<.header>
+  Listing Trees
+  <:subtitle>A tree is an individual client that grows from seeds.</:subtitle>
+</.header>
+
+<.table
+  id="trees"
+  rows={@streams.trees}
+  row_click={fn {_id, tree} -> JS.navigate(~p"/trees/#{tree}") end}
+>
+  <:col :let={{_id, tree}} label="name"><%= tree.name %></:col>
+  <:col :let={{_id, tree}} label="type"><%= tree.type %></:col>
+  <:action :let={{_id, tree}}>
+    <div class="sr-only">
+      <.link navigate={~p"/trees/#{tree}"}>Show</.link>
+    </div>
+  </:action>
+</.table>
