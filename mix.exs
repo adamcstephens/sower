@@ -34,11 +34,11 @@ defmodule Sower.MixProject do
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 0.20.0"},
       {:postgrex, ">= 0.0.0"},
-      {:sentry, "~> 10.2.0"},
+      {:sentry, "~> 10.5.0"},
       {:swoosh, "~> 1.3"},
       {:systemd, "~> 0.6"},
       {:tailwind, "~> 0.2.0", runtime: Mix.env() == :dev},
-      {:telemetry_metrics, "~> 0.6"},
+      {:telemetry_metrics, "~> 1.0.0"},
       {:telemetry_poller, "~> 1.1.0"}
     ]
   end
