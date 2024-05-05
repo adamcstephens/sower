@@ -21,6 +21,19 @@ let
       beamDeps = [ comparable decimal ecto ets jason plug reactor spark splode stream_data telemetry ];
     };
 
+    ash_json_api = buildMix rec {
+      name = "ash_json_api";
+      version = "1.0.0-rc.6";
+
+      src = fetchHex {
+        pkg = "ash_json_api";
+        version = "${version}";
+        sha256 = "f2f6acbf0a0e8e90a6168c01cfa746430d92332e008a435ad897aba70c722656";
+      };
+
+      beamDeps = [ ash jason json_xema plug ];
+    };
+
     ash_phoenix = buildMix rec {
       name = "ash_phoenix";
       version = "2.0.0-rc.8";
@@ -110,6 +123,19 @@ let
       };
 
       beamDeps = [ typable ];
+    };
+
+    conv_case = buildMix rec {
+      name = "conv_case";
+      version = "0.2.3";
+
+      src = fetchHex {
+        pkg = "conv_case";
+        version = "${version}";
+        sha256 = "88f29a3d97d1742f9865f7e394ed3da011abb7c5e8cc104e676fdef6270d4b4a";
+      };
+
+      beamDeps = [];
     };
 
     db_connection = buildMix rec {
@@ -318,6 +344,19 @@ let
       };
 
       beamDeps = [ decimal ];
+    };
+
+    json_xema = buildMix rec {
+      name = "json_xema";
+      version = "0.6.2";
+
+      src = fetchHex {
+        pkg = "json_xema";
+        version = "${version}";
+        sha256 = "50c84c537c95fcc76677f1f030af4aed188f538820fc488aeaa3f7dfe04d0edf";
+      };
+
+      beamDeps = [ conv_case xema ];
     };
 
     libgraph = buildMix rec {
@@ -851,6 +890,19 @@ let
       };
 
       beamDeps = [ bandit plug websock ];
+    };
+
+    xema = buildMix rec {
+      name = "xema";
+      version = "0.17.1";
+
+      src = fetchHex {
+        pkg = "xema";
+        version = "${version}";
+        sha256 = "3dd7213309cc8e6d7770ee54de807a0d91cdbdd9dcb78a6f3eee9dbad43889af";
+      };
+
+      beamDeps = [ conv_case decimal ];
     };
   };
 in self

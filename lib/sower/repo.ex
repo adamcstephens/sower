@@ -3,6 +3,10 @@ defmodule Sower.Repo do
 
   # Installs Postgres extensions that ash commonly uses
   def installed_extensions do
-    ["uuid-ossp", "citext"]
+    [
+      "ash-functions",
+      "citext",
+      "uuid-ossp"
+    ]
   end
 end

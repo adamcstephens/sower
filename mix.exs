@@ -16,6 +16,7 @@ defmodule Sower.MixProject do
   defp deps do
     [
       {:ash, "~> 3.0.0-rc.17"},
+      {:ash_json_api, "~> 1.0.0-rc.6"},
       {:ash_phoenix, "~> 2.0.0-rc.4"},
       {:ash_postgres, "~> 2.0.0-rc.5"},
       {:bandit, "~> 1.0"},
