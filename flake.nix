@@ -4,16 +4,15 @@
     crane.inputs.nixpkgs.follows = "nixpkgs";
     crane.url = "github:ipetkov/crane";
     flake-parts.url = "github:hercules-ci/flake-parts";
-    lexical.inputs.nixpkgs.follows = "nixpkgs";
-    lexical.url = "github:lexical-lsp/lexical";
+    next-ls.inputs.nixpkgs.follows = "nixpkgs";
     next-ls.url = "github:elixir-tools/next-ls";
-    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable-small";
+    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
     process-compose-flake.url = "github:Platonic-Systems/process-compose-flake";
     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
     rust-overlay.url = "github:oxalica/rust-overlay";
     services-flake.url = "github:juspay/services-flake";
-    typhon.url = "github:typhon-ci/typhon";
     typhon.inputs.nixpkgs.follows = "nixpkgs";
+    typhon.url = "github:typhon-ci/typhon";
   };
 
   outputs =
@@ -41,9 +40,9 @@
             ...
           }:
           let
-            beamPackages = pkgs.beam.packagesWith pkgs.erlang;
+            beamPackages = pkgs.beam.packagesWith pkgs.erlangR26;
             elixir = beamPackages.elixir_1_16;
-            lexical = inputs'.lexical.packages.default.override { inherit elixir; };
+            lexical = pkgs.lexical.override { inherit elixir; };
             next-ls = inputs'.next-ls.packages.default.override { };
 
             rustTarget =
