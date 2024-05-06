@@ -52,7 +52,7 @@ in
 
   config = lib.mkIf cfg.enable {
     environment.etc."sower/config.toml".source = lib.mkIf (cfg.settings != null) (
-      toml.generate "sower-config.toml" cfg.settings
+      toml.generate "sower-config.toml" (cfg.settings // (lib.optionalAttrs cfg.autoreboot { reboot = true; }))
     );
 
     systemd.services.sower-client = {
