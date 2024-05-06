@@ -34,6 +34,10 @@ defmodule SowerWeb.Router do
     get("/seeds/latest", SowerWeb.SeedController, :find_latest)
     post("/seeds", SowerWeb.SeedController, :new)
 
+    forward "/json/doc",
+            Redoc.Plug.RedocUI,
+            spec_url: "/api/json/open_api"
+
     forward "/json", SowerWeb.JsonApiRouter
   end
 

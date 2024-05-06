@@ -4,6 +4,7 @@
 can we just check if boot-system matches out_path?
 * TODO differentiate built seed branch?
 * handle our own substituter configs?
+* if network is lost, kill realization, restart when reconnected
 
 * Stories
 - I want to switch nightly but boot/reboot once a week
