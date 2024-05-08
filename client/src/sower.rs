@@ -180,9 +180,9 @@ impl Tree {
     fn reboot_needed() -> std::io::Result<bool> {
         let profile_paths = &["", "/initrd", "/kernel", "/kernel-modules"];
         let result = profile_paths.iter().any(|&path| {
-            let current_path = format!("/nix/var/nix/profiles/system{}", path);
-            let current_path = Path::new(&current_path);
-            if !current_path.try_exists().unwrap_or(false) {
+            let profile_path = format!("/nix/var/nix/profiles/system{}", path);
+            let profile_path = Path::new(&profile_path);
+            if !profile_path.try_exists().unwrap_or(false) {
                 return false;
             };
 
@@ -192,10 +192,22 @@ impl Tree {
                 return false;
             };
 
-            let current = fs::read_link(current_path).expect("unstable to read current link");
-            let booted = fs::read_link(booted_path).expect("unable to read booted link");
+            let current_path = format!("/run/current-system{}", path);
+            let current_path = Path::new(&current_path);
+            if !current_path.try_exists().unwrap_or(false) {
+                return false;
+            };
 
-            current != booted
+            let profile = fs::canonicalize(profile_path).expect("unstable to read current link");
+            let current = fs::canonicalize(current_path).expect("unable to read current link");
+            let booted = fs::canonicalize(booted_path).expect("unable to read booted link");
+
+            if path != "" {
+                current != booted
+            } else {
+                // if running system was updated using switch, don't reboot
+                profile != current
+            }
         });
         Ok(result)
     }
