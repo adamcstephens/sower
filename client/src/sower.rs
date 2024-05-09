@@ -1,5 +1,7 @@
 use crate::*;
 
+pub mod daemon;
+
 use clap::ValueEnum;
 use serde::Deserialize;
 use std::env;
@@ -91,38 +93,48 @@ pub enum ActivationMode {
 #[derive(Clone, Debug)]
 pub struct Sower {
     pub url: String,
+    pub api_url: String,
+    pub channels_url: String,
 }
 
 impl Sower {
     pub fn new(config: &Config) -> Result<Sower, Box<dyn std::error::Error>> {
-        let seed_url = format!(
-            "{}/api/seeds/latest",
-            config.url.clone().expect("URL is required")
-        );
+        let url = config.url.clone().expect("URL is required");
+        let api_url = format!("{}/api", url);
+        let channels_url = format!("{}/client/websocket", url.replace("http", "ws"));
 
-        Ok(Self { url: seed_url })
+        Ok(Self {
+            url,
+            api_url,
+            channels_url,
+        })
     }
 
-    pub async fn find_seed(
-        &self,
-        name: String,
-        seed_type: SeedType,
-    ) -> Result<Seed, Box<dyn std::error::Error>> {
+    pub async fn find_seed(&self, name: String, seed_type: SeedType) -> Option<Seed> {
         let client = reqwest::Client::new();
-        Ok(client
-            .get(&self.url)
+
+        match client
+            .get(format!("{}/seeds/latest", &self.url))
             .query(&[("name", name), ("type", seed_type.to_string())])
             .send()
-            .await?
-            .json::<Seed>()
-            .await?)
+            .await
+        {
+            Ok(result) => {
+                if let Ok(seed) = result.json::<Seed>().await {
+                    Some(seed)
+                } else {
+                    None
+                }
+            }
+            Err(_) => None,
+        }
     }
 }
 
 #[derive(Debug)]
 pub struct Tree {
     pub name: String,
-    pub seed: Seed,
+    pub seed: Option<Seed>,
     pub seed_type: SeedType,
     pub sower: Sower,
 }
@@ -147,7 +159,7 @@ impl Tree {
             name: name.clone(),
             seed_type,
             sower: sower.clone(),
-            seed: sower.find_seed(name, seed_type).await?,
+            seed: sower.find_seed(name, seed_type).await,
         })
     }
 

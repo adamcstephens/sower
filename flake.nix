@@ -74,11 +74,13 @@
                   pkgs.process-compose
                   pkgs.postgresql
 
-                  pkgs.cargo
                   pkgs.rustc
-                  pkgs.clippy
-                  pkgs.rust-analyzer
                   pkgs.rustfmt
+
+                  pkgs.cargo
+                  pkgs.clippy
+                  pkgs.gdb
+                  pkgs.rust-analyzer
                 ]
                 ++ lib.optionals pkgs.stdenv.isLinux [ pkgs.inotify-tools ]
                 ++ lib.optionals pkgs.stdenv.isDarwin [

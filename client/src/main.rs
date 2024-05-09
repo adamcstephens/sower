@@ -72,6 +72,8 @@ enum SeedCommands {
     subcommand_help_heading = "Tree commands"
 )]
 enum TreeCommands {
+    Daemon {},
+
     Info {},
 
     Reboot {
@@ -172,21 +174,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = config.name(cli.name).seed_type(cli.seed_type).url(cli.url);
 
     let tree = Tree::new(&config).await?;
-    let seed = &tree.seed;
+    let seed = &tree.seed.as_ref();
 
     match &cli.action {
         Actions::Seed { action } => match action {
             SeedCommands::Activate { mode, .. } => {
                 let mode = mode.clone().or(config.mode);
-                seed.activate(mode).expect("failed to activate");
+                seed.unwrap().activate(mode).expect("failed to activate");
             }
 
             SeedCommands::Download {} => {
-                seed.realize().expect("failed to realize");
+                seed.unwrap().realize().expect("failed to realize");
             }
         },
 
         Actions::Tree { action } => match action {
+            TreeCommands::Daemon {} => tree.daemon().await.unwrap(),
+
             TreeCommands::Info {} => tree.info(),
 
             TreeCommands::Reboot { yes } => {
@@ -198,7 +202,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 tree.info();
 
                 let mode = mode.clone().or(config.mode);
-                seed.realize()
+                seed.unwrap()
+                    .realize()
                     .expect("failed to realize")
                     .activate(mode)
                     .expect("failed to activate");
