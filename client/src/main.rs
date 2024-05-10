@@ -173,7 +173,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // cli overrides config
     let config = config.name(cli.name).seed_type(cli.seed_type).url(cli.url);
 
-    let tree = Tree::new(&config).await?;
+    let mut tree = Tree::new(&config).await?;
     let seed = &tree.seed.as_ref();
 
     match &cli.action {

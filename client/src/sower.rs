@@ -1,4 +1,5 @@
 use crate::*;
+use serde::Serialize;
 
 pub mod daemon;
 
@@ -70,7 +71,9 @@ impl Seed {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Display, PartialEq, ValueEnum, VariantNames)]
+#[derive(
+    Clone, Copy, Debug, Deserialize, Display, PartialEq, Serialize, ValueEnum, VariantNames,
+)]
 #[serde(rename_all = "kebab-case")]
 #[strum(serialize_all = "kebab-case")]
 pub enum SeedType {
@@ -90,7 +93,7 @@ pub enum ActivationMode {
     None,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Sower {
     pub url: String,
     pub api_url: String,
@@ -114,7 +117,7 @@ impl Sower {
         let client = reqwest::Client::new();
 
         match client
-            .get(format!("{}/seeds/latest", &self.url))
+            .get(format!("{}/seeds/latest", &self.api_url))
             .query(&[("name", name), ("type", seed_type.to_string())])
             .send()
             .await
@@ -131,12 +134,13 @@ impl Sower {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct Tree {
     pub name: String,
     pub seed: Option<Seed>,
     pub seed_type: SeedType,
-    pub sower: Sower,
+    pub sower: Option<Sower>,
+    pub id: Option<String>,
 }
 
 impl Tree {
@@ -158,8 +162,9 @@ impl Tree {
         Ok(Tree {
             name: name.clone(),
             seed_type,
-            sower: sower.clone(),
+            sower: Some(sower.clone()),
             seed: sower.find_seed(name, seed_type).await,
+            id: None,
         })
     }
 

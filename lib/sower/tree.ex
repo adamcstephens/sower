@@ -4,6 +4,8 @@ defmodule Sower.Tree do
     domain: Sower,
     extensions: [AshJsonApi.Resource]
 
+  @derive {Jason.Encoder, only: [:id, :name, :type]}
+
   @types [:nixos, :"home-manager", :"nix-darwin"]
 
   actions do
@@ -22,6 +24,15 @@ defmodule Sower.Tree do
       get? true
 
       filter expr(id == ^arg(:id))
+    end
+
+    read :find do
+      argument :name, :string, allow_nil?: false
+      argument :type, :string, allow_nil?: false
+
+      get? true
+
+      filter expr(name == ^arg(:name) && type == ^arg(:type))
     end
 
     update :set_seed do
@@ -54,6 +65,7 @@ defmodule Sower.Tree do
 
   code_interface do
     define :by_id, args: [:id]
+    define :find, args: [:name, :type]
     define :set_seed, args: [:seed_id]
     define :read_all, action: :read
     define :register, args: [:name, :type]

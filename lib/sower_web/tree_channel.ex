@@ -9,7 +9,14 @@ defmodule SowerWeb.TreeChannel do
     {:error, %{reason: "unauthorized"}}
   end
 
-  def handle_in("reply_ok_tuple", body, socket) do
-    {:reply, {:ok, "success"}, socket}
+  def handle_in("register", %{"name" => name, "type" => type}, socket) do
+    id =
+      with {:ok, tree} <- Sower.Tree.register(name, type) do
+        tree.id
+      else
+        {:error, _} -> Sower.Tree.find!(name, type) |> Map.get(:id)
+      end
+
+    {:reply, {:ok, id}, socket}
   end
 end
