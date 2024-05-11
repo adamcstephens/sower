@@ -1,8 +1,5 @@
 #!/usr/bin/env nu
 
-let git_branch = get-git-branch
-let repo_url = get-repo-url
-
 def attic-setup [url: string, cache: string, token: string] {
   print $"⭐ Ensuring attic cache ($url)/($cache)"
   let check = attic cache info $"main:($cache)" | complete
@@ -92,7 +89,7 @@ export def upload-configs [--attic-cache: string] {
     let build_dependencies = $built_targets | get drvPath | each { |drv|
       nix-store --query --requisites --include-outputs $drv | lines
     } | flatten
-    $acc ++ ( $built_targets | get outputs.out) ++ $build_dependencies
+    $acc ++ ( $built_targets | get outputs.out ) ++ $build_dependencies ++ ( get-flake-inputs | get outPath )
   } | attic-upload $attic_cache
 
   $configs
@@ -125,14 +122,27 @@ export def get-config-outputs [] {
   $configs | each { |c|
     # simplify for output
     $c.targets | filter { |t| $t.build != null } | each { |t|
-      { type: $c.type, name: $t.name, output: $t.build.outputs.out.0, branch: $git_branch, repo_url: $repo_url }
+      { type: $c.type, name: $t.name, output: $t.build.outputs.out.0 }
     }
   } | flatten
+}
+
+export def get-flake-inputs [] {
+  nix flake archive --json | from json | get inputs | transpose | select column0 column1.path | each { |c|
+    {
+      name: $c.column0,
+      outPath: $c.column1_path,
+      drvPath: nul
+    }
+  }
 }
 
 export def post-sower-seeds [--sower-url: string] {
   let configs = $in
   print $"🫱 Giving seeds to sower ($sower_url)"
+
+  let git_branch = get-git-branch
+  let repo_url = get-repo-url
 
   # sower only understands certain build outputs
   $configs | filter { |c| $c.type == "home-manager" or $c.type == "nix-darwin" or $c.type == "nixos" } | each { |c|
