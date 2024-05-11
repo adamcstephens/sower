@@ -79,10 +79,12 @@
 
                   pkgs.cargo
                   pkgs.clippy
-                  pkgs.gdb
                   pkgs.rust-analyzer
                 ]
-                ++ lib.optionals pkgs.stdenv.isLinux [ pkgs.inotify-tools ]
+                ++ lib.optionals pkgs.stdenv.isLinux [
+                  pkgs.gdb
+                  pkgs.inotify-tools
+                ]
                 ++ lib.optionals pkgs.stdenv.isDarwin [
                   pkgs.libiconv
                   pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
