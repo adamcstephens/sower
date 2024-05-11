@@ -15,9 +15,16 @@ beamPackages.mixRelease {
 
   src = lib.fileset.toSource {
     root = ../.;
-    fileset = lib.fileset.fileFilter (
-      file: file.name != "bin" && file.name != "nix" && !file.hasExt "nix"
-    ) ../.;
+    fileset = lib.fileset.unions [
+      ../assets
+      ../config
+      ../lib
+      ../mix.exs
+      ../priv
+      ../rel
+      ../test
+      ../VERSION
+    ];
   };
 
   elixir = beamPackages.elixir_1_16;
