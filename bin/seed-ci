@@ -88,7 +88,11 @@ export def upload-configs [--attic-cache: string] {
   let configs = $in
 
   $configs | reduce --fold [] { |c, acc|
-    $acc ++ ($c.targets | filter { |t| $t.build != null } | get build | flatten | get outputs.out)
+    let built_targets = $c.targets | filter { |t| $t.build != null } | get build | flatten
+    let build_dependencies = $built_targets | get drvPath | each { |drv|
+      nix-store --query --requisites --include-outputs $drv | lines
+    } | flatten
+    $acc ++ ( $built_targets | get outputs.out) ++ $build_dependencies
   } | attic-upload $attic_cache
 
   $configs
