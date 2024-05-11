@@ -31,7 +31,7 @@ let
         sha256 = "f2f6acbf0a0e8e90a6168c01cfa746430d92332e008a435ad897aba70c722656";
       };
 
-      beamDeps = [ ash jason json_xema plug ];
+      beamDeps = [ ash jason json_xema open_api_spex plug ];
     };
 
     ash_phoenix = buildMix rec {
@@ -502,6 +502,19 @@ let
       beamDeps = [];
     };
 
+    open_api_spex = buildMix rec {
+      name = "open_api_spex";
+      version = "3.19.0";
+
+      src = fetchHex {
+        pkg = "open_api_spex";
+        version = "${version}";
+        sha256 = "7e06db4a6a20fb765677aabad84494b950765f0d734444ded79f790638ff4ded";
+      };
+
+      beamDeps = [ jason plug ];
+    };
+
     parse_trans = buildRebar3 rec {
       name = "parse_trans";
       version = "3.4.1";
@@ -669,6 +682,19 @@ let
       };
 
       beamDeps = [ libgraph spark splode telemetry ];
+    };
+
+    redoc_ui_plug = buildMix rec {
+      name = "redoc_ui_plug";
+      version = "0.2.1";
+
+      src = fetchHex {
+        pkg = "redoc_ui_plug";
+        version = "${version}";
+        sha256 = "7be01db31f210887e9fc18f8fbccc7788de32c482b204623556e415ed1fe714b";
+      };
+
+      beamDeps = [ jason plug ];
     };
 
     sentry = buildMix rec {
