@@ -81,7 +81,7 @@ export def build-configs [--threads: int] {
   }
 }
 
-export def upload-configs [--attic-cache: string] {
+export def upload-configs [--attic-cache: string, --cache-build-deps = false, --cache-inputs = false] {
   let configs = $in
 
   $configs | reduce --fold [] { |c, acc|
@@ -189,7 +189,17 @@ export def get-repo-url [] {
   }
 }
 
-def main [--attic-upload = true, --attic-use = false, --eval-only, --nom = true, --sower-seed = false, --system: string, --threads: int = 8] {
+def main [
+  --attic-upload = true,
+  --attic-use = false,
+  --cache-build-deps = false,
+  --cache-inputs = true,
+  --eval-only,
+  --nom = true,
+  --sower-seed = false,
+  --system: string,
+  --threads: int = 8
+  ] {
   let attic_url = $env.ATTIC_URL?
   let attic_cache = $env.ATTIC_CACHE?
   let attic_token = $env.ATTIC_KEY?
@@ -211,7 +221,7 @@ def main [--attic-upload = true, --attic-use = false, --eval-only, --nom = true,
   let built_seeds = $seeds | build-configs --threads $threads
 
   if $attic_upload {
-    $built_seeds | upload-configs --attic-cache $attic_cache
+    $built_seeds | upload-configs --attic-cache $attic_cache --cache-build-deps $cache_build_deps --cache-inputs $cache_inputs
   }
 
   if $sower_seed {
