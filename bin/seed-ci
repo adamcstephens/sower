@@ -86,10 +86,13 @@ export def upload-configs [--attic-cache: string, --cache-build-deps = false, --
 
   $configs | reduce --fold [] { |c, acc|
     let built_targets = $c.targets | filter { |t| $t.build != null } | get build | flatten
-    let build_dependencies = $built_targets | get drvPath | each { |drv|
-      nix-store --query --requisites --include-outputs $drv | lines
-    } | flatten
-    $acc ++ ( $built_targets | get outputs.out ) ++ $build_dependencies ++ ( get-flake-inputs | get outPath )
+    let build_dependencies = if $cache_build_deps {
+      $built_targets | get drvPath | each { |drv|
+        nix-store --query --requisites --include-outputs $drv | lines
+      } | flatten
+    } else { [] }
+    let inputs = if $cache_inputs {  get-flake-inputs | get outPath } else { [] }
+    $acc ++ ( $built_targets | get outputs.out ) ++ $build_dependencies ++ $inputs
   } | attic-upload $attic_cache
 
   $configs
