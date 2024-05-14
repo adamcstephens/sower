@@ -10,6 +10,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 use strum::{Display, VariantNames};
+use tracing::info;
 
 #[derive(Debug, Deserialize)]
 pub struct Seed {
