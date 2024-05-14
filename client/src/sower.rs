@@ -221,8 +221,22 @@ impl Tree {
             let booted = fs::canonicalize(booted_path).expect("unable to read booted link");
 
             if path != "" {
+                if current != booted {
+                    info!(
+                        "current {:?} != booted {:?}",
+                        current.clone().into_os_string(),
+                        booted.clone().into_os_string()
+                    );
+                }
                 current != booted
             } else {
+                if profile != current {
+                    info!(
+                        "current {:?} != booted {:?}",
+                        current.clone().into_os_string(),
+                        profile.clone().into_os_string()
+                    );
+                }
                 // if running system was updated using switch, don't reboot
                 profile != current
             }
