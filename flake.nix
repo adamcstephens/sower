@@ -120,9 +120,6 @@
           nixosModules.sower = ./nix/nixos-module.nix;
           homeModules.sower = ./nix/home-module.nix;
 
-          hydraJobs = lib.recursiveUpdate (inputs.nixpkgs.lib.genAttrs systems (system: {
-            inherit (self.packages.${system}) client;
-          })) { x86_64-linux.server = self.packages.x86_64-linux.server; };
 
           typhonProject = inputs.typhon.lib.gitea.mkProject {
             instance = "git.junco.dev";
