@@ -10,12 +10,12 @@ let
   packages = with beamPackages; with self; {
     ash = buildMix rec {
       name = "ash";
-      version = "3.0.0-rc.45";
+      version = "3.0.1";
 
       src = fetchHex {
         pkg = "ash";
         version = "${version}";
-        sha256 = "1a3261257aee24a59c66db289163b9e16d91cdbc0c6b3ac7eaf64a8a8e45c842";
+        sha256 = "1b2d41ab1fc2e4a525962d588bc38ad327be6eb5d37d49ee16561233f3a76bf2";
       };
 
       beamDeps = [ comparable decimal ecto ets jason plug reactor spark splode stream_data telemetry ];
@@ -23,12 +23,12 @@ let
 
     ash_json_api = buildMix rec {
       name = "ash_json_api";
-      version = "1.0.0-rc.6";
+      version = "1.0.0";
 
       src = fetchHex {
         pkg = "ash_json_api";
         version = "${version}";
-        sha256 = "f2f6acbf0a0e8e90a6168c01cfa746430d92332e008a435ad897aba70c722656";
+        sha256 = "a131585bce029b60e3e9b1b775ee87eb15d8242fe18b73443607f89b9b8d89b1";
       };
 
       beamDeps = [ ash jason json_xema open_api_spex plug ];
@@ -36,12 +36,12 @@ let
 
     ash_phoenix = buildMix rec {
       name = "ash_phoenix";
-      version = "2.0.0-rc.8";
+      version = "2.0.0";
 
       src = fetchHex {
         pkg = "ash_phoenix";
         version = "${version}";
-        sha256 = "891ac97c7ee1fe96ad6fd0b56f7081930d10bab92cee753d3d2ed026221be372";
+        sha256 = "4aebb23acb85d5b0afecb6feb5e4e3f2ff8429164387c26c95642ab024bc240a";
       };
 
       beamDeps = [ ash phoenix phoenix_html phoenix_live_view ];
@@ -49,12 +49,12 @@ let
 
     ash_postgres = buildMix rec {
       name = "ash_postgres";
-      version = "2.0.0-rc.14";
+      version = "2.0.1";
 
       src = fetchHex {
         pkg = "ash_postgres";
         version = "${version}";
-        sha256 = "d8f870020bfd4b53ba9f07a019fdaf8086c24c51cfd722fbb576a2b92dc50e88";
+        sha256 = "6b8c8f6427739f5d668502951644079a81fa385b37c99ce56c378f0365dc4b70";
       };
 
       beamDeps = [ ash ash_sql ecto ecto_sql jason postgrex ];
@@ -62,12 +62,12 @@ let
 
     ash_sql = buildMix rec {
       name = "ash_sql";
-      version = "0.1.1-rc.17";
+      version = "0.1.2";
 
       src = fetchHex {
         pkg = "ash_sql";
         version = "${version}";
-        sha256 = "0eda1e606959d6fb85c665f7465397792f0c128761db8177f1683807020e5f67";
+        sha256 = "35fab32c2e5316fac8552dd541707301c616bf548735af593581dcebc76215eb";
       };
 
       beamDeps = [ ash ecto ecto_sql ];
@@ -75,12 +75,12 @@ let
 
     bandit = buildMix rec {
       name = "bandit";
-      version = "1.5.0";
+      version = "1.5.2";
 
       src = fetchHex {
         pkg = "bandit";
         version = "${version}";
-        sha256 = "92d18d9a7228a597e0d4661ef69a874ea82d63ff49c7d801a5c68cb18ebbbd72";
+        sha256 = "35ddbdce7e8a2a3c6b5093f7299d70832a43ed2f4a1852885a61d334cab1b4ad";
       };
 
       beamDeps = [ hpax plug telemetry thousand_island websock ];
@@ -374,12 +374,12 @@ let
 
     makeup = buildMix rec {
       name = "makeup";
-      version = "1.1.1";
+      version = "1.1.2";
 
       src = fetchHex {
         pkg = "makeup";
         version = "${version}";
-        sha256 = "5dc62fbdd0de44de194898b6710692490be74baa02d9d108bc29f007783b0b48";
+        sha256 = "cce1566b81fbcbd21eca8ffe808f33b221f9eee2cbc7a1706fc3da9ff18e6cac";
       };
 
       beamDeps = [ nimble_parsec ];
@@ -673,12 +673,12 @@ let
 
     reactor = buildMix rec {
       name = "reactor";
-      version = "0.8.1";
+      version = "0.8.2";
 
       src = fetchHex {
         pkg = "reactor";
         version = "${version}";
-        sha256 = "ae3936d97a3e4a316744f70c77b85345b08b70da334024c26e6b5eb8ede1246b";
+        sha256 = "c35eb23b77cc77ba922af108722ac93257899e35cfdd18882f0e659ad2cac9f3";
       };
 
       beamDeps = [ libgraph spark splode telemetry ];
@@ -712,12 +712,12 @@ let
 
     sourceror = buildMix rec {
       name = "sourceror";
-      version = "1.0.3";
+      version = "1.1.0";
 
       src = fetchHex {
         pkg = "sourceror";
         version = "${version}";
-        sha256 = "56c21ef146c00b51bc3bb78d1f047cb732d193256a7c4ba91eaf828d3ae826af";
+        sha256 = "b9c348688e2cfc20acfef0feaca88643044be5acd2e0b02cf4a8d6ac1edc4c4a";
       };
 
       beamDeps = [];
@@ -725,12 +725,12 @@ let
 
     spark = buildMix rec {
       name = "spark";
-      version = "2.1.20";
+      version = "2.1.22";
 
       src = fetchHex {
         pkg = "spark";
         version = "${version}";
-        sha256 = "e7a4f8f8ca7a477918af1eb65e20f2015f783a9a23e5f73d1020edf5b2ef69be";
+        sha256 = "f764611d0b15ac132e72b2326539acc11fc4e63baa3e429f541bca292b5f7064";
       };
 
       beamDeps = [ jason sourceror ];
@@ -764,12 +764,12 @@ let
 
     stream_data = buildMix rec {
       name = "stream_data";
-      version = "0.6.0";
+      version = "1.0.0";
 
       src = fetchHex {
         pkg = "stream_data";
         version = "${version}";
-        sha256 = "b92b5031b650ca480ced047578f1d57ea6dd563f5b57464ad274718c9c29501c";
+        sha256 = "acd53e27c66c617d466f42ec77a7f59e5751f6051583c621ccdb055b9690435d";
       };
 
       beamDeps = [];
