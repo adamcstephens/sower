@@ -50,6 +50,8 @@ enum Actions {
         #[command(subcommand)]
         action: TreeCommands,
     },
+
+    Daemon {},
 }
 
 #[derive(Debug, Subcommand)]
@@ -74,8 +76,6 @@ enum SeedCommands {
     subcommand_help_heading = "Tree commands"
 )]
 enum TreeCommands {
-    Daemon {},
-
     Info {},
 
     Reboot {
@@ -181,7 +181,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match &cli.action {
         Actions::Daemon {} => {
-            let mut daemon = Daemon::new(tree).expect("Failed to initialize daemon");
+            let mut daemon = Daemon::new(&config).await;
             daemon.run().await.unwrap()
         }
 
