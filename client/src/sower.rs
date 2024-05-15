@@ -1,20 +1,20 @@
 use crate::*;
-use serde::Serialize;
 
 pub mod daemon;
 
 use clap::ValueEnum;
 use serde::Deserialize;
+use serde::Serialize;
 use std::env;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
 use strum::{Display, VariantNames};
-use tracing::info;
+use tracing::{debug, info};
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Seed {
-    pub id: String,
+    pub id: Option<String>,
     pub name: String,
     #[serde(rename(deserialize = "type"))]
     pub seed_type: SeedType,
@@ -70,6 +70,17 @@ impl Seed {
             false => Err(format!("failed to realize: {}", &self.out_path)),
         }
     }
+
+    fn new_from_path(name: String, seed_type: SeedType, path: &str) -> Self {
+        debug!(path);
+        let path = fs::canonicalize(Path::new(path)).expect("unable to read link");
+        Self {
+            id: None,
+            name,
+            seed_type,
+            out_path: path.to_string_lossy().to_string(),
+        }
+    }
 }
 
 #[derive(
@@ -81,6 +92,21 @@ pub enum SeedType {
     HomeManager,
     NixDarwin,
     Nixos,
+}
+
+impl SeedType {
+    fn profile_path(&self) -> String {
+        match self {
+            SeedType::HomeManager => {
+                format!(
+                    "{}/.local/state/nix/profiles/home-manager",
+                    env::var("HOME").expect("missing $HOME environment variable")
+                )
+            }
+            SeedType::NixDarwin => panic!("unsupported"),
+            SeedType::Nixos => "/nix/var/nix/profiles/system".to_string(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Display, ValueEnum, VariantNames)]
@@ -138,10 +164,18 @@ impl Sower {
 #[derive(Debug, Deserialize)]
 pub struct Tree {
     pub name: String,
-    pub seed: Option<Seed>,
+    pub seeds: Option<TreeSeeds>,
     pub seed_type: SeedType,
     pub sower: Option<Sower>,
     pub id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct TreeSeeds {
+    pub current: Option<Seed>,
+    pub booted: Option<Seed>,
+    pub desired: Option<Seed>,
+    pub profile: Seed,
 }
 
 impl Tree {
@@ -164,14 +198,72 @@ impl Tree {
             name: name.clone(),
             seed_type,
             sower: Some(sower.clone()),
-            seed: sower.find_seed(name, seed_type).await,
+            seeds: None,
             id: None,
-        })
+        }
+        .load_seeds())
     }
 
     pub fn info(&self) -> () {
         dbg!(self);
         ()
+    }
+
+    pub async fn latest_seed(&self) -> Option<Seed> {
+        self.sower
+            .as_ref()
+            .unwrap()
+            .find_seed(self.name.clone(), self.seed_type.clone())
+            .await
+    }
+
+    pub async fn load_latest(mut self) -> Self {
+        self.seeds = Some(TreeSeeds {
+            desired: self.latest_seed().await,
+            ..self.seeds.unwrap()
+        });
+        self
+    }
+
+    pub fn load_seeds(mut self) -> Self {
+        let booted = match self.seed_type {
+            SeedType::Nixos => Some(Seed::new_from_path(
+                self.name.clone(),
+                self.seed_type.clone(),
+                "/run/booted-system",
+            )),
+            SeedType::HomeManager => None,
+            SeedType::NixDarwin => None,
+        };
+
+        let current = match self.seed_type {
+            SeedType::HomeManager => None,
+            SeedType::NixDarwin => Some(Seed::new_from_path(
+                self.name.clone(),
+                self.seed_type.clone(),
+                "/run/current-system",
+            )),
+            SeedType::Nixos => Some(Seed::new_from_path(
+                self.name.clone(),
+                self.seed_type.clone(),
+                "/run/current-system",
+            )),
+        };
+
+        let profile = Seed::new_from_path(
+            self.name.clone(),
+            self.seed_type.clone(),
+            &self.seed_type.profile_path(),
+        );
+
+        self.seeds = Some(TreeSeeds {
+            booted,
+            current,
+            profile,
+            desired: None,
+        });
+
+        self
     }
 
     pub fn reboot(&self, confirm: bool) {
@@ -237,7 +329,6 @@ impl Tree {
                         profile.clone().into_os_string()
                     );
                 }
-                // if running system was updated using switch, don't reboot
                 profile != current
             }
         });

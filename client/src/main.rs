@@ -5,9 +5,11 @@ use clap::Subcommand;
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
+use tracing::{debug, info};
 use xdg;
 
 mod sower;
+use sower::daemon::Daemon;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None, arg_required_else_help = true)]
@@ -175,46 +177,61 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // cli overrides config
     let config = config.name(cli.name).seed_type(cli.seed_type).url(cli.url);
 
-    let mut tree = Tree::new(&config).await?;
-    let seed = &tree.seed.as_ref();
+    let tree = Tree::new(&config).await?;
 
     match &cli.action {
-        Actions::Seed { action } => match action {
-            SeedCommands::Activate { mode, .. } => {
-                let mode = mode.clone().or(config.mode);
-                seed.unwrap().activate(mode).expect("failed to activate");
-            }
+        Actions::Daemon {} => {
+            let mut daemon = Daemon::new(tree).expect("Failed to initialize daemon");
+            daemon.run().await.unwrap()
+        }
 
-            SeedCommands::Download {} => {
-                seed.unwrap().realize().expect("failed to realize");
-            }
-        },
+        Actions::Seed { action } => {
+            let seed = tree.latest_seed().await;
 
-        Actions::Tree { action } => match action {
-            TreeCommands::Daemon {} => tree.daemon().await.unwrap(),
+            match action {
+                SeedCommands::Activate { mode, .. } => {
+                    let mode = mode.clone().or(config.mode);
+                    seed.unwrap().activate(mode).expect("failed to activate");
+                }
 
-            TreeCommands::Info {} => tree.info(),
-
-            TreeCommands::Reboot { yes } => {
-                tree.info();
-                tree.reboot(yes.clone())
-            }
-
-            TreeCommands::Upgrade { mode, reboot, yes } => {
-                tree.info();
-
-                let mode = mode.clone().or(config.mode);
-                seed.unwrap()
-                    .realize()
-                    .expect("failed to realize")
-                    .activate(mode)
-                    .expect("failed to activate");
-
-                if config.reboot.unwrap_or(false) || reboot.clone() {
-                    tree.reboot(yes.clone());
+                SeedCommands::Download {} => {
+                    seed.unwrap().realize().expect("failed to realize");
                 }
             }
-        },
+        }
+
+        Actions::Tree { action } => {
+            let tree = tree.load_latest().await;
+
+            match action {
+                TreeCommands::Info {} => info!("{:?}", tree),
+
+                TreeCommands::Reboot { yes } => {
+                    tree.info();
+                    tree.reboot(yes.clone())
+                }
+
+                TreeCommands::Upgrade { mode, reboot, yes } => {
+                    debug!("{:?}", tree);
+
+                    let mode = mode.clone().or(config.mode);
+                    let desired = tree.seeds.clone().unwrap().desired.unwrap();
+                    info!("Activating seed {:?}", &desired);
+                    desired
+                        .realize()
+                        .expect("failed to realize")
+                        .activate(mode)
+                        .expect("failed to activate");
+
+                    let tree = tree.load_seeds();
+                    debug!("{:?}", tree);
+
+                    if config.reboot.unwrap_or(false) || reboot.clone() {
+                        tree.reboot(yes.clone());
+                    }
+                }
+            }
+        }
     }
 
     Ok(())
