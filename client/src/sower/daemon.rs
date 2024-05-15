@@ -4,12 +4,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use phoenix_channels_client::url::Url;
-use serde_json::json;
-use tracing::info;
-
 use phoenix_channels_client::{
     Channel, Event, EventPayload, EventsError, Payload, Socket, Topic, JSON,
 };
+use serde_json::json;
+use tokio::signal;
+use tracing::info;
 
 pub struct Daemon {
     tree: Tree,
@@ -71,6 +71,10 @@ impl Daemon {
 
         let events = self.lobby_channel.events();
         tokio::select! {
+            _ = signal::ctrl_c() => {
+                info!("Received shutdown")
+            },
+
             _ = async {
                 info!("Listening for events");
                 loop {
