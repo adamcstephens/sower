@@ -1,10 +1,9 @@
 <.header>
-  <%= @seed.type %>/<%= @seed.name %>@<%= @seed.id %>
+  <%= @seed.name %> @ <%= @seed.id %>
+  <:subtitle><%= @seed.type %></:subtitle>
 </.header>
 
 <.list>
-  <:item title="name"><%= @seed.name %></:item>
-  <:item title="type"><%= @seed.type %></:item>
   <:item title="branch"><%= @seed.branch %></:item>
   <:item title="repository">
     <.link navigate={~p"/inputs/repos/#{@seed.repository.id}"}><%= @seed.repository.url %></.link>
