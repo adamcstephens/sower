@@ -1,9 +1,17 @@
 <.header>
-  Tree <%= @tree.id %>
-  <:subtitle>This is a tree record from your database.</:subtitle>
+  <%= @tree.name %>
+  <:subtitle><%= @tree.type %></:subtitle>
 </.header>
 
-<.list></.list>
+<.list>
+  <:item title="seed">
+    <%= if @tree.seed do %>
+      <.link navigate={~p"/seeds/#{@tree.seed}"}><%= @tree.seed.id %></.link>
+    <% else %>
+      Unknown
+    <% end %>
+  </:item>
+</.list>
 
 <.back navigate={~p"/trees"}>Back to trees</.back>
 

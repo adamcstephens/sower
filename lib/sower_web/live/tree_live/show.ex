@@ -11,7 +11,7 @@ defmodule SowerWeb.TreeLive.Show do
     {:noreply,
      socket
      |> assign(:page_title, page_title(socket.assigns.live_action))
-     |> assign(:tree, Sower.Tree.by_id!(id))}
+     |> assign(:tree, Sower.Tree.by_id!(id) |> Ash.load!(:seed))}
   end
 
   defp page_title(:show), do: "Show Tree"
