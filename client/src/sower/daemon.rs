@@ -3,13 +3,18 @@ use super::{Config, Tree};
 use std::sync::Arc;
 use std::time::Duration;
 
+use josekit::{
+    jws::{JwsHeader, HS256},
+    jwt::{self, JwtPayload},
+    JoseError,
+};
 use phoenix_channels_client::url::Url;
 use phoenix_channels_client::{
     Channel, Event, EventPayload, EventsError, Payload, Socket, Topic, JSON,
 };
 use serde_json::json;
-use tokio::signal;
-use tracing::info;
+use tokio::{signal, time};
+use tracing::{debug, error, info};
 
 pub struct Daemon {
     tree: Tree,
@@ -23,12 +28,22 @@ impl Daemon {
         let tree = Tree::new(config).await.expect("Failed to load tree");
 
         info!("Connecting to sower");
-        let url = Url::parse(&tree.sower.clone().unwrap().channels_url).unwrap();
+        let url = Url::parse_with_params(
+            &tree.sower.clone().unwrap().channels_url,
+            &[(
+                "token",
+                Self::sign_login_jwt(config.bootstrap_token.clone().unwrap(), &tree).unwrap(),
+            )],
+        )
+        .unwrap();
         let socket = Socket::spawn(url, None).unwrap();
-        socket.connect(Duration::from_secs(10)).await.unwrap();
+        match socket.connect(Duration::from_secs(10)).await {
+            Ok(_) => info!("Connected"),
+            Err(_) => panic!("Failed to connect"),
+        }
 
-        info!("Joining lobby tree:all");
-        let topic = Topic::from_string("tree:all".to_string());
+        let topic = Topic::from_string("client:all".to_string());
+        info!("Joining lobby {}", topic);
         let channel = socket.channel(topic.clone(), None).await.unwrap();
         channel.join(Duration::from_secs(15)).await.unwrap();
 
@@ -38,6 +53,24 @@ impl Daemon {
             socket,
             tree,
         }
+    }
+
+    fn sign_login_jwt(key: String, tree: &Tree) -> Result<String, JoseError> {
+        let mut header = JwsHeader::new();
+        header.set_token_type("JWT");
+        header.set_algorithm("HS256");
+
+        let mut payload = JwtPayload::new();
+        payload.set_subject("client");
+        payload.set_claim("name", Some(json!(tree.name))).unwrap();
+        payload
+            .set_claim("seed_type", Some(json!(tree.seed_type)))
+            .unwrap();
+
+        let signer = HS256.signer_from_bytes(key)?;
+        let jwt = jwt::encode_with_signer(&payload, &header, &signer)?;
+
+        Ok(jwt)
     }
 
     pub async fn login(&mut self) {
@@ -69,13 +102,14 @@ impl Daemon {
     pub async fn run(&mut self) -> Result<(), std::io::Error> {
         self.login().await;
 
-        let events = self.lobby_channel.events();
         tokio::select! {
             _ = signal::ctrl_c() => {
                 info!("Received shutdown")
             },
 
             _ = async {
+                let events = self.lobby_channel.events();
+
                 info!("Listening for events");
                 loop {
                     match events.event().await {
@@ -94,6 +128,25 @@ impl Daemon {
                                 eprintln!("{} events missed on channel {}", missed_event_count, self.lobby_topic);
                             }
                         },
+                    }
+                }
+            } => {},
+
+            _ = async {
+                info!("Starting submit loop");
+                let mut interval = time::interval(time::Duration::from_secs(5));
+                loop {
+                    interval.tick().await;
+                    debug!("tick");
+                    let reply_payload = self.lobby_channel.call(
+                        Event::from_string("ping".to_string()),
+                        Payload::json_from_serialized(json!({ "token": "ok" }).to_string()).unwrap(),
+                        Duration::from_secs(5)
+                    ).await;
+
+                    match reply_payload {
+                        Ok(payload) => info!("{}", payload),
+                        Err(err) => error!("{}", err)
                     }
                 }
             } => {}

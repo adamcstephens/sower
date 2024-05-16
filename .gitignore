@@ -38,3 +38,4 @@ npm-debug.log
 target/
 data/
 .nixos-test-history
+.bootstrap.token

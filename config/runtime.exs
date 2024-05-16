@@ -20,6 +20,9 @@ if System.get_env("PHX_SERVER") do
   config :sower, SowerWeb.Endpoint, server: true
 end
 
+config :sower,
+  bootstrap_token: Sower.Application.credential!("SOWER_BOOTSTRAP_TOKEN_FILE")
+
 if config_env() == :prod do
   if System.get_env() |> Map.has_key?("SOWER_DATABASE_SOCKET") do
     config :sower, Sower.Repo,

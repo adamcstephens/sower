@@ -4,6 +4,7 @@
   craneLib,
   darwin,
   libiconv,
+  openssl,
   rustTarget,
   stdenv,
 }:
@@ -26,10 +27,12 @@ craneLib.buildPackage (
     CARGO_BUILD_TARGET = rustTarget;
     CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static";
 
-    buildInputs = lib.optionals stdenv.isDarwin [
-      libiconv
-      darwin.apple_sdk.frameworks.SystemConfiguration
-    ];
+    buildInputs =
+      [ openssl ]
+      ++ lib.optionals stdenv.isDarwin [
+        libiconv
+        darwin.apple_sdk.frameworks.SystemConfiguration
+      ];
 
     meta.mainProgram = "sower";
   }

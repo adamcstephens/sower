@@ -18,6 +18,9 @@ struct Cli {
     action: Actions,
 
     #[arg(long, short, global = true)]
+    bootstrap_token_file: Option<PathBuf>,
+
+    #[arg(long, short, global = true)]
     config: Option<PathBuf>,
 
     #[arg(long, short, global = true)]
@@ -97,6 +100,8 @@ enum TreeCommands {
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
+    bootstrap_token: Option<String>,
+    bootstrap_token_file: Option<PathBuf>,
     reboot: Option<bool>,
     mode: Option<ActivationMode>,
     name: Option<String>,
@@ -106,6 +111,29 @@ pub struct Config {
 }
 
 impl Config {
+    pub fn bootstrap_token(self) -> Self {
+        let bootstrap_token = fs::read_to_string(self.bootstrap_token_file.clone().unwrap()).ok();
+        if let Some(_) = &bootstrap_token {
+            Self {
+                bootstrap_token,
+                ..self
+            }
+        } else {
+            self
+        }
+    }
+
+    pub fn bootstrap_token_file(self, bootstrap_token_file: Option<PathBuf>) -> Self {
+        if let Some(_) = &bootstrap_token_file {
+            Self {
+                bootstrap_token_file,
+                ..self
+            }
+        } else {
+            self
+        }
+    }
+
     pub fn name(self, name: Option<String>) -> Self {
         if let Some(_) = &name {
             Self { name, ..self }
@@ -166,6 +194,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             toml::from_str(&config_string).expect("failed to parse config file")
         }
         _ => Config {
+            bootstrap_token: None,
+            bootstrap_token_file: None,
             reboot: None,
             mode: None,
             name: None,
@@ -175,7 +205,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // cli overrides config
-    let config = config.name(cli.name).seed_type(cli.seed_type).url(cli.url);
+    let config = config
+        .name(cli.name)
+        .seed_type(cli.seed_type)
+        .url(cli.url)
+        .bootstrap_token_file(cli.bootstrap_token_file)
+        .bootstrap_token();
 
     let tree = Tree::new(&config).await?;
 

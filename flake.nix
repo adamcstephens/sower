@@ -93,6 +93,8 @@
               nativeBuildInputs = [
                 pkgs.fmt
                 pkgs.libgit2
+                pkgs.openssl
+                pkgs.pkg-config
               ];
             };
 
@@ -119,7 +121,6 @@
         flake = {
           nixosModules.sower = ./nix/nixos-module.nix;
           homeModules.sower = ./nix/home-module.nix;
-
 
           typhonProject = inputs.typhon.lib.gitea.mkProject {
             instance = "git.junco.dev";

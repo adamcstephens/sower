@@ -346,6 +346,19 @@ let
       beamDeps = [ decimal ];
     };
 
+    jose = buildMix rec {
+      name = "jose";
+      version = "1.11.10";
+
+      src = fetchHex {
+        pkg = "jose";
+        version = "${version}";
+        sha256 = "0d6cd36ff8ba174db29148fc112b5842186b68a90ce9fc2b3ec3afe76593e614";
+      };
+
+      beamDeps = [];
+    };
+
     json_xema = buildMix rec {
       name = "json_xema";
       version = "0.6.2";
