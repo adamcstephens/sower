@@ -3,36 +3,36 @@ defmodule SowerWeb.Router do
   use Plug.ErrorHandler
 
   pipeline :browser do
-    plug(:accepts, ["html"])
-    plug(:fetch_session)
-    plug(:fetch_live_flash)
-    plug(:put_root_layout, html: {SowerWeb.Layouts, :root})
-    plug(:protect_from_forgery)
-    plug(:put_secure_browser_headers)
+    plug :accepts, ["html"]
+    plug :fetch_session
+    plug :fetch_live_flash
+    plug :put_root_layout, html: {SowerWeb.Layouts, :root}
+    plug :protect_from_forgery
+    plug :put_secure_browser_headers
   end
 
   pipeline :api do
-    plug(:accepts, ["json"])
+    plug :accepts, ["json"]
   end
 
   scope "/", SowerWeb do
-    pipe_through(:browser)
+    pipe_through :browser
 
     get "/", PageController, :home
 
-    live("/seeds", SeedLive.Index, :index)
-    live("/seeds/:id", SeedLive.Show, :show)
-    live("/trees", TreeLive.Index, :index)
-    live("/trees/:id", TreeLive.Show, :show)
-    live("/inputs/repos", RepositoryLive.Index, :index)
-    live("/inputs/repos/:id", RepositoryLive.Show, :show)
+    live "/seeds", SeedLive.Index, :index
+    live "/seeds/:id", SeedLive.Show, :show
+    live "/trees", TreeLive.Index, :index
+    live "/trees/:id", TreeLive.Show, :show
+    live "/inputs/repos", RepositoryLive.Index, :index
+    live "/inputs/repos/:id", RepositoryLive.Show, :show
   end
 
   scope "/api" do
-    pipe_through(:api)
-    get("/seeds", SowerWeb.SeedController, :list)
-    get("/seeds/latest", SowerWeb.SeedController, :find_latest)
-    post("/seeds", SowerWeb.SeedController, :new)
+    pipe_through :api
+    get "/seeds", SowerWeb.SeedController, :list
+    get "/seeds/latest", SowerWeb.SeedController, :find_latest
+    post "/seeds", SowerWeb.SeedController, :new
 
     forward "/json/doc",
             Redoc.Plug.RedocUI,
@@ -51,10 +51,10 @@ defmodule SowerWeb.Router do
     import Phoenix.LiveDashboard.Router
 
     scope "/dev" do
-      pipe_through(:browser)
+      pipe_through :browser
 
-      live_dashboard("/dashboard", metrics: SowerWeb.Telemetry)
-      forward("/mailbox", Plug.Swoosh.MailboxPreview)
+      live_dashboard "/dashboard", metrics: SowerWeb.Telemetry
+      forward "/mailbox", Plug.Swoosh.MailboxPreview
     end
   end
 
