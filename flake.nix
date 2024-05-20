@@ -59,10 +59,18 @@
             devShells.default = pkgs.mkShell {
               packages =
                 [
+                  # elixir
                   elixir
                   beamPackages.elixir-ls
                   lexical
                   next-ls
+
+                  # rust
+                  pkgs.cargo
+                  pkgs.clippy
+                  pkgs.rust-analyzer
+                  pkgs.rustc
+                  pkgs.rustfmt
 
                   inputs'.attic.packages.attic
                   self'.packages.seed-ci
@@ -73,29 +81,28 @@
                   pkgs.nvfetcher
                   pkgs.process-compose
                   pkgs.postgresql
-
-                  pkgs.rustc
-                  pkgs.rustfmt
-
-                  pkgs.cargo
-                  pkgs.clippy
-                  pkgs.rust-analyzer
                 ]
                 ++ lib.optionals pkgs.stdenv.isLinux [
-                  pkgs.gdb
+                  # elixir
                   pkgs.inotify-tools
+
+                  # rust
+                  pkgs.gdb
                 ]
                 ++ lib.optionals pkgs.stdenv.isDarwin [
                   pkgs.libiconv
                   pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
                 ];
 
-              nativeBuildInputs = [
-                pkgs.fmt
-                pkgs.libgit2
-                pkgs.openssl
-                pkgs.pkg-config
-              ];
+              shellHook = ''
+                export BINDGEN_EXTRA_CLANG_ARGS="$(< ${pkgs.stdenv.cc}/nix-support/libc-crt1-cflags) \
+                      $(< ${pkgs.stdenv.cc}/nix-support/libc-cflags) \
+                      $(< ${pkgs.stdenv.cc}/nix-support/cc-cflags) \
+                      $(< ${pkgs.stdenv.cc}/nix-support/libcxx-cxxflags) \
+                      ${lib.optionalString pkgs.stdenv.cc.isClang "-idirafter ${pkgs.stdenv.cc.cc}/lib/clang/${lib.getVersion pkgs.stdenv.cc.cc}/include"} \
+                      ${lib.optionalString pkgs.stdenv.cc.isGNU "-isystem ${pkgs.stdenv.cc.cc}/include/c++/${lib.getVersion pkgs.stdenv.cc.cc} -isystem ${pkgs.stdenv.cc.cc}/include/c++/${lib.getVersion pkgs.stdenv.cc.cc}/${pkgs.stdenv.hostPlatform.config} -idirafter ${pkgs.stdenv.cc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${lib.getVersion pkgs.stdenv.cc.cc}/include"} \
+                    "
+              '';
             };
 
             checks = lib.optionalAttrs pkgs.stdenv.isLinux {

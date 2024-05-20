@@ -3,16 +3,15 @@ use super::{Config, Tree};
 use std::sync::Arc;
 use std::time::Duration;
 
-use josekit::{
-    jws::{JwsHeader, HS256},
-    jwt::{self, JwtPayload},
-    JoseError,
-};
+use hmac::{Hmac, Mac};
+use jwt::SignWithKey;
 use phoenix_channels_client::url::Url;
 use phoenix_channels_client::{
     Channel, Event, EventPayload, EventsError, Payload, Socket, Topic, JSON,
 };
+use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
+use sha2::Sha256;
 use tokio::{signal, time};
 use tracing::{debug, error, info};
 
@@ -21,6 +20,13 @@ pub struct Daemon {
     socket: Arc<Socket>,
     lobby_channel: Arc<Channel>,
     lobby_topic: Arc<Topic>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct BootstrapClaim {
+    name: String,
+    seed_type: String,
+    sub: String,
 }
 
 impl Daemon {
@@ -55,25 +61,19 @@ impl Daemon {
         }
     }
 
-    fn sign_login_jwt(key: String, tree: &Tree) -> Result<String, JoseError> {
-        let mut header = JwsHeader::new();
-        header.set_token_type("JWT");
-        header.set_algorithm("HS256");
-
-        let mut payload = JwtPayload::new();
-        payload.set_subject("client");
-        payload.set_claim("name", Some(json!(tree.name))).unwrap();
-        payload
-            .set_claim("seed_type", Some(json!(tree.seed_type)))
-            .unwrap();
-
-        let signer = HS256.signer_from_bytes(key)?;
-        let jwt = jwt::encode_with_signer(&payload, &header, &signer)?;
+    fn sign_login_jwt(key: String, tree: &Tree) -> Result<String, jwt::Error> {
+        let key: Hmac<Sha256> = Hmac::new_from_slice(key.as_bytes())?;
+        let claim = BootstrapClaim {
+            name: tree.name.clone(),
+            seed_type: tree.seed_type.to_string(),
+            sub: "client bootstrap".to_string(),
+        };
+        let jwt = claim.sign_with_key(&key)?;
 
         Ok(jwt)
     }
 
-    pub async fn login(&mut self) {
+    async fn login(&mut self) {
         info!("Registering with sower");
         let Payload::JSONPayload { json } = self
             .lobby_channel

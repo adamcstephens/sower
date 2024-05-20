@@ -9,6 +9,8 @@ can we just check if boot-system matches out_path?
 * Stories
 - I want to switch nightly but boot/reboot once a week
 - I want some systems to never downgrade manually applied changes
+-Janik (might pick up the 🥐 language)
+  raitobezarius (FoosterOS on System76 laptops wen): now I want systemd-unit like logic for colmena where one can specify groups of targets with before/after some other group.
 
 * Bootstrapping a host
 - Requires a cache to realize

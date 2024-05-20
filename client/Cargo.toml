@@ -7,12 +7,15 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.5.1", features = ["derive", "color"] }
-josekit = "0.8.6"
+hmac = "0.12.1"
+jwt = "0.16.0"
 nix = { version = "0.28.0", features = ["hostname"] }
 phoenix_channels_client = { git = "https://github.com/liveview-native/phoenix-channels-client.git", version = "0.9.0" }
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
+serde_derive = "1.0.202"
 serde_json = "1.0.116"
+sha2 = "0.10.8"
 strum = { version = "0.26", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 tokio-stream = { version = "0.1.15", features = ["full"] }
