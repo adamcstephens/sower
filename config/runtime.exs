@@ -20,10 +20,22 @@ if System.get_env("PHX_SERVER") do
   config :sower, SowerWeb.Endpoint, server: true
 end
 
-config :sower,
-  bootstrap_token: Sower.Application.credential!("SOWER_BOOTSTRAP_TOKEN_FILE")
+config :sower, oidc_base_url: System.get_env("SOWER_AUTH_OIDC_BASE_URL")
 
 if config_env() == :prod do
+  host = System.get_env("SOWER_HOSTNAME") || raise "missing $SOWER_HOSTNAME"
+  scheme = System.get_env("SOWER_PUBLIC_SCHEME", "https")
+  public_port = String.to_integer(System.get_env("SOWER_PUBLIC_PORT", "443"))
+
+  config :sower,
+    bootstrap_token: Sower.Application.credential!("SOWER_BOOTSTRAP_TOKEN_FILE"),
+    oidc_base_url:
+      System.get_env("SOWER_AUTH_OIDC_BASE_URL") || raise("missing $SOWER_AUTH_OIDC_BASE_URL"),
+    oidc_client_id: Sower.Application.credential!("SOWER_AUTH_OIDC_CLIENT_ID_FILE"),
+    oidc_client_secret: Sower.Application.credential!("SOWER_AUTH_OIDC_CLIENT_ID_FILE"),
+    oidc_redirect_uri:
+      System.get_env("SOWER_AUTH_OIDC_REDIRECT_URI", ~s"#{scheme}://#{host}:#{public_port}/auth")
+
   if System.get_env() |> Map.has_key?("SOWER_DATABASE_SOCKET") do
     config :sower, Sower.Repo,
       socket: System.get_env("SOWER_DATABASE_SOCKET"),
@@ -44,10 +56,7 @@ if config_env() == :prod do
   # variable instead.
   secret_key_base = Sower.Application.credential!("SECRET_KEY_BASE_FILE")
 
-  host = System.get_env("SOWER_HOSTNAME") || raise "missing $SOWER_HOSTNAME"
   port = String.to_integer(System.get_env("SOWER_LISTEN_PORT", "4000"))
-  scheme = System.get_env("SOWER_PUBLIC_SCHEME", "https")
-  public_port = String.to_integer(System.get_env("SOWER_PUBLIC_PORT", "443"))
 
   {:ok, listen_ip} =
     System.get_env("SOWER_LISTEN_ADDRESS", "127.0.0.1")

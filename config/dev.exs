@@ -1,5 +1,13 @@
 import Config
 
+config :sower,
+  dev_routes: true,
+  bootstrap_token: System.get_env("SOWER_BOOTSTRAP_TOKEN"),
+  oidc_base_url: System.get_env("SOWER_AUTH_OIDC_BASE_URL"),
+  oidc_client_id: System.get_env("SOWER_AUTH_OIDC_CLIENT_ID"),
+  oidc_client_secret: System.get_env("SOWER_AUTH_OIDC_CLIENT_SECRET"),
+  oidc_redirect_uri: "http://localhost:4000/auth"
+
 # Configure your database
 config :sower, Sower.Repo,
   username: "postgres",
@@ -63,9 +71,6 @@ config :sower, SowerWeb.Endpoint,
       ~r"lib/git/.*ex$"
     ]
   ]
-
-# Enable dev routes for dashboard and mailbox
-config :sower, dev_routes: true
 
 # Do not include metadata nor timestamps in development logs
 config :logger, :console, format: "[$level] $message\n"

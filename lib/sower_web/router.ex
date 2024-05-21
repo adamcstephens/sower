@@ -1,6 +1,7 @@
 defmodule SowerWeb.Router do
   use SowerWeb, :router
   use Plug.ErrorHandler
+  use AshAuthentication.Phoenix.Router
 
   pipeline :browser do
     plug :accepts, ["html"]
@@ -9,10 +10,12 @@ defmodule SowerWeb.Router do
     plug :put_root_layout, html: {SowerWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    plug :load_from_session
   end
 
   pipeline :api do
     plug :accepts, ["json"]
+    plug :load_from_bearer
   end
 
   scope "/", SowerWeb do
@@ -20,12 +23,23 @@ defmodule SowerWeb.Router do
 
     get "/", PageController, :home
 
-    live "/seeds", SeedLive.Index, :index
-    live "/seeds/:id", SeedLive.Show, :show
-    live "/trees", TreeLive.Index, :index
-    live "/trees/:id", TreeLive.Show, :show
-    live "/inputs/repos", RepositoryLive.Index, :index
-    live "/inputs/repos/:id", RepositoryLive.Show, :show
+    sign_in_route(register_path: "/register")
+    sign_out_route AuthController
+    auth_routes_for Sower.Accounts.User, to: AuthController
+
+    ash_authentication_live_session :authentication_required,
+      on_mount: {SowerWeb.LiveUserAuth, :live_user_required} do
+      live "/seeds", SeedLive.Index, :index
+      live "/seeds/:id", SeedLive.Show, :show
+      live "/trees", TreeLive.Index, :index
+      live "/trees/:id", TreeLive.Show, :show
+      live "/inputs/repos", RepositoryLive.Index, :index
+      live "/inputs/repos/:id", RepositoryLive.Show, :show
+    end
+
+    ash_authentication_live_session :authentication_optional,
+      on_mount: {SowerWeb.LiveUserAuth, :live_user_optional} do
+    end
   end
 
   scope "/api" do

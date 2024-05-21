@@ -22,6 +22,25 @@
       >
         Repos
       </.link>
+
+      <%= if @current_user do %>
+        <span class="px-3 py-2 text-sm font-medium text-white rounded-md">
+          <%= @current_user.username %>
+        </span>
+        <a
+          href="/sign-out"
+          class="rounded-lg bg-zinc-100 px-2 py-1 text-[0.8125rem] font-semibold leading-6 text-zinc-900 hover:bg-zinc-200/80 active:text-zinc-900/70"
+        >
+          Sign out
+        </a>
+      <% else %>
+        <a
+          href="/auth/user/oidc"
+          class="rounded-lg bg-zinc-100 px-2 py-1 text-[0.8125rem] font-semibold leading-6 text-zinc-900 hover:bg-zinc-200/80 active:text-zinc-900/70"
+        >
+          Sign In
+        </a>
+      <% end %>
     </div>
   </div>
 </header>
