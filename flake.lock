@@ -202,16 +202,14 @@
     },
     "next-ls": {
       "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ]
+        "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1715695227,
-        "narHash": "sha256-+cJ3NutynwOAtVREWCgINmaVfET5aB4sus2Gp++dO2U=",
+        "lastModified": 1716206908,
+        "narHash": "sha256-AyQ5dVzTF1YCVKNmYD41syfMaBgAd5c/KwivlZqCMfU=",
         "owner": "elixir-tools",
         "repo": "next-ls",
-        "rev": "4559d1ae2f58acfae71925458c7f594e80c247ff",
+        "rev": "3236e14733d8d59fb81656e7e5e6d2c8689031d7",
         "type": "github"
       },
       "original": {
@@ -266,6 +264,21 @@
     },
     "nixpkgs_2": {
       "locked": {
+        "narHash": "sha256-5tPUpZlCpgqDQVUDlmhDhKn1h0A68jba8/DYie+yNC4=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "592a779f3c5e7bce1a02027abe11b7996816223f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_3": {
+      "locked": {
         "lastModified": 1715534503,
         "narHash": "sha256-5ZSVkFadZbFP1THataCaSf0JH2cAH3S29hU9rrxTEqk=",
         "owner": "nixos",
@@ -301,7 +314,7 @@
         "crane": "crane_2",
         "flake-parts": "flake-parts",
         "next-ls": "next-ls",
-        "nixpkgs": "nixpkgs_2",
+        "nixpkgs": "nixpkgs_3",
         "process-compose-flake": "process-compose-flake",
         "rust-overlay": "rust-overlay",
         "services-flake": "services-flake",
