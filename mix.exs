@@ -28,7 +28,7 @@ defmodule Sower.MixProject do
       {:gettext, "~> 0.20"},
       {:hackney, "~> 1.8"},
       {:jason, "~> 1.2"},
-      {:jose, "~> 1.11"},
+      {:joken, "~> 2.6.1"},
       {:makeup, "~> 1.1"},
       {:makeup_json, "~> 0.1.0"},
       {:open_api_spex, "~> 3.19"},

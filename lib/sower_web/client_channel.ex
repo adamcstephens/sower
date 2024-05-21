@@ -19,13 +19,4 @@ defmodule SowerWeb.ClientChannel do
 
     {:reply, {:ok, id}, socket}
   end
-
-  def handle_in("ping", %{"token" => token}, socket) do
-    jwk = %{"kty" => "oct", "k" => :jose_base64url.encode("0123456789ABCDEF0123456789ABCDEF")}
-
-    case JOSE.JWT.verify(jwk, token) do
-      {true, jwt, _} -> {:reply, {:ok, "success"}, socket}
-      _ -> {:reply, {:error, "unauthorized"}, socket}
-    end
-  end
 end

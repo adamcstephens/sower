@@ -45,7 +45,7 @@ impl Daemon {
         let socket = Socket::spawn(url, None).unwrap();
         match socket.connect(Duration::from_secs(10)).await {
             Ok(_) => info!("Connected"),
-            Err(_) => panic!("Failed to connect"),
+            Err(e) => panic!("Failed to connect, {}", e),
         }
 
         let topic = Topic::from_string("client:all".to_string());

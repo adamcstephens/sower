@@ -5,13 +5,10 @@ defmodule SowerWeb.ClientSocket do
 
   @impl true
   def connect(%{"token" => token}, socket, _connect_info) do
-    jwk = %{
-      "kty" => "oct",
-      "k" => :jose_base64url.encode(Application.fetch_env!(:sower, :bootstrap_token))
-    }
+    signer = Joken.Signer.create("HS256", Application.fetch_env!(:sower, :bootstrap_token))
 
-    case JOSE.JWT.verify(jwk, token) do
-      {true, _jwt, _} -> {:ok, socket}
+    case Joken.Signer.verify(token, signer) do
+      {:ok, _} -> {:ok, socket}
       _ -> {:error, "unauthorized"}
     end
   end
