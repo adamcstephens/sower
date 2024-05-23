@@ -1,4 +1,5 @@
 defmodule SowerWeb.ClientSocket do
+  require Logger
   use Phoenix.Socket
 
   channel("client:*", SowerWeb.ClientChannel)
@@ -8,11 +9,22 @@ defmodule SowerWeb.ClientSocket do
     signer = Joken.Signer.create("HS256", Application.fetch_env!(:sower, :bootstrap_token))
 
     case Joken.Signer.verify(token, signer) do
-      {:ok, _} -> {:ok, socket}
-      _ -> {:error, "unauthorized"}
+      {:ok, claims} ->
+        case get_tree(claims) do
+          {:ok, tree} -> {:ok, socket |> assign(:tree_id, tree.id)}
+          {:error, e} -> Logger.error(~s"failed to find tree: #{e}")
+        end
+
+      _ ->
+        {:error, "unauthorized"}
     end
   end
 
   @impl true
   def id(_socket), do: nil
+
+  # TODO: use id provided by claims
+  defp get_tree(%{"name" => name, "seed_type" => seed_type}) do
+    Sower.Tree.find(name, seed_type) |> dbg()
+  end
 end

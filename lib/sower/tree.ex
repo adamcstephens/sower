@@ -35,14 +35,59 @@ defmodule Sower.Tree do
       filter expr(name == ^arg(:name) && type == ^arg(:type))
     end
 
-    update :set_seed do
-      require_atomic? false
+    create :set_system_seeds do
+      argument :profile_seed_id, :uuid
+      argument :booted_seed_id, :uuid, allow_nil?: false
+      argument :current_seed_id, :uuid, allow_nil?: false
 
-      argument :seed_id, :uuid do
-        allow_nil? false
+      upsert? true
+      # upsert_identity :id
+      # upsert_fields :updated_at
+
+      # change manage_relationship(:booted_seed_id, :booted_seed, type: :append_and_remove)
+      # change manage_relationship(:current_seed_id, :current_seed, type: :append_and_remove)
+      # change manage_relationship(:profile_seed_id, :current_seed, type: :append_and_remove)
+      #
+      change fn changeset, _ctx ->
+        dbg(changeset)
+        booted_seed = Ash.Changeset.get_argument(changeset, :booted_seed)
+
+        booted_seed =
+          Sower.Seed.new(
+            booted_seed["name"],
+            booted_seed["type"],
+            booted_seed["out_path"],
+            nil,
+            nil
+          )
+
+        current_seed = Ash.Changeset.get_argument(changeset, :current_seed)
+
+        current_seed =
+          Sower.Seed.new(
+            current_seed["name"],
+            current_seed["type"],
+            current_seed["out_path"],
+            nil,
+            nil
+          )
+
+        profile_seed = Ash.Changeset.get_argument(changeset, :profile_seed)
+
+        profile_seed =
+          Sower.Seed.new(
+            profile_seed["name"],
+            profile_seed["type"],
+            profile_seed["out_path"],
+            nil,
+            nil
+          )
+
+        changeset
+        |> Ash.Changeset.change_attribute(:booted_seed_id, booted_seed.id)
+        |> Ash.Changeset.change_attribute(:current_seed_id, current_seed.id)
+        |> Ash.Changeset.change_attribute(:profile_seed_id, profile_seed.id)
       end
-
-      change manage_relationship(:seed_id, :seed, type: :append_and_remove)
     end
   end
 
@@ -66,7 +111,7 @@ defmodule Sower.Tree do
   code_interface do
     define :by_id, args: [:id]
     define :find, args: [:name, :type]
-    define :set_seed, args: [:seed_id]
+    define :set_system_seeds, args: [:profile_seed_id, :booted_seed_id, :current_seed_id]
     define :read_all, action: :read
     define :register, args: [:name, :type]
   end
@@ -90,11 +135,17 @@ defmodule Sower.Tree do
     repo Sower.Repo
 
     references do
-      reference :seed
+      reference :booted_seed
+      reference :current_seed
+      reference :latest_seed
+      reference :profile_seed
     end
   end
 
   relationships do
-    belongs_to :seed, Sower.Seed
+    belongs_to :booted_seed, Sower.Seed, source_attribute: :booted_seed_id
+    belongs_to :current_seed, Sower.Seed, source_attribute: :current_seed_id
+    belongs_to :latest_seed, Sower.Seed, source_attribute: :latest_seed_id
+    belongs_to :profile_seed, Sower.Seed, source_attribute: :profile_seed_id
   end
 end

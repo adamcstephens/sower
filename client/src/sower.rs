@@ -12,7 +12,7 @@ use std::process::Command;
 use strum::{Display, VariantNames};
 use tracing::{debug, info};
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Seed {
     pub id: Option<String>,
     pub name: String,
@@ -168,6 +168,7 @@ pub struct Tree {
     pub seed_type: SeedType,
     pub sower: Option<Sower>,
     pub id: Option<String>,
+    pub server_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -200,6 +201,7 @@ impl Tree {
             sower: Some(sower.clone()),
             seeds: None,
             id: None,
+            server_id: None,
         }
         .load_seeds())
     }

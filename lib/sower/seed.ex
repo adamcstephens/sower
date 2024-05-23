@@ -4,7 +4,7 @@ defmodule Sower.Seed do
     domain: Sower,
     extensions: [AshJsonApi.Resource]
 
-  @derive {Jason.Encoder, only: [:id, :name, :type, :out_path, :branch, :repository_id]}
+  @derive {Jason.Encoder, only: [:id, :name, :seed_type, :out_path, :branch, :repository_id]}
 
   @types [:nixos, :"home-manager", :"nix-darwin"]
 
@@ -12,7 +12,7 @@ defmodule Sower.Seed do
     defaults [:read, :create, :destroy]
 
     create :new_legacy do
-      accept [:name, :type, :out_path]
+      accept [:name, :seed_type, :out_path]
 
       upsert? true
       upsert_identity :seed
@@ -20,10 +20,10 @@ defmodule Sower.Seed do
     end
 
     create :new do
-      accept [:name, :type, :out_path, :branch]
+      accept [:name, :seed_type, :out_path, :branch]
 
       argument :repo_url, :string do
-        allow_nil? false
+        allow_nil? true
       end
 
       upsert? true
@@ -53,7 +53,7 @@ defmodule Sower.Seed do
         allow_nil? false
       end
 
-      argument :type, :atom do
+      argument :seed_type, :atom do
         allow_nil? false
         constraints one_of: @types
       end
@@ -62,7 +62,7 @@ defmodule Sower.Seed do
       get? true
 
       prepare build(
-                filter: expr(name == ^arg(:name) and type == ^arg(:type)),
+                filter: expr(name == ^arg(:name) and type == ^arg(:seed_type)),
                 limit: 1,
                 sort: [updated_at: :desc]
               )
@@ -96,7 +96,7 @@ defmodule Sower.Seed do
       public? true
     end
 
-    attribute :type, :atom do
+    attribute :seed_type, :atom do
       allow_nil? false
       public? true
       constraints one_of: @types
@@ -112,14 +112,14 @@ defmodule Sower.Seed do
   code_interface do
     define :by_id, args: [:id]
     define :by_path, args: [:out_path]
-    define :new, args: [:name, :type, :out_path, :branch, :repo_url]
-    define :new_legacy, args: [:name, :type, :out_path]
-    define :latest, args: [:name, :type]
+    define :new, args: [:name, :seed_type, :out_path, :branch, :repo_url]
+    define :new_legacy, args: [:name, :seed_type, :out_path]
+    define :latest, args: [:name, :seed_type]
     define :read_all, action: :read
   end
 
   identities do
-    identity :seed, [:name, :type, :out_path, :branch]
+    identity :seed, [:name, :seed_type, :out_path, :branch]
   end
 
   json_api do
