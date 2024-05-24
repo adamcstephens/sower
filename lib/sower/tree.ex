@@ -4,7 +4,7 @@ defmodule Sower.Tree do
     domain: Sower,
     extensions: [AshJsonApi.Resource]
 
-  @derive {Jason.Encoder, only: [:id, :name, :type]}
+  @derive {Jason.Encoder, only: [:id, :name, :seed_type]}
 
   @types [:nixos, :"home-manager", :"nix-darwin"]
 
@@ -12,7 +12,7 @@ defmodule Sower.Tree do
     defaults [:read]
 
     create :register do
-      accept [:name, :type]
+      accept [:name, :seed_type]
     end
 
     read :by_id do
@@ -28,11 +28,11 @@ defmodule Sower.Tree do
 
     read :find do
       argument :name, :string, allow_nil?: false
-      argument :type, :string, allow_nil?: false
+      argument :seed_type, :string, allow_nil?: false
 
       get? true
 
-      filter expr(name == ^arg(:name) && type == ^arg(:type))
+      filter expr(name == ^arg(:name) && seed_type == ^arg(:seed_type))
     end
 
     create :set_system_seeds do
@@ -55,7 +55,7 @@ defmodule Sower.Tree do
         booted_seed =
           Sower.Seed.new(
             booted_seed["name"],
-            booted_seed["type"],
+            booted_seed["seed_type"],
             booted_seed["out_path"],
             nil,
             nil
@@ -66,7 +66,7 @@ defmodule Sower.Tree do
         current_seed =
           Sower.Seed.new(
             current_seed["name"],
-            current_seed["type"],
+            current_seed["seed_type"],
             current_seed["out_path"],
             nil,
             nil
@@ -77,7 +77,7 @@ defmodule Sower.Tree do
         profile_seed =
           Sower.Seed.new(
             profile_seed["name"],
-            profile_seed["type"],
+            profile_seed["seed_type"],
             profile_seed["out_path"],
             nil,
             nil
@@ -101,7 +101,7 @@ defmodule Sower.Tree do
       public? true
     end
 
-    attribute :type, :atom do
+    attribute :seed_type, :atom do
       allow_nil? false
       public? true
       constraints one_of: @types
@@ -110,14 +110,14 @@ defmodule Sower.Tree do
 
   code_interface do
     define :by_id, args: [:id]
-    define :find, args: [:name, :type]
+    define :find, args: [:name, :seed_type]
     define :set_system_seeds, args: [:profile_seed_id, :booted_seed_id, :current_seed_id]
     define :read_all, action: :read
-    define :register, args: [:name, :type]
+    define :register, args: [:name, :seed_type]
   end
 
   identities do
-    identity :tree, [:name, :type]
+    identity :tree, [:name, :seed_type]
   end
 
   json_api do
