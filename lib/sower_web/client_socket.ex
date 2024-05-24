@@ -25,6 +25,9 @@ defmodule SowerWeb.ClientSocket do
 
   # TODO: use id provided by claims
   defp get_tree(%{"name" => name, "seed_type" => seed_type}) do
-    Sower.Tree.find(name, seed_type) |> dbg()
+    case res = Sower.Tree.find(name, seed_type) |> dbg() do
+      {:error, %Ash.Error.Query.NotFound{}} -> Sower.Tree.register(name, seed_type)
+      _ -> res
+    end
   end
 end
