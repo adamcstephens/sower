@@ -1263,6 +1263,7 @@ dependencies = [
 name = "sower"
 version = "0.2.0-dev"
 dependencies = [
+ "anyhow",
  "clap",
  "hmac",
  "jwt",

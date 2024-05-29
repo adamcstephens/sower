@@ -9,7 +9,7 @@
   row_click={fn {_id, tree} -> JS.navigate(~p"/trees/#{tree}") end}
 >
   <:col :let={{_id, tree}} label="name"><%= tree.name %></:col>
-  <:col :let={{_id, tree}} label="type"><%= tree.type %></:col>
+  <:col :let={{_id, tree}} label="seed type"><%= tree.seed_type %></:col>
   <:action :let={{_id, tree}}>
     <div class="sr-only">
       <.link navigate={~p"/trees/#{tree}"}>Show</.link>

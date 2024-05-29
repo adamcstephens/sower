@@ -8,7 +8,15 @@ defmodule SowerWeb.ClientChannel do
     {:ok, socket}
   end
 
-  def join("client:" <> client_name, _params, _socket) do
+  def join("client:" <> client_name, _params, socket = %{assigns: %{tree_id: tree_id}}) do
+    if tree_id == client_name do
+      {:ok, socket}
+    else
+      {:error, %{reason: "unauthorized"}}
+    end
+  end
+
+  def join(_topic, _params, _socket) do
     {:error, %{reason: "unauthorized"}}
   end
 
