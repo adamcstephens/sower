@@ -28,6 +28,9 @@ set-version version:
 start:
     iex -S mix phx.server
 
-update: && nix-lock
+update-elixir: && nix-lock
     mix deps.update --all
     mix deps.clean --unused --unlock
+
+update-rust:
+    cargo update
