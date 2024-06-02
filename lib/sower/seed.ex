@@ -62,7 +62,7 @@ defmodule Sower.Seed do
       get? true
 
       prepare build(
-                filter: expr(name == ^arg(:name) and type == ^arg(:seed_type)),
+                filter: expr(name == ^arg(:name) and seed_type == ^arg(:seed_type)),
                 limit: 1,
                 sort: [updated_at: :desc]
               )
