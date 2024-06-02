@@ -16,13 +16,19 @@ in
 
       autoreboot = lib.mkEnableOption "automatic rebooting";
 
-      package = lib.mkOption { type = lib.types.package; };
+      credentials = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        description = "systemd credentials";
+        default = [ ];
+      };
 
       onCalendar = lib.mkOption {
         type = lib.types.str;
         description = "OnCalendar for systemd timer on linux. See https://www.freedesktop.org/software/systemd/man/latest/systemd.time.html#Calendar%20Events";
         default = "daily";
       };
+
+      package = lib.mkOption { type = lib.types.package; };
 
       settings = lib.mkOption {
         type = lib.types.submodule {
@@ -68,6 +74,7 @@ in
       serviceConfig = {
         ExecStart = "${lib.getExe cfg.package} tree upgrade ${lib.optionalString cfg.autoreboot "--yes"}";
         Type = "oneshot";
+        LoadCredential = cfg.credentials;
       };
     };
 

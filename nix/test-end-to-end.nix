@@ -12,43 +12,54 @@
 testers.runNixOSTest {
   name = "sower";
 
-  nodes.server = {
-    imports = [ ./nixos-module.nix ];
+  nodes.server =
+    { pkgs, ... }:
+    {
+      imports = [ ./nixos-module.nix ];
 
-    config = {
-      environment.systemPackages = [ curl ];
+      config = {
+        environment.systemPackages = [ curl ];
 
-      services.sower.client = {
-        enable = true;
-        package = client;
-        settings = {
-          url = "http://localhost:4000";
-          mode = "dry-activate";
+        services.sower.client = {
+          enable = true;
+          package = client;
+          credentials = [ "SOWER_BOOTSTRAP_TOKEN_FILE:${pkgs.writeText "token" "aninsecuretoken"}" ];
+          settings = {
+            url = "http://localhost:4000";
+            mode = "dry-activate";
+            bootstrap_token_file = "${pkgs.writeText "token" "aninsecuretoken"}";
+          };
         };
-      };
 
-      services.sower.server = {
-        enable = true;
-        environment = {
-          SOWER_DATABASE_SOCKET = "/run/postgresql/.s.PGSQL.5432";
-          SOWER_HOSTNAME = "localhost";
-          SOWER_PUBLIC_PORT = "4000";
-          SOWER_PUBLIC_SCHEME = "http";
+        services.sower.server = {
+          enable = true;
+          credentials = [
+            "SOWER_BOOTSTRAP_TOKEN_FILE:${pkgs.writeText "token" "aninsecuretoken"}"
+            "SOWER_AUTH_OIDC_CLIENT_ID_FILE:${pkgs.writeText "oidc-id" "ok"}"
+            "SOWER_AUTH_OIDC_CLIENT_SECRET_FILE:${pkgs.writeText "oidc-secret" "ok"}"
+          ];
+          environment = {
+            SOWER_DATABASE_SOCKET = "/run/postgresql/.s.PGSQL.5432";
+            SOWER_HOSTNAME = "localhost";
+            SOWER_PUBLIC_PORT = "4000";
+            SOWER_PUBLIC_SCHEME = "http";
+            SOWER_AUTH_OIDC_BASE_URL = "http://localhost:9000";
+          };
         };
-      };
+        systemd.services.sower.serviceConfig.Restart = "no";
 
-      services.postgresql = {
-        enable = true;
-        ensureUsers = [
-          {
-            name = "sower";
-            ensureDBOwnership = true;
-          }
-        ];
-        ensureDatabases = [ "sower" ];
+        services.postgresql = {
+          enable = true;
+          ensureUsers = [
+            {
+              name = "sower";
+              ensureDBOwnership = true;
+            }
+          ];
+          ensureDatabases = [ "sower" ];
+        };
       };
     };
-  };
 
   testScript = ''
     start_all()

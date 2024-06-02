@@ -2,6 +2,7 @@ use crate::*;
 
 pub mod daemon;
 
+use anyhow::{anyhow, Result};
 use clap::ValueEnum;
 use serde::Deserialize;
 use serde::Serialize;
@@ -16,16 +17,15 @@ use tracing::{debug, info};
 pub struct Seed {
     pub id: Option<String>,
     pub name: String,
-    #[serde(rename(deserialize = "type"))]
     pub seed_type: SeedType,
     pub out_path: String,
 }
 
 impl Seed {
-    pub fn realize(&self) -> Result<&Self, String> {
+    pub fn realize(&self) -> Result<&Self> {
         match run_command("nix-store", vec!["--realize", &self.out_path.clone()]) {
             true => Ok(self),
-            false => Err(format!("failed to realize: {}", &self.out_path)),
+            false => Err(anyhow!("{}", &self.out_path)),
         }
     }
 
@@ -71,14 +71,16 @@ impl Seed {
         }
     }
 
-    fn new_from_path(name: String, seed_type: SeedType, path: &str) -> Self {
+    fn new_from_path(name: String, seed_type: SeedType, path: &str) -> Result<Self> {
         debug!(path);
-        let path = fs::canonicalize(Path::new(path)).expect("unable to read link");
-        Self {
-            id: None,
-            name,
-            seed_type,
-            out_path: path.to_string_lossy().to_string(),
+        match fs::canonicalize(Path::new(path)) {
+            Ok(path) => Ok(Self {
+                id: None,
+                name,
+                seed_type,
+                out_path: path.to_string_lossy().to_string(),
+            }),
+            Err(e) => Err(e.into()),
         }
     }
 }
@@ -128,7 +130,7 @@ pub struct Sower {
 }
 
 impl Sower {
-    pub fn new(config: &Config) -> Result<Sower, Box<dyn std::error::Error>> {
+    pub fn new(config: &Config) -> Result<Sower> {
         let url = config.url.clone().expect("URL is required");
         let api_url = format!("{}/api", url);
         let channels_url = format!("{}/client/websocket", url.replace("http", "ws"));
@@ -150,13 +152,19 @@ impl Sower {
             .await
         {
             Ok(result) => {
-                if let Ok(seed) = result.json::<Seed>().await {
-                    Some(seed)
-                } else {
-                    None
+                debug!("{:?}", result);
+                match result.json::<Seed>().await {
+                    Ok(seed) => Some(seed),
+                    Err(err) => {
+                        dbg!(err);
+                        None
+                    }
                 }
             }
-            Err(_) => None,
+            Err(err) => {
+                debug!("Err: {}", err);
+                None
+            }
         }
     }
 }
@@ -176,11 +184,11 @@ pub struct TreeSeeds {
     pub current: Option<Seed>,
     pub booted: Option<Seed>,
     pub desired: Option<Seed>,
-    pub profile: Seed,
+    pub profile: Option<Seed>,
 }
 
 impl Tree {
-    pub async fn new(config: &Config) -> Result<Tree, Box<dyn std::error::Error>> {
+    pub async fn new(config: &Config) -> Result<Tree> {
         let name =
             config
                 .name
@@ -195,77 +203,65 @@ impl Tree {
         let seed_type = config.seed_type.unwrap();
         let sower = Sower::new(&config)?;
 
-        Ok(Tree {
+        let mut tree = Tree {
             name: name.clone(),
             seed_type,
             sower: Some(sower.clone()),
             seeds: None,
             id: None,
             server_id: None,
-        }
-        .load_seeds())
+        };
+
+        tree.load_seeds().await?;
+
+        Ok(tree)
     }
 
-    pub fn info(&self) -> () {
+    pub fn info(&self) {
         dbg!(self);
-        ()
     }
 
-    pub async fn latest_seed(&self) -> Option<Seed> {
-        self.sower
-            .as_ref()
-            .unwrap()
-            .find_seed(self.name.clone(), self.seed_type.clone())
-            .await
-    }
-
-    pub async fn load_latest(mut self) -> Self {
-        self.seeds = Some(TreeSeeds {
-            desired: self.latest_seed().await,
-            ..self.seeds.unwrap()
-        });
-        self
-    }
-
-    pub fn load_seeds(mut self) -> Self {
+    pub async fn load_seeds(&mut self) -> Result<()> {
         let booted = match self.seed_type {
-            SeedType::Nixos => Some(Seed::new_from_path(
-                self.name.clone(),
-                self.seed_type.clone(),
-                "/run/booted-system",
-            )),
+            SeedType::Nixos => {
+                Seed::new_from_path(self.name.clone(), self.seed_type, "/run/booted-system").ok()
+            }
             SeedType::HomeManager => None,
             SeedType::NixDarwin => None,
         };
 
         let current = match self.seed_type {
             SeedType::HomeManager => None,
-            SeedType::NixDarwin => Some(Seed::new_from_path(
-                self.name.clone(),
-                self.seed_type.clone(),
-                "/run/current-system",
-            )),
-            SeedType::Nixos => Some(Seed::new_from_path(
-                self.name.clone(),
-                self.seed_type.clone(),
-                "/run/current-system",
-            )),
+            SeedType::NixDarwin => {
+                Seed::new_from_path(self.name.clone(), self.seed_type, "/run/current-system").ok()
+            }
+            SeedType::Nixos => {
+                Seed::new_from_path(self.name.clone(), self.seed_type, "/run/current-system").ok()
+            }
         };
 
         let profile = Seed::new_from_path(
             self.name.clone(),
-            self.seed_type.clone(),
+            self.seed_type,
             &self.seed_type.profile_path(),
-        );
+        )
+        .ok();
+
+        let desired = self
+            .sower
+            .as_ref()
+            .unwrap()
+            .find_seed(self.name.clone(), self.seed_type)
+            .await;
 
         self.seeds = Some(TreeSeeds {
             booted,
             current,
             profile,
-            desired: None,
+            desired,
         });
 
-        self
+        Ok(())
     }
 
     pub fn reboot(&self, confirm: bool) {
@@ -289,7 +285,7 @@ impl Tree {
         Self::run_reboot()
     }
 
-    fn reboot_needed() -> std::io::Result<bool> {
+    fn reboot_needed() -> Result<bool> {
         let profile_paths = &["", "/initrd", "/kernel", "/kernel-modules"];
         let result = profile_paths.iter().any(|&path| {
             let profile_path = format!("/nix/var/nix/profiles/system{}", path);

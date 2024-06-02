@@ -6,7 +6,6 @@ use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info};
-use xdg;
 
 mod sower;
 use sower::daemon::Daemon;
@@ -112,8 +111,8 @@ pub struct Config {
 
 impl Config {
     pub fn bootstrap_token(self) -> Self {
-        let bootstrap_token = fs::read_to_string(self.bootstrap_token_file.clone().unwrap()).ok();
-        if let Some(_) = &bootstrap_token {
+        if let Some(token_path) = &self.bootstrap_token_file {
+            let bootstrap_token = fs::read_to_string(token_path).ok();
             Self {
                 bootstrap_token,
                 ..self
@@ -221,52 +220,55 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Actions::Seed { action } => {
-            let seed = tree.latest_seed().await;
+            dbg!("{}", &tree);
+            let seed = tree
+                .seeds
+                .expect("No seeds loaded into tree")
+                .desired
+                .expect("Could not find desired seed");
 
             match action {
                 SeedCommands::Activate { mode, .. } => {
                     let mode = mode.clone().or(config.mode);
-                    seed.unwrap().activate(mode).expect("failed to activate");
+                    seed.activate(mode).expect("failed to activate");
                 }
 
                 SeedCommands::Download {} => {
-                    seed.unwrap().realize().expect("failed to realize");
+                    seed.realize().expect("failed to realize");
                 }
             }
         }
 
-        Actions::Tree { action } => {
-            let tree = tree.load_latest().await;
+        Actions::Tree { action } => match action {
+            TreeCommands::Info {} => info!("{:?}", tree),
 
-            match action {
-                TreeCommands::Info {} => info!("{:?}", tree),
+            TreeCommands::Reboot { yes } => {
+                tree.info();
+                tree.reboot(*yes)
+            }
 
-                TreeCommands::Reboot { yes } => {
-                    tree.info();
-                    tree.reboot(yes.clone())
-                }
+            TreeCommands::Upgrade { mode, reboot, yes } => {
+                debug!("{:?}", tree);
 
-                TreeCommands::Upgrade { mode, reboot, yes } => {
-                    debug!("{:?}", tree);
+                let mode = mode.clone().or(config.mode);
+                let desired = tree.seeds.clone().unwrap().desired;
+                match desired {
+                    Some(desired) => {
+                        info!("Activating seed {:?}", &desired);
+                        desired
+                            .realize()
+                            .expect("failed to realize")
+                            .activate(mode)
+                            .expect("failed to activate");
 
-                    let mode = mode.clone().or(config.mode);
-                    let desired = tree.seeds.clone().unwrap().desired.unwrap();
-                    info!("Activating seed {:?}", &desired);
-                    desired
-                        .realize()
-                        .expect("failed to realize")
-                        .activate(mode)
-                        .expect("failed to activate");
-
-                    let tree = tree.load_seeds();
-                    debug!("{:?}", tree);
-
-                    if config.reboot.unwrap_or(false) || reboot.clone() {
-                        tree.reboot(yes.clone());
+                        if config.reboot.unwrap_or(false) || *reboot {
+                            tree.reboot(*yes);
+                        }
                     }
+                    None => panic!("No desired seed found"),
                 }
             }
-        }
+        },
     }
 
     Ok(())

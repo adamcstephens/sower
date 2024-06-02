@@ -1,4 +1,4 @@
-defmodule Sower.Repo.Migrations.RenameSeedType do
+defmodule Sower.Repo.Migrations.RenameTreeSeedType do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 

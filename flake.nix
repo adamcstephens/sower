@@ -68,6 +68,8 @@
                   pkgs.cargo
                   pkgs.cargo-watch
                   pkgs.clippy
+                  pkgs.lldb
+                  pkgs.llvm
                   pkgs.rust-analyzer
                   pkgs.rustc
                   pkgs.rustfmt

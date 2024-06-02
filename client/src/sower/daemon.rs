@@ -35,7 +35,14 @@ impl Daemon {
             &tree.sower.clone().unwrap().channels_url,
             &[(
                 "token",
-                Self::sign_login_jwt(config.bootstrap_token.clone().unwrap(), &tree).unwrap(),
+                Self::sign_login_jwt(
+                    config
+                        .bootstrap_token
+                        .clone()
+                        .expect("No bootstrap token found"),
+                    &tree,
+                )
+                .unwrap(),
             )],
         )
         .unwrap();
@@ -61,7 +68,6 @@ impl Daemon {
     }
 
     pub async fn run(&mut self) -> Result<(), anyhow::Error> {
-        //self.login().await;
         let (private_channel_tx, mut private_channel_rx) = mpsc::channel(1);
         let (shutdown_send, mut shutdown_recv) = mpsc::unbounded_channel();
 

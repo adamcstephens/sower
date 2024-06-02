@@ -17,6 +17,12 @@ in
         default = pkgs.callPackage ./server-package.nix { };
       };
 
+      credentials = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        description = "systemd credentials";
+        default = [ ];
+      };
+
       environment = lib.mkOption {
         type = lib.types.attrsOf lib.types.str;
         description = "environment variables to pass to service. Do not set secrets here, but instead use systemd credentials";
@@ -48,7 +54,7 @@ in
         {
           Type = "notify";
           WatchdogSec = "10s";
-          Restart = "on-failure";
+          Restart = lib.mkDefault "on-failure";
 
           DynamicUser = true;
           StateDirectory = "sower";
@@ -63,6 +69,8 @@ in
             exec ${cfg.package}/bin/sower start
           '';
           ExecStop = "${cfg.package}/bin/sower stop";
+
+          LoadCredential = cfg.credentials;
         }
         (lib.optionalAttrs cfg.initSecrets {
           LoadCredential = [
