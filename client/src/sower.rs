@@ -201,7 +201,7 @@ impl Tree {
                     SeedType::HomeManager => env::var("USER").expect("can not detect username"),
                 });
         let seed_type = config.seed_type.unwrap();
-        let sower = Sower::new(&config)?;
+        let sower = Sower::new(config)?;
 
         let mut tree = Tree {
             name: name.clone(),
@@ -310,7 +310,7 @@ impl Tree {
             let current = fs::canonicalize(current_path).expect("unable to read current link");
             let booted = fs::canonicalize(booted_path).expect("unable to read booted link");
 
-            if path != "" {
+            if !path.is_empty() {
                 if current != booted {
                     info!(
                         "current {:?} != booted {:?}",

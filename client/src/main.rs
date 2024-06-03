@@ -123,7 +123,7 @@ impl Config {
     }
 
     pub fn bootstrap_token_file(self, bootstrap_token_file: Option<PathBuf>) -> Self {
-        if let Some(_) = &bootstrap_token_file {
+        if bootstrap_token_file.is_some() {
             Self {
                 bootstrap_token_file,
                 ..self
@@ -134,7 +134,7 @@ impl Config {
     }
 
     pub fn name(self, name: Option<String>) -> Self {
-        if let Some(_) = &name {
+        if name.is_some() {
             Self { name, ..self }
         } else {
             self
@@ -142,7 +142,7 @@ impl Config {
     }
 
     pub fn reboot(self, reboot: Option<bool>) -> Self {
-        if let Some(_) = &reboot {
+        if reboot.is_some() {
             Self { reboot, ..self }
         } else {
             self
@@ -150,7 +150,7 @@ impl Config {
     }
 
     pub fn seed_type(self, seed_type: Option<SeedType>) -> Self {
-        if let Some(_) = &seed_type {
+        if seed_type.is_some() {
             Self { seed_type, ..self }
         } else {
             self
@@ -158,7 +158,7 @@ impl Config {
     }
 
     pub fn url(self, url: Option<String>) -> Self {
-        if let Some(_) = &url {
+        if url.is_some() {
             Self { url, ..self }
         } else {
             self
