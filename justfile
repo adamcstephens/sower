@@ -27,6 +27,9 @@ set-version version:
     sed -i 's/^version = ".*"/version = "{{ version }}"/' client/Cargo.toml
     cargo generate-lockfile
 
+release:
+    git tag -a v$(cat VERSION)
+
 start:
     iex -S mix phx.server
 
