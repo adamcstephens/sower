@@ -24,6 +24,8 @@ nix-lock:
 
 set-version version:
     echo -n {{ version }} > VERSION
+    sed -i 's/^version = ".*"/version = "{{ version }}"/' client/Cargo.toml
+    cargo generate-lockfile
 
 start:
     iex -S mix phx.server
