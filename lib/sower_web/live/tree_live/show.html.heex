@@ -1,15 +1,11 @@
 <.header>
   <%= @tree.name %>
-  <:subtitle><%= @tree.type %></:subtitle>
+  <:subtitle><%= @tree.seed_type %></:subtitle>
 </.header>
 
 <.list>
-  <:item title="seed">
-    <%= if @tree.seed do %>
-      <.link navigate={~p"/seeds/#{@tree.seed}"}><%= @tree.seed.id %></.link>
-    <% else %>
-      Unknown
-    <% end %>
+  <:item title="seed?">
+    TODO
   </:item>
 </.list>
 
