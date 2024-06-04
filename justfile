@@ -29,6 +29,8 @@ set-version version:
 
 release:
     git tag -a v$(cat VERSION)
+    git push
+    git push --tags
 
 start:
     iex -S mix phx.server
