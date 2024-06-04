@@ -32,7 +32,7 @@ if config_env() == :prod do
     oidc_base_url:
       System.get_env("SOWER_AUTH_OIDC_BASE_URL") || raise("missing $SOWER_AUTH_OIDC_BASE_URL"),
     oidc_client_id: Sower.Application.credential!("SOWER_AUTH_OIDC_CLIENT_ID_FILE"),
-    oidc_client_secret: Sower.Application.credential!("SOWER_AUTH_OIDC_CLIENT_ID_FILE"),
+    oidc_client_secret: Sower.Application.credential!("SOWER_AUTH_OIDC_CLIENT_SECRET_FILE"),
     oidc_redirect_uri:
       System.get_env("SOWER_AUTH_OIDC_REDIRECT_URI", ~s"#{scheme}://#{host}:#{public_port}/auth")
 
