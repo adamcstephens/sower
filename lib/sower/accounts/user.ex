@@ -42,8 +42,21 @@ defmodule Sower.Accounts.User do
     strategies do
       oidc :oidc do
         client_id Sower.Accounts.Secrets
-        base_url fn _, _ -> Application.fetch_env(:sower, :oidc_base_url) end
-        redirect_uri fn _, _ -> Application.fetch_env(:sower, :oidc_redirect_uri) end
+
+        base_url fn _, _ ->
+          case Application.get_env(:sower, :auth) |> Keyword.get(:oidc_base_url) do
+            nil -> :error
+            val -> {:ok, val}
+          end
+        end
+
+        redirect_uri fn _, _ ->
+          case Application.get_env(:sower, :auth) |> Keyword.get(:oidc_redirect_uri) do
+            nil -> :error
+            val -> {:ok, val}
+          end
+        end
+
         client_secret Sower.Accounts.Secrets
         # TODO: figure out why decoding fails with ES256
         # id_token_signed_response_alg "ES256"

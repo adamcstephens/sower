@@ -1,7 +1,7 @@
 {
   "public_url": "http://localhost:4000",
   "auth": {
-    "oidc_base_url": "https://sower.junco.dev",
+    "oidc_base_url": "https://id.junco.dev/oauth2/openid/sower-dev",
     "oidc_client_id": "sower-dev"
   },
   "database": {

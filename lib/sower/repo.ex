@@ -11,6 +11,6 @@ defmodule Sower.Repo do
   end
 
   def init(_context, config) do
-    {:ok, Keyword.merge(config, Application.get_env(:sower, :database))}
+    {:ok, Keyword.merge(config, Application.get_env(:sower, :database, []))}
   end
 end

@@ -12,10 +12,16 @@ defmodule Sower.Accounts.Secrets do
   end
 
   def secret_for([:authentication, :strategies, :oidc, :client_id], Sower.Accounts.User, _) do
-    Application.fetch_env(:sower, :oidc_client_id)
+    case Application.get_env(:sower, :auth) |> Keyword.get(:oidc_client_id) do
+      nil -> :error
+      result -> {:ok, result}
+    end
   end
 
   def secret_for([:authentication, :strategies, :oidc, :client_secret], Sower.Accounts.User, _) do
-    Application.fetch_env(:sower, :oidc_client_secret)
+    case Application.get_env(:sower, :auth) |> Keyword.get(:oidc_client_secret) do
+      nil -> :error
+      result -> {:ok, result}
+    end
   end
 end
