@@ -31,6 +31,8 @@ craneLib.buildPackage (
       darwin.apple_sdk.frameworks.SystemConfiguration
     ];
 
+    doNotRemoveReferencesToVendorDir = true;
+
     meta.mainProgram = "sower";
   }
 )
