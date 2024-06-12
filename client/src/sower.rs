@@ -32,13 +32,31 @@ impl Seed {
     pub fn activate(&self, mode: Option<ActivationMode>) -> Result<&Self, String> {
         // TODO compare new activation to existing profile
         match &self.seed_type {
-            SeedType::HomeManager => self.activate_generic(),
-            SeedType::NixDarwin => self.activate_generic(),
+            SeedType::HomeManager => self.activate_home_manager(),
+            SeedType::NixDarwin => self.activate_nix_darwin(),
             SeedType::Nixos => self.activate_nixos(mode),
         }
     }
 
-    fn activate_generic(&self) -> Result<&Self, String> {
+    fn activate_home_manager(&self) -> Result<&Self, String> {
+        match run_command(format!("{}/activate", &self.out_path).as_ref(), vec![]) {
+            true => Ok(self),
+            false => Err(format!("failed to realize: {}", &self.out_path)),
+        }
+    }
+
+    fn activate_nix_darwin(&self) -> Result<&Self, String> {
+        // nixos profile needs to be manually set to ensure correct switching
+        run_command(
+            "nix-env",
+            vec![
+                "--set",
+                "--profile",
+                "/nix/var/nix/profiles/system",
+                &self.out_path.clone(),
+            ],
+        );
+
         match run_command(format!("{}/activate", &self.out_path).as_ref(), vec![]) {
             true => Ok(self),
             false => Err(format!("failed to realize: {}", &self.out_path)),
@@ -105,7 +123,8 @@ impl SeedType {
                     env::var("HOME").expect("missing $HOME environment variable")
                 )
             }
-            SeedType::NixDarwin => panic!("unsupported"),
+            SeedType::NixDarwin => "/nix/var/nix/profiles/system".to_string(),
+
             SeedType::Nixos => "/nix/var/nix/profiles/system".to_string(),
         }
     }
