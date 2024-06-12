@@ -10,8 +10,6 @@
     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
     rust-overlay.url = "github:oxalica/rust-overlay";
     services-flake.url = "github:juspay/services-flake";
-    typhon.inputs.nixpkgs.follows = "nixpkgs";
-    typhon.url = "github:typhon-ci/typhon";
   };
 
   outputs =
@@ -130,17 +128,6 @@
         flake = {
           nixosModules.sower = ./nix/nixos-module.nix;
           homeModules.sower = ./nix/home-module.nix;
-
-          typhonProject = inputs.typhon.lib.gitea.mkProject {
-            instance = "git.junco.dev";
-            owner = "adam";
-            repo = "sower";
-            secrets = ./nix/typhon-secrets.age;
-            typhonUrl = "https://typhon.junco.dev";
-          };
-          typhonJobs = lib.recursiveUpdate (inputs.nixpkgs.lib.genAttrs systems (system: {
-            inherit (self.packages.${system}) client;
-          })) { x86_64-linux.server = self.packages.x86_64-linux.server; };
         };
       }
     );

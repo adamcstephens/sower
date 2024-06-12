@@ -23,7 +23,9 @@ testers.runNixOSTest {
         services.sower.client = {
           enable = true;
           package = client;
+
           credentials = [ "SOWER_BOOTSTRAP_TOKEN_FILE:${pkgs.writeText "token" "aninsecuretoken"}" ];
+
           settings = {
             url = "http://localhost:4000";
             mode = "dry-activate";
@@ -33,17 +35,23 @@ testers.runNixOSTest {
 
         services.sower.server = {
           enable = true;
-          credentials = [
-            "SOWER_BOOTSTRAP_TOKEN_FILE:${pkgs.writeText "token" "aninsecuretoken"}"
-            "SOWER_AUTH_OIDC_CLIENT_ID_FILE:${pkgs.writeText "oidc-id" "ok"}"
-            "SOWER_AUTH_OIDC_CLIENT_SECRET_FILE:${pkgs.writeText "oidc-secret" "ok"}"
-          ];
-          environment = {
-            SOWER_DATABASE_SOCKET = "/run/postgresql/.s.PGSQL.5432";
-            SOWER_HOSTNAME = "localhost";
-            SOWER_PUBLIC_PORT = "4000";
-            SOWER_PUBLIC_SCHEME = "http";
-            SOWER_AUTH_OIDC_BASE_URL = "http://localhost:9000";
+          secrets = {
+            bootstrap_token_file = "${pkgs.writeText "token" "aninsecuretken"}";
+            auth_oidc_client_id_file = "${pkgs.writeText "oidc-id" "ok"}";
+            auth_oidc_client_secret_file = "${pkgs.writeText "oidc-secret" "ok"}";
+          };
+
+          settings = {
+            database = {
+              socket = "/run/postgresql/.s.PGSQL.5432";
+              username = "sower";
+              database = "sower";
+            };
+
+            auth = {
+              oidc_client_id = "sower";
+              oidc_base_url = "http://localhost:9000";
+            };
           };
         };
         systemd.services.sower.serviceConfig.Restart = "no";

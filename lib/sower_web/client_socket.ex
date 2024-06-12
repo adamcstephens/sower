@@ -6,7 +6,13 @@ defmodule SowerWeb.ClientSocket do
 
   @impl true
   def connect(%{"token" => token}, socket, _connect_info) do
-    signer = Joken.Signer.create("HS256", Application.fetch_env!(:sower, :bootstrap_token))
+    bootstrap_token =
+      case Application.fetch_env(:sower, :bootstrap_token) do
+        {:ok, token} -> token
+        :error -> Kernel.exit(:no_bootstrap_token)
+      end
+
+    signer = Joken.Signer.create("HS256", bootstrap_token)
 
     case Joken.Signer.verify(token, signer) do
       {:ok, claims} ->

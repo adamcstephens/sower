@@ -35,6 +35,9 @@ release:
 start:
     iex -S mix phx.server
 
+test:
+    nix build .#checks.x86_64-linux.default --print-build-logs
+
 update-elixir: && nix-lock
     mix deps.update --all
     mix deps.clean --unused --unlock

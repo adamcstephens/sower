@@ -1,0 +1,13 @@
+{
+  "public_url": "http://localhost:4000",
+  "auth": {
+    "oidc_base_url": "https://sower.junco.dev",
+    "oidc_client_id": "sower-dev"
+  },
+  "database": {
+    "username": "postgres",
+    "hostname": "localhost",
+    "database": "sower_dev",
+    "port": 5432
+  }
+}

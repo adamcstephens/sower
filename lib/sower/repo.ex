@@ -9,4 +9,8 @@ defmodule Sower.Repo do
       "uuid-ossp"
     ]
   end
+
+  def init(_context, config) do
+    {:ok, Keyword.merge(config, Application.get_env(:sower, :database))}
+  end
 end

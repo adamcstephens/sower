@@ -1,20 +1,10 @@
 import Config
 
 config :sower,
-  dev_routes: true,
-  bootstrap_token: System.get_env("SOWER_BOOTSTRAP_TOKEN"),
-  oidc_base_url: System.get_env("SOWER_AUTH_OIDC_BASE_URL"),
-  oidc_client_id: System.get_env("SOWER_AUTH_OIDC_CLIENT_ID"),
-  oidc_client_secret: System.get_env("SOWER_AUTH_OIDC_CLIENT_SECRET"),
-  oidc_redirect_uri: "http://localhost:4000/auth"
+  dev_routes: true
 
 # Configure your database
 config :sower, Sower.Repo,
-  username: "postgres",
-  password: "postgres",
-  hostname: "localhost",
-  database: "sower_dev",
-  port: 5432,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
 

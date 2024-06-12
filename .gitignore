@@ -32,7 +32,7 @@ sower-*.tar
 npm-debug.log
 /assets/node_modules/
 
-.dev-cookie
+/.dev-*
 .secret.envrc
 
 target/

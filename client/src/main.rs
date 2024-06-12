@@ -174,14 +174,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config_file = match cli.config {
         Some(path) => path,
-        None => match std::env::var("USER") {
-            Ok(user) => match user.as_ref() {
-                "root" => PathBuf::from("/etc/sower/config.toml"),
-                _ => xdg::BaseDirectories::with_prefix("sower")
-                    .expect("cannot locate XDG directories")
-                    .get_config_file("config.toml"),
+        None => match std::env::var("SOWER_CLIENT_CONFIG_FILE") {
+            Ok(f) => PathBuf::from(f),
+            Err(_) => match std::env::var("USER") {
+                Ok(user) => match user.as_ref() {
+                    "root" => PathBuf::from("/etc/sower/config.toml"),
+                    _ => xdg::BaseDirectories::with_prefix("sower")
+                        .expect("cannot locate XDG directories")
+                        .get_config_file("config.toml"),
+                },
+                Err(_) => PathBuf::from("/etc/sower/config.toml"),
             },
-            Err(_) => PathBuf::from("/etc/sower/config.toml"),
         },
     };
 
@@ -203,7 +206,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
     };
 
-    // cli overrides config
+    // env overrides config
+    let config = config.bootstrap_token_file(match std::env::var("SOWER_BOOTSTRAP_TOKEN_FILE") {
+        Ok(f) => Some(PathBuf::from(f)),
+        Err(_) => None,
+    });
+
+    // cli overrides env and config
     let config = config
         .name(cli.name)
         .seed_type(cli.seed_type)

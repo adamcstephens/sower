@@ -34,13 +34,13 @@ defmodule SowerWeb.ClientChannel do
   def handle_in(
         "seed:sync",
         %{
-          "booted_seed" => booted_seed,
-          "current_seed" => current_seed,
-          "profile_seed" => profile_seed
+          # "booted_seed" => booted_seed,
+          # "current_seed" => current_seed,
+          # "profile_seed" => profile_seed
         },
         socket
       ) do
-    tree =
+    _tree =
       Sower.Tree.by_id(socket.assigns.tree_id)
       |> Ash.load([:booted_seed, :current_seed, :profile_seed, :latest_seed])
 

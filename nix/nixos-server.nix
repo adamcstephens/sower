@@ -6,6 +6,7 @@
 }:
 let
   cfg = config.services.sower.server;
+  jsonType = (pkgs.formats.json { }).type;
 in
 {
   options = {
@@ -17,15 +18,24 @@ in
         default = pkgs.callPackage ./server-package.nix { };
       };
 
-      credentials = lib.mkOption {
-        type = lib.types.listOf lib.types.str;
-        description = "systemd credentials";
-        default = [ ];
+      secrets = lib.mkOption {
+        type = lib.types.attrsOf lib.types.str;
+        description = "systemd credentials wrapper";
+        example = {
+          SOWER_DATABASE_PASS_FILE = "/path/to/pass/file";
+        };
+        default = { };
+      };
+
+      settings = lib.mkOption {
+        type = lib.types.submodule { freeformType = jsonType; };
+        description = "sower server main configuration file";
+        default = { };
       };
 
       environment = lib.mkOption {
         type = lib.types.attrsOf lib.types.str;
-        description = "environment variables to pass to service. Do not set secrets here, but instead use systemd credentials";
+        description = "environment variables to pass to service. Do not set secrets here, but instead use `services.sower.server.secrets`";
         default = { };
       };
 
@@ -33,13 +43,18 @@ in
         type = lib.types.bool;
         default = true;
         description = ''
-          Whether to initialise non‐existent secrets with random values.
+          Whether to initialise non-existent secrets with random values.
         '';
       };
     };
   };
 
   config = lib.mkIf cfg.enable {
+    services.sower.server.secrets = lib.mkIf cfg.initSecrets {
+      release_cookie_file = "/var/lib/sower/release-cookie";
+      secret_key_base_file = "/var/lib/sower/secret-key-base";
+    };
+
     systemd.services.sower = {
       description = "Sower management platform";
 
@@ -50,38 +65,31 @@ in
       ];
       requires = [ "network-online.target" ];
 
-      serviceConfig = lib.mkMerge [
-        {
-          Type = "notify";
-          WatchdogSec = "10s";
-          Restart = lib.mkDefault "on-failure";
+      serviceConfig = {
+        Type = "notify";
+        WatchdogSec = "10s";
+        Restart = lib.mkDefault "on-failure";
 
-          DynamicUser = true;
-          StateDirectory = "sower";
-          RuntimeDirectory = "sower";
+        DynamicUser = true;
+        StateDirectory = "sower";
+        RuntimeDirectory = "sower";
 
-          ExecStart = pkgs.writeShellScript "sower-start" ''
-            ${lib.optionalString cfg.initSecrets ''
-              export RELEASE_COOKIE=$(cat $CREDENTIALS_DIRECTORY/RELEASE_COOKIE_FILE)
-            ''}
+        ExecStart = pkgs.writeShellScript "sower-start" ''
+          ${lib.optionalString cfg.initSecrets ''
+            export RELEASE_COOKIE=$(cat $CREDENTIALS_DIRECTORY/SOWER_RELEASE_COOKIE_FILE)
+          ''}
 
-            ${cfg.package}/bin/sower eval Sower.Release.migrate
-            exec ${cfg.package}/bin/sower start
-          '';
-          ExecStop = "${cfg.package}/bin/sower stop";
+          ${cfg.package}/bin/sower eval Sower.Release.migrate
+          exec ${cfg.package}/bin/sower start
+        '';
+        ExecStop = "${cfg.package}/bin/sower stop";
 
-          LoadCredential = cfg.credentials;
-        }
-        (lib.optionalAttrs cfg.initSecrets {
-          LoadCredential = [
-            "RELEASE_COOKIE_FILE:%S/sower/release-cookie"
-            "SECRET_KEY_BASE_FILE:%S/sower/secret-key-base"
-          ];
-        })
-      ];
+        LoadCredential = lib.mapAttrsToList (k: v: "SOWER_${lib.toUpper k}:${v}") cfg.secrets;
+      };
 
       environment = {
         PHX_SERVER = "true";
+        SOWER_SERVER_CONFIG_FILE = pkgs.writeText "sower-server-config" (builtins.toJSON cfg.settings);
       } // cfg.environment;
     };
 
