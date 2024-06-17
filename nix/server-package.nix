@@ -1,6 +1,7 @@
 {
   lib,
   beamPackages,
+  elixir ? beamPackages.elixir_1_17,
   esbuild,
   tailwindcss,
   stdenv,
@@ -12,6 +13,8 @@ in
 beamPackages.mixRelease {
   pname = "sower";
   version = builtins.readFile ../VERSION;
+
+  inherit elixir;
 
   src = lib.fileset.toSource {
     root = ../.;
@@ -26,8 +29,6 @@ beamPackages.mixRelease {
       ../VERSION
     ];
   };
-
-  elixir = beamPackages.elixir_1_16;
 
   mixNixDeps = import ./mix.nix {
     inherit lib beamPackages;

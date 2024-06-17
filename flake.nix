@@ -37,9 +37,9 @@
             ...
           }:
           let
-            beamPackages = pkgs.beam.packagesWith pkgs.erlangR26;
-            elixir = beamPackages.elixir_1_16;
-            lexical = pkgs.lexical.override { inherit elixir; };
+            beamPackages = pkgs.beam.packagesWith pkgs.erlang_27;
+            elixir = beamPackages.elixir_1_17;
+            lexical = pkgs.lexical.override { inherit beamPackages elixir; };
             next-ls = inputs'.next-ls.packages.default.override { };
 
             rustTarget =
@@ -112,7 +112,7 @@
             packages = {
               seed-ci = pkgs.callPackage ./nix/seed-ci.nix { inherit (inputs'.attic.packages) attic; };
               client = pkgs.callPackage ./nix/client-package.nix { inherit craneLib rustTarget; };
-              server = pkgs.callPackage ./nix/server-package.nix { };
+              server = pkgs.callPackage ./nix/server-package.nix { inherit beamPackages elixir; };
             };
 
             process-compose."default" = {
