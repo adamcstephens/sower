@@ -7,6 +7,9 @@
 let
   cfg = config.services.sower.server;
   jsonType = (pkgs.formats.json { }).type;
+
+  beamPackages = pkgs.beam.packagesWith pkgs.erlang_27;
+  elixir = beamPackages.elixir_1_17;
 in
 {
   options = {
@@ -15,7 +18,7 @@ in
 
       package = lib.mkOption {
         type = lib.types.package;
-        default = pkgs.callPackage ./server-package.nix { };
+        default = pkgs.callPackage ./server-package.nix { inherit beamPackages elixir; };
       };
 
       secrets = lib.mkOption {
