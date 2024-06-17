@@ -64,6 +64,7 @@
 
                   # rust
                   pkgs.cargo
+                  pkgs.cargo-outdated
                   pkgs.cargo-watch
                   pkgs.clippy
                   pkgs.lldb
