@@ -1,5 +1,6 @@
 use crate::sower::*;
 
+use anyhow::Result;
 use clap::Parser;
 use clap::Subcommand;
 use serde::Deserialize;
@@ -167,43 +168,50 @@ impl Config {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     let cli = Cli::parse();
 
+    // config loading priority:
+    // 1. --config
+    // 2. SOWER_CLIENT_CONFIG_FILE env
+    // 3. /etc/sower/client.toml for root, $XDG_CONFIG_HOME/sower/client.toml for other users
     let config_file = match cli.config {
         Some(path) => path,
         None => match std::env::var("SOWER_CLIENT_CONFIG_FILE") {
             Ok(f) => PathBuf::from(f),
             Err(_) => match std::env::var("USER") {
                 Ok(user) => match user.as_ref() {
-                    "root" => PathBuf::from("/etc/sower/config.toml"),
+                    "root" => PathBuf::from("/etc/sower/client.toml"),
                     _ => xdg::BaseDirectories::with_prefix("sower")
                         .expect("cannot locate XDG directories")
-                        .get_config_file("config.toml"),
+                        .get_config_file("client.toml"),
                 },
-                Err(_) => PathBuf::from("/etc/sower/config.toml"),
+                Err(_) => PathBuf::from("/etc/sower/client.toml"),
             },
         },
     };
 
-    dbg!(&config_file);
-
     let config = match Path::try_exists(&config_file) {
         Ok(true) => {
+            debug!("loading config: {:?}", &config_file);
+
             let config_string = fs::read_to_string(config_file)?;
             toml::from_str(&config_string).expect("failed to parse config file")
         }
-        _ => Config {
-            bootstrap_token: None,
-            bootstrap_token_file: None,
-            reboot: None,
-            mode: None,
-            name: None,
-            seed_type: None,
-            url: None,
-        },
+        _ => {
+            info!("skipping config, file not found: {:?}", config_file);
+            Config {
+                bootstrap_token: None,
+                bootstrap_token_file: None,
+                reboot: None,
+                mode: None,
+                name: None,
+                seed_type: None,
+                url: None,
+            }
+        }
     };
 
     // env overrides config
@@ -221,6 +229,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .bootstrap_token();
 
     let tree = Tree::new(&config).await?;
+    debug!("tree: {:?}", &tree);
 
     match &cli.action {
         Actions::Daemon {} => {
@@ -229,7 +238,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Actions::Seed { action } => {
-            dbg!("{}", &tree);
             let seed = tree
                 .seeds
                 .expect("No seeds loaded into tree")

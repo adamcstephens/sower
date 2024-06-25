@@ -11,7 +11,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 use strum::{Display, VariantNames};
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Seed {
@@ -175,13 +175,13 @@ impl Sower {
                 match result.json::<Seed>().await {
                     Ok(seed) => Some(seed),
                     Err(err) => {
-                        dbg!(err);
+                        error!("failed to get seed: {}", err);
                         None
                     }
                 }
             }
             Err(err) => {
-                debug!("Err: {}", err);
+                error!("failed to get seed: {}", err);
                 None
             }
         }

@@ -57,8 +57,8 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    environment.etc."sower/config.toml".source = lib.mkIf (cfg.settings != null) (
-      toml.generate "sower-config.toml" (
+    environment.etc."sower/client.toml".source = lib.mkIf (cfg.settings != null) (
+      toml.generate "sower-client.toml" (
         cfg.settings // (lib.optionalAttrs cfg.autoreboot { reboot = true; })
       )
     );
