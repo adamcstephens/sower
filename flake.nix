@@ -13,10 +13,10 @@
   };
 
   outputs =
-    inputs@{ flake-parts, self, ... }:
+    inputs@{ flake-parts, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } (
-      { lib, withSystem, ... }:
-      rec {
+      { ... }:
+      {
         imports = [
           ./nix/flakemodule.nix
           inputs.process-compose-flake.flakeModule
@@ -37,7 +37,7 @@
             ...
           }:
           let
-            beamPackages = pkgs.beam.packagesWith pkgs.erlang_27;
+            beamPackages = pkgs.beam_minimal.packages.erlang_27;
             elixir = beamPackages.elixir_1_17;
 
             rustTarget =

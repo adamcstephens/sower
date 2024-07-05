@@ -39,9 +39,6 @@ defmodule Sower.Config do
           "database" => %{
             "type" => "string"
           },
-          "pass_file" => %{
-            "type" => "string"
-          },
           "port" => %{
             "type" => "integer",
             "minimum" => 80,
@@ -114,6 +111,11 @@ defmodule Sower.Config do
 
     @credentials |> Enum.map(&load_credential(&1))
 
+    case credential("SOWER_DATABASE_PASS_FILE") do
+      {:ok, pass} -> put_config(Sower.Repo, password: pass)
+      _ -> nil
+    end
+
     # load some non-app namespaced configs
     %URI{scheme: scheme, host: host, port: port} = URI.parse(public_url)
 
@@ -133,19 +135,9 @@ defmodule Sower.Config do
     put_config(config_atom, values)
   end
 
-  defp load_config({config_atom, value}) when is_binary(value) do
+  defp load_config({config_atom, value}) when is_binary(value) or is_number(value) do
     config_atom = String.to_atom(config_atom)
     put_config(config_atom, value)
-  end
-
-  defp credential(name) do
-    credential_dir = System.get_env("CREDENTIALS_DIRECTORY")
-    credential = System.get_env(name)
-
-    case read_credential(name, credential_dir, credential) do
-      {:ok, value} -> {:ok, value |> String.trim()}
-      {:error, err} -> {:error, ~s"unable to load credential #{name}, #{err}"}
-    end
   end
 
   defp load_credential(cred) when is_binary(cred) do
@@ -171,6 +163,16 @@ defmodule Sower.Config do
 
       {:error, _err} ->
         :error
+    end
+  end
+
+  defp credential(name) do
+    credential_dir = System.get_env("CREDENTIALS_DIRECTORY")
+    credential = System.get_env(name)
+
+    case read_credential(name, credential_dir, credential) do
+      {:ok, value} -> {:ok, value |> String.trim()}
+      {:error, err} -> {:error, ~s"unable to load credential #{name}, #{err}"}
     end
   end
 

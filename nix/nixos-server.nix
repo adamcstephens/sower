@@ -7,9 +7,6 @@
 let
   cfg = config.services.sower.server;
   jsonType = (pkgs.formats.json { }).type;
-
-  beamPackages = pkgs.beam.packagesWith pkgs.erlang_27;
-  elixir = beamPackages.elixir_1_17;
 in
 {
   options = {
@@ -18,14 +15,14 @@ in
 
       package = lib.mkOption {
         type = lib.types.package;
-        default = pkgs.callPackage ./server-package.nix { inherit beamPackages elixir; };
+        default = pkgs.callPackage ./server-package.nix { };
       };
 
       secrets = lib.mkOption {
         type = lib.types.attrsOf lib.types.str;
         description = "systemd credentials wrapper";
         example = {
-          SOWER_DATABASE_PASS_FILE = "/path/to/pass/file";
+          database_password_file = "/path/to/pass/file";
         };
         default = { };
       };
@@ -76,6 +73,7 @@ in
         DynamicUser = true;
         StateDirectory = "sower";
         RuntimeDirectory = "sower";
+        WorkingDirectory = "%S/sower";
 
         ExecStart = pkgs.writeShellScript "sower-start" ''
           ${lib.optionalString cfg.initSecrets ''
@@ -91,6 +89,7 @@ in
       };
 
       environment = {
+        HOME = "%S/sower";
         PHX_SERVER = "true";
         SOWER_SERVER_CONFIG_FILE = pkgs.writeText "sower-server-config" (builtins.toJSON cfg.settings);
       } // cfg.environment;

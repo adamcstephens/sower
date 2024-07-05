@@ -1,7 +1,7 @@
 {
   lib,
   beamPackages,
-  elixir ? beamPackages.elixir_1_17,
+  elixir,
   esbuild,
   tailwindcss,
   stdenv,

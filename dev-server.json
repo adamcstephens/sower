@@ -10,6 +10,7 @@
     "database": "sower_dev",
     "port": 5432
   },
+  "listen_port": 4000,
   "nix_cache": {
     "url": "https://cache.junco.dev/v3",
     "public_key": "v3:aMXMnngJoGU8dpELPyNAhADrOgrn5GiXWP90NiB4aFY="
