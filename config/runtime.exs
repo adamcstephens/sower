@@ -73,9 +73,9 @@ defmodule Sower.Config do
   }
 
   def load() do
-    Logger.debug("Loading configuration")
     {:ok, _} = Application.ensure_all_started(:jason)
     {:ok, _} = Application.ensure_all_started(:logger)
+    Logger.debug("Loading configuration")
 
     config_file = System.get_env("SOWER_SERVER_CONFIG_FILE", "/etc/sower/server.json")
 

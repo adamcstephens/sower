@@ -23,6 +23,8 @@ defmodule SowerWeb.Router do
 
     get "/", PageController, :home
 
+    get "/client/script", AppController, :client_script
+
     sign_in_route(register_path: "/register")
     sign_out_route AuthController
     auth_routes_for Sower.Accounts.User, to: AuthController

@@ -10,5 +10,12 @@
     "database": "sower_dev",
     "port": 5432
   },
+  "nix_cache": {
+    "url": "https://cache.junco.dev/v3",
+    "public_key": "v3:aMXMnngJoGU8dpELPyNAhADrOgrn5GiXWP90NiB4aFY="
+  },
+  "client_bin": {
+    "x86_64-linux": "/nix/store/path-to-client"
+  },
   "log_level": "debug"
 }
