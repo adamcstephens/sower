@@ -7,10 +7,6 @@ end
 defmodule Sower.Config do
   require Logger
 
-  @credentials [
-    "SOWER_AUTH_OIDC_CLIENT_SECRET_FILE"
-  ]
-
   @schema %{
     "type" => "object",
     "required" => ["auth", "database"],
@@ -23,6 +19,9 @@ defmodule Sower.Config do
             "type" => "string"
           },
           "oidc_client_id" => %{
+            "type" => "string"
+          },
+          "oidc_client_secret_file" => %{
             "type" => "string"
           },
           "oidc_redirect_uri" => %{
@@ -49,6 +48,9 @@ defmodule Sower.Config do
           },
           "user" => %{
             "type" => "string"
+          },
+          "password_file" => %{
+            "type" => "string"
           }
         }
       },
@@ -65,6 +67,9 @@ defmodule Sower.Config do
         "type" => "integer",
         "minimum" => 80,
         "maximum" => 65535
+      },
+      "secret_key_base_file" => %{
+        "type" => "string"
       }
     }
   }
@@ -87,15 +92,6 @@ defmodule Sower.Config do
           Kernel.exit(1)
       end
 
-    Logger.debug("Loaded configuration")
-    Logger.debug(json_config)
-
-    # load some defaults
-    public_url = json_config |> Map.get("public_url", "http://127.0.0.1:4000")
-    put_config(:auth, oidc_redirect_uri: ~s"#{public_url}/auth")
-    listen_address = json_config |> Map.get("listen_address", "127.0.0.1")
-    listen_port = json_config |> Map.get("listen_port", 4000)
-
     # set log level to atom and remove from config
     if Map.has_key?(json_config, "log_level") do
       level = Map.get(json_config, "log_level") |> String.to_existing_atom()
@@ -104,17 +100,65 @@ defmodule Sower.Config do
       config :logger, :console, level: level
     end
 
+    Logger.debug("Loaded configuration")
+    Logger.debug(json_config)
     json_config = json_config |> Map.delete("log_level")
 
-    json_config
-    |> Enum.map(&load_config(&1))
+    # load some defaults
+    public_url = json_config |> Map.get("public_url", "http://127.0.0.1:4000")
+    put_config(:auth, oidc_redirect_uri: ~s"#{public_url}/auth")
+    listen_address = json_config |> Map.get("listen_address", "127.0.0.1")
+    listen_port = json_config |> Map.get("listen_port", 4000)
 
-    @credentials |> Enum.map(&load_credential(&1))
+    secret_key_base =
+      with %{"secret_key_base_file" => secret_key_base_file} <- json_config,
+           {:ok, secret_key_base} <- read_credential(secret_key_base_file) do
+        secret_key_base
+      else
+        {:error, err} ->
+          Logger.warning("Failed to load secret_key_base from secret file, #{err}.")
+          Kernel.exit(1)
 
-    case credential("SOWER_DATABASE_PASS_FILE") do
-      {:ok, pass} -> put_config(Sower.Repo, password: pass)
-      _ -> nil
-    end
+        %{} ->
+          Logger.warning("No secret_key_base_file in configuration. Exiting!")
+          Kernel.exit(1)
+      end
+
+    json_config =
+      with %{"database" => database} <- json_config,
+           %{"password_file" => password_file} <- database,
+           {:ok, password} <- read_credential(password_file) do
+        json_config |> Map.put("database", database |> Map.put("password", password))
+      else
+        # assume missing password_file is intentional
+        %{} ->
+          Logger.debug("No database password_file to read.")
+          json_config
+
+        {:error, err} ->
+          Logger.warning("Failed to load database password from file, #{err}.")
+          json_config
+      end
+
+    json_config =
+      with %{"auth" => auth} <- json_config,
+           %{"oidc_client_secret_file" => oidc_client_secret_file} <- auth,
+           {:ok, oidc_client_secret} <- read_credential(oidc_client_secret_file) do
+        json_config |> Map.put("auth", auth |> Map.put("oidc_client_secret", oidc_client_secret))
+      else
+        {:error, err} ->
+          Logger.warning("Failed to load oidc_client_secret from secret file, #{err}.")
+          Kernel.exit(1)
+
+        %{} ->
+          Logger.warning("No auth.oidc_client_secret_file in configuration. Exiting!")
+          Kernel.exit(1)
+      end
+
+    Logger.debug("Modified configuration")
+    Logger.debug(json_config)
+
+    json_config |> Enum.map(&load_config(&1))
 
     # load some non-app namespaced configs
     %URI{scheme: scheme, host: host, port: port} = URI.parse(public_url)
@@ -122,7 +166,7 @@ defmodule Sower.Config do
     put_config(SowerWeb.Endpoint,
       url: [host: host, port: port, scheme: scheme],
       http: [ip: ip_to_inet(listen_address), port: listen_port],
-      secret_key_base: credential!("SOWER_SECRET_KEY_BASE_FILE"),
+      secret_key_base: secret_key_base,
       persistent: true
     )
 
@@ -140,63 +184,14 @@ defmodule Sower.Config do
     put_config(config_atom, value)
   end
 
-  defp load_credential(cred) when is_binary(cred) do
-    Logger.debug(~s"Loading credential #{cred}")
+  defp read_credential(path) when is_binary(path) do
+    case path |> File.read() do
+      {:ok, content} ->
+        {:ok, content |> String.trim()}
 
-    captures =
-      ~r/SOWER_(?<section>[[:alnum:]]+)_(?<key>.+)_FILE/
-      |> Regex.named_captures(cred)
-
-    if captures == nil do
-      Logger.error(~s"Credential #{cred} cannot be parsed")
-      Kernel.exit(1)
+      other ->
+        other
     end
-
-    section = captures["section"] |> String.downcase() |> String.to_atom()
-
-    key = captures["key"] |> String.downcase() |> String.to_atom()
-
-    case credential(cred) do
-      {:ok, path} ->
-        put_config(section, [{key, path}])
-        :ok
-
-      {:error, _err} ->
-        :error
-    end
-  end
-
-  defp credential(name) do
-    credential_dir = System.get_env("CREDENTIALS_DIRECTORY")
-    credential = System.get_env(name)
-
-    case read_credential(name, credential_dir, credential) do
-      {:ok, value} -> {:ok, value |> String.trim()}
-      {:error, err} -> {:error, ~s"unable to load credential #{name}, #{err}"}
-    end
-  end
-
-  def credential!(name) do
-    case credential(name) do
-      {:ok, value} -> value
-      {:error, err} -> raise err
-    end
-  end
-
-  defp read_credential(name, nil, nil) do
-    Logger.warning(~s"Could not load credential from env: #{name}")
-    {:error, "not found"}
-  end
-
-  defp read_credential(_, nil, cred), do: read_credential(cred)
-
-  defp read_credential(name, dir, nil), do: read_credential(~s"#{dir}/#{name}")
-  defp read_credential(_, dir, cred), do: read_credential(~s"#{dir}/#{cred}")
-  defp read_credential(path) when is_binary(path), do: path |> File.read()
-
-  defp read_credential(nil) do
-    Logger.error("Could not find credential")
-    Kernel.exit(1)
   end
 
   defp put_config(config_atom, new_values) when is_atom(config_atom) and is_list(new_values) do

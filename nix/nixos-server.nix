@@ -50,9 +50,12 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    services.sower.server.secrets = lib.mkIf cfg.initSecrets {
-      release_cookie_file = "/var/lib/sower/release-cookie";
-      secret_key_base_file = "/var/lib/sower/secret-key-base";
+    services.sower.server = lib.mkIf cfg.initSecrets {
+      secrets = {
+        release_cookie_file = "/var/lib/sower/release-cookie";
+      };
+
+      settings.secret_key_base_file = "/var/lib/sower/secret-key-base";
     };
 
     systemd.services.sower = {

@@ -38,7 +38,6 @@ testers.runNixOSTest {
           initSecrets = true;
           secrets = {
             bootstrap_token_file = "${pkgs.writeText "token" "aninsecuretken"}";
-            auth_oidc_client_secret_file = "${pkgs.writeText "oidc-secret" "ok"}";
           };
 
           settings = {
@@ -53,6 +52,7 @@ testers.runNixOSTest {
             auth = {
               oidc_client_id = "sower";
               oidc_base_url = "http://localhost:9000";
+              oidc_client_secret_file = "${pkgs.writeText "oidc-secret" "ok"}";
             };
 
             log_level = "debug";
