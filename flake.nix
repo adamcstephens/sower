@@ -39,8 +39,6 @@
           let
             beamPackages = pkgs.beam.packagesWith pkgs.erlang_27;
             elixir = beamPackages.elixir_1_17;
-            lexical = pkgs.lexical.override { inherit beamPackages elixir; };
-            next-ls = inputs'.next-ls.packages.default.override { };
 
             rustTarget =
               if pkgs.stdenv.isLinux then
@@ -59,8 +57,7 @@
                   # elixir
                   elixir
                   beamPackages.elixir-ls
-                  lexical
-                  next-ls
+                  inputs'.next-ls.packages.default
 
                   # rust
                   pkgs.cargo

@@ -75,6 +75,7 @@ defmodule Sower.Config do
   def load() do
     Logger.debug("Loading configuration")
     {:ok, _} = Application.ensure_all_started(:jason)
+    {:ok, _} = Application.ensure_all_started(:logger)
 
     config_file = System.get_env("SOWER_SERVER_CONFIG_FILE", "/etc/sower/server.json")
 
@@ -84,9 +85,8 @@ defmodule Sower.Config do
            :ok <- ExJsonSchema.Validator.validate(ExJsonSchema.Schema.resolve(@schema), json) do
         json
       else
-        {:error, err} ->
+        {:error, _err} ->
           Logger.error(~s"Failed to read configuration file #{config_file}")
-          Logger.error(err)
           Kernel.exit(1)
       end
 
@@ -99,7 +99,19 @@ defmodule Sower.Config do
     listen_address = json_config |> Map.get("listen_address", "127.0.0.1")
     listen_port = json_config |> Map.get("listen_port", 4000)
 
-    json_config |> Enum.map(&load_config(&1))
+    # set log level to atom and remove from config
+    if Map.has_key?(json_config, "log_level") do
+      level = Map.get(json_config, "log_level") |> String.to_existing_atom()
+      Logger.info(~s"Overriding log level from config to #{level}")
+
+      config :logger, :console, level: level
+    end
+
+    json_config = json_config |> Map.delete("log_level")
+
+    json_config
+    |> Enum.map(&load_config(&1))
+
     @credentials |> Enum.map(&load_credential(&1))
 
     # load some non-app namespaced configs

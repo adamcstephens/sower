@@ -35,13 +35,15 @@ testers.runNixOSTest {
 
         services.sower.server = {
           enable = true;
+          initSecrets = true;
           secrets = {
             bootstrap_token_file = "${pkgs.writeText "token" "aninsecuretken"}";
-            auth_oidc_client_id_file = "${pkgs.writeText "oidc-id" "ok"}";
             auth_oidc_client_secret_file = "${pkgs.writeText "oidc-secret" "ok"}";
           };
 
           settings = {
+            public_url = "http://127.0.0.1:4000";
+
             database = {
               socket = "/run/postgresql/.s.PGSQL.5432";
               username = "sower";
@@ -52,6 +54,8 @@ testers.runNixOSTest {
               oidc_client_id = "sower";
               oidc_base_url = "http://localhost:9000";
             };
+
+            log_level = "debug";
           };
         };
         systemd.services.sower.serviceConfig.Restart = "no";

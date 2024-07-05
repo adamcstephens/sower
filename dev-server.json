@@ -9,5 +9,6 @@
     "hostname": "localhost",
     "database": "sower_dev",
     "port": 5432
-  }
+  },
+  "log_level": "debug"
 }

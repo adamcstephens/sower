@@ -105,9 +105,11 @@ in
         Type = "oneshot";
         ExecStart = pkgs.writeShellScript "sower-init-secrets" ''
           if [ ! -e /var/lib/sower/release-cookie ]; then
+            echo "Generating release cookie"
             ${pkgs.coreutils}/bin/dd if=/dev/urandom bs=1 count=16 | ${pkgs.hexdump}/bin/hexdump -e '64/1 "%02x"' > /var/lib/sower/release-cookie
           fi
           if [ ! -e /var/lib/sower/secret-key-base ]; then
+            echo "Generating secret key base"
             ${lib.getExe pkgs.pwgen} --capitalize --secure 64 1 | ${pkgs.coreutils}/bin/tr -d '\n' > /var/lib/sower/secret-key-base
           fi
         '';

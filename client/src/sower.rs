@@ -237,6 +237,7 @@ impl Tree {
     }
 
     pub fn info(&self) {
+        // TODO: check if system needs to be updated
         dbg!(self);
     }
 
