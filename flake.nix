@@ -4,8 +4,7 @@
     crane.inputs.nixpkgs.follows = "nixpkgs";
     crane.url = "github:ipetkov/crane";
     flake-parts.url = "github:hercules-ci/flake-parts";
-    next-ls.url = "github:elixir-tools/next-ls";
-    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs?ref=nixpkgs-unstable";
     process-compose-flake.url = "github:Platonic-Systems/process-compose-flake";
     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
     rust-overlay.url = "github:oxalica/rust-overlay";
@@ -57,7 +56,7 @@
                   # elixir
                   elixir
                   beamPackages.elixir-ls
-                  inputs'.next-ls.packages.default
+                  pkgs.next-ls
 
                   # rust
                   pkgs.cargo
