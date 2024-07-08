@@ -29,6 +29,43 @@ defmodule Sower.Config do
           }
         }
       },
+      "clients" => %{
+        "type" => "object",
+        "properties" => %{
+          "x86_64-linux" => %{
+            "type" => "object",
+            "properties" => %{
+              "path" => %{
+                "type" => "string"
+              }
+            }
+          },
+          "aarch64-linux" => %{
+            "type" => "object",
+            "properties" => %{
+              "path" => %{
+                "type" => "string"
+              }
+            }
+          },
+          "x86_64-darwin" => %{
+            "type" => "object",
+            "properties" => %{
+              "path" => %{
+                "type" => "string"
+              }
+            }
+          },
+          "aarch64-darwin" => %{
+            "type" => "object",
+            "properties" => %{
+              "path" => %{
+                "type" => "string"
+              }
+            }
+          }
+        }
+      },
       "database" => %{
         "type" => "object",
         "properties" => %{

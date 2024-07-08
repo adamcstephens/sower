@@ -21,7 +21,7 @@
   ],
   "clients": {
     "x86_64-linux": {
-      "path": "/nix/store/path-to-client"
+      "path": "/nix/store/2qlsz08lajq99nlacwyijb7dlmvf39g2-sower-0.3.1"
     }
   },
   "log_level": "debug",

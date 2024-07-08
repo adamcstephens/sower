@@ -2,5 +2,26 @@
 
 # TODO: bootstrap a host by overriding cache URL and key
 
-echo "Hi"
-nix-store --realize <%= @client_store_path %>
+arch=$(uname -m)
+os=$(uname -s | tr [:upper:] [:lower:])
+
+if [[ "$os" == "darwin" && "$arch" == "arm64" ]]; then
+  arch="aarch64"
+fi
+
+system="${arch}-linux"
+echo ":: Found system ${system}"
+
+case "$system" in
+<%= for {arch, props} <- @clients do %>
+
+  <%= arch %>)
+    nix-store --realize <%= props |> Keyword.get(:path) %>
+    exec <%= props |> Keyword.get(:path) %>/bin/sower "$@"
+    ;;
+<% end %>
+  *)
+    echo "!! Unsupported system!"
+    exit 1
+    ;;
+esac
