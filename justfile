@@ -33,7 +33,7 @@ release:
     git push --tags
 
 start:
-    iex -S mix phx.server
+    iex --dbg pry -S mix phx.server
 
 test:
     nix build .#checks.x86_64-linux.default --print-build-logs
