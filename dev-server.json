@@ -19,8 +19,10 @@
       "public_key": "v3:aMXMnngJoGU8dpELPyNAhADrOgrn5GiXWP90NiB4aFY="
     }
   ],
-  "client_bin": {
-    "x86_64-linux": "/nix/store/path-to-client"
+  "clients": {
+    "x86_64-linux": {
+      "path": "/nix/store/path-to-client"
+    }
   },
   "log_level": "debug",
   "secret_key_base_file": ".dev-secret-key-base"

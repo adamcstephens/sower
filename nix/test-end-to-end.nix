@@ -4,8 +4,8 @@
 # >>> start_all()
 # >>> machine.shell_interact()
 {
-  client,
   curl,
+  flake,
   testers,
 }:
 
@@ -22,7 +22,7 @@ testers.runNixOSTest {
 
         services.sower.client = {
           enable = true;
-          package = client;
+          package = flake.packages.${pkgs.system}.client;
 
           credentials = [ "SOWER_BOOTSTRAP_TOKEN_FILE:${pkgs.writeText "token" "aninsecuretoken"}" ];
 
@@ -56,6 +56,9 @@ testers.runNixOSTest {
             };
 
             log_level = "debug";
+
+            clients."${pkgs.system}".path = builtins.toString flake.packages.${pkgs.system}.client;
+            # clients.aarch64-linux.path = builtins.toString flake.packages.aarch64-linux.client;
           };
         };
         systemd.services.sower.serviceConfig.Restart = "no";

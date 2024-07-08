@@ -12,7 +12,7 @@
   };
 
   outputs =
-    inputs@{ flake-parts, ... }:
+    inputs@{ flake-parts, self, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } (
       { ... }:
       {
@@ -103,7 +103,7 @@
             };
 
             checks = lib.optionalAttrs pkgs.stdenv.isLinux {
-              default = pkgs.callPackage ./nix/test-end-to-end.nix { client = self'.packages.client; };
+              default = pkgs.callPackage ./nix/test-end-to-end.nix { flake = self; };
             };
 
             packages = {
