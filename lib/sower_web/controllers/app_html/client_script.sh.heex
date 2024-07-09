@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 
-# TODO: bootstrap a host by overriding cache URL and key
-
 arch=$(uname -m)
-os=$(uname -s | tr [:upper:] [:lower:])
+os=$(uname -s | tr '[:upper:]' '[:lower:]')
 
 if [[ "$os" == "darwin" && "$arch" == "arm64" ]]; then
-  arch="aarch64"
+arch="aarch64"
 fi
 
-system="${arch}-linux"
-cache_args="<.cache_args nix_caches={@nix_caches} />"
+system="${arch}-${os}"
 echo ":: Found system ${system}"
+
+cache_args="<.cache_args nix_caches={@nix_caches} />"
+export SOWER_URL="<%= @sower_url %>"
 
 case "$system" in
 <%= for {arch, props} <- @clients do %>
-<.case_arch arch={arch} path={props |> Keyword.get(:path)} />
+  <.case_arch arch={arch} path={props |> Keyword.get(:path)} />
 <% end %>
 *)
 echo "!! Unsupported system!"

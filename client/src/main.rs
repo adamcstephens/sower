@@ -35,7 +35,13 @@ struct Cli {
     )]
     seed_type: Option<SeedType>,
 
-    #[arg(short, long, global = true, value_name = "SOWER_URL")]
+    #[arg(
+        short,
+        long,
+        global = true,
+        value_name = "SOWER_URL",
+        env = "SOWER_URL"
+    )]
     url: Option<String>,
 }
 
