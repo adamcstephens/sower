@@ -173,6 +173,10 @@ defmodule Sower.Config do
     listen_address = json_config |> Keyword.get(:listen_address, "127.0.0.1")
     listen_port = json_config |> Keyword.get(:listen_port, 4000)
 
+    if not Keyword.has_key?(json_config, :nix_caches) do
+      json_config = json_config |> Keyword.put(:nix_caches, [])
+    end
+
     secret_key_base =
       with secret_key_base_file <- json_config |> Keyword.get(:secret_key_base_file),
            {:ok, secret_key_base} <- read_credential(secret_key_base_file) do
@@ -238,7 +242,7 @@ defmodule Sower.Config do
   end
 
   defp atomize([head | rest]) do
-    [atomize(head), atomize(rest)] |> List.flatten()
+    [atomize(head)] ++ atomize(rest)
   end
 
   defp atomize(map = %{}) do

@@ -10,18 +10,15 @@ if [[ "$os" == "darwin" && "$arch" == "arm64" ]]; then
 fi
 
 system="${arch}-linux"
+cache_args="<.cache_args nix_caches={@nix_caches} />"
 echo ":: Found system ${system}"
 
 case "$system" in
 <%= for {arch, props} <- @clients do %>
-
-  <%= arch %>)
-    nix-store --realize <%= props |> Keyword.get(:path) %>
-    exec <%= props |> Keyword.get(:path) %>/bin/sower "$@"
-    ;;
+<.case_arch arch={arch} path={props |> Keyword.get(:path)} />
 <% end %>
-  *)
-    echo "!! Unsupported system!"
-    exit 1
-    ;;
+*)
+echo "!! Unsupported system!"
+exit 1
+;;
 esac
