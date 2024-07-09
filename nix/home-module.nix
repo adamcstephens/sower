@@ -58,8 +58,8 @@ in
           }
         ];
 
-        xdg.configFile."sower/config.toml".source = lib.mkIf (cfg.config != null) (
-          toml.generate "sower-config.toml" cfg.config
+        xdg.configFile."sower/client.toml".source = lib.mkIf (cfg.config != null) (
+          toml.generate "sower-client.toml" cfg.config
         );
       }
 
