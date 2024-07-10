@@ -24,4 +24,16 @@ defmodule SowerWeb.AppController do
       end
     end
   end
+
+  # TODO: this should really be somewhere related to an api
+  def config(conn, _params) do
+    with {:ok, nix_caches} <- Application.fetch_env(:sower, :nix_caches) do
+      # convert back to list of maps
+      nix_caches = nix_caches |> Enum.map(&(&1 |> Enum.into(%{})))
+
+      conn
+      |> put_root_layout(false)
+      |> json(%{nix_caches: nix_caches})
+    end
+  end
 end

@@ -234,7 +234,7 @@ async fn main() -> Result<()> {
         .bootstrap_token_file(cli.bootstrap_token_file)
         .bootstrap_token();
 
-    let sower = Sower::new(&config)?;
+    let sower = Sower::new(&config).await?;
 
     match &cli.action {
         Actions::Daemon {} => {
@@ -258,7 +258,7 @@ async fn main() -> Result<()> {
                 }
 
                 SeedCommands::Download {} => {
-                    seed.realize().expect("failed to realize");
+                    seed.realize(sower.cache_args()).expect("failed to realize");
                 }
             }
         }
@@ -284,7 +284,7 @@ async fn main() -> Result<()> {
                         Some(desired) => {
                             info!("Activating seed {:?}", &desired);
                             desired
-                                .realize()
+                                .realize(sower.cache_args())
                                 .expect("failed to realize")
                                 .activate(mode)
                                 .expect("failed to activate");

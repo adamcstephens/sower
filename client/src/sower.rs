@@ -22,8 +22,16 @@ pub struct Seed {
 }
 
 impl Seed {
-    pub fn realize(&self) -> Result<&Self> {
-        match run_command("nix-store", vec!["--realize", &self.out_path.clone()]) {
+    pub fn realize(&self, args: Vec<String>) -> Result<&Self> {
+        let out_path = self.out_path.clone();
+        let realize_args = ["--realize", &out_path];
+        let all_args = [
+            &args.iter().map(|s| s.as_str()).collect::<Vec<&str>>()[..],
+            &realize_args[..],
+        ]
+        .concat();
+
+        match run_command("nix-store", all_args) {
             true => Ok(self),
             false => Err(anyhow!("{}", &self.out_path)),
         }
@@ -142,24 +150,74 @@ pub enum ActivationMode {
     None,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct NixCache {
+    pub url: String,
+    pub public_key: String,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct Sower {
     pub url: String,
     pub api_url: String,
     pub channels_url: String,
+    pub config: SowerConfig,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct SowerConfig {
+    pub nix_caches: Vec<NixCache>,
 }
 
 impl Sower {
-    pub fn new(config: &Config) -> Result<Sower> {
+    pub async fn new(config: &Config) -> Result<Sower> {
         let url = config.url.clone().expect("URL is required");
         let api_url = format!("{}/api", url);
         let channels_url = format!("{}/client/websocket", url.replace("http", "ws"));
+
+        let config = Self::fetch_config(api_url.clone()).await;
+
+        debug!("{:?}", &config);
 
         Ok(Self {
             url,
             api_url,
             channels_url,
+            config: config.expect("failed to load configuration"),
         })
+    }
+
+    pub fn cache_args(&self) -> Vec<String> {
+        if !self.config.nix_caches.is_empty() {
+            let public_keys = self
+                .config
+                .nix_caches
+                .clone()
+                .into_iter()
+                .map(|nc| nc.public_key)
+                .collect::<Vec<String>>()
+                .join(",");
+
+            let substituters = self
+                .config
+                .nix_caches
+                .clone()
+                .into_iter()
+                .map(|nc| nc.url)
+                .collect::<Vec<String>>()
+                .join(",");
+
+            debug!("{:?}", public_keys);
+
+            vec![
+                "--extra-substituters".to_string(),
+                substituters,
+                "--extra-trusted-public-keys".to_string(),
+                public_keys,
+            ]
+        } else {
+            vec![]
+        }
     }
 
     pub async fn find_seed(&self, name: String, seed_type: SeedType) -> Option<Seed> {
@@ -177,6 +235,27 @@ impl Sower {
                     Ok(seed) => Some(seed),
                     Err(err) => {
                         error!("failed to get seed: {}", err);
+                        None
+                    }
+                }
+            }
+            Err(err) => {
+                error!("failed to get seed: {}", err);
+                None
+            }
+        }
+    }
+
+    async fn fetch_config(api_url: String) -> Option<SowerConfig> {
+        let client = reqwest::Client::new();
+
+        match client.get(format!("{}/config", api_url)).send().await {
+            Ok(result) => {
+                debug!("{:?}", result);
+                match result.json::<SowerConfig>().await {
+                    Ok(config) => Some(config),
+                    Err(err) => {
+                        error!("failed to get sower configuration: {}", err);
                         None
                     }
                 }
@@ -370,6 +449,8 @@ impl Tree {
 }
 
 fn run_command(command: &str, args: Vec<&str>) -> bool {
+    debug!("Running command: {} {}", &command, &args.join(" "));
+
     let status = &mut Command::new(command)
         .args(args)
         .status()

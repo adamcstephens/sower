@@ -46,6 +46,8 @@ defmodule SowerWeb.Router do
 
   scope "/api" do
     pipe_through :api
+    get "/config", SowerWeb.AppController, :config
+
     get "/seeds", SowerWeb.SeedController, :list
     get "/seeds/latest", SowerWeb.SeedController, :find_latest
     post "/seeds", SowerWeb.SeedController, :new
