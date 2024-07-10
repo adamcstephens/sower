@@ -55,7 +55,7 @@
                 [
                   # elixir
                   elixir
-                  beamPackages.elixir-ls
+                  (beamPackages.elixir-ls.override { inherit elixir; })
                   pkgs.next-ls
 
                   # rust
