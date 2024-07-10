@@ -1,4 +1,4 @@
-use super::{Config, Tree};
+use super::{Config, Sower, Tree};
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -27,8 +27,8 @@ struct BootstrapClaim {
 }
 
 impl Daemon {
-    pub async fn new(config: &Config) -> Self {
-        let tree = Tree::new(config).await.expect("Failed to load tree");
+    pub async fn new(config: &Config, sower: &Sower) -> Self {
+        let tree = Tree::new(config, sower).await.expect("Failed to load tree");
 
         info!("Connecting to sower");
         let url = Url::parse_with_params(
@@ -95,7 +95,7 @@ impl Daemon {
                     }
                 };
 
-                self.tree.server_id = tree_id.clone();
+                self.tree.server_id.clone_from(&tree_id);
 
                 Self::run_private_channel(self.socket.clone(), tree_id.unwrap()).await
 
@@ -171,9 +171,8 @@ impl Daemon {
 
         info!("Listening for private events");
         loop {
-            match events.event().await {
-                event => debug!("{:?}", event),
-            }
+            let event = events.event().await;
+            debug!("{:?}", event)
         }
     }
 }

@@ -38,6 +38,7 @@ impl Seed {
         }
     }
 
+    // TODO turn activation into a trait, with default implementation
     fn activate_home_manager(&self) -> Result<&Self, String> {
         match run_command(format!("{}/activate", &self.out_path).as_ref(), vec![]) {
             true => Ok(self),
@@ -207,7 +208,7 @@ pub struct TreeSeeds {
 }
 
 impl Tree {
-    pub async fn new(config: &Config) -> Result<Tree> {
+    pub async fn new(config: &Config, sower: &Sower) -> Result<Tree> {
         let name =
             config
                 .name
@@ -220,7 +221,6 @@ impl Tree {
                     SeedType::HomeManager => env::var("USER").expect("can not detect username"),
                 });
         let seed_type = config.seed_type.unwrap();
-        let sower = Sower::new(config)?;
 
         let mut tree = Tree {
             name: name.clone(),
@@ -326,7 +326,7 @@ impl Tree {
                 return false;
             };
 
-            let profile = fs::canonicalize(profile_path).expect("unstable to read current link");
+            let profile = fs::canonicalize(profile_path).expect("unable to read profile link");
             let current = fs::canonicalize(current_path).expect("unable to read current link");
             let booted = fs::canonicalize(booted_path).expect("unable to read booted link");
 

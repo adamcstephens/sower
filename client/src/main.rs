@@ -234,21 +234,22 @@ async fn main() -> Result<()> {
         .bootstrap_token_file(cli.bootstrap_token_file)
         .bootstrap_token();
 
-    let tree = Tree::new(&config).await?;
-    debug!("tree: {:?}", &tree);
+    let sower = Sower::new(&config)?;
 
     match &cli.action {
         Actions::Daemon {} => {
-            let mut daemon = Daemon::new(&config).await;
+            let mut daemon = Daemon::new(&config, &sower).await;
             daemon.run().await.unwrap()
         }
 
         Actions::Seed { action } => {
-            let seed = tree
-                .seeds
-                .expect("No seeds loaded into tree")
-                .desired
-                .expect("Could not find desired seed");
+            let seed = sower
+                .find_seed(
+                    config.name.expect("name is required"),
+                    config.seed_type.expect("seed type is required"),
+                )
+                .await
+                .expect("failed to find seed");
 
             match action {
                 SeedCommands::Activate { mode, .. } => {
@@ -262,36 +263,41 @@ async fn main() -> Result<()> {
             }
         }
 
-        Actions::Tree { action } => match action {
-            TreeCommands::Info {} => info!("{:?}", tree),
+        Actions::Tree { action } => {
+            let tree = Tree::new(&config, &sower).await?;
+            debug!("tree: {:?}", &tree);
 
-            TreeCommands::Reboot { yes } => {
-                tree.info();
-                tree.reboot(*yes)
-            }
+            match action {
+                TreeCommands::Info {} => info!("{:?}", tree),
 
-            TreeCommands::Upgrade { mode, reboot, yes } => {
-                debug!("{:?}", tree);
+                TreeCommands::Reboot { yes } => {
+                    tree.info();
+                    tree.reboot(*yes)
+                }
 
-                let mode = mode.clone().or(config.mode);
-                let desired = tree.seeds.clone().unwrap().desired;
-                match desired {
-                    Some(desired) => {
-                        info!("Activating seed {:?}", &desired);
-                        desired
-                            .realize()
-                            .expect("failed to realize")
-                            .activate(mode)
-                            .expect("failed to activate");
+                TreeCommands::Upgrade { mode, reboot, yes } => {
+                    debug!("{:?}", tree);
 
-                        if config.reboot.unwrap_or(false) || *reboot {
-                            tree.reboot(*yes);
+                    let mode = mode.clone().or(config.mode);
+                    let desired = tree.seeds.clone().unwrap().desired;
+                    match desired {
+                        Some(desired) => {
+                            info!("Activating seed {:?}", &desired);
+                            desired
+                                .realize()
+                                .expect("failed to realize")
+                                .activate(mode)
+                                .expect("failed to activate");
+
+                            if config.reboot.unwrap_or(false) || *reboot {
+                                tree.reboot(*yes);
+                            }
                         }
+                        None => panic!("No desired seed found"),
                     }
-                    None => panic!("No desired seed found"),
                 }
             }
-        },
+        }
     }
 
     Ok(())
