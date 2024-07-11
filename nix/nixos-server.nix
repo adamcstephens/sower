@@ -58,6 +58,10 @@ in
       settings.secret_key_base_file = "/var/lib/sower/secret-key-base";
     };
 
+    environment.etc."sower/server.json".source = pkgs.writeText "sower-server-config" (
+      builtins.toJSON cfg.settings
+    );
+
     systemd.services.sower = {
       description = "Sower management platform";
 
@@ -94,7 +98,7 @@ in
       environment = {
         HOME = "%S/sower";
         PHX_SERVER = "true";
-        SOWER_SERVER_CONFIG_FILE = pkgs.writeText "sower-server-config" (builtins.toJSON cfg.settings);
+        SOWER_SERVER_CONFIG_FILE = "/etc/sower/server.json";
       } // cfg.environment;
     };
 
