@@ -134,11 +134,17 @@ defmodule Sower.Config do
 
     config_file = System.get_env("SOWER_SERVER_CONFIG_FILE", "/etc/sower/server.json")
 
+    defaults = %{
+      "listen_address" => "127.0.0.1",
+      "listen_port" => 4000,
+      "nix_caches" => []
+    }
+
     json_config =
       with {:ok, contents} <- File.read(config_file),
            {:ok, json} <- Jason.decode(contents),
            :ok <- ExJsonSchema.Validator.validate(ExJsonSchema.Schema.resolve(@schema), json) do
-        json |> atomize()
+        defaults |> Map.merge(json) |> atomize()
       else
         {:error, err} ->
           Logger.error(~s"Failed to read configuration file #{config_file}")
@@ -158,48 +164,42 @@ defmodule Sower.Config do
     Logger.debug(json_config)
     json_config = json_config |> Keyword.delete(:log_level)
 
-    # load some defaults
-    public_url = json_config |> Keyword.get(:public_url, "http://127.0.0.1:4000")
+    # compute urls
+    public_url = json_config |> Keyword.fetch!(:public_url)
 
     json_config =
       json_config
       |> Keyword.put(
         :auth,
         json_config
-        |> Keyword.get(:auth)
+        |> Keyword.fetch!(:auth)
         |> Keyword.put(:oidc_redirect_uri, ~s"#{public_url}/auth")
       )
 
-    listen_address = json_config |> Keyword.get(:listen_address, "127.0.0.1")
-    listen_port = json_config |> Keyword.get(:listen_port, 4000)
-
-    if not Keyword.has_key?(json_config, :nix_caches) do
-      json_config = json_config |> Keyword.put(:nix_caches, [])
-    end
-
     secret_key_base =
-      with secret_key_base_file <- json_config |> Keyword.get(:secret_key_base_file),
+      with {:ok, secret_key_base_file} <- json_config |> Keyword.fetch(:secret_key_base_file),
            {:ok, secret_key_base} <- read_credential(secret_key_base_file) do
         secret_key_base
       else
+        :error ->
+          Logger.warning("Configuration is missing `secret_key_base_file`.")
+          Kernel.exit(1)
+
         {:error, err} ->
           Logger.warning("Failed to load secret_key_base from secret file, #{err}.")
           Kernel.exit(1)
-
-        [_ | _] ->
-          Logger.warning("No secret_key_base_file in configuration. Exiting!")
-          Kernel.exit(1)
       end
 
+    # database password file
     json_config =
-      with database <- json_config |> Keyword.get(:database),
-           password_file <- database |> Keyword.get(:password_file),
+      with {:ok, database} <- json_config |> Keyword.fetch(:database),
+           {:ok, password_file} <- database |> Keyword.fetch(:password_file),
            {:ok, password} <- read_credential(password_file) do
         json_config |> Keyword.put(:database, database |> Keyword.put(:password, password))
       else
         # assume missing password_file is intentional
-        [_ | _] ->
-          Logger.debug("No database password_file to read.")
+        :error ->
+          Logger.debug("Configuration does not have `database.password_file` to read. Skipping.")
           json_config
 
         {:error, err} ->
@@ -207,9 +207,10 @@ defmodule Sower.Config do
           json_config
       end
 
+    # oidc client secret file
     json_config =
-      with auth <- json_config |> Keyword.get(:auth),
-           oidc_client_secret_file <- auth |> Keyword.get(:oidc_client_secret_file),
+      with {:ok, auth} <- json_config |> Keyword.fetch(:auth),
+           {:ok, oidc_client_secret_file} <- auth |> Keyword.fetch(:oidc_client_secret_file),
            {:ok, oidc_client_secret} <- read_credential(oidc_client_secret_file) do
         json_config
         |> Keyword.put(:auth, auth |> Keyword.put(:oidc_client_secret, oidc_client_secret))
@@ -218,12 +219,12 @@ defmodule Sower.Config do
           Logger.warning("Failed to load oidc_client_secret from secret file, #{err}.")
           Kernel.exit(1)
 
-        [_ | _] ->
-          Logger.warning("No auth.oidc_client_secret_file in configuration. Exiting!")
+        :error ->
+          Logger.warning("Configuration is missing `auth.oidc_client_secret_file`.")
           Kernel.exit(1)
       end
 
-    Logger.debug("Modified configuration")
+    Logger.debug("Final configuration:")
     Logger.debug(json_config)
 
     json_config |> Enum.map(fn {k, v} -> put_config(k, v) end)
@@ -233,12 +234,15 @@ defmodule Sower.Config do
 
     put_config(SowerWeb.Endpoint,
       url: [host: host, port: port, scheme: scheme],
-      http: [ip: ip_to_inet(listen_address), port: listen_port],
+      http: [
+        ip: ip_to_inet(json_config |> Keyword.fetch!(:listen_address)),
+        port: json_config |> Keyword.fetch!(:listen_port)
+      ],
       secret_key_base: secret_key_base,
       persistent: true
     )
 
-    Logger.info("Finished loading configuration")
+    Logger.info("Finished loading configuration.")
   end
 
   defp atomize([head | rest]) do
