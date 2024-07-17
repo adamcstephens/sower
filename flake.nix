@@ -58,6 +58,10 @@
                   (beamPackages.elixir-ls.override { inherit elixir; })
                   pkgs.next-ls
 
+                  # go
+                  pkgs.go_1_22
+                  pkgs.gopls
+
                   # rust
                   pkgs.cargo
                   pkgs.cargo-outdated
