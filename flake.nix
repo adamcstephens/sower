@@ -60,6 +60,7 @@
 
                   # go
                   pkgs.go_1_22
+                  pkgs.delve
                   pkgs.gopls
 
                   # rust
@@ -94,6 +95,9 @@
                   pkgs.libiconv
                   pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
                 ];
+
+              # og delve fix
+              hardeningDisable = [ "fortify" ];
 
               shellHook = ''
                 export BINDGEN_EXTRA_CLANG_ARGS="$(< ${pkgs.stdenv.cc}/nix-support/libc-crt1-cflags) \
