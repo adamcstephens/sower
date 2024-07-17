@@ -117,6 +117,7 @@
             packages = {
               seed-ci = pkgs.callPackage ./nix/seed-ci.nix { inherit (inputs'.attic.packages) attic; };
               client = pkgs.callPackage ./nix/client-package.nix { inherit craneLib rustTarget; };
+              client-go = pkgs.callPackage ./nix/client-go-package.nix { buildGoModule = pkgs.buildGo122Module; };
               server = pkgs.callPackage ./nix/server-package.nix { inherit beamPackages elixir; };
             };
 
