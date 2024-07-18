@@ -9,3 +9,16 @@
 #
 # We recommend using the bang functions (`insert!`, `update!`
 # and so on) as they will fail if something goes wrong.
+
+Enum.to_list(1..20)
+|> Enum.map(fn t ->
+  name = ~s"test#{t}"
+
+  Sower.Seed.new(
+    name,
+    "nixos",
+    ~s"/nix/store/fqf9pp2pbcv64j0bz3mwv5grj60jkvzv-nixos-system-#{name}-24.11.20240703.9f4128e",
+    nil,
+    nil
+  )
+end)
