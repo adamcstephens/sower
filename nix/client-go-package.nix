@@ -16,5 +16,9 @@ buildGoModule {
 
   CGO_ENABLED = 0;
 
+  postInstall = ''
+    mv $out/bin/client-go $out/bin/sower
+  '';
+
   vendorHash = "sha256-PqhDYEoLD1ZBQjMgAIylZMHK8i5HQLdiotrFxEAoJHU=";
 }
