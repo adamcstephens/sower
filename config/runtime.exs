@@ -29,6 +29,9 @@ defmodule Sower.Config do
           }
         }
       },
+      "bootstrap_token_file" => %{
+        "type" => "string"
+      },
       "clients" => %{
         "type" => "object",
         "properties" => %{
@@ -221,6 +224,22 @@ defmodule Sower.Config do
 
         :error ->
           Logger.warning("Configuration is missing `auth.oidc_client_secret_file`.")
+          Kernel.exit(1)
+      end
+
+    # bootstrap token file
+    json_config =
+      with {:ok, bootstrap_token_file} <- json_config |> Keyword.fetch(:bootstrap_token_file),
+           {:ok, bootstrap_token} <- read_credential(bootstrap_token_file) do
+        json_config
+        |> Keyword.put(:bootstrap_token, bootstrap_token)
+      else
+        {:error, err} ->
+          Logger.warning("Failed to load bootstrap_token from secret file, #{err}.")
+          Kernel.exit(1)
+
+        :error ->
+          Logger.warning("Configuration is missing `bootstrap_token_file`.")
           Kernel.exit(1)
       end
 

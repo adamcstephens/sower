@@ -32,31 +32,21 @@ defmodule SowerWeb.ClientChannel do
   end
 
   def handle_in(
-        "seed:sync",
+        "seed:submit",
         %{
-          # "booted_seed" => booted_seed,
-          # "current_seed" => current_seed,
-          # "profile_seed" => profile_seed
-        },
+          "name" => name,
+          "seed_type" => seed_type,
+          "out_path" => out_path
+        } = seed,
         socket
       ) do
-    _tree =
-      Sower.Tree.by_id(socket.assigns.tree_id)
-      |> Ash.load([:booted_seed, :current_seed, :profile_seed, :latest_seed])
+    case Sower.Seed.new(name, seed_type, out_path, nil, nil) do
+      {:ok, %Sower.Seed{} = seed} ->
+        {:reply, {:ok, %{seed_id: seed.id}}, socket}
 
-    # res =
-    #   case Sower.Tree.set_system_seeds(
-    #          tree,
-    #          profile_seed["id"],
-    #          booted_seed["id"],
-    #          current_seed["id"]
-    #        )
-    #        |> dbg() do
-    #     {:ok, _} -> {:reply, {:ok, "yes"}, socket}
-    #     {:error, _} -> {:reply, {:error, "fail"}, socket}
-    #   end
-
-    {:reply, {:ok, "TODO"}, socket}
+      {:error, _err} ->
+        {:reply, {:error, "failed to submit"}, socket}
+    end
   end
 
   def handle_info(:push_tree_id_to_client, socket) do

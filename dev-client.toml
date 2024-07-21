@@ -1,3 +1,4 @@
 url = "ws://localhost:4000"
 name = "blank"
 type = "home-manager"
+bootstrap-token-file = "./.bootstrap.token"

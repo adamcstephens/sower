@@ -83,6 +83,7 @@
                   pkgs.nvfetcher
                   pkgs.process-compose
                   pkgs.postgresql
+                  pkgs.watchexec
                 ]
                 ++ lib.optionals pkgs.stdenv.isLinux [
                   # elixir
