@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/knadh/koanf/parsers/toml/v2"
@@ -96,6 +97,7 @@ func run(config config) {
 	log.Debug().Any("config", config).Msg("")
 
 	socket := phx.NewSocket(&config.endpoint)
+	socket.HeartbeatInterval = 60 * time.Second
 	zerologLogger := logger{}
 	socket.Logger = &zerologLogger
 
