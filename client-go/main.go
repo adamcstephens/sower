@@ -138,7 +138,9 @@ func run(config config) {
 	seedPush.Receive("ok", func(response any) {
 		seed_id := response.(map[string]interface{})["seed_id"].(string)
 		log.Info().Any("seed", seed).Str("seed_id", seed_id).Msgf("Received seed id")
-		seed.Activate()
+		if err := seed.Download(); err != nil {
+			log.Error().Err(err).Msg("")
+		}
 	})
 
 	select {}
