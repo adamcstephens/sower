@@ -5,7 +5,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/knadh/koanf/parsers/toml/v2"
@@ -97,7 +96,6 @@ func run(config config) {
 	log.Debug().Any("config", config).Msg("")
 
 	socket := phx.NewSocket(&config.endpoint)
-	socket.HeartbeatInterval = 60 * time.Second
 	zerologLogger := logger{}
 	socket.Logger = &zerologLogger
 
@@ -130,12 +128,17 @@ func run(config config) {
 		log.Error().Err(err).Msg("failed to join dedicated channel")
 	}
 
-	seedPush, err := dedicatedChannel.Push("seed:submit", map[string]any{"name": "blank", "seed_type": "nixos", "out_path": "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaabb-nixos-system-blank-24.11.20240716.ad0b5ee"})
+	// seedPush, err := dedicatedChannel.Push("seed:submit", map[string]any{"name": "blank", "seed_type": "nixos", "out_path": "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaabb-nixos-system-blank-24.11.20240716.ad0b5ee"})
+	// seed := NewSeed("blank", "nixos", "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaabb-nixos-system-blank-24.11.20240716.ad0b5ee")
+	seed := NewSeed("blank", "home-manager", "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaabb-nixos-system-blank-24.11.20240716.ad0b5ee")
+	seedPush, err := dedicatedChannel.Push("seed:submit", seed)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to push seed:submit")
 	}
 	seedPush.Receive("ok", func(response any) {
-		log.Info().Msgf("%v", response.(map[string]interface{})["seed_id"].(string))
+		seed_id := response.(map[string]interface{})["seed_id"].(string)
+		log.Info().Any("seed", seed).Str("seed_id", seed_id).Msgf("Received seed id")
+		seed.Activate()
 	})
 
 	select {}
