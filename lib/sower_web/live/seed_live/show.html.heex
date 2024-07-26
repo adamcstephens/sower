@@ -6,7 +6,11 @@
 <.list>
   <:item title="branch"><%= @seed.branch %></:item>
   <:item title="repository">
-    <.link navigate={~p"/inputs/repos/#{@seed.repository.id}"}><%= @seed.repository.url %></.link>
+    <%= if @seed.repository do %>
+      <.link navigate={~p"/inputs/repos/#{@seed.repository.id}"}>
+        <%= @seed.repository.url %>
+      </.link>
+    <% end %>
   </:item>
   <:item title="out_path"><%= @seed.out_path %></:item>
   <:item title="created"><%= @seed.inserted_at %></:item>
