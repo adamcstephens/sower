@@ -21,21 +21,20 @@ type GenericSeed struct {
 }
 
 func NewSeed(name, seed_type, out_path string) Seed {
-	switch seed_type {
-	case "nixos":
-		return &NixosSeed{
-			GenericSeed: GenericSeed{Name: name,
-				OutPath:  out_path,
-				SeedType: seed_type,
-			},
-		}
-	}
-
-	return &GenericSeed{
+	seed := &GenericSeed{
 		Name:     name,
 		OutPath:  out_path,
 		SeedType: seed_type,
 	}
+
+	switch seed_type {
+	case "nixos":
+		return &NixosSeed{
+			GenericSeed: *seed,
+		}
+	}
+
+	return seed
 }
 
 func (d *GenericSeed) Activate() error {
@@ -51,11 +50,11 @@ func (d *GenericSeed) Download() error {
 	// Set up the pipes for stdout and stderr
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("Error creating StdoutPipe: %v", err)
+		return fmt.Errorf("Error creating stdout: %v", err)
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return fmt.Errorf("Error creating StderrPipe: %v", err)
+		return fmt.Errorf("Error creating stderr: %v", err)
 	}
 
 	err = cmd.Start()
