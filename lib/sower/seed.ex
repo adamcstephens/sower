@@ -119,7 +119,7 @@ defmodule Sower.Seed do
   end
 
   identities do
-    identity :seed, [:name, :seed_type, :out_path, :branch]
+    identity :seed, [:name, :seed_type, :out_path]
   end
 
   json_api do
