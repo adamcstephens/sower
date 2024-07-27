@@ -36,11 +36,9 @@ testers.runNixOSTest {
         services.sower.server = {
           enable = true;
           initSecrets = true;
-          secrets = {
-            bootstrap_token_file = "${pkgs.writeText "token" "aninsecuretken"}";
-          };
 
           settings = {
+            bootstrap_token_file = "${pkgs.writeText "token" "aninsecuretken"}";
             public_url = "http://127.0.0.1:4000";
 
             database = {
