@@ -1,5 +1,5 @@
 { lib, buildGoModule }:
-buildGoModule {
+buildGoModule rec {
   pname = "sower-client";
   version = builtins.readFile ../VERSION;
 
@@ -16,9 +16,11 @@ buildGoModule {
 
   CGO_ENABLED = 0;
 
+  ldflags = [ "-X main.version=${version}" ];
+
   postInstall = ''
     mv $out/bin/client-go $out/bin/sower
   '';
 
-  vendorHash = "sha256-ZaS8x9ktEbDC8xDKL4Gb13hQl19lDjqepbqSpC8MIv8=";
+  vendorHash = "sha256-7658me4SpEoO66Y16Qy3/ue6/AJTuwb2T1mS2OQGB64=";
 }

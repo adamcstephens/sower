@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
 	"net/url"
 	"os"
@@ -15,85 +16,122 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
+	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 )
+
+var version string
 
 type config struct {
 	endpoint url.URL
 }
 
-var conf = koanf.Conf{}
-
-var kConfig = koanf.NewWithConf(conf)
-
 func main() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
-	flags := flag.NewFlagSet("config", flag.ExitOnError)
-	flags.Usage = func() {
-		fmt.Println(flags.FlagUsages())
-		os.Exit(0)
+	var config *config
+
+	var rootCmd = &cobra.Command{
+		Use:   "sower",
+		Short: "sower client",
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			var err error
+
+			// load the configuration for every subcommand
+			config, err = initRootConfig(cmd.Flags())
+			if err != nil {
+				log.Error().Err(err).Msg("failed loading configuration")
+				return err
+			}
+
+			return nil
+		},
 	}
-	// TODO fix default config path
-	flags.StringSlice("config", []string{"./dev-client.toml"}, "path to one or more toml config files")
-	flags.String("bootstrap-token-file", "", "bootstrap token")
-	// TODO fix default name and seed_type
-	flags.String("name", "", "seed name")
-	flags.String("type", "", "seed type")
-	flags.Bool("debug", false, "enable debug logging")
-	flags.Parse(os.Args[1:])
+	rootCmd.PersistentFlags().Bool("debug", false, "enable debug logging")
+	rootCmd.PersistentFlags().StringSlice("config", []string{"./dev-client.toml"}, "path to toml config file, repeatable")
+
+	var versionCmd = &cobra.Command{
+		Use:   "version",
+		Short: "Print the version",
+		Run: func(cmd *cobra.Command, args []string) {
+			if version == "" {
+				fmt.Println("dev")
+			} else {
+				fmt.Println(version)
+			}
+		},
+	}
+	rootCmd.AddCommand(versionCmd)
+
+	var daemonCmd = &cobra.Command{
+		Use:   "daemon",
+		Short: "Run the daemon",
+		Run: func(cmd *cobra.Command, args []string) {
+			run(config)
+		},
+	}
+	rootCmd.AddCommand(daemonCmd)
+
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+}
+
+func initRootConfig(flags *flag.FlagSet) (*config, error) {
+	var conf = koanf.Conf{}
+	var kConfig = koanf.NewWithConf(conf)
 
 	// load config files
 	configFiles, _ := flags.GetStringSlice("config")
 	for _, c := range configFiles {
 		if err := kConfig.Load(file.Provider(c), toml.Parser()); err != nil {
-			log.Error().Err(err).Msg("error loading config file")
-			os.Exit(1)
+			return &config{}, fmt.Errorf("error loading config file")
 		}
 	}
 
 	// load cli args
 	if err := kConfig.Load(posflag.Provider(flags, ".", kConfig), nil); err != nil {
-		log.Error().Err(err).Msg("error parsing arguments")
-		os.Exit(1)
+		return &config{}, fmt.Errorf("error parsing arguments")
 	}
 
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	if kConfig.Bool("debug") {
+	debug, err := flags.GetBool("debug")
+	if err != nil {
+		return &config{}, fmt.Errorf("Failed to parse debug: %v", err)
+	}
+	if debug {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	}
 
 	if kConfig.String("bootstrap-token-file") == "" {
-		log.Error().Msg("Missing required bootstrap-token")
-		os.Exit(1)
+		return &config{}, fmt.Errorf("Missing required bootstrap-token")
 	}
 	bootstrapToken, err := readSecret(kConfig.String("bootstrap-token-file"))
 	if err != nil {
-		log.Error().Msgf("failed to read secret, %v", err)
-		os.Exit(1)
+		return &config{}, fmt.Errorf("failed to read secret, %v", err)
 	}
 	token, err := signToken(bootstrapToken, kConfig.String("name"), kConfig.String("type"))
 	if err != nil {
-		log.Error().Msgf("failed to sign jwt, %v", err)
-		os.Exit(1)
+		return &config{}, fmt.Errorf("failed to sign jwt, %v", err)
 	}
 
 	endpoint, err := url.Parse(fmt.Sprintf("%s/client?token=%s", kConfig.String("url"), token))
 	if err != nil {
-		log.Error().Msgf("failed to parse URL, %v", err)
-		os.Exit(1)
+		return &config{}, fmt.Errorf("failed to parse URL, %v", err)
 	}
 
-	config := config{
+	config := &config{
 		endpoint: *endpoint,
 	}
 
-	run(config)
+	log.Debug().Any("config", config).Msg("")
+
+	return config, nil
 }
 
-func run(config config) {
+func run(config *config) {
 	log.Info().Msg("Starting")
-	log.Debug().Any("config", config).Msg("")
 
 	socket := phx.NewSocket(&config.endpoint)
 	zerologLogger := logger{}

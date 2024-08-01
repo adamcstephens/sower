@@ -39,3 +39,6 @@ target/
 data/
 .nixos-test-history
 .bootstrap.token
+
+# go bin
+/sower
