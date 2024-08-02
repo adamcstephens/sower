@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"codeberg.org/adamcstephens/sower/client/seed"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/knadh/koanf/parsers/toml/v2"
 	"github.com/knadh/koanf/providers/file"
@@ -186,7 +187,7 @@ func run(config *config) {
 
 	// seedPush, err := dedicatedChannel.Push("seed:submit", map[string]any{"name": "blank", "seed_type": "nixos", "out_path": "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaabb-nixos-system-blank-24.11.20240716.ad0b5ee"})
 	// seed := NewSeed("blank", "nixos", "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaabb-nixos-system-blank-24.11.20240716.ad0b5ee")
-	seed := NewSeed("blank", "home-manager", "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaabb-nixos-system-blank-24.11.20240716.ad0b5ee")
+	seed := seed.NewSeed("blank", "home-manager", "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaabb-nixos-system-blank-24.11.20240716.ad0b5ee")
 	seedPush, err := dedicatedChannel.Push("seed:submit", seed)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to push seed:submit")

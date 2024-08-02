@@ -1,4 +1,4 @@
-module sower.dev
+module codeberg.org/adamcstephens/sower
 
 go 1.22.5
 
