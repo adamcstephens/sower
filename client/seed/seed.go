@@ -20,23 +20,6 @@ type GenericSeed struct {
 	SeedType string `json:"seed_type"`
 }
 
-func NewSeed(name, seed_type, out_path string) Seed {
-	seed := &GenericSeed{
-		Name:     name,
-		OutPath:  out_path,
-		SeedType: seed_type,
-	}
-
-	switch seed_type {
-	case "nixos":
-		return &NixosSeed{
-			GenericSeed: *seed,
-		}
-	}
-
-	return seed
-}
-
 func (d *GenericSeed) Activate() error {
 	log.Debug().Msgf("Activating seed %s", d.Name)
 	return nil
@@ -44,6 +27,10 @@ func (d *GenericSeed) Activate() error {
 
 func (d *GenericSeed) Download() error {
 	log.Debug().Any("seed", d).Msgf("Downloading seed")
+
+	if d.OutPath == "" {
+		return fmt.Errorf("Cannot download without seed out_path")
+	}
 
 	cmd := exec.Command("nix-store", "--realize", d.OutPath)
 
@@ -89,4 +76,45 @@ type NixosSeed struct {
 func (d *NixosSeed) Activate() error {
 	log.Debug().Msg("Nixos is a different activation")
 	return nil
+}
+
+func NewSeed(name, seed_type, out_path string) Seed {
+	seed := &GenericSeed{
+		Name:     name,
+		OutPath:  out_path,
+		SeedType: seed_type,
+	}
+
+	switch seed_type {
+	case "nixos":
+		return &NixosSeed{
+			GenericSeed: *seed,
+		}
+	}
+
+	return seed
+}
+
+func DefaultName() string {
+	name := "blank"
+
+	// SeedType::Nixos | SeedType::NixDarwin => nix::unistd::gethostname()
+	//     .expect("Failed getting hostname")
+	//     .into_string()
+	//     .unwrap(),
+	// SeedType::HomeManager => env::var("USER").expect("can not detect username"),
+
+	return name
+}
+
+func DefaultType() string {
+	name := "nixos"
+
+	// SeedType::Nixos | SeedType::NixDarwin => nix::unistd::gethostname()
+	//     .expect("Failed getting hostname")
+	//     .into_string()
+	//     .unwrap(),
+	// SeedType::HomeManager => env::var("USER").expect("can not detect username"),
+
+	return name
 }

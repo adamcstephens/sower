@@ -76,23 +76,47 @@ func main() {
 	var seedCmd = &cobra.Command{
 		Use:   "seed",
 		Short: "Run seed related actions",
-		// Run: func(cmd *cobra.Command, args []string) {
-		// },
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println(args)
+		},
 	}
 	rootCmd.AddCommand(seedCmd)
 	var seedDownloadCommand = &cobra.Command{
 		Use:   "download",
 		Short: "Download a seed",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println(args)
+			name, err := cmd.Flags().GetString("name")
+			if err != nil {
+				log.Error().Err(err).Msg("Failed loading seed name")
+				os.Exit(1)
+			}
+			if name == "" {
+				name = seed.DefaultName()
+			}
+
+			seedType, err := cmd.Flags().GetString("type")
+			if err != nil {
+				log.Error().Err(err).Msg("Failed loading seed type")
+				os.Exit(1)
+			}
+			if seedType == "" {
+				seedType = seed.DefaultType()
+			}
+
+			wantedSeed := seed.NewSeed(name, seedType, "")
+
+			if err := wantedSeed.Download(); err != nil {
+				log.Error().Err(err).Msg("Failed downloading seed")
+				os.Exit(1)
+			}
 		},
 	}
 	seedCmd.AddCommand(seedDownloadCommand)
-	// seedDownloadCommand.Flags().String("name", seed.defaultName(), "seed name")
-	// seedDownloadCommand.Flags().String("type", seed.defaultType(), "seed type")
+	seedDownloadCommand.Flags().String("name", "", "seed name")
+	seedDownloadCommand.Flags().String("type", "", "seed type")
 
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
+		log.Error().Err(err).Msg("")
 		os.Exit(1)
 	}
 }
@@ -185,8 +209,6 @@ func run(config *config) {
 		log.Error().Err(err).Msg("failed to join dedicated channel")
 	}
 
-	// seedPush, err := dedicatedChannel.Push("seed:submit", map[string]any{"name": "blank", "seed_type": "nixos", "out_path": "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaabb-nixos-system-blank-24.11.20240716.ad0b5ee"})
-	// seed := NewSeed("blank", "nixos", "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaabb-nixos-system-blank-24.11.20240716.ad0b5ee")
 	seed := seed.NewSeed("blank", "home-manager", "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaabb-nixos-system-blank-24.11.20240716.ad0b5ee")
 	seedPush, err := dedicatedChannel.Push("seed:submit", seed)
 	if err != nil {
