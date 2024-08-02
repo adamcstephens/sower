@@ -8,7 +8,7 @@ buildGoModule rec {
     toSource {
       root = ./..;
       fileset = unions [
-        ../client-go
+        ../client
         ../go.mod
         ../go.sum
       ];
@@ -19,7 +19,7 @@ buildGoModule rec {
   ldflags = [ "-X main.version=${version}" ];
 
   postInstall = ''
-    mv $out/bin/client-go $out/bin/sower
+    mv $out/bin/client $out/bin/sower
   '';
 
   vendorHash = "sha256-7658me4SpEoO66Y16Qy3/ue6/AJTuwb2T1mS2OQGB64=";

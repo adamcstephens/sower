@@ -72,6 +72,24 @@ func main() {
 	}
 	rootCmd.AddCommand(daemonCmd)
 
+	var seedCmd = &cobra.Command{
+		Use:   "seed",
+		Short: "Run seed related actions",
+		// Run: func(cmd *cobra.Command, args []string) {
+		// },
+	}
+	rootCmd.AddCommand(seedCmd)
+	var seedDownloadCommand = &cobra.Command{
+		Use:   "download",
+		Short: "Download a seed",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println(args)
+		},
+	}
+	seedCmd.AddCommand(seedDownloadCommand)
+	// seedDownloadCommand.Flags().String("name", seed.defaultName(), "seed name")
+	// seedDownloadCommand.Flags().String("type", seed.defaultType(), "seed type")
+
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)

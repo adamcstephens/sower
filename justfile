@@ -39,7 +39,7 @@ start-pry:
     iex --dbg pry -S mix phx.server
 
 start-client:
-    watchexec --watch client-go --restart -- go run ./client-go --debug
+    watchexec --watch ./client --restart -- go run ./client --debug
 
 test:
     nix build .#checks.x86_64-linux.default --print-build-logs

@@ -9,14 +9,14 @@
 }:
 
 craneLib.buildPackage (
-  craneLib.crateNameFromCargoToml { cargoToml = ../client/Cargo.toml; }
+  craneLib.crateNameFromCargoToml { cargoToml = ../client-rust/Cargo.toml; }
   // {
     src =
       with lib.fileset;
       toSource {
         root = ./..;
         fileset = unions [
-          ../client
+          ../client-rust
           ../Cargo.lock
           ../Cargo.toml
         ];
