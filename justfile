@@ -24,7 +24,7 @@ nix-lock:
 
 set-version version:
     echo -n {{ version }} > VERSION
-    sed -i 's/^version = ".*"/version = "{{ version }}"/' client/Cargo.toml
+    sed -i 's/^version = ".*"/version = "{{ version }}"/' client-rust/Cargo.toml
     cargo generate-lockfile --offline
 
 release:
