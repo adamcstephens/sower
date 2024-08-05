@@ -20,27 +20,16 @@ defmodule SowerWeb.ClientChannel do
     {:error, %{reason: "unauthorized"}}
   end
 
-  def handle_in("register", %{"name" => name, "type" => type}, socket) do
-    id =
-      with {:ok, client} <- Sower.Tree.register(name, type) do
-        client.id
-      else
-        {:error, _} -> Sower.Tree.find!(name, type) |> Map.get(:id)
-      end
-
-    {:reply, {:ok, id}, socket |> assign(:tree_id, id)}
-  end
-
   def handle_in(
         "seed:submit",
         %{
           "name" => name,
           "seed_type" => seed_type,
           "out_path" => out_path
-        } = seed,
+        } = _seed,
         socket
       ) do
-    case Sower.Seed.new(name, seed_type, out_path, nil, nil) do
+    case Sower.Seed.submit(%{name: name, seed_type: seed_type, out_path: out_path}) do
       {:ok, %Sower.Seed{} = seed} ->
         {:reply, {:ok, %{seed_id: seed.id}}, socket}
 

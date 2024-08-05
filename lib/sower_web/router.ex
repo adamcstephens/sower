@@ -33,8 +33,6 @@ defmodule SowerWeb.Router do
       on_mount: {SowerWeb.LiveUserAuth, :live_user_required} do
       live "/seeds", SeedLive.Index, :index
       live "/seeds/:id", SeedLive.Show, :show
-      live "/trees", TreeLive.Index, :index
-      live "/trees/:id", TreeLive.Show, :show
       live "/inputs/repos", RepositoryLive.Index, :index
       live "/inputs/repos/:id", RepositoryLive.Show, :show
     end

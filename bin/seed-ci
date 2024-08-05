@@ -27,7 +27,7 @@ export def attic-upload [cache: string] {
 }
 
 export def load-seeds [] {
-  nix eval .#sower --json | from json | transpose type targets | each {|type| $type | update targets ($type.targets | transpose name config) }
+  nix eval .#sower --json | from json | transpose seed_type targets | each {|seed_type| $seed_type | update targets ($seed_type.targets | transpose name config) }
 }
 
 export def filter-configs [--system: string] {
@@ -55,18 +55,18 @@ export def build-configs [--threads: int] {
 
   $configs | each { |c|
     $c | update targets ($c.targets | par-each --threads $threads { |i|
-      let buildTarget: list<string> = if $c.type == "nix-darwin" {
+      let buildTarget: list<string> = if $c.seed_type == "nix-darwin" {
         [$".#darwinConfigurations.($i.name).system"]
-      } else if $c.type == "dev-shell" {
+      } else if $c.seed_type == "dev-shell" {
         $i.config.systems | each {|t| $".#devShells.($t).($i.name)" }
-      } else if $c.type == "home-manager" {
+      } else if $c.seed_type == "home-manager" {
         [$".#homeConfigurations.($i.name).activationPackage"]
-      } else if $c.type == "nixos" {
+      } else if $c.seed_type == "nixos" {
         [$".#nixosConfigurations.($i.name).config.system.build.toplevel"]
-      } else if $c.type == "package" {
+      } else if $c.seed_type == "package" {
         $i.config.systems | each {|t| $".#packages.($t).($i.name)" }
       } else {
-        print $"!! Unsupported type ($c.type)"
+        print $"!! Unsupported type ($c.seed_type)"
         exit 1
       }
 
@@ -114,7 +114,7 @@ export def get-config-failures [] {
   } | each { |c|
     # simplify for output
     $c.targets | each { |t|
-      { type: $c.type, name: $t.name }
+      { seed_type: $c.seed_type, name: $t.name }
     }
   } | flatten
 }
@@ -125,7 +125,7 @@ export def get-config-outputs [] {
   $configs | each { |c|
     # simplify for output
     $c.targets | filter { |t| $t.build != null } | each { |t|
-      { type: $c.type, name: $t.name, output: $t.build.outputs.out.0 }
+      { seed_type: $c.seed_type, name: $t.name, store_path: $t.build.outputs.out.0 }
     }
   } | flatten
 }
@@ -148,12 +148,12 @@ export def post-sower-seeds [--sower-url: string] {
   let repo_url = get-repo-url
 
   # sower only understands certain build outputs
-  $configs | filter { |c| $c.type == "home-manager" or $c.type == "nix-darwin" or $c.type == "nixos" } | each { |c|
+  $configs | filter { |c| $c.seed_type == "home-manager" or $c.seed_type == "nix-darwin" or $c.seed_type == "nixos" } | each { |c|
     $c.targets | filter { |t| $t.build != null } | each { |t|
       let seed = {
         name: $t.name,
-        type: $c.type,
-        out_path: $t.build.outputs.out.0,,
+        seed_seed_type: $c.seed_type,
+        store_path: $t.build.outputs.out.0,,
         branch: $git_branch,
         repo_url: $repo_url
       }

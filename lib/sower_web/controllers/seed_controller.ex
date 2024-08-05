@@ -7,28 +7,14 @@ defmodule SowerWeb.SeedController do
 
   def new(conn, %{
         "name" => name,
-        "type" => type,
-        "out_path" => out_path,
-        "branch" => branch,
-        "repo_url" => repo_url
-      }) do
-    Logger.debug("Received seed.")
-
-    with {:ok, %Sower.Seed{} = seed} <- Sower.Seed.new(name, type, out_path, branch, repo_url) do
-      conn
-      |> put_status(:created)
-      |> render(:show, seed: seed)
-    end
-  end
-
-  def new(conn, %{
-        "name" => name,
-        "type" => type,
-        "out_path" => out_path
+        # TODO change seed-ci and rename this
+        "seed_type" => seed_type,
+        "store_path" => store_path
       }) do
     Logger.warning("Received legacy seed")
 
-    with {:ok, %Sower.Seed{} = seed} <- Sower.Seed.new_legacy(name, type, out_path),
+    with {:ok, %Sower.Seed{} = seed} <-
+           Sower.Seed.submit(%{name: name, seed_type: seed_type, store_path: store_path}),
          Logger.debug(seed) do
       conn
       |> put_status(:created)
