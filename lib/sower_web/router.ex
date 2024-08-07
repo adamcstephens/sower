@@ -40,6 +40,11 @@ defmodule SowerWeb.Router do
     ash_authentication_live_session :authentication_optional,
       on_mount: {SowerWeb.LiveUserAuth, :live_user_optional} do
     end
+    live "/clients", ClientLive.Index, :index
+    live "/clients/new", ClientLive.Index, :new
+    live "/clients/:id/edit", ClientLive.Index, :edit
+    live "/clients/:id", ClientLive.Show, :show
+    live "/clients/:id/show/edit", ClientLive.Show, :edit
   end
 
   scope "/api" do

@@ -8,10 +8,12 @@ defmodule SowerWeb.SeedLive.Show do
 
   @impl true
   def handle_params(%{"id" => id}, _, socket) do
+    seed = Sower.Seed.get_by_id!(id)
+
     {:noreply,
      socket
      |> assign(:page_title, page_title(socket.assigns.live_action))
-     |> assign(:seed, Sower.Seed.by_id!(id) |> Ash.load!(:repository))}
+     |> assign(:seed, seed)}
   end
 
   defp page_title(:show), do: "Show Seed"

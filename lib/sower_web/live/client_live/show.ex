@@ -1,4 +1,4 @@
-defmodule SowerWeb.TreeLive.Show do
+defmodule SowerWeb.ClientLive.Show do
   use SowerWeb, :live_view
 
   @impl true
@@ -11,8 +11,9 @@ defmodule SowerWeb.TreeLive.Show do
     {:noreply,
      socket
      |> assign(:page_title, page_title(socket.assigns.live_action))
-     |> assign(:tree, Sower.Tree.by_id!(id))}
+     |> assign(:client, Sower.Client.get!(id))}
   end
 
-  defp page_title(:show), do: "Show Tree"
+  defp page_title(:show), do: "Show Client"
+  defp page_title(:edit), do: "Edit Client"
 end

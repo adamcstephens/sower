@@ -1,0 +1,25 @@
+<.header>
+  Client <%= @client.id %>
+  <:subtitle>This is a client record from your database.</:subtitle>
+  <:actions>
+    <.link patch={~p"/clients/#{@client}/show/edit"} phx-click={JS.push_focus()}>
+      <.button>Edit client</.button>
+    </.link>
+  </:actions>
+</.header>
+
+<.list>
+</.list>
+
+<.back navigate={~p"/clients"}>Back to clients</.back>
+
+<.modal :if={@live_action == :edit} id="client-modal" show on_cancel={JS.patch(~p"/clients/#{@client}")}>
+  <.live_component
+    module={SowerWeb.ClientLive.FormComponent}
+    id={@client.id}
+    title={@page_title}
+    action={@live_action}
+    client={@client}
+    patch={~p"/clients/#{@client}"}
+  />
+</.modal>

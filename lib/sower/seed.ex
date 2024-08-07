@@ -27,6 +27,15 @@ defmodule Sower.Seed do
     end
   end
 
+  # get by id and load store_paths
+  def get_by_id!(id) do
+    Repo.get(Sower.Seed, id) |> Repo.preload(:store_paths)
+  end
+
+  def list() do
+    Repo.all(Sower.Seed)
+  end
+
   defp changeset(seed, attrs) do
     seed
     |> cast(attrs, [:name, :seed_type])

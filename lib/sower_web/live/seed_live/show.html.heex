@@ -4,15 +4,15 @@
 </.header>
 
 <.list>
-  <:item title="branch"><%= @seed.branch %></:item>
-  <:item title="repository">
-    <%= if @seed.repository do %>
-      <.link navigate={~p"/inputs/repos/#{@seed.repository.id}"}>
-        <%= @seed.repository.url %>
-      </.link>
-    <% end %>
+  <:item title="store_paths">
+    <.table
+      id="store_paths"
+      rows={@seed.store_paths}
+      row_click={fn store_path -> JS.navigate(~p"/store_path/#{store_path.id}") end}
+    >
+      <:col :let={store_path}><%= store_path.path %></:col>
+    </.table>
   </:item>
-  <:item title="out_path"><%= @seed.out_path %></:item>
   <:item title="created"><%= @seed.inserted_at %></:item>
   <:item title="updated"><%= @seed.updated_at %></:item>
 </.list>
