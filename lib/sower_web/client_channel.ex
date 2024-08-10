@@ -3,8 +3,8 @@ defmodule SowerWeb.ClientChannel do
   use Phoenix.Channel
 
   def join("client:all", _message, socket) do
-    send(self(), :push_tree_id_to_client)
-    Logger.debug(~s"client:all joined by #{socket.assigns.tree_id}")
+    # send(self(), :push_tree_id_to_client)
+    # Logger.debug(~s"client:all joined by #{socket.assigns.tree_id}")
     {:ok, socket}
   end
 
@@ -38,8 +38,8 @@ defmodule SowerWeb.ClientChannel do
     end
   end
 
-  def handle_info(:push_tree_id_to_client, socket) do
-    push(socket, "tree:id", %{tree_id: socket.assigns.tree_id})
-    {:noreply, socket}
-  end
+  # def handle_info(:push_tree_id_to_client, socket) do
+  #   push(socket, "tree:id", %{tree_id: socket.assigns.tree_id})
+  #   {:noreply, socket}
+  # end
 end

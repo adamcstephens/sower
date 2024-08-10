@@ -25,26 +25,27 @@ defmodule SowerWeb.Router do
 
     get "/client/script", AppController, :client_script
 
-    sign_in_route(register_path: "/register")
-    sign_out_route AuthController
-    auth_routes_for Sower.Accounts.User, to: AuthController
+    # TODO add back auth routes and route protection
+    # sign_in_route(register_path: "/register")
+    # sign_out_route AuthController
+    # auth_routes_for Sower.Accounts.User, to: AuthController
 
-    ash_authentication_live_session :authentication_required,
-      on_mount: {SowerWeb.LiveUserAuth, :live_user_required} do
-      live "/seeds", SeedLive.Index, :index
-      live "/seeds/:id", SeedLive.Show, :show
-      live "/inputs/repos", RepositoryLive.Index, :index
-      live "/inputs/repos/:id", RepositoryLive.Show, :show
-    end
-
-    ash_authentication_live_session :authentication_optional,
-      on_mount: {SowerWeb.LiveUserAuth, :live_user_optional} do
-    end
+    # ash_authentication_live_session :authentication_required,
+    #   on_mount: {SowerWeb.LiveUserAuth, :live_user_required} do
     live "/clients", ClientLive.Index, :index
     live "/clients/new", ClientLive.Index, :new
     live "/clients/:id/edit", ClientLive.Index, :edit
     live "/clients/:id", ClientLive.Show, :show
     live "/clients/:id/show/edit", ClientLive.Show, :edit
+    live "/seeds", SeedLive.Index, :index
+    live "/seeds/:id", SeedLive.Show, :show
+    live "/inputs/repos", RepositoryLive.Index, :index
+    live "/inputs/repos/:id", RepositoryLive.Show, :show
+    # end
+
+    # ash_authentication_live_session :authentication_optional,
+    #   on_mount: {SowerWeb.LiveUserAuth, :live_user_optional} do
+    # end
   end
 
   scope "/api" do

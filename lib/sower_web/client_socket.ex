@@ -15,11 +15,14 @@ defmodule SowerWeb.ClientSocket do
     signer = Joken.Signer.create("HS256", bootstrap_token)
 
     case Joken.Signer.verify(token, signer) do
-      {:ok, claims} ->
-        case get_tree(claims) do
-          {:ok, tree} -> {:ok, socket |> assign(:tree_id, tree.id)}
-          {:error, e} -> Logger.error(~s"failed to find tree: #{e}")
-        end
+      {:ok, _claims} ->
+        # TODO: rewrite client registration
+        # case get_tree(claims) do
+        #   {:ok, tree} -> {:ok, socket |> assign(:tree_id, tree.id)}
+        #   {:error, e} -> Logger.error(~s"failed to find tree: #{e}")
+        # end
+
+        {:ok, socket}
 
       _ ->
         Logger.error("failed to verify client token")
@@ -34,13 +37,13 @@ defmodule SowerWeb.ClientSocket do
   @impl true
   def id(_socket), do: nil
 
-  # TODO: use id provided by claims
-  defp get_tree(%{"name" => name, "seed_type" => seed_type}) do
-    Logger.debug(~s"Connection from [#{name}] of type [#{seed_type}]")
+  # TODO: rewrite client registration
+  # defp get_tree(%{"name" => name, "seed_type" => seed_type}) do
+  #   Logger.debug(~s"Connection from [#{name}] of type [#{seed_type}]")
 
-    case res = Sower.Tree.find(name, seed_type) do
-      {:error, %Ash.Error.Query.NotFound{}} -> Sower.Tree.register(name, seed_type)
-      _ -> res
-    end
-  end
+  #   case res = Sower.Tree.find(name, seed_type) do
+  #     {:error, %Ash.Error.Query.NotFound{}} -> Sower.Tree.register(name, seed_type)
+  #     _ -> res
+  #   end
+  # end
 end

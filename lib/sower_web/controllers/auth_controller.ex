@@ -8,7 +8,7 @@ defmodule SowerWeb.AuthController do
     conn
     |> delete_session(:return_to)
     |> store_in_session(user)
-    |> assign(:current_user, user)
+    # TODO add back current user to conn |> assign(:current_user, user)
     |> redirect(to: return_to)
   end
 
