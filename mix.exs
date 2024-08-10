@@ -15,13 +15,8 @@ defmodule Sower.MixProject do
 
   defp deps do
     [
-      {:ash, "~> 3.2"},
-      {:ash_authentication, "~> 4.0"},
-      {:ash_authentication_phoenix, "~> 2.0"},
-      {:ash_json_api, "~> 1.0"},
-      {:ash_phoenix, "~> 2.0"},
-      {:ash_postgres, "~> 2.1"},
       {:bandit, "~> 1.0"},
+      {:ecto_sql, "~> 3.11"},
       {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
       {:ex_json_schema, "~> 0.10.2"},
       {:finch, "~> 0.13"},

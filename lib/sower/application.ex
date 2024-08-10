@@ -8,7 +8,6 @@ defmodule Sower.Application do
     children = [
       SowerWeb.Telemetry,
       Sower.Repo,
-      {AshAuthentication.Supervisor, otp_app: :sower},
       {Phoenix.PubSub, name: Sower.PubSub},
       {Finch, name: Sower.Finch},
       SowerWeb.Endpoint,

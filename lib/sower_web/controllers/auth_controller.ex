@@ -1,13 +1,12 @@
 defmodule SowerWeb.AuthController do
   use SowerWeb, :controller
-  use AshAuthentication.Phoenix.Controller
 
   def success(conn, _activity, user, _token) do
     return_to = get_session(conn, :return_to) || ~p"/"
 
     conn
     |> delete_session(:return_to)
-    |> store_in_session(user)
+    # |> store_in_session(user)
     # TODO add back current user to conn |> assign(:current_user, user)
     |> redirect(to: return_to)
   end

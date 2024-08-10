@@ -1,7 +1,6 @@
 defmodule SowerWeb.Router do
   use SowerWeb, :router
   use Plug.ErrorHandler
-  use AshAuthentication.Phoenix.Router
 
   pipeline :browser do
     plug :accepts, ["html"]
@@ -10,12 +9,10 @@ defmodule SowerWeb.Router do
     plug :put_root_layout, html: {SowerWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
-    plug :load_from_session
   end
 
   pipeline :api do
     plug :accepts, ["json"]
-    plug :load_from_bearer
   end
 
   scope "/", SowerWeb do
@@ -55,12 +52,6 @@ defmodule SowerWeb.Router do
     get "/seeds", SowerWeb.SeedController, :list
     get "/seeds/latest", SowerWeb.SeedController, :find_latest
     post "/seeds", SowerWeb.SeedController, :new
-
-    forward "/json/doc",
-            Redoc.Plug.RedocUI,
-            spec_url: "/api/json/open_api"
-
-    forward "/json", SowerWeb.JsonApiRouter
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
