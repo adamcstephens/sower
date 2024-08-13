@@ -1,5 +1,5 @@
 {
-  "public_url": "http://localhost:4000",
+  "public_url": "http://blank:7150",
   "bootstrap_token_file": "./.bootstrap.token",
   "auth": {
     "oidc_base_url": "https://id.junco.dev/oauth2/openid/sower-dev",
@@ -13,7 +13,8 @@
     "port": 5432,
     "password_file": "VERSION"
   },
-  "listen_port": 4000,
+  "listen_port": 7150,
+  "listen_address": "::",
   "nix_caches": [
     {
       "url": "https://cache.junco.dev/v3",

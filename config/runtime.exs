@@ -95,8 +95,10 @@ defmodule Sower.Config do
         }
       },
       "listen_address" => %{
-        "type" => "string",
-        "format" => "ipv4"
+        "oneOf " => [
+          %{"type" => "string", "format" => "ipv4"},
+          %{"type" => "string", "format" => "ipv6"}
+        ]
       },
       "listen_port" => %{
         "default" => 4000,
