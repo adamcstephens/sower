@@ -24,7 +24,9 @@ import (
 var version string
 
 type config struct {
-	endpoint url.URL
+	bootstrapToken string
+	endpoint       url.URL
+	stateDirectory string
 }
 
 func main() {
@@ -41,15 +43,14 @@ func main() {
 			// load the configuration for every subcommand
 			config, err = initRootConfig(cmd.Flags())
 			if err != nil {
-				log.Error().Err(err).Msg("failed loading configuration")
-				return err
+				return fmt.Errorf("Failed loading configuration, %v", err)
 			}
 
 			return nil
 		},
 	}
 	rootCmd.PersistentFlags().Bool("debug", false, "enable debug logging")
-	rootCmd.PersistentFlags().StringSlice("config", []string{"./dev-client.toml"}, "path to toml config file, repeatable")
+	rootCmd.PersistentFlags().StringSlice("config", []string{}, "path to toml config file, repeatable")
 
 	var versionCmd = &cobra.Command{
 		Use:   "version",
@@ -116,7 +117,6 @@ func main() {
 	seedDownloadCommand.Flags().String("type", "", "seed type")
 
 	if err := rootCmd.Execute(); err != nil {
-		log.Error().Err(err).Msg("")
 		os.Exit(1)
 	}
 }
@@ -127,6 +127,9 @@ func initRootConfig(flags *flag.FlagSet) (*config, error) {
 
 	// load config files
 	configFiles, _ := flags.GetStringSlice("config")
+	if len(configFiles) == 0 {
+		return &config{}, fmt.Errorf("No config files provided")
+	}
 	for _, c := range configFiles {
 		if err := kConfig.Load(file.Provider(c), toml.Parser()); err != nil {
 			return &config{}, fmt.Errorf("error loading config file")
@@ -154,18 +157,18 @@ func initRootConfig(flags *flag.FlagSet) (*config, error) {
 	if err != nil {
 		return &config{}, fmt.Errorf("failed to read secret, %v", err)
 	}
-	token, err := signToken(bootstrapToken, kConfig.String("name"), kConfig.String("type"))
-	if err != nil {
-		return &config{}, fmt.Errorf("failed to sign jwt, %v", err)
-	}
 
-	endpoint, err := url.Parse(fmt.Sprintf("%s/client?token=%s", kConfig.String("url"), token))
+	endpoint, err := url.Parse(fmt.Sprintf("%s/client", kConfig.String("url")))
 	if err != nil {
 		return &config{}, fmt.Errorf("failed to parse URL, %v", err)
 	}
 
+	stateDirectory := kConfig.String("state-directory")
+
 	config := &config{
-		endpoint: *endpoint,
+		bootstrapToken: bootstrapToken,
+		endpoint:       *endpoint,
+		stateDirectory: stateDirectory,
 	}
 
 	log.Debug().Any("config", config).Msg("")
@@ -176,7 +179,11 @@ func initRootConfig(flags *flag.FlagSet) (*config, error) {
 func run(config *config) {
 	log.Info().Msg("Starting")
 
-	socket := phx.NewSocket(&config.endpoint)
+	endpoint := config.endpoint
+	token, _ := signToken(config.bootstrapToken, "name", "type")
+	endpoint.RawQuery = fmt.Sprintf("token=%s", url.QueryEscape(token))
+
+	socket := phx.NewSocket(&endpoint)
 	zerologLogger := logger{}
 	socket.Logger = &zerologLogger
 
