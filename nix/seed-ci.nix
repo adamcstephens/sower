@@ -3,7 +3,7 @@
   makeWrapper,
   runCommandNoCC,
 
-  attic,
+  attic-client,
   coreutils,
   nix,
   nix-eval-jobs,
@@ -21,7 +21,7 @@ runCommandNoCC "seed-ci"
 
     wrapProgram $out/bin/seed-ci --prefix PATH : ${
       lib.makeBinPath [
-        attic
+        attic-client
         coreutils
         nix
         nix-eval-jobs

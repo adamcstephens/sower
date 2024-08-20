@@ -1,6 +1,5 @@
 {
   inputs = {
-    attic.url = "github:zhaofengli/attic";
     crane.inputs.nixpkgs.follows = "nixpkgs";
     crane.url = "github:ipetkov/crane";
     flake-parts.url = "github:hercules-ci/flake-parts";
@@ -74,7 +73,7 @@
                   pkgs.rustc
                   pkgs.rustfmt
 
-                  inputs'.attic.packages.attic
+                  pkgs.attic-client
                   self'.packages.seed-ci
 
                   pkgs.docker
@@ -116,7 +115,7 @@
             };
 
             packages = {
-              seed-ci = pkgs.callPackage ./nix/seed-ci.nix { inherit (inputs'.attic.packages) attic; };
+              seed-ci = pkgs.callPackage ./nix/seed-ci.nix { };
               client = pkgs.callPackage ./nix/client-rust-package.nix { inherit craneLib rustTarget; };
               client-go = pkgs.callPackage ./nix/client-go-package.nix { buildGoModule = pkgs.buildGo122Module; };
               server = pkgs.callPackage ./nix/server-package.nix { inherit beamPackages elixir; };
