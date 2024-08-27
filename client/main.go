@@ -54,7 +54,14 @@ func main() {
 		Use:   "daemon",
 		Short: "Run the daemon",
 		Run: func(cmd *cobra.Command, args []string) {
-			run(config)
+			client := newClient(config)
+
+			err := client.connect()
+			if err != nil {
+				log.Error().Err(err).Msg("failed to connect")
+			}
+
+			client.run()
 		},
 	}
 	rootCmd.AddCommand(daemonCmd)
@@ -98,8 +105,33 @@ func main() {
 		},
 	}
 	seedCmd.AddCommand(seedDownloadCommand)
-	seedDownloadCommand.Flags().String("name", "", "seed name")
-	seedDownloadCommand.Flags().String("type", "", "seed type")
+	var seedSubmitCommand = &cobra.Command{
+		Use:   "submit name type out_path",
+		Short: "submit a seed",
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 3 {
+				return fmt.Errorf("Expected 3 arguments, got %d", len(args))
+			}
+			return nil
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			log.Debug().Any("args", args).Msg("submit seed")
+
+			newSeed := seed.NewSeed(args[0], args[1], args[2])
+
+			client := newClient(config)
+			err := client.connect()
+			if err != nil {
+				log.Error().Err(err).Msg("failed to connect")
+			}
+
+			if err := client.submitSeed(newSeed); err != nil {
+				log.Error().Err(err).Msg("Failed downloading seed")
+				os.Exit(1)
+			}
+		},
+	}
+	seedCmd.AddCommand(seedSubmitCommand)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
