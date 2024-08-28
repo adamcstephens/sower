@@ -54,6 +54,12 @@ defmodule SowerWeb.Router do
     post "/seeds", SowerWeb.SeedController, :new
   end
 
+  scope "/auth" do
+    pipe_through :browser
+    get "/:provider", SowerWeb.AuthController, :request
+    get "/:provider/callback", SowerWeb.AuthController, :callback
+  end
+
   # Enable LiveDashboard and Swoosh mailbox preview in development
   if Application.compile_env(:sower, :dev_routes) do
     # If you want to use the LiveDashboard in production, you should put

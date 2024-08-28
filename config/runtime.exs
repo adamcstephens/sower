@@ -133,41 +133,18 @@ defmodule Sower.Config do
   }
 
   def load() do
-    {:ok, _} = Application.ensure_all_started(:jason)
-    {:ok, _} = Application.ensure_all_started(:logger)
-    Logger.debug("Loading configuration")
-
-    config_file = System.get_env("SOWER_SERVER_CONFIG_FILE", "/etc/sower/server.json")
-
-    defaults = %{
-      "listen_address" => "127.0.0.1",
-      "listen_port" => 4000,
-      "nix_caches" => []
-    }
-
     json_config =
-      with {:ok, contents} <- File.read(config_file),
-           {:ok, json} <- Jason.decode(contents),
-           :ok <- ExJsonSchema.Validator.validate(ExJsonSchema.Schema.resolve(@schema), json) do
-        defaults |> Map.merge(json) |> atomize()
-      else
+      case load_config_file() do
+        {:ok, json_config} ->
+          json_config |> set_logger_config()
+
         {:error, err} ->
-          Logger.error(~s"Failed to read configuration file #{config_file}")
-          Logger.error(err)
+          Logger.error("Failed to load configuration: #{inspect(err)}")
           Kernel.exit(1)
       end
 
-    # set log level to atom and remove from config
-    if Keyword.has_key?(json_config, :log_level) do
-      level = Keyword.get(json_config, :log_level) |> String.to_existing_atom()
-      Logger.info(~s"Overriding log level from config to #{level}")
-
-      config :logger, :console, level: level
-    end
-
     Logger.debug("Loaded configuration")
     Logger.debug(json_config)
-    json_config = json_config |> Keyword.delete(:log_level)
 
     # compute urls
     public_url = json_config |> Keyword.fetch!(:public_url)
@@ -230,20 +207,20 @@ defmodule Sower.Config do
       end
 
     # bootstrap token file
-    json_config =
-      with {:ok, bootstrap_token_file} <- json_config |> Keyword.fetch(:bootstrap_token_file),
-           {:ok, bootstrap_token} <- read_credential(bootstrap_token_file) do
-        json_config
-        |> Keyword.put(:bootstrap_token, bootstrap_token)
-      else
-        {:error, err} ->
-          Logger.warning("Failed to load bootstrap_token from secret file, #{err}.")
-          Kernel.exit(1)
+    with {:ok, bootstrap_token_file} <- json_config |> Keyword.fetch(:bootstrap_token_file),
+         {:ok, bootstrap_token} <- read_credential(bootstrap_token_file) do
+      config :sower, Sower.Guardian,
+        issuer: "sower",
+        secret_key: bootstrap_token
+    else
+      {:error, err} ->
+        Logger.warning("Failed to load bootstrap_token from secret file, #{err}.")
+        Kernel.exit(1)
 
-        :error ->
-          Logger.warning("Configuration is missing `bootstrap_token_file`.")
-          Kernel.exit(1)
-      end
+      :error ->
+        Logger.warning("Configuration is missing `bootstrap_token_file`.")
+        Kernel.exit(1)
+    end
 
     Logger.debug("Final configuration:")
     Logger.debug(json_config)
@@ -263,7 +240,64 @@ defmodule Sower.Config do
       persistent: true
     )
 
+    config :ueberauth_oidcc, :issuers, [
+      %{
+        name: :oidcc_issuer,
+        issuer: json_config |> Keyword.fetch!(:auth) |> Keyword.fetch!(:oidc_base_url)
+      }
+    ]
+
+    config :ueberauth, Ueberauth,
+      providers: [
+        oidcc: {
+          Ueberauth.Strategy.Oidcc,
+          client_id: json_config |> Keyword.fetch!(:auth) |> Keyword.fetch!(:oidc_client_id),
+          client_secret:
+            json_config |> Keyword.fetch!(:auth) |> Keyword.fetch!(:oidc_client_secret),
+          issuer: :oidcc_issuer,
+          scopes: ["openid", "profile", "email"],
+          require_pkce: true
+        }
+      ]
+
     Logger.info("Finished loading configuration.")
+  end
+
+  def load_config_file() do
+    {:ok, _} = Application.ensure_all_started(:jason)
+    {:ok, _} = Application.ensure_all_started(:logger)
+    Logger.debug("Loading configuration")
+
+    config_file = System.get_env("SOWER_SERVER_CONFIG_FILE", "/etc/sower/server.json")
+
+    defaults = %{
+      "listen_address" => "127.0.0.1",
+      "listen_port" => 4000,
+      "nix_caches" => []
+    }
+
+    with {:ok, contents} <- File.read(config_file),
+         {:ok, json} <- Jason.decode(contents),
+         :ok <- ExJsonSchema.Validator.validate(ExJsonSchema.Schema.resolve(@schema), json) do
+      {:ok, defaults |> Map.merge(json) |> atomize()}
+    else
+      {:error, err} ->
+        Logger.error(~s"Failed to read configuration file #{config_file}")
+        Logger.error(err)
+        Kernel.exit(1)
+    end
+  end
+
+  def set_logger_config(json_config) do
+    # set log level to atom and remove from config
+    if Keyword.has_key?(json_config, :log_level) do
+      level = Keyword.get(json_config, :log_level) |> String.to_existing_atom()
+      Logger.info(~s"Overriding log level from config to #{level}")
+
+      config :logger, :console, level: level
+    end
+
+    json_config |> Keyword.delete(:log_level)
   end
 
   defp atomize([head | rest]) do

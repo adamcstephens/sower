@@ -21,6 +21,7 @@ defmodule Sower.MixProject do
       {:ex_json_schema, "~> 0.10.2"},
       {:finch, "~> 0.13"},
       {:floki, ">= 0.30.0", only: :test},
+      {:guardian, "~> 2.3"},
       {:gettext, "~> 0.20"},
       {:hackney, "~> 1.8"},
       {:jason, "~> 1.2"},
@@ -35,6 +36,7 @@ defmodule Sower.MixProject do
       {:phoenix_live_dashboard, "~> 0.8.0"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 0.20.0"},
+      {:phx_gen_oidcc, "~> 0.1.0", only: [:dev], runtime: false},
       {:postgrex, ">= 0.0.0"},
       {:redoc_ui_plug, "~> 0.2.1"},
       {:sentry, "~> 10.5"},
@@ -42,7 +44,9 @@ defmodule Sower.MixProject do
       {:systemd, "~> 0.6"},
       {:tailwind, "~> 0.2.0", runtime: Mix.env() == :dev},
       {:telemetry_metrics, "~> 1.0.0"},
-      {:telemetry_poller, "~> 1.1.0"}
+      {:telemetry_poller, "~> 1.1.0"},
+      {:ueberauth, "~> 0.10"},
+      {:ueberauth_oidcc, "~> 0.3"}
     ]
   end
 
