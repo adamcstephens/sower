@@ -1,5 +1,5 @@
 defmodule Sower.Inputs.Repository do
-  use Ecto.Schema
+  use Sower.Schema
   import Ecto.Changeset
 
   schema "repositories" do

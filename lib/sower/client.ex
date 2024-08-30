@@ -1,5 +1,5 @@
 defmodule Sower.Client do
-  use Ecto.Schema
+  use Sower.Schema
   import Ecto.Changeset
   alias Sower.Repo
 

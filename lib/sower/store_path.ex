@@ -1,5 +1,5 @@
 defmodule Sower.StorePath do
-  use Ecto.Schema
+  use Sower.Schema
   import Ecto.Changeset
 
   schema "store_paths" do
