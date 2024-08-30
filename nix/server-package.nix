@@ -3,6 +3,7 @@
   beamPackages,
   elixir,
   esbuild,
+  rustPlatform,
   tailwindcss,
   stdenv,
 }:
@@ -43,6 +44,28 @@ beamPackages.mixRelease {
       tailwind = prev.tailwind.override (old: {
         patches = [ ./tailwind-loadpaths.patch ];
       });
+      uuidv7 = prev.uuidv7.override (
+        old:
+        let
+          native = rustPlatform.buildRustPackage {
+            pname = "uuidv7";
+            version = old.version;
+            src = "${old.src}/native/uuidv7";
+            cargoSha256 = "sha256-wSbI7J2vNjqjT4zDMbN7pO2D7KI1Vzh0j3chM8AKN9E=";
+          };
+        in
+        {
+          appConfigPath = ../config;
+
+          preConfigure = ''
+            mkdir -p priv/native
+            cp ${native}/lib/libuuidv7.so priv/native/
+          '';
+
+          env.RUSTLER_PRECOMPILED_FORCE_BUILD_ALL = "true";
+          env.RUSTLER_PRECOMPILED_GLOBAL_CACHE_PATH = "fake";
+        }
+      );
     };
   };
 

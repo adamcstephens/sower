@@ -39,6 +39,7 @@ defmodule Sower.MixProject do
       {:phx_gen_oidcc, "~> 0.1.0", only: [:dev], runtime: false},
       {:postgrex, ">= 0.0.0"},
       {:redoc_ui_plug, "~> 0.2.1"},
+      {:rustler, "~> 0.30.0"},
       {:sentry, "~> 10.5"},
       {:swoosh, "~> 1.3"},
       {:systemd, "~> 0.6"},
@@ -46,7 +47,8 @@ defmodule Sower.MixProject do
       {:telemetry_metrics, "~> 1.0.0"},
       {:telemetry_poller, "~> 1.1.0"},
       {:ueberauth, "~> 0.10"},
-      {:ueberauth_oidcc, "~> 0.3"}
+      {:ueberauth_oidcc, "~> 0.3"},
+      {:uuidv7, "~> 0.2"}
     ]
   end
 
