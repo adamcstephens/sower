@@ -45,8 +45,6 @@ defmodule Sower.Seed do
   end
 
   defp parse_path(params) do
-    dbg(params)
-
     case Map.get("store_path") do
       nil ->
         false

@@ -209,9 +209,9 @@ defmodule Sower.Config do
     # bootstrap token file
     with {:ok, bootstrap_token_file} <- json_config |> Keyword.fetch(:bootstrap_token_file),
          {:ok, bootstrap_token} <- read_credential(bootstrap_token_file) do
-      config :sower, Sower.Guardian,
-        issuer: "sower",
-        secret_key: bootstrap_token
+      config :sower, Sower.Accounts.UserAuthentication,
+        issuer: "oidcc",
+        secret_key: secret_key_base
     else
       {:error, err} ->
         Logger.warning("Failed to load bootstrap_token from secret file, #{err}.")

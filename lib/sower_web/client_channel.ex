@@ -40,7 +40,6 @@ defmodule SowerWeb.ClientChannel do
 
   def handle_info(:push_tree_id_to_client, socket) do
     # push(socket, "tree:id", %{tree_id: socket.assigns.tree_id})
-    dbg(socket)
     {:noreply, socket}
   end
 end

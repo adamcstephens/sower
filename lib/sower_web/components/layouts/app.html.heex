@@ -22,24 +22,23 @@
       >
         Repos
       </.link>
-      <%!-- TODO change the login --%>
-      <%= if false do %>
+      <%= if @current_user do %>
         <span class="px-3 py-2 text-sm font-medium text-white rounded-md">
-          <%= @current_user.username %>
+          <%= @current_user.name %>
         </span>
-        <a
-          href="/sign-out"
+        <.link
+          navigate={~p"/auth/signout"}
           class="rounded-lg bg-zinc-100 px-2 py-1 text-[0.8125rem] font-semibold leading-6 text-zinc-900 hover:bg-zinc-200/80 active:text-zinc-900/70"
         >
-          Sign out
-        </a>
+          Sign Out
+        </.link>
       <% else %>
-        <a
-          href="/auth/oidcc"
+        <.link
+          navigate={~p"/auth/oidcc"}
           class="rounded-lg bg-zinc-100 px-2 py-1 text-[0.8125rem] font-semibold leading-6 text-zinc-900 hover:bg-zinc-200/80 active:text-zinc-900/70"
         >
           Sign In
-        </a>
+        </.link>
       <% end %>
     </div>
   </div>

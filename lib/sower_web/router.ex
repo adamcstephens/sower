@@ -1,5 +1,7 @@
 defmodule SowerWeb.Router do
   use SowerWeb, :router
+
+  import SowerWeb.UserAuth
   use Plug.ErrorHandler
 
   pipeline :browser do
@@ -9,6 +11,7 @@ defmodule SowerWeb.Router do
     plug :put_root_layout, html: {SowerWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    plug :fetch_current_user
   end
 
   pipeline :api do
@@ -21,28 +24,22 @@ defmodule SowerWeb.Router do
     get "/", PageController, :home
 
     get "/client/script", AppController, :client_script
+  end
 
-    # TODO add back auth routes and route protection
-    # sign_in_route(register_path: "/register")
-    # sign_out_route AuthController
-    # auth_routes_for Sower.Accounts.User, to: AuthController
+  scope "/", SowerWeb do
+    pipe_through [:browser, :require_authenticated_user]
 
-    # ash_authentication_live_session :authentication_required,
-    #   on_mount: {SowerWeb.LiveUserAuth, :live_user_required} do
-    live "/clients", ClientLive.Index, :index
-    live "/clients/new", ClientLive.Index, :new
-    live "/clients/:id/edit", ClientLive.Index, :edit
-    live "/clients/:id", ClientLive.Show, :show
-    live "/clients/:id/show/edit", ClientLive.Show, :edit
-    live "/seeds", SeedLive.Index, :index
-    live "/seeds/:id", SeedLive.Show, :show
-    live "/inputs/repos", RepositoryLive.Index, :index
-    live "/inputs/repos/:id", RepositoryLive.Show, :show
-    # end
-
-    # ash_authentication_live_session :authentication_optional,
-    #   on_mount: {SowerWeb.LiveUserAuth, :live_user_optional} do
-    # end
+    live_session :authenticated, on_mount: [{SowerWeb.UserAuth, :ensure_authenticated}] do
+      live "/clients", ClientLive.Index, :index
+      live "/clients/new", ClientLive.Index, :new
+      live "/clients/:id/edit", ClientLive.Index, :edit
+      live "/clients/:id", ClientLive.Show, :show
+      live "/clients/:id/show/edit", ClientLive.Show, :edit
+      live "/seeds", SeedLive.Index, :index
+      live "/seeds/:id", SeedLive.Show, :show
+      live "/inputs/repos", RepositoryLive.Index, :index
+      live "/inputs/repos/:id", RepositoryLive.Show, :show
+    end
   end
 
   scope "/api" do
@@ -80,5 +77,31 @@ defmodule SowerWeb.Router do
   # and implement the callback handle_errors/2
   # defp handle_errors(conn, _) do
   #   conn |> json(%{error: "unknown"}) |> halt()
+  # end
+
+  ## Authentication routes
+
+  # scope "/", SowerWeb do
+  #   pipe_through [:browser, :redirect_if_user_is_authenticated]
+  #
+  #   live_session :redirect_if_user_is_authenticated,
+  #     on_mount: [{SowerWeb.UserAuth, :redirect_if_user_is_authenticated}] do
+  #     live "/users/register", UserRegistrationLive, :new
+  #     live "/users/log_in", UserLoginLive, :new
+  #     live "/users/reset_password", UserForgotPasswordLive, :new
+  #     live "/users/reset_password/:token", UserResetPasswordLive, :edit
+  #   end
+  #
+  #   post "/users/log_in", UserSessionController, :create
+  # end
+  #
+  # scope "/", SowerWeb do
+  #   pipe_through [:browser, :require_authenticated_user]
+  #
+  #   live_session :require_authenticated_user,
+  #     on_mount: [{SowerWeb.UserAuth, :ensure_authenticated}] do
+  #     live "/users/settings", UserSettingsLive, :edit
+  #     live "/users/settings/confirm_email/:token", UserSettingsLive, :confirm_email
+  #   end
   # end
 end

@@ -203,19 +203,6 @@ let
       beamDeps = [ expo ];
     };
 
-    guardian = buildMix rec {
-      name = "guardian";
-      version = "2.3.2";
-
-      src = fetchHex {
-        pkg = "guardian";
-        version = "${version}";
-        sha256 = "b189ff38cd46a22a8a824866a6867ca8722942347f13c33f7d23126af8821b52";
-      };
-
-      beamDeps = [ jose plug ];
-    };
-
     hackney = buildRebar3 rec {
       name = "hackney";
       version = "1.20.1";
@@ -567,19 +554,6 @@ let
       beamDeps = [ phoenix_html ];
     };
 
-    phx_gen_oidcc = buildMix rec {
-      name = "phx_gen_oidcc";
-      version = "0.1.0";
-
-      src = fetchHex {
-        pkg = "phx_gen_oidcc";
-        version = "${version}";
-        sha256 = "ed6208bebe1c01dc858f94b2d1edeff7fbca505fd884972e2dc2c19a20f887ce";
-      };
-
-      beamDeps = [ jason phoenix sourceror ];
-    };
-
     plug = buildMix rec {
       name = "plug";
       version = "1.16.1";
@@ -619,19 +593,6 @@ let
       beamDeps = [ db_connection decimal jason ];
     };
 
-    redoc_ui_plug = buildMix rec {
-      name = "redoc_ui_plug";
-      version = "0.2.1";
-
-      src = fetchHex {
-        pkg = "redoc_ui_plug";
-        version = "${version}";
-        sha256 = "7be01db31f210887e9fc18f8fbccc7788de32c482b204623556e415ed1fe714b";
-      };
-
-      beamDeps = [ jason plug ];
-    };
-
     rustler = buildMix rec {
       name = "rustler";
       version = "0.30.0";
@@ -669,19 +630,6 @@ let
       };
 
       beamDeps = [ hackney jason nimble_options nimble_ownership phoenix phoenix_live_view plug telemetry ];
-    };
-
-    sourceror = buildMix rec {
-      name = "sourceror";
-      version = "0.13.0";
-
-      src = fetchHex {
-        pkg = "sourceror";
-        version = "${version}";
-        sha256 = "d0a819491061cd26bfa4450d1c84301a410c19c1782a6577ce15853fc0e7e4e1";
-      };
-
-      beamDeps = [];
     };
 
     ssl_verify_fun = buildRebar3 rec {
