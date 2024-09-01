@@ -5,7 +5,7 @@ defmodule Sower.StorePath do
   schema "store_paths" do
     field :path, :string
 
-    many_to_many :seeds, Sower.Seed, join_through: "seeds_store_paths"
+    many_to_many :seeds, Sower.Seed, join_through: Sower.SeedStorePath
 
     timestamps()
   end
@@ -19,9 +19,17 @@ defmodule Sower.StorePath do
     )
   end
 
-  def submit(path, seed_id) do
+  def submit!(path) do
     %Sower.StorePath{}
-    |> changeset(%{path: path, seed_id: seed_id})
-    |> Sower.Repo.insert()
+    |> changeset(%{path: path})
+    |> Sower.Repo.insert!(
+      on_conflict: {:replace, [:updated_at]},
+      conflict_target: [:path],
+      returning: true
+    )
+  end
+
+  def get_by_path!(path) do
+    Sower.Repo.get_by!(Sower.StorePath, path: path)
   end
 end

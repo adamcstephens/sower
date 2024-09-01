@@ -20,8 +20,12 @@ defmodule Sower.Repo.Migrations.CreateSeeds do
     create unique_index(:store_paths, [:path])
 
     create table(:seeds_store_paths) do
-      add :seed_id, references(:seeds)
+      add :seed_id, references(:seeds, on_delete: :delete_all)
       add :store_path_id, references(:store_paths, on_delete: :delete_all)
+
+      timestamps()
     end
+
+    create unique_index(:seeds_store_paths, [:seed_id, :store_path_id])
   end
 end
