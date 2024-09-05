@@ -352,4 +352,6 @@ defmodule Sower.Config do
   end
 end
 
-Sower.Config.load()
+if config_env() != :test do
+  Sower.Config.load()
+end
