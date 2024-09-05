@@ -80,18 +80,6 @@ defmodule SowerWeb.Router do
   # end
 
   ## Authentication routes
-
-  scope "/", SowerWeb do
-    pipe_through [:browser, :redirect_if_user_is_authenticated]
-
-    live_session :redirect_if_user_is_authenticated,
-      on_mount: [{SowerWeb.UserAuth, :redirect_if_user_is_authenticated}] do
-      live "/users/log_in", UserLoginLive, :new
-    end
-
-    post "/users/log_in", UserSessionController, :create
-  end
-
   scope "/", SowerWeb do
     pipe_through [:browser, :require_authenticated_user]
 
@@ -99,11 +87,5 @@ defmodule SowerWeb.Router do
       on_mount: [{SowerWeb.UserAuth, :ensure_authenticated}] do
       live "/users/settings", UserSettingsLive, :edit
     end
-  end
-
-  scope "/", SowerWeb do
-    pipe_through [:browser]
-
-    delete "/users/log_out", UserSessionController, :delete
   end
 end

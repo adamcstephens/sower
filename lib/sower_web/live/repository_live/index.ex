@@ -3,6 +3,6 @@ defmodule SowerWeb.RepositoryLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, stream(socket, :repos, Sower.Inputs.Repository.read_all!())}
+    {:ok, stream(socket, :repos, Sower.Inputs.Repository.list())}
   end
 end

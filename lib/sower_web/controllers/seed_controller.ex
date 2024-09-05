@@ -23,12 +23,12 @@ defmodule SowerWeb.SeedController do
   end
 
   def find_latest(conn, %{"name" => name, "type" => type}) do
-    seed = Sower.Seed.latest!(name, type)
+    seed = Sower.Seed.latest(name, type)
     render(conn, :show, seed: seed)
   end
 
   def list(conn, _) do
-    seeds = Sower.Seed.read_all!()
+    seeds = Sower.Seed.list()
     render(conn, :list, seeds: seeds)
   end
 end

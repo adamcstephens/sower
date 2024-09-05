@@ -1,6 +1,6 @@
 defmodule Sower.Client do
   use Sower.Schema
-  import Ecto.Changeset
+  # import Ecto.Changeset
   alias Sower.Repo
 
   @derive {Jason.Encoder, only: [:id, :name]}
@@ -15,9 +15,13 @@ defmodule Sower.Client do
     Repo.all(Sower.Client)
   end
 
-  defp changeset(seed, attrs) do
-    seed
-    |> cast(attrs, [:name])
-    |> validate_required([:name, :seed_type])
+  def get!(id) do
+    Repo.get!(Sower.Client, id)
   end
+
+  # defp changeset(seed, attrs) do
+  #   seed
+  #   |> cast(attrs, [:name])
+  #   |> validate_required([:name, :seed_type])
+  # end
 end

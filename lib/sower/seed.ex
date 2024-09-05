@@ -40,8 +40,12 @@ defmodule Sower.Seed do
     Repo.all(Sower.Seed)
   end
 
-  def latest_by_name(name) do
-    Repo.one(from s in Sower.Seed, where: s.name == ^name, order_by: [desc: s.updated_at])
+  def latest(name, seed_type) do
+    Repo.one(
+      from s in Sower.Seed,
+        where: s.name == ^name and s.seed_type == ^seed_type,
+        order_by: [desc: s.updated_at]
+    )
   end
 
   defp changeset(seed, attrs) do

@@ -11,7 +11,7 @@ defmodule SowerWeb.RepositoryLive.Show do
     {:noreply,
      socket
      |> assign(:page_title, page_title(socket.assigns.live_action))
-     |> assign(:repo, Sower.Inputs.Repository.by_id!(id))}
+     |> assign(:repo, Sower.Inputs.Repository.get!(id))}
   end
 
   defp page_title(:show), do: "Show Repository"

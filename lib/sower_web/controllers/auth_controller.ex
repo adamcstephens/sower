@@ -21,7 +21,7 @@ defmodule SowerWeb.AuthController do
     end
   end
 
-  def callback(%{assigns: %{ueberauth_failure: auth}} = conn, params) do
+  def callback(%{assigns: %{ueberauth_failure: auth}} = conn, _params) do
     Logger.error("Auth failure: #{inspect(auth)}")
 
     conn |> put_flash(:error, "Authentication failed.") |> redirect(to: "/")

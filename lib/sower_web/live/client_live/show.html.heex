@@ -8,12 +8,14 @@
   </:actions>
 </.header>
 
-<.list>
-</.list>
-
 <.back navigate={~p"/clients"}>Back to clients</.back>
 
-<.modal :if={@live_action == :edit} id="client-modal" show on_cancel={JS.patch(~p"/clients/#{@client}")}>
+<.modal
+  :if={@live_action == :edit}
+  id="client-modal"
+  show
+  on_cancel={JS.patch(~p"/clients/#{@client}")}
+>
   <.live_component
     module={SowerWeb.ClientLive.FormComponent}
     id={@client.id}

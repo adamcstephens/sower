@@ -5,15 +5,15 @@ defmodule Sower.SeedTest do
 
   alias Sower.Seed
 
-  describe "latest_by_name/1" do
+  describe "latest/1" do
     test "does not return the seed if name does not exist" do
-      refute Seed.latest_by_name("unknown")
+      refute Seed.latest("unknown", "nixos")
     end
 
     test "returns the seed if name exists" do
       %{id: id} = seed = seed_fixture()
 
-      assert %Seed{id: ^id} = Seed.latest_by_name(seed.name)
+      assert %Seed{id: ^id} = Seed.latest(seed.name, "nixos")
     end
   end
 
@@ -21,10 +21,10 @@ defmodule Sower.SeedTest do
     test "creates the seed if it does not exist" do
       name = unique_seed_name()
 
-      refute Seed.latest_by_name(name)
+      refute Seed.latest(name, "nixos")
 
       %{id: id} = seed = seed_fixture(%{name: name})
-      assert %Seed{id: ^id} = Seed.latest_by_name(seed.name)
+      assert %Seed{id: ^id} = Seed.latest(seed.name, "nixos")
     end
 
     test "adds a store path if seed already exists" do

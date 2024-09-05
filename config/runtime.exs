@@ -207,20 +207,19 @@ defmodule Sower.Config do
       end
 
     # bootstrap token file
-    with {:ok, bootstrap_token_file} <- json_config |> Keyword.fetch(:bootstrap_token_file),
-         {:ok, bootstrap_token} <- read_credential(bootstrap_token_file) do
-      config :sower, Sower.Accounts.UserAuthentication,
-        issuer: "oidcc",
-        secret_key: secret_key_base
-    else
-      {:error, err} ->
-        Logger.warning("Failed to load bootstrap_token from secret file, #{err}.")
-        Kernel.exit(1)
+    json_config =
+      with {:ok, bootstrap_token_file} <- json_config |> Keyword.fetch(:bootstrap_token_file),
+           {:ok, bootstrap_token} <- read_credential(bootstrap_token_file) do
+        json_config |> Keyword.put(:bootstrap_token, bootstrap_token)
+      else
+        {:error, err} ->
+          Logger.warning("Failed to load bootstrap_token from secret file, #{err}.")
+          Kernel.exit(1)
 
-      :error ->
-        Logger.warning("Configuration is missing `bootstrap_token_file`.")
-        Kernel.exit(1)
-    end
+        :error ->
+          Logger.warning("Configuration is missing `bootstrap_token_file`.")
+          Kernel.exit(1)
+      end
 
     Logger.debug("Final configuration:")
     Logger.debug(json_config)
@@ -239,6 +238,10 @@ defmodule Sower.Config do
       secret_key_base: secret_key_base,
       persistent: true
     )
+
+    config :sower, Sower.Accounts.UserAuthentication,
+      issuer: "oidcc",
+      secret_key: secret_key_base
 
     config :ueberauth_oidcc, :issuers, [
       %{
