@@ -16,6 +16,7 @@ defmodule SowerWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
+    plug OpenApiSpex.Plug.PutApiSpec, module: SowerWeb.ApiSpec
   end
 
   scope "/", SowerWeb do
@@ -45,6 +46,8 @@ defmodule SowerWeb.Router do
   scope "/api" do
     pipe_through :api
     get "/config", SowerWeb.AppController, :config
+
+    get "/openapi", OpenApiSpex.Plug.RenderSpec, []
 
     get "/seeds", SowerWeb.SeedController, :list
     get "/seeds/latest", SowerWeb.SeedController, :find_latest

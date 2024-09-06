@@ -9,7 +9,6 @@ import Config
 
 config :sower, ecto_repos: [Sower.Repo]
 config :sower, Sower.Repo, migration_primary_key: [name: :id, type: :uuid]
-config :sower, ash_domains: [Sower, Sower.Accounts]
 
 # Configures the endpoint
 config :sower, SowerWeb.Endpoint,

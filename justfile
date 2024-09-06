@@ -47,6 +47,7 @@ test:
 update-elixir: && nix-lock
     mix deps.clean --unused --unlock
     mix deps.update --all
+    mix deps.get
     mix hex.outdated
 
 update-rust:
