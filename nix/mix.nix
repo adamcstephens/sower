@@ -281,32 +281,6 @@ let
       beamDeps = [];
     };
 
-    makeup = buildMix rec {
-      name = "makeup";
-      version = "1.1.2";
-
-      src = fetchHex {
-        pkg = "makeup";
-        version = "${version}";
-        sha256 = "cce1566b81fbcbd21eca8ffe808f33b221f9eee2cbc7a1706fc3da9ff18e6cac";
-      };
-
-      beamDeps = [ nimble_parsec ];
-    };
-
-    makeup_json = buildMix rec {
-      name = "makeup_json";
-      version = "0.1.1";
-
-      src = fetchHex {
-        pkg = "makeup_json";
-        version = "${version}";
-        sha256 = "3879d78117e37a9b1e567b9cc76c1b5b51b9efc5f4f4301ea5e53fb70c59c718";
-      };
-
-      beamDeps = [ makeup nimble_parsec ];
-    };
-
     metrics = buildRebar3 rec {
       name = "metrics";
       version = "1.0.1";
@@ -380,19 +354,6 @@ let
         pkg = "nimble_ownership";
         version = "${version}";
         sha256 = "28b9a9f4094fda1aa8ca72f732ff3223eb54aa3eda4fed9022254de2c152b138";
-      };
-
-      beamDeps = [];
-    };
-
-    nimble_parsec = buildMix rec {
-      name = "nimble_parsec";
-      version = "1.4.0";
-
-      src = fetchHex {
-        pkg = "nimble_parsec";
-        version = "${version}";
-        sha256 = "9c565862810fb383e9838c1dd2d7d2c437b3d13b267414ba6af33e50d2d1cf28";
       };
 
       beamDeps = [];

@@ -25,8 +25,6 @@ defmodule Sower.MixProject do
       {:hackney, "~> 1.8"},
       {:jason, "~> 1.2"},
       {:joken, "~> 2.6.1"},
-      {:makeup, "~> 1.1"},
-      {:makeup_json, "~> 0.1.0"},
       {:mime, "~> 2.0.6"},
       {:open_api_spex, "~> 3.19"},
       {:phoenix, "~> 1.7.7"},
