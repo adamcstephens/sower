@@ -45,8 +45,9 @@ test:
     nix build .#checks.x86_64-linux.default --print-build-logs
 
 update-elixir: && nix-lock
-    mix deps.update --all
     mix deps.clean --unused --unlock
+    mix deps.update --all
+    mix hex.outdated
 
 update-rust:
     cargo update
