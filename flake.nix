@@ -1,12 +1,12 @@
 {
   inputs = {
-    crane.inputs.nixpkgs.follows = "nixpkgs";
+    nixpkgs.url = "github:nixos/nixpkgs?ref=nixpkgs-unstable";
+
     crane.url = "github:ipetkov/crane";
     flake-parts.url = "github:hercules-ci/flake-parts";
-    nixpkgs.url = "github:nixos/nixpkgs?ref=nixpkgs-unstable";
     process-compose-flake.url = "github:Platonic-Systems/process-compose-flake";
-    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
     rust-overlay.url = "github:oxalica/rust-overlay";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
     services-flake.url = "github:juspay/services-flake";
   };
 
@@ -58,7 +58,7 @@
                   pkgs.next-ls
 
                   # go
-                  pkgs.go_1_22
+                  pkgs.go_1_23
                   pkgs.delve
                   pkgs.gopls
                   pkgs.oapi-codegen
