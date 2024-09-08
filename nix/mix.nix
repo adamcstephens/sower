@@ -75,12 +75,12 @@ let
 
     ecto = buildMix rec {
       name = "ecto";
-      version = "3.12.2";
+      version = "3.12.3";
 
       src = fetchHex {
         pkg = "ecto";
         version = "${version}";
-        sha256 = "492e67c70f3a71c6afe80d946d3ced52ecc57c53c9829791bfff1830ff5a1f0c";
+        sha256 = "9efd91506ae722f95e48dc49e70d0cb632ede3b7a23896252a60a14ac6d59165";
       };
 
       beamDeps = [ decimal jason telemetry ];
