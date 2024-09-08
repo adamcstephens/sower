@@ -22,6 +22,12 @@ docker-push:
 nix-lock:
     mix2nix mix.lock > nix/mix.nix
 
+openapi-output:
+    MIX_ENV=test mix openapi.spec.json --spec SowerWeb.ApiSpec --pretty=true openapi.json
+
+openapi-generate: openapi-output
+    go generate ./client/client
+
 set-version version:
     echo -n {{ version }} > VERSION
     sed -i 's/^version = ".*"/version = "{{ version }}"/' client-rust/Cargo.toml

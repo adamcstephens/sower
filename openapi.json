@@ -1,0 +1,201 @@
+{
+  "components": {
+    "responses": {},
+    "schemas": {
+      "Seed": {
+        "description": "A seed is an installable unit",
+        "example": {
+          "name": "myhost",
+          "seed_type": "nixos",
+          "store_path": "/nix/store/fqf9pp2pbcv64j0bz3mwv5grj60jkvzv-nixos-system-myhost-24.11.20240703.9f4128e"
+        },
+        "properties": {
+          "name": {
+            "description": "Name of the seed",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "seed_type": {
+            "description": "Type of the seed",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "store_path": {
+            "description": "Store path of the seed",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          }
+        },
+        "required": [
+          "name",
+          "seed_type",
+          "store_path"
+        ],
+        "title": "Seed",
+        "type": "object",
+        "x-struct": "Elixir.SowerWeb.Schemas.Seed.Seed",
+        "x-validate": null
+      },
+      "SeedResponse": {
+        "description": "Resonse for a seed",
+        "example": {
+          "data": {
+            "inserted_at": "2017-09-12T12:34:55Z",
+            "name": "myhost",
+            "seed_type": "nixos",
+            "store_path": "/nix/store/fqf9pp2pbcv64j0bz3mwv5grj60jkvzv-nixos-system-myhost-24.11.20240703.9f4128e",
+            "updated_at": "2017-09-13T10:11:12Z"
+          }
+        },
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Seed"
+          }
+        },
+        "title": "SeedResponse",
+        "type": "object",
+        "x-struct": "Elixir.SowerWeb.Schemas.Seed.Response",
+        "x-validate": null
+      },
+      "SeedsResponse": {
+        "description": "Response schema for multiple seeds",
+        "example": {
+          "data": [
+            {
+              "birthday": "1970-01-01T12:34:55Z",
+              "inserted_at": "2017-09-12T12:34:55Z",
+              "name": "myhost",
+              "seed_type": "nixos",
+              "store_path": "/nix/store/fqf9pp2pbcv64j0bz3mwv5grj60jkvzv-nixos-system-myhost-24.11.20240703.9f4128e",
+              "updated_at": "2017-09-13T10:11:12Z"
+            },
+            {
+              "birthday": "1970-01-01T12:34:55Z",
+              "inserted_at": "2017-09-12T12:34:55Z",
+              "name": "host3",
+              "seed_type": "nixos",
+              "store_path": "/nix/store/fqf9pp2pbcv64j0bz3mwv5grj60jkvzv-nixos-system-host3-24.11.20240703.9f4128e",
+              "updated_at": "2017-09-13T10:11:12Z"
+            }
+          ]
+        },
+        "properties": {
+          "data": {
+            "description": "The seeds details",
+            "items": {
+              "$ref": "#/components/schemas/Seed"
+            },
+            "type": "array",
+            "x-struct": null,
+            "x-validate": null
+          }
+        },
+        "title": "SeedsResponse",
+        "type": "object",
+        "x-struct": "Elixir.SowerWeb.Schemas.Seed.ListResponse",
+        "x-validate": null
+      }
+    }
+  },
+  "info": {
+    "title": "sower",
+    "version": "0.4.0-dev"
+  },
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/seeds": {
+      "get": {
+        "callbacks": {},
+        "operationId": "SowerWeb.SeedController.list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeedsResponse"
+                }
+              }
+            },
+            "description": "Seed response"
+          }
+        },
+        "summary": "List Seeds",
+        "tags": []
+      },
+      "post": {
+        "callbacks": {},
+        "operationId": "SowerWeb.SeedController.new",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Seed"
+              }
+            }
+          },
+          "description": "Seed params",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeedResponse"
+                }
+              }
+            },
+            "description": "Seed response"
+          }
+        },
+        "summary": "New Seed",
+        "tags": []
+      }
+    },
+    "/api/seeds/latest": {
+      "get": {
+        "callbacks": {},
+        "operationId": "SowerWeb.SeedController.find_latest",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Seed"
+              }
+            }
+          },
+          "description": "Seed params",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeedResponse"
+                }
+              }
+            },
+            "description": "Seed response"
+          }
+        },
+        "summary": "Get latest Seed",
+        "tags": []
+      }
+    }
+  },
+  "security": [],
+  "servers": [
+    {
+      "url": "http://localhost:4002",
+      "variables": {}
+    }
+  ],
+  "tags": []
+}

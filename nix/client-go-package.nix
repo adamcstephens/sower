@@ -11,6 +11,7 @@ buildGoModule rec {
         ../client
         ../go.mod
         ../go.sum
+        ../openapi.json
       ];
     };
 

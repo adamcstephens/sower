@@ -61,6 +61,7 @@
                   pkgs.go_1_22
                   pkgs.delve
                   pkgs.gopls
+                  pkgs.oapi-codegen
 
                   # rust
                   pkgs.cargo

@@ -11,7 +11,7 @@ defmodule SowerWeb.SeedController do
   operation :new,
     summary: "New Seed",
     parameters: [],
-    request_body: {"Seed params", "application/json", Schemas.Seed.Request},
+    request_body: {"Seed params", "application/json", Schemas.Seed.Seed},
     responses: [
       ok: {"Seed response", "application/json", Schemas.Seed.Response}
     ]
@@ -36,7 +36,7 @@ defmodule SowerWeb.SeedController do
   operation :find_latest,
     summary: "Get latest Seed",
     parameters: [],
-    request_body: {"Seed params", "application/json", Schemas.Seed.Request},
+    request_body: {"Seed params", "application/json", Schemas.Seed.Seed},
     responses: [
       ok: {"Seed response", "application/json", Schemas.Seed.Response}
     ]
