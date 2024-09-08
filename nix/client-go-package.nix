@@ -1,6 +1,6 @@
 { lib, buildGoModule }:
 buildGoModule rec {
-  pname = "sower-client";
+  pname = "sower";
   version = builtins.readFile ../VERSION;
 
   src =
@@ -23,5 +23,5 @@ buildGoModule rec {
     mv $out/bin/client $out/bin/sower
   '';
 
-  vendorHash = "sha256-7658me4SpEoO66Y16Qy3/ue6/AJTuwb2T1mS2OQGB64=";
+  vendorHash = "sha256-L9rk/6WH9vOgawNqC2MLRjOBblZuJG8ABCP+tYL35sI=";
 }

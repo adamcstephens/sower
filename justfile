@@ -56,5 +56,10 @@ update-elixir: && nix-lock
     mix deps.get
     mix hex.outdated
 
+update-go:
+    go get -u all ./...
+    go mod edit -go=$(go version | awk '{print $3}' | sed 's/go//')
+    go mod tidy
+
 update-rust:
     cargo update
