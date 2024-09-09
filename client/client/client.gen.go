@@ -12,10 +12,15 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Seed A seed is an installable unit
 type Seed struct {
+	// Id Name of the seed
+	Id *openapi_types.UUID `json:"id,omitempty"`
+
 	// Name Name of the seed
 	Name string `json:"name"`
 
@@ -24,18 +29,6 @@ type Seed struct {
 
 	// StorePath Store path of the seed
 	StorePath string `json:"store_path"`
-}
-
-// SeedResponse Resonse for a seed
-type SeedResponse struct {
-	// Data A seed is an installable unit
-	Data *Seed `json:"data,omitempty"`
-}
-
-// SeedsResponse Response schema for multiple seeds
-type SeedsResponse struct {
-	// Data The seeds details
-	Data *[]Seed `json:"data,omitempty"`
 }
 
 // SowerWebSeedControllerNewJSONRequestBody defines body for SowerWebSeedControllerNew for application/json ContentType.
@@ -358,7 +351,7 @@ type ClientWithResponsesInterface interface {
 type SowerWebSeedControllerListResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *SeedsResponse
+	JSON200      *[]Seed
 }
 
 // Status returns HTTPResponse.Status
@@ -380,7 +373,7 @@ func (r SowerWebSeedControllerListResponse) StatusCode() int {
 type SowerWebSeedControllerNewResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *SeedResponse
+	JSON200      *Seed
 }
 
 // Status returns HTTPResponse.Status
@@ -402,7 +395,7 @@ func (r SowerWebSeedControllerNewResponse) StatusCode() int {
 type SowerWebSeedControllerFindLatestResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *SeedResponse
+	JSON200      *Seed
 }
 
 // Status returns HTTPResponse.Status
@@ -479,7 +472,7 @@ func ParseSowerWebSeedControllerListResponse(rsp *http.Response) (*SowerWebSeedC
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest SeedsResponse
+		var dest []Seed
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -505,7 +498,7 @@ func ParseSowerWebSeedControllerNewResponse(rsp *http.Response) (*SowerWebSeedCo
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest SeedResponse
+		var dest Seed
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -531,7 +524,7 @@ func ParseSowerWebSeedControllerFindLatestResponse(rsp *http.Response) (*SowerWe
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest SeedResponse
+		var dest Seed
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

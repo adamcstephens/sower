@@ -4,6 +4,7 @@ defmodule SowerWeb.SeedController do
 
   require Logger
 
+  alias OpenApiSpex.Schema
   alias SowerWeb.Schemas
 
   action_fallback SowerWeb.FallbackController
@@ -11,9 +12,9 @@ defmodule SowerWeb.SeedController do
   operation :new,
     summary: "New Seed",
     parameters: [],
-    request_body: {"Seed params", "application/json", Schemas.Seed.Seed},
+    request_body: {"Seed params", "application/json", Schemas.Seed},
     responses: [
-      ok: {"Seed response", "application/json", Schemas.Seed.Response}
+      ok: {"Seed response", "application/json", Schemas.Seed}
     ]
 
   def new(conn, %{
@@ -36,9 +37,9 @@ defmodule SowerWeb.SeedController do
   operation :find_latest,
     summary: "Get latest Seed",
     parameters: [],
-    request_body: {"Seed params", "application/json", Schemas.Seed.Seed},
+    request_body: {"Seed params", "application/json", Schemas.Seed},
     responses: [
-      ok: {"Seed response", "application/json", Schemas.Seed.Response}
+      ok: {"Seed response", "application/json", Schemas.Seed}
     ]
 
   def find_latest(conn, %{"name" => name, "type" => type}) do
@@ -50,7 +51,7 @@ defmodule SowerWeb.SeedController do
     summary: "List Seeds",
     parameters: [],
     responses: [
-      ok: {"Seed response", "application/json", Schemas.Seed.ListResponse}
+      ok: {"Seed response", "application/json", %Schema{type: :array, items: Schemas.Seed}}
     ]
 
   def list(conn, _) do
