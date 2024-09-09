@@ -31,11 +31,11 @@ type Seed struct {
 	StorePath string `json:"store_path"`
 }
 
-// SowerWebSeedControllerNewJSONRequestBody defines body for SowerWebSeedControllerNew for application/json ContentType.
-type SowerWebSeedControllerNewJSONRequestBody = Seed
+// NewSeedJSONRequestBody defines body for NewSeed for application/json ContentType.
+type NewSeedJSONRequestBody = Seed
 
-// SowerWebSeedControllerFindLatestJSONRequestBody defines body for SowerWebSeedControllerFindLatest for application/json ContentType.
-type SowerWebSeedControllerFindLatestJSONRequestBody = Seed
+// FindLatestSeedJSONRequestBody defines body for FindLatestSeed for application/json ContentType.
+type FindLatestSeedJSONRequestBody = Seed
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -110,22 +110,22 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
-	// SowerWebSeedControllerList request
-	SowerWebSeedControllerList(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// ListSeeds request
+	ListSeeds(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SowerWebSeedControllerNewWithBody request with any body
-	SowerWebSeedControllerNewWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// NewSeedWithBody request with any body
+	NewSeedWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	SowerWebSeedControllerNew(ctx context.Context, body SowerWebSeedControllerNewJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	NewSeed(ctx context.Context, body NewSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SowerWebSeedControllerFindLatestWithBody request with any body
-	SowerWebSeedControllerFindLatestWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// FindLatestSeedWithBody request with any body
+	FindLatestSeedWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	SowerWebSeedControllerFindLatest(ctx context.Context, body SowerWebSeedControllerFindLatestJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	FindLatestSeed(ctx context.Context, body FindLatestSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
-func (c *Client) SowerWebSeedControllerList(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSowerWebSeedControllerListRequest(c.Server)
+func (c *Client) ListSeeds(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListSeedsRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -136,8 +136,8 @@ func (c *Client) SowerWebSeedControllerList(ctx context.Context, reqEditors ...R
 	return c.Client.Do(req)
 }
 
-func (c *Client) SowerWebSeedControllerNewWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSowerWebSeedControllerNewRequestWithBody(c.Server, contentType, body)
+func (c *Client) NewSeedWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewNewSeedRequestWithBody(c.Server, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -148,8 +148,8 @@ func (c *Client) SowerWebSeedControllerNewWithBody(ctx context.Context, contentT
 	return c.Client.Do(req)
 }
 
-func (c *Client) SowerWebSeedControllerNew(ctx context.Context, body SowerWebSeedControllerNewJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSowerWebSeedControllerNewRequest(c.Server, body)
+func (c *Client) NewSeed(ctx context.Context, body NewSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewNewSeedRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -160,8 +160,8 @@ func (c *Client) SowerWebSeedControllerNew(ctx context.Context, body SowerWebSee
 	return c.Client.Do(req)
 }
 
-func (c *Client) SowerWebSeedControllerFindLatestWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSowerWebSeedControllerFindLatestRequestWithBody(c.Server, contentType, body)
+func (c *Client) FindLatestSeedWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewFindLatestSeedRequestWithBody(c.Server, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -172,8 +172,8 @@ func (c *Client) SowerWebSeedControllerFindLatestWithBody(ctx context.Context, c
 	return c.Client.Do(req)
 }
 
-func (c *Client) SowerWebSeedControllerFindLatest(ctx context.Context, body SowerWebSeedControllerFindLatestJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSowerWebSeedControllerFindLatestRequest(c.Server, body)
+func (c *Client) FindLatestSeed(ctx context.Context, body FindLatestSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewFindLatestSeedRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -184,8 +184,8 @@ func (c *Client) SowerWebSeedControllerFindLatest(ctx context.Context, body Sowe
 	return c.Client.Do(req)
 }
 
-// NewSowerWebSeedControllerListRequest generates requests for SowerWebSeedControllerList
-func NewSowerWebSeedControllerListRequest(server string) (*http.Request, error) {
+// NewListSeedsRequest generates requests for ListSeeds
+func NewListSeedsRequest(server string) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -211,19 +211,19 @@ func NewSowerWebSeedControllerListRequest(server string) (*http.Request, error) 
 	return req, nil
 }
 
-// NewSowerWebSeedControllerNewRequest calls the generic SowerWebSeedControllerNew builder with application/json body
-func NewSowerWebSeedControllerNewRequest(server string, body SowerWebSeedControllerNewJSONRequestBody) (*http.Request, error) {
+// NewNewSeedRequest calls the generic NewSeed builder with application/json body
+func NewNewSeedRequest(server string, body NewSeedJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewSowerWebSeedControllerNewRequestWithBody(server, "application/json", bodyReader)
+	return NewNewSeedRequestWithBody(server, "application/json", bodyReader)
 }
 
-// NewSowerWebSeedControllerNewRequestWithBody generates requests for SowerWebSeedControllerNew with any type of body
-func NewSowerWebSeedControllerNewRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+// NewNewSeedRequestWithBody generates requests for NewSeed with any type of body
+func NewNewSeedRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -251,19 +251,19 @@ func NewSowerWebSeedControllerNewRequestWithBody(server string, contentType stri
 	return req, nil
 }
 
-// NewSowerWebSeedControllerFindLatestRequest calls the generic SowerWebSeedControllerFindLatest builder with application/json body
-func NewSowerWebSeedControllerFindLatestRequest(server string, body SowerWebSeedControllerFindLatestJSONRequestBody) (*http.Request, error) {
+// NewFindLatestSeedRequest calls the generic FindLatestSeed builder with application/json body
+func NewFindLatestSeedRequest(server string, body FindLatestSeedJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewSowerWebSeedControllerFindLatestRequestWithBody(server, "application/json", bodyReader)
+	return NewFindLatestSeedRequestWithBody(server, "application/json", bodyReader)
 }
 
-// NewSowerWebSeedControllerFindLatestRequestWithBody generates requests for SowerWebSeedControllerFindLatest with any type of body
-func NewSowerWebSeedControllerFindLatestRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+// NewFindLatestSeedRequestWithBody generates requests for FindLatestSeed with any type of body
+func NewFindLatestSeedRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -334,28 +334,28 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
-	// SowerWebSeedControllerListWithResponse request
-	SowerWebSeedControllerListWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*SowerWebSeedControllerListResponse, error)
+	// ListSeedsWithResponse request
+	ListSeedsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListSeedsResponse, error)
 
-	// SowerWebSeedControllerNewWithBodyWithResponse request with any body
-	SowerWebSeedControllerNewWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SowerWebSeedControllerNewResponse, error)
+	// NewSeedWithBodyWithResponse request with any body
+	NewSeedWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*NewSeedResponse, error)
 
-	SowerWebSeedControllerNewWithResponse(ctx context.Context, body SowerWebSeedControllerNewJSONRequestBody, reqEditors ...RequestEditorFn) (*SowerWebSeedControllerNewResponse, error)
+	NewSeedWithResponse(ctx context.Context, body NewSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*NewSeedResponse, error)
 
-	// SowerWebSeedControllerFindLatestWithBodyWithResponse request with any body
-	SowerWebSeedControllerFindLatestWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SowerWebSeedControllerFindLatestResponse, error)
+	// FindLatestSeedWithBodyWithResponse request with any body
+	FindLatestSeedWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*FindLatestSeedResponse, error)
 
-	SowerWebSeedControllerFindLatestWithResponse(ctx context.Context, body SowerWebSeedControllerFindLatestJSONRequestBody, reqEditors ...RequestEditorFn) (*SowerWebSeedControllerFindLatestResponse, error)
+	FindLatestSeedWithResponse(ctx context.Context, body FindLatestSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*FindLatestSeedResponse, error)
 }
 
-type SowerWebSeedControllerListResponse struct {
+type ListSeedsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *[]Seed
 }
 
 // Status returns HTTPResponse.Status
-func (r SowerWebSeedControllerListResponse) Status() string {
+func (r ListSeedsResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -363,21 +363,21 @@ func (r SowerWebSeedControllerListResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r SowerWebSeedControllerListResponse) StatusCode() int {
+func (r ListSeedsResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
 	return 0
 }
 
-type SowerWebSeedControllerNewResponse struct {
+type NewSeedResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *Seed
 }
 
 // Status returns HTTPResponse.Status
-func (r SowerWebSeedControllerNewResponse) Status() string {
+func (r NewSeedResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -385,21 +385,21 @@ func (r SowerWebSeedControllerNewResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r SowerWebSeedControllerNewResponse) StatusCode() int {
+func (r NewSeedResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
 	return 0
 }
 
-type SowerWebSeedControllerFindLatestResponse struct {
+type FindLatestSeedResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *Seed
 }
 
 // Status returns HTTPResponse.Status
-func (r SowerWebSeedControllerFindLatestResponse) Status() string {
+func (r FindLatestSeedResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -407,65 +407,65 @@ func (r SowerWebSeedControllerFindLatestResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r SowerWebSeedControllerFindLatestResponse) StatusCode() int {
+func (r FindLatestSeedResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
 	return 0
 }
 
-// SowerWebSeedControllerListWithResponse request returning *SowerWebSeedControllerListResponse
-func (c *ClientWithResponses) SowerWebSeedControllerListWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*SowerWebSeedControllerListResponse, error) {
-	rsp, err := c.SowerWebSeedControllerList(ctx, reqEditors...)
+// ListSeedsWithResponse request returning *ListSeedsResponse
+func (c *ClientWithResponses) ListSeedsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListSeedsResponse, error) {
+	rsp, err := c.ListSeeds(ctx, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseSowerWebSeedControllerListResponse(rsp)
+	return ParseListSeedsResponse(rsp)
 }
 
-// SowerWebSeedControllerNewWithBodyWithResponse request with arbitrary body returning *SowerWebSeedControllerNewResponse
-func (c *ClientWithResponses) SowerWebSeedControllerNewWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SowerWebSeedControllerNewResponse, error) {
-	rsp, err := c.SowerWebSeedControllerNewWithBody(ctx, contentType, body, reqEditors...)
+// NewSeedWithBodyWithResponse request with arbitrary body returning *NewSeedResponse
+func (c *ClientWithResponses) NewSeedWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*NewSeedResponse, error) {
+	rsp, err := c.NewSeedWithBody(ctx, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseSowerWebSeedControllerNewResponse(rsp)
+	return ParseNewSeedResponse(rsp)
 }
 
-func (c *ClientWithResponses) SowerWebSeedControllerNewWithResponse(ctx context.Context, body SowerWebSeedControllerNewJSONRequestBody, reqEditors ...RequestEditorFn) (*SowerWebSeedControllerNewResponse, error) {
-	rsp, err := c.SowerWebSeedControllerNew(ctx, body, reqEditors...)
+func (c *ClientWithResponses) NewSeedWithResponse(ctx context.Context, body NewSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*NewSeedResponse, error) {
+	rsp, err := c.NewSeed(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseSowerWebSeedControllerNewResponse(rsp)
+	return ParseNewSeedResponse(rsp)
 }
 
-// SowerWebSeedControllerFindLatestWithBodyWithResponse request with arbitrary body returning *SowerWebSeedControllerFindLatestResponse
-func (c *ClientWithResponses) SowerWebSeedControllerFindLatestWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SowerWebSeedControllerFindLatestResponse, error) {
-	rsp, err := c.SowerWebSeedControllerFindLatestWithBody(ctx, contentType, body, reqEditors...)
+// FindLatestSeedWithBodyWithResponse request with arbitrary body returning *FindLatestSeedResponse
+func (c *ClientWithResponses) FindLatestSeedWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*FindLatestSeedResponse, error) {
+	rsp, err := c.FindLatestSeedWithBody(ctx, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseSowerWebSeedControllerFindLatestResponse(rsp)
+	return ParseFindLatestSeedResponse(rsp)
 }
 
-func (c *ClientWithResponses) SowerWebSeedControllerFindLatestWithResponse(ctx context.Context, body SowerWebSeedControllerFindLatestJSONRequestBody, reqEditors ...RequestEditorFn) (*SowerWebSeedControllerFindLatestResponse, error) {
-	rsp, err := c.SowerWebSeedControllerFindLatest(ctx, body, reqEditors...)
+func (c *ClientWithResponses) FindLatestSeedWithResponse(ctx context.Context, body FindLatestSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*FindLatestSeedResponse, error) {
+	rsp, err := c.FindLatestSeed(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseSowerWebSeedControllerFindLatestResponse(rsp)
+	return ParseFindLatestSeedResponse(rsp)
 }
 
-// ParseSowerWebSeedControllerListResponse parses an HTTP response from a SowerWebSeedControllerListWithResponse call
-func ParseSowerWebSeedControllerListResponse(rsp *http.Response) (*SowerWebSeedControllerListResponse, error) {
+// ParseListSeedsResponse parses an HTTP response from a ListSeedsWithResponse call
+func ParseListSeedsResponse(rsp *http.Response) (*ListSeedsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &SowerWebSeedControllerListResponse{
+	response := &ListSeedsResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
@@ -483,15 +483,15 @@ func ParseSowerWebSeedControllerListResponse(rsp *http.Response) (*SowerWebSeedC
 	return response, nil
 }
 
-// ParseSowerWebSeedControllerNewResponse parses an HTTP response from a SowerWebSeedControllerNewWithResponse call
-func ParseSowerWebSeedControllerNewResponse(rsp *http.Response) (*SowerWebSeedControllerNewResponse, error) {
+// ParseNewSeedResponse parses an HTTP response from a NewSeedWithResponse call
+func ParseNewSeedResponse(rsp *http.Response) (*NewSeedResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &SowerWebSeedControllerNewResponse{
+	response := &NewSeedResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
@@ -509,15 +509,15 @@ func ParseSowerWebSeedControllerNewResponse(rsp *http.Response) (*SowerWebSeedCo
 	return response, nil
 }
 
-// ParseSowerWebSeedControllerFindLatestResponse parses an HTTP response from a SowerWebSeedControllerFindLatestWithResponse call
-func ParseSowerWebSeedControllerFindLatestResponse(rsp *http.Response) (*SowerWebSeedControllerFindLatestResponse, error) {
+// ParseFindLatestSeedResponse parses an HTTP response from a FindLatestSeedWithResponse call
+func ParseFindLatestSeedResponse(rsp *http.Response) (*FindLatestSeedResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &SowerWebSeedControllerFindLatestResponse{
+	response := &FindLatestSeedResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}

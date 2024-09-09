@@ -58,7 +58,7 @@
     "/api/seeds": {
       "get": {
         "callbacks": {},
-        "operationId": "SowerWeb.SeedController.list",
+        "operationId": "ListSeeds",
         "parameters": [],
         "responses": {
           "200": {
@@ -82,7 +82,7 @@
       },
       "post": {
         "callbacks": {},
-        "operationId": "SowerWeb.SeedController.new",
+        "operationId": "NewSeed",
         "parameters": [],
         "requestBody": {
           "content": {
@@ -114,7 +114,7 @@
     "/api/seeds/latest": {
       "get": {
         "callbacks": {},
-        "operationId": "SowerWeb.SeedController.find_latest",
+        "operationId": "FindLatestSeed",
         "parameters": [],
         "requestBody": {
           "content": {

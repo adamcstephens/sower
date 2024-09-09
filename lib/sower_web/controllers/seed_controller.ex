@@ -10,6 +10,7 @@ defmodule SowerWeb.SeedController do
   action_fallback SowerWeb.FallbackController
 
   operation :new,
+    operation_id: "NewSeed",
     summary: "New Seed",
     parameters: [],
     request_body: {"Seed params", "application/json", Schemas.Seed},
@@ -35,6 +36,7 @@ defmodule SowerWeb.SeedController do
   end
 
   operation :find_latest,
+    operation_id: "FindLatestSeed",
     summary: "Get latest Seed",
     parameters: [],
     request_body: {"Seed params", "application/json", Schemas.Seed},
@@ -48,6 +50,7 @@ defmodule SowerWeb.SeedController do
   end
 
   operation :list,
+    operation_id: "ListSeeds",
     summary: "List Seeds",
     parameters: [],
     responses: [
