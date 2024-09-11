@@ -134,7 +134,7 @@ export def get-flake-inputs [] {
   nix flake archive --json | from json | get inputs | transpose | select column0 column1.path | each { |c|
     {
       name: $c.column0,
-      outPath: $c.column1_path,
+      outPath: $c."column1.path",
       drvPath: nul
     }
   }
