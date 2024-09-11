@@ -11,19 +11,19 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type client struct {
+type channelClient struct {
 	config *config
 	socket *phx.Socket
 }
 
-func newClient(config *config) *client {
-	return &client{config: config}
+func newClient(config *config) *channelClient {
+	return &channelClient{config: config}
 }
 
-func (c *client) connect() error {
+func (c *channelClient) connect() error {
 	log.Info().Msg("Starting")
 
-	endpoint := c.config.endpoint
+	endpoint := c.config.channelEndpoint
 	token, _ := signToken(c.config.bootstrapToken, "name", "type")
 	endpoint.RawQuery = fmt.Sprintf("token=%s", url.QueryEscape(token))
 
@@ -60,11 +60,11 @@ func (c *client) connect() error {
 	return nil
 }
 
-func (c *client) run() {
+func (c *channelClient) run() {
 	select {}
 }
 
-func (c *client) joinLobby() error {
+func (c *channelClient) joinLobby() error {
 	cont := make(chan bool)
 	channel := c.socket.Channel("client:all", nil)
 
@@ -83,7 +83,7 @@ func (c *client) joinLobby() error {
 	return nil
 }
 
-func (c *client) submitSeed(seed seed.Seed) error {
+func (c *channelClient) submitSeed(seed seed.Seed) error {
 	cont := make(chan error)
 	channel := c.socket.Channel("client:all", nil)
 

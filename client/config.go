@@ -16,9 +16,10 @@ import (
 )
 
 type config struct {
-	bootstrapToken string
-	endpoint       url.URL
-	stateDirectory string
+	apiEndpoint     url.URL
+	bootstrapToken  string
+	channelEndpoint url.URL
+	stateDirectory  string
 }
 
 func initRootConfig(flags *flag.FlagSet) (*config, error) {
@@ -58,7 +59,12 @@ func initRootConfig(flags *flag.FlagSet) (*config, error) {
 		return &config{}, fmt.Errorf("failed to read secret, %v", err)
 	}
 
-	endpoint, err := url.Parse(fmt.Sprintf("%s/client", kConfig.String("url")))
+	channelEndpoint, err := url.Parse(fmt.Sprintf("%s/client", kConfig.String("url")))
+	if err != nil {
+		return &config{}, fmt.Errorf("failed to parse URL, %v", err)
+	}
+
+	apiEndpoint, err := url.Parse(fmt.Sprintf("%s", kConfig.String("url")))
 	if err != nil {
 		return &config{}, fmt.Errorf("failed to parse URL, %v", err)
 	}
@@ -66,9 +72,10 @@ func initRootConfig(flags *flag.FlagSet) (*config, error) {
 	stateDirectory := kConfig.String("state-directory")
 
 	config := &config{
-		bootstrapToken: bootstrapToken,
-		endpoint:       *endpoint,
-		stateDirectory: stateDirectory,
+		apiEndpoint:     *apiEndpoint,
+		bootstrapToken:  bootstrapToken,
+		channelEndpoint: *channelEndpoint,
+		stateDirectory:  stateDirectory,
 	}
 
 	log.Debug().Any("config", config).Msg("")

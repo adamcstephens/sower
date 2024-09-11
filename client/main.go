@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	_ "embed"
 	"fmt"
+	"net/http"
 	"os"
 
+	"codeberg.org/adamcstephens/sower/client/client"
 	"codeberg.org/adamcstephens/sower/client/seed"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -117,18 +120,28 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			log.Debug().Any("args", args).Msg("submit seed")
 
-			newSeed := seed.NewSeed(args[0], args[1], args[2])
-
-			client := newClient(config)
-			err := client.connect()
-			if err != nil {
-				log.Error().Err(err).Msg("failed to connect")
+			newSeed := client.Seed{
+				Name:      args[0],
+				SeedType:  args[1],
+				StorePath: args[2],
 			}
 
-			if err := client.submitSeed(newSeed); err != nil {
-				log.Error().Err(err).Msg("Failed downloading seed")
+			c, err := client.NewClientWithResponses(config.apiEndpoint.String())
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to create client")
 				os.Exit(1)
 			}
+
+			resp, err := c.NewSeedWithResponse(context.TODO(), newSeed)
+			if err != nil {
+				os.Exit(1)
+			}
+			if resp.StatusCode() != http.StatusCreated {
+				log.Error().Msg("Failed submitting seed")
+				os.Exit(1)
+			}
+
+			fmt.Printf("resp.JSON200: %v\n", resp.JSON200)
 		},
 	}
 	seedCmd.AddCommand(seedSubmitCommand)
