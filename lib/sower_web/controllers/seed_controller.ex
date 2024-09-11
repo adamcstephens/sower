@@ -24,8 +24,6 @@ defmodule SowerWeb.SeedController do
         "seed_type" => seed_type,
         "store_path" => store_path
       }) do
-    Logger.warning("Received legacy seed")
-
     with {:ok, %Sower.Seed{} = seed} <-
            Sower.Seed.submit(%{name: name, seed_type: seed_type, store_path: store_path}),
          Logger.debug(seed) do
@@ -46,6 +44,26 @@ defmodule SowerWeb.SeedController do
 
   def find_latest(conn, %{"name" => name, "type" => type}) do
     seed = Sower.Seed.latest(name, type)
+    render(conn, :show, seed: seed)
+  end
+
+  operation :get,
+    operation_id: "GetSeed",
+    summary: "Get Seed",
+    parameters: [
+      id: [
+        in: :path,
+        description: "Seed ID",
+        type: :string,
+        example: "1234-5678-1234-5678"
+      ]
+    ],
+    responses: [
+      ok: {"Seed response", "application/json", %Schema{type: :array, items: Schemas.Seed}}
+    ]
+
+  def get(conn, params) do
+    seed = Sower.Seed.get_by_id!(params["id"])
     render(conn, :show, seed: seed)
   end
 

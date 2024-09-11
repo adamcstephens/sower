@@ -50,6 +50,7 @@ defmodule SowerWeb.Router do
     get "/openapi", OpenApiSpex.Plug.RenderSpec, []
 
     get "/seeds", SowerWeb.SeedController, :list
+    get "/seeds/:id", SowerWeb.SeedController, :get
     get "/seeds/latest", SowerWeb.SeedController, :find_latest
     post "/seeds", SowerWeb.SeedController, :new
   end

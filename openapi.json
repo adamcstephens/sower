@@ -6,8 +6,7 @@
         "description": "A seed is an installable unit",
         "example": {
           "name": "myhost",
-          "seed_type": "nixos",
-          "store_path": "/nix/store/fqf9pp2pbcv64j0bz3mwv5grj60jkvzv-nixos-system-myhost-24.11.20240703.9f4128e"
+          "seed_type": "nixos"
         },
         "properties": {
           "id": {
@@ -26,12 +25,6 @@
           },
           "seed_type": {
             "description": "Type of the seed",
-            "type": "string",
-            "x-struct": null,
-            "x-validate": null
-          },
-          "store_path": {
-            "description": "Store path of the seed",
             "type": "string",
             "x-struct": null,
             "x-validate": null
@@ -140,6 +133,45 @@
           }
         },
         "summary": "Get latest Seed",
+        "tags": []
+      }
+    },
+    "/api/seeds/{id}": {
+      "get": {
+        "callbacks": {},
+        "operationId": "GetSeed",
+        "parameters": [
+          {
+            "description": "Seed ID",
+            "example": "1234-5678-1234-5678",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Seed"
+                  },
+                  "type": "array",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Seed response"
+          }
+        },
+        "summary": "Get Seed",
         "tags": []
       }
     }
