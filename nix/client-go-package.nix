@@ -23,5 +23,5 @@ buildGoModule rec {
     mv $out/bin/client $out/bin/sower
   '';
 
-  vendorHash = "sha256-L9rk/6WH9vOgawNqC2MLRjOBblZuJG8ABCP+tYL35sI=";
+  vendorHash = "sha256-X15e9mVrNPjvGxKGd33mmC/gnR2/DpbWcKw/lQW9nTk=";
 }

@@ -19,7 +19,7 @@ docker-push:
     docker manifest create --amend $image_name:latest $image_name:latest-aarch64-linux $image_name:latest-x86_64-linux
     docker manifest push $image_name:latest
 
-nix-lock:
+mix-nix-lock:
     mix2nix mix.lock > nix/mix.nix
 
 openapi-output:
@@ -50,16 +50,40 @@ start-client:
 test:
     nix build .#checks.x86_64-linux.default --print-build-logs
 
-update-elixir: && nix-lock
+update-elixir: && mix-nix-lock
     mix deps.clean --unused --unlock
     mix deps.update --all
     mix deps.get
     mix hex.outdated
 
-update-go:
+update-go: && update-go-hash
     go get -u all ./...
     go mod edit -go=$(go version | awk '{print $3}' | sed 's/go//')
     go mod tidy
+
+update-go-hash:
+    #!/usr/bin/env bash
+
+    set -eou pipefail
+
+    setKV() {
+      sed -i "s|$1 = \".*\"|$1 = \"${2:-}\"|" ./nix/client-go-package.nix
+    }
+
+    setKV vendorHash "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=" # Necessary to force clean build.
+
+    set +e
+    VENDOR_HASH=$(nix build --no-link .#client-go 2>&1 >/dev/null | grep "got:" | cut -d':' -f2 | sed 's| ||g')
+    set -e
+
+    if [ -n "${VENDOR_HASH:-}" ]; then
+      setKV vendorHash ${VENDOR_HASH}
+    else
+      echo "Update failed. VENDOR_HASH is empty."
+      exit 1
+    fi
+
+    git diff ./nix/client-go-package.nix
 
 update-rust:
     cargo update
