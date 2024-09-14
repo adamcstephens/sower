@@ -25,7 +25,7 @@ defmodule Sower.Seed do
         |> Repo.insert()
 
       seed ->
-        SeedStorePath.insert!(seed, StorePath.submit!(store_path))
+        SeedStorePath.submit!(seed, StorePath.submit!(store_path))
 
         {:ok, seed}
     end

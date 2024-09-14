@@ -11,7 +11,7 @@ defmodule Sower.SeedStorePath do
     timestamps()
   end
 
-  def insert!(seed, store_path) do
+  def submit!(seed, store_path) do
     %Sower.SeedStorePath{}
     |> changeset(%{seed_id: seed.id, store_path_id: store_path.id})
     |> Repo.insert!(
