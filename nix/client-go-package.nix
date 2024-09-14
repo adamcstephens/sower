@@ -26,5 +26,5 @@ buildGoModule rec {
   # disable checks for now until better fleshed out
   doCheck = false;
 
-  vendorHash = "sha256-X15e9mVrNPjvGxKGd33mmC/gnR2/DpbWcKw/lQW9nTk=";
+  vendorHash = "sha256-EIequUi6sULf3PDwzrGMwJgquct1TOjt8uU1IN6dRJY=";
 }

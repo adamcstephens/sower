@@ -10,7 +10,7 @@
         },
         "properties": {
           "id": {
-            "description": "Name of the seed",
+            "description": "id of the seed",
             "format": "uuid",
             "readOnly": true,
             "type": "string",
@@ -32,12 +32,40 @@
         },
         "required": [
           "name",
-          "seed_type",
-          "store_path"
+          "seed_type"
         ],
         "title": "Seed",
         "type": "object",
         "x-struct": "Elixir.SowerWeb.Schemas.Seed",
+        "x-validate": null
+      },
+      "StorePath": {
+        "description": "A store path is a Nix store path that can by installed by a client",
+        "example": {
+          "path": "/nix/store/..."
+        },
+        "properties": {
+          "id": {
+            "description": "id of the store path",
+            "format": "uuid",
+            "readOnly": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "path": {
+            "description": "Store path itself",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "StorePath",
+        "type": "object",
+        "x-struct": "Elixir.SowerWeb.Schemas.StorePath",
         "x-validate": null
       }
     }
@@ -104,38 +132,6 @@
         "tags": []
       }
     },
-    "/api/seeds/latest": {
-      "get": {
-        "callbacks": {},
-        "operationId": "FindLatestSeed",
-        "parameters": [],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Seed"
-              }
-            }
-          },
-          "description": "Seed params",
-          "required": false
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Seed"
-                }
-              }
-            },
-            "description": "Seed response"
-          }
-        },
-        "summary": "Get latest Seed",
-        "tags": []
-      }
-    },
     "/api/seeds/{id}": {
       "get": {
         "callbacks": {},
@@ -172,6 +168,85 @@
           }
         },
         "summary": "Get Seed",
+        "tags": []
+      }
+    },
+    "/api/seeds/{id}/paths": {
+      "post": {
+        "callbacks": {},
+        "operationId": "NewSeedStorePath",
+        "parameters": [
+          {
+            "description": "Seed ID",
+            "example": "1234-5678-1234-5678",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StorePath"
+              }
+            }
+          },
+          "description": "Seed params",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorePath"
+                }
+              }
+            },
+            "description": "Seed response"
+          }
+        },
+        "summary": "New Seed Store Path",
+        "tags": []
+      }
+    },
+    "/api/seeds/{id}/paths/latest": {
+      "get": {
+        "callbacks": {},
+        "operationId": "LatestStorePathBySeed",
+        "parameters": [
+          {
+            "description": "Seed ID",
+            "example": "1234-5678-1234-5678",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorePath"
+                }
+              }
+            },
+            "description": "Seed response"
+          }
+        },
+        "summary": "Get latest Store Path for a Seed",
         "tags": []
       }
     }

@@ -20,12 +20,10 @@ defmodule SowerWeb.SeedController do
 
   def new(conn, %{
         "name" => name,
-        # TODO change seed-ci and rename this
-        "seed_type" => seed_type,
-        "store_path" => store_path
+        "seed_type" => seed_type
       }) do
     with {:ok, %Sower.Seed{} = seed} <-
-           Sower.Seed.submit(%{name: name, seed_type: seed_type, store_path: store_path}),
+           Sower.Seed.new(%{name: name, seed_type: seed_type}),
          Logger.debug(seed) do
       conn
       |> put_status(:created)
@@ -33,17 +31,49 @@ defmodule SowerWeb.SeedController do
     end
   end
 
-  operation :find_latest,
-    operation_id: "FindLatestSeed",
-    summary: "Get latest Seed",
-    parameters: [],
-    request_body: {"Seed params", "application/json", Schemas.Seed},
+  operation :new_store_path,
+    operation_id: "NewSeedStorePath",
+    summary: "New Seed Store Path",
+    parameters: [
+      id: [
+        in: :path,
+        description: "Seed ID",
+        type: :string,
+        example: "1234-5678-1234-5678"
+      ]
+    ],
+    request_body: {"Seed params", "application/json", Schemas.StorePath},
     responses: [
-      ok: {"Seed response", "application/json", Schemas.Seed}
+      ok: {"Seed response", "application/json", Schemas.StorePath}
     ]
 
-  def find_latest(conn, %{"name" => name, "type" => type}) do
-    seed = Sower.Seed.latest(name, type)
+  def new_store_path(conn, %{"id" => id, "path" => path}) do
+    with {:ok, %Sower.StorePath{} = seed} <-
+           Sower.Seed.submit(%{id: id, path: path}),
+         Logger.debug(seed) do
+      conn
+      |> put_status(:created)
+      |> render(:show, seed: seed)
+    end
+  end
+
+  operation :latest,
+    operation_id: "LatestStorePathBySeed",
+    summary: "Get latest Store Path for a Seed",
+    parameters: [
+      id: [
+        in: :path,
+        description: "Seed ID",
+        type: :string,
+        example: "1234-5678-1234-5678"
+      ]
+    ],
+    responses: [
+      ok: {"Seed response", "application/json", Schemas.StorePath}
+    ]
+
+  def latest(conn, params) do
+    seed = Sower.Seed.latest_store_path_by_id(params["id"])
     render(conn, :show, seed: seed)
   end
 

@@ -8,7 +8,7 @@ defmodule SowerWeb.SeedLive.Show do
 
   @impl true
   def handle_params(%{"id" => id}, _, socket) do
-    seed = Sower.Seed.get_by_id!(id)
+    seed = Sower.Seed.get_by_id!(id) |> Sower.Repo.preload(:store_paths)
 
     {:noreply,
      socket

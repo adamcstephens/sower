@@ -17,23 +17,35 @@ defmodule Sower.Seed do
     timestamps()
   end
 
-  def submit(%{name: name, seed_type: seed_type, store_path: store_path}) do
-    case Repo.get_by(Sower.Seed, name: name, seed_type: seed_type) do
-      nil ->
-        %Sower.Seed{}
-        |> changeset(%{name: name, seed_type: seed_type, store_path: store_path})
-        |> Repo.insert()
-
-      seed ->
-        SeedStorePath.submit!(seed, StorePath.submit!(store_path))
-
-        {:ok, seed}
-    end
+  def new(attrs) do
+    %Sower.Seed{}
+    |> changeset(attrs)
+    |> Repo.insert()
   end
 
-  # get by id and load store_paths
+  def submit(%{id: id, path: store_path}) do
+    store_path = StorePath.submit!(store_path)
+
+    get_by_id!(id)
+    |> SeedStorePath.submit!(store_path)
+
+    {:ok, store_path}
+  end
+
   def get_by_id!(id) do
-    Repo.get(Sower.Seed, id) |> Repo.preload(:store_paths)
+    Repo.get!(Sower.Seed, id)
+  end
+
+  def get_by_id(id) do
+    Repo.get(Sower.Seed, id)
+  end
+
+  def get!(name, seed_type) do
+    Repo.get_by!(Sower.Seed, name: name, seed_type: seed_type)
+  end
+
+  def get(name, seed_type) do
+    Repo.get_by!(Sower.Seed, name: name, seed_type: seed_type)
   end
 
   def list() do
@@ -48,21 +60,23 @@ defmodule Sower.Seed do
     )
   end
 
+  def latest_store_path_by_id(id) do
+    seed = Sower.Seed.get_by_id!(id)
+
+    query =
+      from sp in Sower.SeedStorePath,
+        where: sp.seed_id == ^seed.id,
+        order_by: [desc: sp.updated_at],
+        limit: 1
+
+    Repo.one(query) |> Repo.preload(:store_path) |> Map.get(:store_path)
+  end
+
   defp changeset(seed, attrs) do
     seed
     |> cast(attrs, [:name, :seed_type])
     |> validate_inclusion(:seed_type, ["nixos", "home-manager", "nix-darwin"])
-    |> put_assoc(:store_paths, parse_path(attrs))
     |> validate_required([:name, :seed_type])
-  end
-
-  defp parse_path(params) do
-    case Map.get(params, :store_path) do
-      nil ->
-        false
-
-      store_path ->
-        [StorePath.submit!(store_path)]
-    end
+    |> unique_constraint([:name, :seed_type], error_key: :unique_seed)
   end
 end

@@ -76,6 +76,7 @@ func main() {
 			fmt.Println(args)
 		},
 	}
+
 	rootCmd.AddCommand(seedCmd)
 	var seedDownloadCommand = &cobra.Command{
 		Use:   "download",
@@ -99,6 +100,21 @@ func main() {
 				seedType = seed.DefaultType()
 			}
 
+			c, err := client.NewClientWithResponses(config.apiEndpoint.String())
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to create client")
+				os.Exit(1)
+			}
+
+			resp, err := c.GetSeedWithResponse(context.TODO(), args[0])
+			if err != nil {
+				os.Exit(1)
+			}
+			if resp.StatusCode() != http.StatusOK {
+				log.Error().Msg("Failed finding seed")
+				os.Exit(1)
+			}
+
 			wantedSeed := seed.NewSeed(name, seedType, "")
 
 			if err := wantedSeed.Download(); err != nil {
@@ -107,6 +123,7 @@ func main() {
 			}
 		},
 	}
+
 	seedCmd.AddCommand(seedDownloadCommand)
 	var seedSubmitCommand = &cobra.Command{
 		Use:   "submit name type out_path",
@@ -121,9 +138,8 @@ func main() {
 			log.Debug().Any("args", args).Msg("submit seed")
 
 			newSeed := client.Seed{
-				Name:      args[0],
-				SeedType:  args[1],
-				StorePath: args[2],
+				Name:     args[0],
+				SeedType: args[1],
 			}
 
 			c, err := client.NewClientWithResponses(config.apiEndpoint.String())

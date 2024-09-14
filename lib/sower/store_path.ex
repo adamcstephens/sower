@@ -2,6 +2,8 @@ defmodule Sower.StorePath do
   use Sower.Schema
   import Ecto.Changeset
 
+  @derive {Jason.Encoder, only: [:id, :path]}
+
   schema "store_paths" do
     field :path, :string
 

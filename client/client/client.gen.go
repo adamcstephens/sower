@@ -13,12 +13,13 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Seed A seed is an installable unit
 type Seed struct {
-	// Id Name of the seed
+	// Id id of the seed
 	Id *openapi_types.UUID `json:"id,omitempty"`
 
 	// Name Name of the seed
@@ -26,16 +27,22 @@ type Seed struct {
 
 	// SeedType Type of the seed
 	SeedType string `json:"seed_type"`
+}
 
-	// StorePath Store path of the seed
-	StorePath string `json:"store_path"`
+// StorePath A store path is a Nix store path that can by installed by a client
+type StorePath struct {
+	// Id id of the store path
+	Id *openapi_types.UUID `json:"id,omitempty"`
+
+	// Path Store path itself
+	Path string `json:"path"`
 }
 
 // NewSeedJSONRequestBody defines body for NewSeed for application/json ContentType.
 type NewSeedJSONRequestBody = Seed
 
-// FindLatestSeedJSONRequestBody defines body for FindLatestSeed for application/json ContentType.
-type FindLatestSeedJSONRequestBody = Seed
+// NewSeedStorePathJSONRequestBody defines body for NewSeedStorePath for application/json ContentType.
+type NewSeedStorePathJSONRequestBody = StorePath
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -118,10 +125,16 @@ type ClientInterface interface {
 
 	NewSeed(ctx context.Context, body NewSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// FindLatestSeedWithBody request with any body
-	FindLatestSeedWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// GetSeed request
+	GetSeed(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	FindLatestSeed(ctx context.Context, body FindLatestSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// NewSeedStorePathWithBody request with any body
+	NewSeedStorePathWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	NewSeedStorePath(ctx context.Context, id string, body NewSeedStorePathJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// LatestStorePathBySeed request
+	LatestStorePathBySeed(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) ListSeeds(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -160,8 +173,8 @@ func (c *Client) NewSeed(ctx context.Context, body NewSeedJSONRequestBody, reqEd
 	return c.Client.Do(req)
 }
 
-func (c *Client) FindLatestSeedWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewFindLatestSeedRequestWithBody(c.Server, contentType, body)
+func (c *Client) GetSeed(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSeedRequest(c.Server, id)
 	if err != nil {
 		return nil, err
 	}
@@ -172,8 +185,32 @@ func (c *Client) FindLatestSeedWithBody(ctx context.Context, contentType string,
 	return c.Client.Do(req)
 }
 
-func (c *Client) FindLatestSeed(ctx context.Context, body FindLatestSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewFindLatestSeedRequest(c.Server, body)
+func (c *Client) NewSeedStorePathWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewNewSeedStorePathRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) NewSeedStorePath(ctx context.Context, id string, body NewSeedStorePathJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewNewSeedStorePathRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) LatestStorePathBySeed(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLatestStorePathBySeedRequest(c.Server, id)
 	if err != nil {
 		return nil, err
 	}
@@ -251,27 +288,23 @@ func NewNewSeedRequestWithBody(server string, contentType string, body io.Reader
 	return req, nil
 }
 
-// NewFindLatestSeedRequest calls the generic FindLatestSeed builder with application/json body
-func NewFindLatestSeedRequest(server string, body FindLatestSeedJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
+// NewGetSeedRequest generates requests for GetSeed
+func NewGetSeedRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
 	if err != nil {
 		return nil, err
 	}
-	bodyReader = bytes.NewReader(buf)
-	return NewFindLatestSeedRequestWithBody(server, "application/json", bodyReader)
-}
-
-// NewFindLatestSeedRequestWithBody generates requests for FindLatestSeed with any type of body
-func NewFindLatestSeedRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
 
 	serverURL, err := url.Parse(server)
 	if err != nil {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/seeds/latest")
+	operationPath := fmt.Sprintf("/api/seeds/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -281,12 +314,91 @@ func NewFindLatestSeedRequestWithBody(server string, contentType string, body io
 		return nil, err
 	}
 
-	req, err := http.NewRequest("GET", queryURL.String(), body)
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewNewSeedStorePathRequest calls the generic NewSeedStorePath builder with application/json body
+func NewNewSeedStorePathRequest(server string, id string, body NewSeedStorePathJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewNewSeedStorePathRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewNewSeedStorePathRequestWithBody generates requests for NewSeedStorePath with any type of body
+func NewNewSeedStorePathRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/seeds/%s/paths", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewLatestStorePathBySeedRequest generates requests for LatestStorePathBySeed
+func NewLatestStorePathBySeedRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/seeds/%s/paths/latest", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -342,10 +454,16 @@ type ClientWithResponsesInterface interface {
 
 	NewSeedWithResponse(ctx context.Context, body NewSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*NewSeedResponse, error)
 
-	// FindLatestSeedWithBodyWithResponse request with any body
-	FindLatestSeedWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*FindLatestSeedResponse, error)
+	// GetSeedWithResponse request
+	GetSeedWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetSeedResponse, error)
 
-	FindLatestSeedWithResponse(ctx context.Context, body FindLatestSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*FindLatestSeedResponse, error)
+	// NewSeedStorePathWithBodyWithResponse request with any body
+	NewSeedStorePathWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*NewSeedStorePathResponse, error)
+
+	NewSeedStorePathWithResponse(ctx context.Context, id string, body NewSeedStorePathJSONRequestBody, reqEditors ...RequestEditorFn) (*NewSeedStorePathResponse, error)
+
+	// LatestStorePathBySeedWithResponse request
+	LatestStorePathBySeedWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*LatestStorePathBySeedResponse, error)
 }
 
 type ListSeedsResponse struct {
@@ -392,14 +510,14 @@ func (r NewSeedResponse) StatusCode() int {
 	return 0
 }
 
-type FindLatestSeedResponse struct {
+type GetSeedResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *Seed
+	JSON200      *[]Seed
 }
 
 // Status returns HTTPResponse.Status
-func (r FindLatestSeedResponse) Status() string {
+func (r GetSeedResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -407,7 +525,51 @@ func (r FindLatestSeedResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r FindLatestSeedResponse) StatusCode() int {
+func (r GetSeedResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type NewSeedStorePathResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *StorePath
+}
+
+// Status returns HTTPResponse.Status
+func (r NewSeedStorePathResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r NewSeedStorePathResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type LatestStorePathBySeedResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *StorePath
+}
+
+// Status returns HTTPResponse.Status
+func (r LatestStorePathBySeedResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r LatestStorePathBySeedResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -440,21 +602,39 @@ func (c *ClientWithResponses) NewSeedWithResponse(ctx context.Context, body NewS
 	return ParseNewSeedResponse(rsp)
 }
 
-// FindLatestSeedWithBodyWithResponse request with arbitrary body returning *FindLatestSeedResponse
-func (c *ClientWithResponses) FindLatestSeedWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*FindLatestSeedResponse, error) {
-	rsp, err := c.FindLatestSeedWithBody(ctx, contentType, body, reqEditors...)
+// GetSeedWithResponse request returning *GetSeedResponse
+func (c *ClientWithResponses) GetSeedWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetSeedResponse, error) {
+	rsp, err := c.GetSeed(ctx, id, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseFindLatestSeedResponse(rsp)
+	return ParseGetSeedResponse(rsp)
 }
 
-func (c *ClientWithResponses) FindLatestSeedWithResponse(ctx context.Context, body FindLatestSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*FindLatestSeedResponse, error) {
-	rsp, err := c.FindLatestSeed(ctx, body, reqEditors...)
+// NewSeedStorePathWithBodyWithResponse request with arbitrary body returning *NewSeedStorePathResponse
+func (c *ClientWithResponses) NewSeedStorePathWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*NewSeedStorePathResponse, error) {
+	rsp, err := c.NewSeedStorePathWithBody(ctx, id, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseFindLatestSeedResponse(rsp)
+	return ParseNewSeedStorePathResponse(rsp)
+}
+
+func (c *ClientWithResponses) NewSeedStorePathWithResponse(ctx context.Context, id string, body NewSeedStorePathJSONRequestBody, reqEditors ...RequestEditorFn) (*NewSeedStorePathResponse, error) {
+	rsp, err := c.NewSeedStorePath(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseNewSeedStorePathResponse(rsp)
+}
+
+// LatestStorePathBySeedWithResponse request returning *LatestStorePathBySeedResponse
+func (c *ClientWithResponses) LatestStorePathBySeedWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*LatestStorePathBySeedResponse, error) {
+	rsp, err := c.LatestStorePathBySeed(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseLatestStorePathBySeedResponse(rsp)
 }
 
 // ParseListSeedsResponse parses an HTTP response from a ListSeedsWithResponse call
@@ -509,22 +689,74 @@ func ParseNewSeedResponse(rsp *http.Response) (*NewSeedResponse, error) {
 	return response, nil
 }
 
-// ParseFindLatestSeedResponse parses an HTTP response from a FindLatestSeedWithResponse call
-func ParseFindLatestSeedResponse(rsp *http.Response) (*FindLatestSeedResponse, error) {
+// ParseGetSeedResponse parses an HTTP response from a GetSeedWithResponse call
+func ParseGetSeedResponse(rsp *http.Response) (*GetSeedResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &FindLatestSeedResponse{
+	response := &GetSeedResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest Seed
+		var dest []Seed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseNewSeedStorePathResponse parses an HTTP response from a NewSeedStorePathWithResponse call
+func ParseNewSeedStorePathResponse(rsp *http.Response) (*NewSeedStorePathResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &NewSeedStorePathResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest StorePath
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseLatestStorePathBySeedResponse parses an HTTP response from a LatestStorePathBySeedWithResponse call
+func ParseLatestStorePathBySeedResponse(rsp *http.Response) (*LatestStorePathBySeedResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &LatestStorePathBySeedResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest StorePath
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

@@ -11,7 +11,7 @@ defmodule SowerWeb.Schemas.Seed do
       id: %Schema{
         type: :string,
         format: :uuid,
-        description: "Name of the seed",
+        description: "id of the seed",
         readOnly: true
       },
       name: %Schema{
@@ -23,7 +23,7 @@ defmodule SowerWeb.Schemas.Seed do
         description: "Type of the seed"
       }
     },
-    required: ~w(name seed_type store_path)a,
+    required: ~w(name seed_type)a,
     example: %{
       "name" => "myhost",
       "seed_type" => "nixos"

@@ -51,8 +51,9 @@ defmodule SowerWeb.Router do
 
     get "/seeds", SowerWeb.SeedController, :list
     get "/seeds/:id", SowerWeb.SeedController, :get
-    get "/seeds/latest", SowerWeb.SeedController, :find_latest
+    get "/seeds/:id/paths/latest", SowerWeb.SeedController, :latest
     post "/seeds", SowerWeb.SeedController, :new
+    post "/seeds/:id/paths", SowerWeb.SeedController, :new_store_path
   end
 
   scope "/auth" do
