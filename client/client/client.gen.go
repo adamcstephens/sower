@@ -513,7 +513,7 @@ func (r NewSeedResponse) StatusCode() int {
 type GetSeedResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *[]Seed
+	JSON200      *Seed
 }
 
 // Status returns HTTPResponse.Status
@@ -704,7 +704,7 @@ func ParseGetSeedResponse(rsp *http.Response) (*GetSeedResponse, error) {
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []Seed
+		var dest Seed
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

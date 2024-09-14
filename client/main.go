@@ -9,6 +9,7 @@ import (
 
 	"codeberg.org/adamcstephens/sower/client/client"
 	"codeberg.org/adamcstephens/sower/client/seed"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
@@ -79,34 +80,35 @@ func main() {
 
 	rootCmd.AddCommand(seedCmd)
 	var seedDownloadCommand = &cobra.Command{
-		Use:   "download",
+		Use:   "download id",
 		Short: "Download a seed",
 		Run: func(cmd *cobra.Command, args []string) {
-			name, err := cmd.Flags().GetString("name")
-			if err != nil {
-				log.Error().Err(err).Msg("Failed loading seed name")
-				os.Exit(1)
-			}
-			if name == "" {
-				name = seed.DefaultName()
-			}
+			var hc = http.Client{}
 
-			seedType, err := cmd.Flags().GetString("type")
-			if err != nil {
-				log.Error().Err(err).Msg("Failed loading seed type")
-				os.Exit(1)
-			}
-			if seedType == "" {
-				seedType = seed.DefaultType()
-			}
-
-			c, err := client.NewClientWithResponses(config.apiEndpoint.String())
+			c, err := client.NewClientWithResponses("http://localhost:7150", client.WithHTTPClient(&hc))
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to create client")
 				os.Exit(1)
 			}
 
-			resp, err := c.GetSeedWithResponse(context.TODO(), args[0])
+			id, err := uuid.Parse(args[0])
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to parse uuid")
+				return
+			}
+
+			resp, err := c.GetSeedWithResponse(context.TODO(), id.String())
+			if err != nil {
+				log.Error().Err(err).Any("resp", resp).Msg("Failed getting seed")
+				os.Exit(1)
+			}
+			if resp.StatusCode() != http.StatusOK {
+				log.Error().Msg("Failed finding seed")
+				os.Exit(1)
+			}
+			newSeed := resp.JSON200
+
+			pathResp, err := c.LatestStorePathBySeedWithResponse(context.TODO(), newSeed.Id.String())
 			if err != nil {
 				os.Exit(1)
 			}
@@ -114,8 +116,10 @@ func main() {
 				log.Error().Msg("Failed finding seed")
 				os.Exit(1)
 			}
+			path := pathResp.JSON200
+			log.Debug().Any("path", path).Any("seed", newSeed).Msg("Found path for seed")
 
-			wantedSeed := seed.NewSeed(name, seedType, "")
+			wantedSeed := seed.NewSeed(newSeed, path)
 
 			if err := wantedSeed.Download(); err != nil {
 				log.Error().Err(err).Msg("Failed downloading seed")

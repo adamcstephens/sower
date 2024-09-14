@@ -89,7 +89,7 @@ defmodule SowerWeb.SeedController do
       ]
     ],
     responses: [
-      ok: {"Seed response", "application/json", %Schema{type: :array, items: Schemas.Seed}}
+      ok: {"Seed response", "application/json", Schemas.Seed}
     ]
 
   def get(conn, params) do

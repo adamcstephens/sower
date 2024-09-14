@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 
+	"codeberg.org/adamcstephens/sower/client/client"
 	"github.com/rs/zerolog/log"
 )
 
@@ -78,21 +79,21 @@ func (d *NixosSeed) Activate() error {
 	return nil
 }
 
-func NewSeed(name, seed_type, out_path string) Seed {
-	seed := &GenericSeed{
-		Name:     name,
-		OutPath:  out_path,
-		SeedType: seed_type,
+func NewSeed(seed *client.Seed, storePath *client.StorePath) Seed {
+	newSeed := &GenericSeed{
+		Name:     seed.Name,
+		OutPath:  storePath.Path,
+		SeedType: seed.SeedType,
 	}
 
-	switch seed_type {
+	switch newSeed.SeedType {
 	case "nixos":
 		return &NixosSeed{
-			GenericSeed: *seed,
+			GenericSeed: *newSeed,
 		}
 	}
 
-	return seed
+	return newSeed
 }
 
 func DefaultName() string {
