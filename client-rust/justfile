@@ -1,2 +1,0 @@
-start:
-    cargo watch -x 'run -- daemon --url=http://localhost:4000 -b=../.bootstrap.token'

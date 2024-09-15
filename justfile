@@ -30,7 +30,6 @@ openapi-generate: openapi-output
 
 set-version version:
     echo -n {{ version }} > VERSION
-    sed -i 's/^version = ".*"/version = "{{ version }}"/' client-rust/Cargo.toml
     cargo generate-lockfile --offline
 
 release:
@@ -84,6 +83,3 @@ update-go-hash:
     fi
 
     git diff ./nix/client-go-package.nix
-
-update-rust:
-    cargo update
