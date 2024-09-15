@@ -11,7 +11,6 @@ import (
 	"github.com/knadh/koanf/providers/posflag"
 	"github.com/knadh/koanf/v2"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	flag "github.com/spf13/pflag"
 )
 
@@ -77,8 +76,6 @@ func initRootConfig(flags *flag.FlagSet) (*config, error) {
 		channelEndpoint: *channelEndpoint,
 		stateDirectory:  stateDirectory,
 	}
-
-	log.Debug().Any("config", config).Msg("")
 
 	return config, nil
 }
