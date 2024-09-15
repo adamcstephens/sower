@@ -80,7 +80,32 @@
       "get": {
         "callbacks": {},
         "operationId": "ListSeeds",
-        "parameters": [],
+        "parameters": [
+          {
+            "description": "Seed name",
+            "example": "host1",
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          },
+          {
+            "description": "Seed type (nixos, home-manager, etc.)",
+            "example": "nixos",
+            "in": "query",
+            "name": "seed_type",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -96,6 +121,25 @@
               }
             },
             "description": "Seed response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Seed error response"
           }
         },
         "summary": "List Seeds",

@@ -38,6 +38,15 @@ type StorePath struct {
 	Path string `json:"path"`
 }
 
+// ListSeedsParams defines parameters for ListSeeds.
+type ListSeedsParams struct {
+	// Name Seed name
+	Name *string `form:"name,omitempty" json:"name,omitempty"`
+
+	// SeedType Seed type (nixos, home-manager, etc.)
+	SeedType *string `form:"seed_type,omitempty" json:"seed_type,omitempty"`
+}
+
 // NewSeedJSONRequestBody defines body for NewSeed for application/json ContentType.
 type NewSeedJSONRequestBody = Seed
 
@@ -118,7 +127,7 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 // The interface specification for the client above.
 type ClientInterface interface {
 	// ListSeeds request
-	ListSeeds(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListSeeds(ctx context.Context, params *ListSeedsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// NewSeedWithBody request with any body
 	NewSeedWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -137,8 +146,8 @@ type ClientInterface interface {
 	LatestStorePathBySeed(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
-func (c *Client) ListSeeds(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListSeedsRequest(c.Server)
+func (c *Client) ListSeeds(ctx context.Context, params *ListSeedsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListSeedsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +231,7 @@ func (c *Client) LatestStorePathBySeed(ctx context.Context, id string, reqEditor
 }
 
 // NewListSeedsRequest generates requests for ListSeeds
-func NewListSeedsRequest(server string) (*http.Request, error) {
+func NewListSeedsRequest(server string, params *ListSeedsParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -238,6 +247,44 @@ func NewListSeedsRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Name != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "name", runtime.ParamLocationQuery, *params.Name); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.SeedType != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "seed_type", runtime.ParamLocationQuery, *params.SeedType); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -447,7 +494,7 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 	// ListSeedsWithResponse request
-	ListSeedsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListSeedsResponse, error)
+	ListSeedsWithResponse(ctx context.Context, params *ListSeedsParams, reqEditors ...RequestEditorFn) (*ListSeedsResponse, error)
 
 	// NewSeedWithBodyWithResponse request with any body
 	NewSeedWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*NewSeedResponse, error)
@@ -470,6 +517,9 @@ type ListSeedsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *[]Seed
+	JSON404      *struct {
+		Error *string `json:"error,omitempty"`
+	}
 }
 
 // Status returns HTTPResponse.Status
@@ -577,8 +627,8 @@ func (r LatestStorePathBySeedResponse) StatusCode() int {
 }
 
 // ListSeedsWithResponse request returning *ListSeedsResponse
-func (c *ClientWithResponses) ListSeedsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListSeedsResponse, error) {
-	rsp, err := c.ListSeeds(ctx, reqEditors...)
+func (c *ClientWithResponses) ListSeedsWithResponse(ctx context.Context, params *ListSeedsParams, reqEditors ...RequestEditorFn) (*ListSeedsResponse, error) {
+	rsp, err := c.ListSeeds(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -657,6 +707,15 @@ func ParseListSeedsResponse(rsp *http.Response) (*ListSeedsResponse, error) {
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest struct {
+			Error *string `json:"error,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
 
 	}
 

@@ -43,6 +43,11 @@ defmodule SowerWeb.Router do
     end
   end
 
+  scope "/" do
+    pipe_through [:browser, :require_authenticated_user]
+    get "/docs/swagger-ui", OpenApiSpex.Plug.SwaggerUI, path: "/api/openapi"
+  end
+
   scope "/api" do
     pipe_through :api
     get "/config", SowerWeb.AppController, :config

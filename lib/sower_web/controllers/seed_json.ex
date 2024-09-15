@@ -13,7 +13,7 @@ defmodule SowerWeb.SeedJSON do
     seed
   end
 
-  def notfound() do
+  def not_found(_) do
     %{error: "seed not found"}
   end
 end

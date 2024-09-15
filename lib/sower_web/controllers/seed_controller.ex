@@ -100,10 +100,36 @@ defmodule SowerWeb.SeedController do
   operation :list,
     operation_id: "ListSeeds",
     summary: "List Seeds",
-    parameters: [],
+    parameters: [
+      name: [
+        description: "Seed name",
+        type: :string,
+        example: "host1"
+      ],
+      seed_type: [
+        description: "Seed type (nixos, home-manager, etc.)",
+        type: :string,
+        example: "nixos"
+      ]
+    ],
     responses: [
-      ok: {"Seed response", "application/json", %Schema{type: :array, items: Schemas.Seed}}
+      ok: {"Seed response", "application/json", %Schema{type: :array, items: Schemas.Seed}},
+      not_found:
+        {"Seed error response", "application/json",
+         %Schema{type: :object, properties: %{error: %Schema{type: :string}}}}
     ]
+
+  def list(conn, %{"name" => name, "seed_type" => seed_type}) do
+    seed = Sower.Seed.get(name, seed_type)
+
+    case seed do
+      nil ->
+        conn |> put_status(404) |> render(:not_found)
+
+      seed ->
+        render(conn, :list, seeds: [seed])
+    end
+  end
 
   def list(conn, _) do
     seeds = Sower.Seed.list()

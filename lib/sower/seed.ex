@@ -45,7 +45,7 @@ defmodule Sower.Seed do
   end
 
   def get(name, seed_type) do
-    Repo.get_by!(Sower.Seed, name: name, seed_type: seed_type)
+    Repo.get_by(Sower.Seed, name: name, seed_type: seed_type)
   end
 
   def list() do

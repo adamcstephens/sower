@@ -76,15 +76,15 @@ func main() {
 			fmt.Println(args)
 		},
 	}
-
 	rootCmd.AddCommand(seedCmd)
+
 	var seedDownloadCommand = &cobra.Command{
 		Use:   "download id",
 		Short: "Download a seed",
 		Run: func(cmd *cobra.Command, args []string) {
 			var hc = http.Client{}
 
-			c, err := client.NewClientWithResponses("http://localhost:7150", client.WithHTTPClient(&hc))
+			c, err := client.NewClientWithResponses(config.apiEndpoint.String(), client.WithHTTPClient(&hc))
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to create client")
 				os.Exit(1)
@@ -98,7 +98,7 @@ func main() {
 
 			resp, err := c.GetSeedWithResponse(context.TODO(), id.String())
 			if err != nil {
-				log.Error().Err(err).Any("resp", resp).Msg("Failed getting seed")
+				log.Error().Err(err).Any("resp", resp.JSON200).Msg("Failed getting seed")
 				os.Exit(1)
 			}
 			if resp.StatusCode() != http.StatusOK {
@@ -124,8 +124,82 @@ func main() {
 			}
 		},
 	}
-
 	seedCmd.AddCommand(seedDownloadCommand)
+
+	var seedInfoCommand = &cobra.Command{
+		Use:   "info id",
+		Short: "Display seed information",
+		Run: func(cmd *cobra.Command, args []string) {
+			var hc = http.Client{}
+
+			c, err := client.NewClientWithResponses(config.apiEndpoint.String(), client.WithHTTPClient(&hc))
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to create client")
+				os.Exit(1)
+			}
+
+			newSeed := client.Seed{}
+
+			if len(args) == 0 {
+				name, _ := cmd.Flags().GetString("name")
+				seedType, _ := cmd.Flags().GetString("type")
+
+				if name == "" && seedType == "" {
+					log.Error().Msg("Cannot specify both name and type")
+					os.Exit(1)
+				}
+
+				resp, err := c.ListSeedsWithResponse(context.TODO(), &client.ListSeedsParams{Name: &name, SeedType: &seedType})
+				if err != nil {
+					log.Error().Err(err).Any("resp", resp.Body).Msg("Failed getting seed")
+					os.Exit(1)
+				}
+
+				if resp.StatusCode() != http.StatusOK {
+					log.Error().Any("error", resp.JSON404.Error).Msg("Failed finding seed")
+					os.Exit(1)
+				}
+				newSeed = (*resp.JSON200)[0]
+
+			} else if len(args) == 1 {
+				id, err := uuid.Parse(args[0])
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to parse uuid")
+					return
+				}
+
+				resp, err := c.GetSeedWithResponse(context.TODO(), id.String())
+				if err != nil {
+					log.Error().Err(err).Any("resp", resp).Msg("Failed getting seed")
+					os.Exit(1)
+				}
+
+				if resp.StatusCode() != http.StatusOK {
+					log.Error().Msg("Failed finding seed")
+					os.Exit(1)
+				}
+				newSeed = *resp.JSON200
+			}
+
+			pathResp, err := c.LatestStorePathBySeedWithResponse(context.TODO(), newSeed.Id.String())
+			if err != nil {
+				os.Exit(1)
+			}
+			if pathResp.StatusCode() != http.StatusOK {
+				log.Error().Msg("Failed finding seed")
+				os.Exit(1)
+			}
+			path := pathResp.JSON200
+			log.Debug().Any("path", path).Any("seed", newSeed).Msg("Found path for seed")
+
+			fmt.Printf("Seed: %v\n", newSeed)
+			fmt.Printf("Path: %v\n", path)
+		},
+	}
+	seedCmd.AddCommand(seedInfoCommand)
+	seedCmd.PersistentFlags().String("name", "", "seed name")
+	seedCmd.PersistentFlags().String("type", "", "seed type")
+
 	var seedSubmitCommand = &cobra.Command{
 		Use:   "submit name type out_path",
 		Short: "submit a seed",
