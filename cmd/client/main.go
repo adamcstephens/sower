@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"os"
 
-	"codeberg.org/adamcstephens/sower/client/client"
+	"codeberg.org/adamcstephens/sower/client"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 

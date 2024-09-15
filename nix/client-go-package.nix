@@ -9,6 +9,7 @@ buildGoModule rec {
       root = ./..;
       fileset = unions [
         ../client
+        ../cmd/client
         ../go.mod
         ../go.sum
         ../openapi.json
