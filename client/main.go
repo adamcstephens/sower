@@ -8,7 +8,6 @@ import (
 	"os"
 
 	"codeberg.org/adamcstephens/sower/client/client"
-	"codeberg.org/adamcstephens/sower/client/seed"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -119,10 +118,8 @@ func main() {
 			path := pathResp.JSON200
 			log.Debug().Any("path", path).Any("seed", newSeed).Msg("Found path for seed")
 
-			wantedSeed := seed.NewSeed(newSeed, path)
-
-			if err := wantedSeed.Download(); err != nil {
-				log.Error().Err(err).Msg("Failed downloading seed")
+			if err := Realize(path.Path); err != nil {
+				log.Error().Err(err).Msg("Failed realizing seed")
 				os.Exit(1)
 			}
 		},

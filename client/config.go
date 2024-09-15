@@ -64,7 +64,7 @@ func initRootConfig(flags *flag.FlagSet) (*config, error) {
 		return &config{}, fmt.Errorf("failed to parse URL, %v", err)
 	}
 
-	apiEndpoint, err := url.Parse(fmt.Sprintf("%s", kConfig.String("url")))
+	apiEndpoint, err := url.Parse(kConfig.String("url"))
 	if err != nil {
 		return &config{}, fmt.Errorf("failed to parse URL, %v", err)
 	}

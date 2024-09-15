@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"net/url"
 
-	"codeberg.org/adamcstephens/sower/client/seed"
-
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/nshafer/phx"
 	"github.com/rs/zerolog/log"
@@ -83,25 +81,25 @@ func (c *channelClient) joinLobby() error {
 	return nil
 }
 
-func (c *channelClient) submitSeed(seed seed.Seed) error {
-	cont := make(chan error)
-	channel := c.socket.Channel("client:all", nil)
-
-	push, err := channel.Push("seed:submit", seed)
-	if err != nil {
-		return fmt.Errorf("failed to push seed:submit")
-	}
-
-	push.Receive("ok", func(response any) {
-		cont <- nil
-	})
-
-	push.Receive("error", func(response any) {
-		cont <- fmt.Errorf("failed to submit seed")
-	})
-
-	return <-cont
-}
+// func (c *channelClient) submitSeed(seed seed.Seed) error {
+// 	cont := make(chan error)
+// 	channel := c.socket.Channel("client:all", nil)
+//
+// 	push, err := channel.Push("seed:submit", seed)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to push seed:submit")
+// 	}
+//
+// 	push.Receive("ok", func(response any) {
+// 		cont <- nil
+// 	})
+//
+// 	push.Receive("error", func(response any) {
+// 		cont <- fmt.Errorf("failed to submit seed")
+// 	})
+//
+// 	return <-cont
+// }
 
 func signToken(bootstrapToken, name, seedType string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
