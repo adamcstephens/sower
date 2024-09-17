@@ -44,16 +44,16 @@ defmodule SowerWeb.SeedController do
     ],
     request_body: {"Seed params", "application/json", Schemas.StorePath},
     responses: [
-      ok: {"Seed response", "application/json", Schemas.StorePath}
+      created: {"Seed response", "application/json", Schemas.StorePath}
     ]
 
   def new_store_path(conn, %{"id" => id, "path" => path}) do
-    with {:ok, %Sower.StorePath{} = seed} <-
+    with {:ok, %Sower.StorePath{} = store_path} <-
            Sower.Seed.submit(%{id: id, path: path}),
-         Logger.debug(seed) do
+         Logger.debug(store_path) do
       conn
       |> put_status(:created)
-      |> render(:show, seed: seed)
+      |> render(:show, store_path: store_path)
     end
   end
 

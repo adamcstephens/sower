@@ -25,6 +25,7 @@ defmodule SowerWeb.Schemas.Seed do
     },
     required: ~w(name seed_type)a,
     example: %{
+      "id" => "1234-5678-1234-5678",
       "name" => "myhost",
       "seed_type" => "nixos"
     }

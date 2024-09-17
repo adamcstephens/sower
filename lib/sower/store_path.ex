@@ -21,6 +21,10 @@ defmodule Sower.StorePath do
     )
   end
 
+  def get!(id) do
+    Sower.Repo.get!(Sower.StorePath, id)
+  end
+
   def submit!(path) do
     %Sower.StorePath{}
     |> changeset(%{path: path})

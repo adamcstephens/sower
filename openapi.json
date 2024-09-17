@@ -5,6 +5,7 @@
       "Seed": {
         "description": "A seed is an installable unit",
         "example": {
+          "id": "1234-5678-1234-5678",
           "name": "myhost",
           "seed_type": "nixos"
         },
@@ -42,6 +43,7 @@
       "StorePath": {
         "description": "A store path is a Nix store path that can by installed by a client",
         "example": {
+          "id": "1234-5678-1234-5678",
           "path": "/nix/store/..."
         },
         "properties": {
@@ -54,7 +56,7 @@
             "x-validate": null
           },
           "path": {
-            "description": "Store path itself",
+            "description": "Nix store path",
             "type": "string",
             "x-struct": null,
             "x-validate": null
@@ -240,7 +242,7 @@
           "required": false
         },
         "responses": {
-          "200": {
+          "201": {
             "content": {
               "application/json": {
                 "schema": {

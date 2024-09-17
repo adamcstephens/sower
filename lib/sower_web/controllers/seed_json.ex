@@ -13,6 +13,13 @@ defmodule SowerWeb.SeedJSON do
     seed
   end
 
+  @doc """
+  Renders a single store path.
+  """
+  def show(%{store_path: store_path}) do
+    store_path
+  end
+
   def not_found(_) do
     %{error: "seed not found"}
   end

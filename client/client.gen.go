@@ -34,7 +34,7 @@ type StorePath struct {
 	// Id id of the store path
 	Id *openapi_types.UUID `json:"id,omitempty"`
 
-	// Path Store path itself
+	// Path Nix store path
 	Path string `json:"path"`
 }
 
@@ -585,7 +585,7 @@ func (r GetSeedResponse) StatusCode() int {
 type NewSeedStorePathResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *StorePath
+	JSON201      *StorePath
 }
 
 // Status returns HTTPResponse.Status
@@ -788,12 +788,12 @@ func ParseNewSeedStorePathResponse(rsp *http.Response) (*NewSeedStorePathRespons
 	}
 
 	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
 		var dest StorePath
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
-		response.JSON200 = &dest
+		response.JSON201 = &dest
 
 	}
 

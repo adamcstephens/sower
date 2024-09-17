@@ -65,6 +65,8 @@ func (s *SeedClient) GetSeed(id, name, seedType string) (*Seed, error) {
 		newSeed = *resp.JSON200
 	}
 
+	log.Debug().Any("seed", newSeed).Msg("Found seed")
+
 	return &newSeed, nil
 }
 
@@ -81,4 +83,18 @@ func (s *SeedClient) GetSeedLatestPath(seed *Seed) (*StorePath, error) {
 	log.Debug().Any("path", path).Any("seed", seed).Msg("Found path for seed")
 
 	return path, nil
+}
+
+func (s *SeedClient) SubmitSeedPath(seed *Seed, path string) (*StorePath, error) {
+	resp, err := s.client.NewSeedStorePathWithResponse(context.TODO(), seed.Id.String(), StorePath{Path: path})
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode() != http.StatusCreated {
+		return nil, err
+	}
+	storePath := resp.JSON201
+	log.Debug().Any("seed_id", seed.Id).Any("path", storePath).Msg("Created path for seed")
+
+	return storePath, nil
 }

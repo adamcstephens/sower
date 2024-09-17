@@ -16,11 +16,12 @@ defmodule SowerWeb.Schemas.StorePath do
       },
       path: %Schema{
         type: :string,
-        description: "Store path itself"
+        description: "Nix store path"
       }
     },
     required: ~w(path)a,
     example: %{
+      "id" => "1234-5678-1234-5678",
       "path" => "/nix/store/..."
     }
   })
