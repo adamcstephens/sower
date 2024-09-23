@@ -56,7 +56,7 @@ update-elixir: && mix-nix-lock
     mix hex.outdated
 
 update-go: && update-go-hash
-    go get -u all ./...
+    go get -u ./...
     go mod edit -go=$(go version | awk '{print $3}' | sed 's/go//')
     go mod tidy
 
@@ -66,13 +66,13 @@ update-go-hash:
     set -eou pipefail
 
     setKV() {
-      sed -i "s|$1 = \".*\"|$1 = \"${2:-}\"|" ./nix/client-go-package.nix
+      sed -i "s|$1 = \".*\"|$1 = \"${2:-}\"|" ./nix/client-package.nix
     }
 
     setKV vendorHash "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=" # Necessary to force clean build.
 
     set +e
-    VENDOR_HASH=$(nix build --no-link .#client-go 2>&1 >/dev/null | grep "got:" | cut -d':' -f2 | sed 's| ||g')
+    VENDOR_HASH=$(nix build --no-link .#client 2>&1 >/dev/null | grep "got:" | cut -d':' -f2 | sed 's| ||g')
     set -e
 
     if [ -n "${VENDOR_HASH:-}" ]; then
@@ -82,4 +82,4 @@ update-go-hash:
       exit 1
     fi
 
-    git diff ./nix/client-go-package.nix
+    git diff ./nix/client-package.nix
