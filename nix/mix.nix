@@ -554,45 +554,6 @@ let
       beamDeps = [ db_connection decimal jason ];
     };
 
-    req = buildMix rec {
-      name = "req";
-      version = "0.5.6";
-
-      src = fetchHex {
-        pkg = "req";
-        version = "${version}";
-        sha256 = "cfaa8e720945d46654853de39d368f40362c2641c4b2153c886418914b372185";
-      };
-
-      beamDeps = [ finch jason mime plug ];
-    };
-
-    rustler = buildMix rec {
-      name = "rustler";
-      version = "0.34.0";
-
-      src = fetchHex {
-        pkg = "rustler";
-        version = "${version}";
-        sha256 = "1d0c7449482b459513003230c0e2422b0252245776fe6fd6e41cb2b11bd8e628";
-      };
-
-      beamDeps = [ jason req toml ];
-    };
-
-    rustler_precompiled = buildMix rec {
-      name = "rustler_precompiled";
-      version = "0.8.1";
-
-      src = fetchHex {
-        pkg = "rustler_precompiled";
-        version = "${version}";
-        sha256 = "90b8c2297bf7959cfa1c927b2881faad7bb0707183124955369991b76177a166";
-      };
-
-      beamDeps = [ castore rustler ];
-    };
-
     sentry = buildMix rec {
       name = "sentry";
       version = "10.7.1";
@@ -629,7 +590,7 @@ let
         sha256 = "3b20d25e580cb79af631335a1bdcfbffd835c08ebcdc16e98577223a241a18a1";
       };
 
-      beamDeps = [ bandit finch hackney jason mime plug req telemetry ];
+      beamDeps = [ bandit finch hackney jason mime plug telemetry ];
     };
 
     systemd = buildRebar3 rec {
@@ -723,19 +684,6 @@ let
       beamDeps = [ telemetry ];
     };
 
-    toml = buildMix rec {
-      name = "toml";
-      version = "0.7.0";
-
-      src = fetchHex {
-        pkg = "toml";
-        version = "${version}";
-        sha256 = "0690246a2478c1defd100b0c9b89b4ea280a22be9a7b313a8a058a2408a2fa70";
-      };
-
-      beamDeps = [];
-    };
-
     ueberauth = buildMix rec {
       name = "ueberauth";
       version = "0.10.8";
@@ -777,15 +725,15 @@ let
 
     uuidv7 = buildMix rec {
       name = "uuidv7";
-      version = "0.2.1";
+      version = "1.0.0";
 
       src = fetchHex {
         pkg = "uuidv7";
         version = "${version}";
-        sha256 = "a7ec15522c7796399469ad3e8a00190d5fe4a02839944bea61dfbde35fea12e5";
+        sha256 = "0ecd337108456f7d8b1a9a54ef435443d3f8c10a5b685bd866ef9e396b444cbc";
       };
 
-      beamDeps = [ ecto rustler rustler_precompiled ];
+      beamDeps = [ ecto ];
     };
 
     websock = buildMix rec {

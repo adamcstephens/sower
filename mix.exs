@@ -34,7 +34,6 @@ defmodule Sower.MixProject do
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 0.20.0"},
       {:postgrex, ">= 0.0.0"},
-      {:rustler, "~> 0.34.0", override: true},
       {:sentry, "~> 10.5"},
       {:swoosh, "~> 1.3"},
       {:systemd, "~> 0.6"},
@@ -43,7 +42,7 @@ defmodule Sower.MixProject do
       {:telemetry_poller, "~> 1.1.0"},
       {:ueberauth, "~> 0.10"},
       {:ueberauth_oidcc, "~> 0.3"},
-      {:uuidv7, "~> 0.2"}
+      {:uuidv7, "~> 1.0.0"}
     ]
   end
 
