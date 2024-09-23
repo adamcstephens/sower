@@ -1,9 +1,8 @@
 defmodule SowerWeb.ApiSpec do
-  alias OpenApiSpex.{Components, Info, OpenApi, Paths, Server}
+  alias OpenApiSpex.{Info, OpenApi, Paths, Server}
   alias SowerWeb.{Endpoint, Router}
   @behaviour OpenApi
 
-  @imp OpenApi
   def spec() do
     %OpenApi{
       info: %Info{

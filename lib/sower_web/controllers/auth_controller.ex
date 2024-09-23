@@ -1,6 +1,6 @@
 defmodule SowerWeb.AuthController do
   use SowerWeb, :controller
-  plug Ueberauth
+  plug SowerWeb.Ueberauth
   require Logger
 
   def callback(%{assigns: %{ueberauth_auth: auth}} = conn, _params) do

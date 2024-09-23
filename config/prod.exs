@@ -23,11 +23,5 @@ config :swoosh, local: false
 # Do not print debug messages in production
 config :logger, level: :info
 
-config :uuidv7, UUIDv7,
-  crate: :uuidv7,
-  skip_compilation?: true
-
-config :ueberauth, Ueberauth, providers: []
-
 # Runtime production configuration, including reading
 # of environment variables, is done on config/runtime.exs.

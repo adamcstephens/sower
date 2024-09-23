@@ -7,15 +7,12 @@ defmodule SowerWeb.SeedJSON do
   end
 
   @doc """
-  Renders a single seed.
+  Renders a single item.
   """
   def show(%{seed: seed}) do
     seed
   end
 
-  @doc """
-  Renders a single store path.
-  """
   def show(%{store_path: store_path}) do
     store_path
   end
