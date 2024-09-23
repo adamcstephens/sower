@@ -140,12 +140,12 @@ let
 
     expo = buildMix rec {
       name = "expo";
-      version = "1.0.1";
+      version = "1.1.0";
 
       src = fetchHex {
         pkg = "expo";
         version = "${version}";
-        sha256 = "f250b33274e3e56513644858c116f255d35c767c2b8e96a512fe7839ef9306a1";
+        sha256 = "fbadf93f4700fb44c331362177bdca9eeb8097e8b0ef525c9cc501cb9917c960";
       };
 
       beamDeps = [];
@@ -374,12 +374,12 @@ let
 
     oidcc = buildMix rec {
       name = "oidcc";
-      version = "3.2.3";
+      version = "3.2.4";
 
       src = fetchHex {
         pkg = "oidcc";
         version = "${version}";
-        sha256 = "686ed9750db5a23d7b9d7bf1c1261a24cdeed65f2ea7a642a788dd2bd9632598";
+        sha256 = "984956348f6f833577b7a6cb72b325936cab3fd1c9cf28d7d54773d3ea48a20a";
       };
 
       beamDeps = [ jose telemetry telemetry_registry ];
@@ -387,15 +387,15 @@ let
 
     open_api_spex = buildMix rec {
       name = "open_api_spex";
-      version = "3.20.1";
+      version = "3.21.1";
 
       src = fetchHex {
         pkg = "open_api_spex";
         version = "${version}";
-        sha256 = "dc9c383949d0fc4b20b73103ac20af39dad638b3a15c0e6281853c2fc7cc3cc8";
+        sha256 = "eab3e703270fe8fce127274d4d1c67c15fcb440421117b44ceed0a19c3b97386";
       };
 
-      beamDeps = [ jason plug ];
+      beamDeps = [ decimal jason plug ];
     };
 
     parse_trans = buildRebar3 rec {
@@ -582,12 +582,12 @@ let
 
     rustler_precompiled = buildMix rec {
       name = "rustler_precompiled";
-      version = "0.8.0";
+      version = "0.8.1";
 
       src = fetchHex {
         pkg = "rustler_precompiled";
         version = "${version}";
-        sha256 = "00b1711d8d828200fe931e23bb0e72c2672a3a0ef76740e3c50433afda1965fb";
+        sha256 = "90b8c2297bf7959cfa1c927b2881faad7bb0707183124955369991b76177a166";
       };
 
       beamDeps = [ castore rustler ];
@@ -621,12 +621,12 @@ let
 
     swoosh = buildMix rec {
       name = "swoosh";
-      version = "1.17.0";
+      version = "1.17.1";
 
       src = fetchHex {
         pkg = "swoosh";
         version = "${version}";
-        sha256 = "659b8bc25f7483b872d051a7f0731fb8d5312165be0d0302a3c783b566b0a290";
+        sha256 = "3b20d25e580cb79af631335a1bdcfbffd835c08ebcdc16e98577223a241a18a1";
       };
 
       beamDeps = [ bandit finch hackney jason mime plug req telemetry ];
