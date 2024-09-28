@@ -40,6 +40,15 @@ defmodule SowerWeb.Router do
       live "/seeds/:id", SeedLive.Show, :show
       live "/inputs/repos", RepositoryLive.Index, :index
       live "/inputs/repos/:id", RepositoryLive.Show, :show
+
+      live "/settings", Settings.IndexLive, :index
+      # live "/settings/access-tokens", SettingsLive.AccessTokens, :index
+      live "/settings/access-tokens", Settings.AccessTokenLive.Index, :index
+      live "/settings/access-tokens/new", Settings.AccessTokenLive.Index, :new
+      live "/settings/access-tokens/:id/edit", Settings.AccessTokenLive.Index, :edit
+
+      live "/settings/access-tokens/:id", Settings.AccessTokenLive.Show, :show
+      live "/settings/access-tokens/:id/show/edit", Settings.AccessTokenLive.Show, :edit
     end
   end
 
@@ -95,7 +104,6 @@ defmodule SowerWeb.Router do
 
     live_session :require_authenticated_user,
       on_mount: [{SowerWeb.UserAuth, :ensure_authenticated}] do
-      live "/users/settings", UserSettingsLive, :edit
     end
   end
 end

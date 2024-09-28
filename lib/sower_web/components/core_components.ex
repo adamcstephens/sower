@@ -225,7 +225,7 @@ defmodule SowerWeb.CoreComponents do
     <button
       type={@type}
       class={[
-        "phx-submit-loading:opacity-75 bg-zinc-900 dark:bg-zinc-50 hover:bg-zinc-700 dark:hover:bg-zinc-300 py-2 px-3",
+        "phx-submit-loading:opacity-75 text-zinc-800 bg-zinc-300 dark:text-zinc-200 dark:bg-zinc-600 hover:text-zinc-800 hover:bg-orange-500 dark:hover:text-zinc-800 dark:hover:bg-orange-300 py-2 px-3 rounded",
         "text-sm font-semibold leading-6 text-white active:text-white/80",
         @class
       ]}

@@ -87,17 +87,17 @@
             id="user-dropdown"
           >
             <div class="px-4 py-3">
-              <span class="px-3 py-2 text-sm font-medium text-white rounded-md">
+              <span class="px-3 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-200 rounded-md">
                 Hello, <%= @current_user.name %>!
               </span>
             </div>
             <ul class="py-2" aria-labelledby="user-menu-button">
               <li>
                 <.link
-                  navigate={~p"/settings/api-tokens"}
+                  navigate={~p"/settings/access-tokens"}
                   class="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-600 dark:text-zinc-200 dark:hover:text-white"
                 >
-                  API Tokens
+                  Access Tokens
                 </.link>
               </li>
               <li>
@@ -130,7 +130,7 @@
     </div>
   </nav>
 </header>
-<main class="px-4 py-20 sm:px-6 lg:px-8 relative">
+<main class="px-4 py-8 sm:px-6 lg:px-8 relative">
   <div class="mx-auto max-w-6xl">
     <.flash_group flash={@flash} />
     <%= @inner_content %>

@@ -1,4 +1,4 @@
-defmodule SowerWeb.UserSettingsLive do
+defmodule SowerWeb.Settings.IndexLive do
   use SowerWeb, :live_view
 
   def render(assigns) do
@@ -7,12 +7,14 @@ defmodule SowerWeb.UserSettingsLive do
       Account Settings
     </.header>
 
-    <div class="space-y-12 divide-y"></div>
+    <div class="space-y-12 divide-y">
+      <.link navigate={~p"/settings/access-tokens"}>Access Tokens</.link>
+    </div>
     """
   end
 
   def mount(%{"token" => _token}, _session, socket) do
-    {:ok, push_navigate(socket, to: ~p"/users/settings")}
+    {:ok, push_navigate(socket, to: ~p"/settings")}
   end
 
   def mount(_params, _session, socket) do

@@ -28,4 +28,10 @@ defmodule Sower.AccountsFixtures do
     [_, token | _] = String.split(captured_email.text_body, "[TOKEN]")
     token
   end
+
+  def access_token_fixture() do
+    {:ok, access_token} = Sower.Accounts.AccessToken.create()
+
+    access_token
+  end
 end
