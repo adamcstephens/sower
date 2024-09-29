@@ -26,6 +26,7 @@ defmodule Sower.MixProject do
       {:jason, "~> 1.2"},
       {:joken, "~> 2.6.1"},
       {:mime, "~> 2.0.6"},
+      {:mix_test_watch, "~> 1.0", only: [:dev, :test], runtime: false},
       {:open_api_spex, "~> 3.20"},
       {:phoenix, "~> 1.7.7"},
       {:phoenix_ecto, "~> 4.4"},
