@@ -40,6 +40,10 @@ defmodule Sower.Accounts.AccessToken do
     create(attrs |> Map.put("expires_at", default_expiration))
   end
 
+  def create() do
+    create(%{})
+  end
+
   defp generate_token({:ok, access_token}) do
     {:ok, expire} =
       access_token.expires_at

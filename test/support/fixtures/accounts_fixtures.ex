@@ -10,7 +10,7 @@ defmodule Sower.AccountsFixtures do
     Enum.into(attrs, %{
       email: unique_user_email(),
       name: "John Doe",
-      oidc_id: Ecto.UUID.generate()
+      oidc_id: UUIDv7.generate()
     })
   end
 
@@ -29,8 +29,11 @@ defmodule Sower.AccountsFixtures do
     token
   end
 
-  def access_token_fixture() do
-    {:ok, access_token} = Sower.Accounts.AccessToken.create()
+  def access_token_fixture(attrs \\ %{}) do
+    {:ok, access_token, _token} =
+      attrs
+      |> Enum.into(%{"description" => "sample", "user_id" => user_fixture().id})
+      |> Sower.Accounts.AccessToken.create()
 
     access_token
   end

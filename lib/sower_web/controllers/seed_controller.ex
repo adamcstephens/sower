@@ -49,7 +49,7 @@ defmodule SowerWeb.SeedController do
 
   def new_store_path(conn, %{"id" => id, "path" => path}) do
     with {:ok, %Sower.StorePath{} = store_path} <-
-           Sower.Seed.submit(%{id: id, path: path}),
+           Sower.Seed.submit(id, path),
          Logger.debug(store_path) do
       conn
       |> put_status(:created)

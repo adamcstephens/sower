@@ -4,7 +4,7 @@ defmodule SowerWeb.SowerComponents do
   attr :id, :string, required: true
 
   def uuid(assigns) do
-    id = assigns.id |> String.split("-") |> List.last() |> dbg()
+    id = assigns.id |> String.split("-") |> List.last()
 
     assigns =
       assign(assigns, :id, id)

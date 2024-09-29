@@ -23,13 +23,14 @@ defmodule Sower.Seed do
     |> Repo.insert()
   end
 
-  def submit(%{id: id, path: store_path}) do
-    store_path = StorePath.submit!(store_path)
+  def submit(seed_id, path) do
+    store_path = StorePath.submit!(path)
 
-    get_by_id!(id)
-    |> SeedStorePath.submit!(store_path)
+    seed = get_by_id!(seed_id)
 
-    {:ok, store_path}
+    SeedStorePath.submit!(seed, store_path)
+
+    {:ok, seed}
   end
 
   def get_by_id!(id) do

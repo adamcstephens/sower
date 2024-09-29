@@ -4,17 +4,23 @@ defmodule SowerWeb.Settings.AccessTokenLiveTest do
   import Phoenix.LiveViewTest
   import Sower.AccountsFixtures
 
-  @create_attrs %{}
-  @update_attrs %{}
-  @invalid_attrs %{}
+  @create_attrs %{
+    description: "test"
+  }
+  @update_attrs %{
+    description: "second"
+  }
+  @invalid_attrs %{
+    description: ""
+  }
 
-  defp create_access_token(_) do
-    access_token = access_token_fixture()
+  defp create_access_token(context) do
+    access_token = access_token_fixture(%{"user_id" => context.user.id})
     %{access_token: access_token}
   end
 
   describe "Index" do
-    setup [:create_access_token]
+    setup [:register_and_log_in_user, :create_access_token]
 
     test "lists all access-tokens", %{conn: conn} do
       {:ok, _index_live, html} = live(conn, ~p"/settings/access-tokens")
@@ -25,8 +31,8 @@ defmodule SowerWeb.Settings.AccessTokenLiveTest do
     test "saves new access_token", %{conn: conn} do
       {:ok, index_live, _html} = live(conn, ~p"/settings/access-tokens")
 
-      assert index_live |> element("a", "New Access token") |> render_click() =~
-               "New Access token"
+      assert index_live |> element("a", "New Token") |> render_click() =~
+               "New Token"
 
       assert_patch(index_live, ~p"/settings/access-tokens/new")
 
@@ -38,17 +44,16 @@ defmodule SowerWeb.Settings.AccessTokenLiveTest do
              |> form("#access_token-form", access_token: @create_attrs)
              |> render_submit()
 
-      assert_patch(index_live, ~p"/settings/access-tokens")
-
-      html = render(index_live)
-      assert html =~ "Access token created successfully"
+      path = assert_redirect(index_live)
+      assert path = ~r"/settings/access-tokens/+"
     end
 
     test "updates access_token in listing", %{conn: conn, access_token: access_token} do
       {:ok, index_live, _html} = live(conn, ~p"/settings/access-tokens")
 
-      assert index_live |> element("#access-tokens-#{access_token.id} a", "Edit") |> render_click() =~
-               "Edit Access token"
+      assert index_live
+             |> element("#access_tokens-#{access_token.id} a", "Edit")
+             |> render_click() =~ "Edit"
 
       assert_patch(index_live, ~p"/settings/access-tokens/#{access_token}/edit")
 
@@ -60,22 +65,23 @@ defmodule SowerWeb.Settings.AccessTokenLiveTest do
              |> form("#access_token-form", access_token: @update_attrs)
              |> render_submit()
 
-      assert_patch(index_live, ~p"/settings/access-tokens")
-
-      html = render(index_live)
-      assert html =~ "Access token updated successfully"
+      path = assert_patch(index_live)
+      assert path = ~r"/settings/access-tokens/+"
     end
 
     test "deletes access_token in listing", %{conn: conn, access_token: access_token} do
       {:ok, index_live, _html} = live(conn, ~p"/settings/access-tokens")
 
-      assert index_live |> element("#access-tokens-#{access_token.id} a", "Delete") |> render_click()
-      refute has_element?(index_live, "#access-tokens-#{access_token.id}")
+      assert index_live
+             |> element("#access_tokens-#{access_token.id} a", "Delete")
+             |> render_click()
+
+      refute has_element?(index_live, "#access_tokens-#{access_token.id}")
     end
   end
 
   describe "Show" do
-    setup [:create_access_token]
+    setup [:register_and_log_in_user, :create_access_token]
 
     test "displays access_token", %{conn: conn, access_token: access_token} do
       {:ok, _show_live, html} = live(conn, ~p"/settings/access-tokens/#{access_token}")
@@ -102,7 +108,18 @@ defmodule SowerWeb.Settings.AccessTokenLiveTest do
       assert_patch(show_live, ~p"/settings/access-tokens/#{access_token}")
 
       html = render(show_live)
-      assert html =~ "Access token updated successfully"
+      assert html =~ "Copy this token now! It will not be stored nor shown again."
+    end
+
+    test "deletes access_token within model", %{conn: conn, access_token: access_token} do
+      {:ok, show_live, _html} = live(conn, ~p"/settings/access-tokens/#{access_token}")
+
+      assert show_live
+             |> element("a", "Delete")
+             |> render_click()
+
+      path = assert_redirect(show_live)
+      assert path = ~r"/settings/access-tokens/+"
     end
   end
 end

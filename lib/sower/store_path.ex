@@ -25,6 +25,16 @@ defmodule Sower.StorePath do
     Sower.Repo.get!(Sower.StorePath, id)
   end
 
+  def submit!(%{path: _} = attrs) do
+    %Sower.StorePath{}
+    |> changeset(attrs)
+    |> Sower.Repo.insert!(
+      on_conflict: {:replace, [:updated_at]},
+      conflict_target: [:path],
+      returning: true
+    )
+  end
+
   def submit!(path) do
     %Sower.StorePath{}
     |> changeset(%{path: path})

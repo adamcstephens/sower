@@ -22,8 +22,14 @@ defmodule Sower.SeedFixtures do
     {:ok, seed} =
       attrs
       |> valid_seed_attributes()
-      |> Sower.Seed.submit()
+      |> Sower.Seed.new()
 
     seed
+  end
+
+  def store_path_fixture(attrs \\ %{}) do
+    attrs
+    |> Enum.into(%{path: random_store_path()})
+    |> Sower.StorePath.submit!()
   end
 end
