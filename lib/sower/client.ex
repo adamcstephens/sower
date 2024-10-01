@@ -7,6 +7,7 @@ defmodule Sower.Client do
 
   schema "clients" do
     field :name, :string
+    field :org_id, Ecto.UUID
 
     timestamps()
   end

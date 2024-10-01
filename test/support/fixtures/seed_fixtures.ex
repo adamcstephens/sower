@@ -22,7 +22,7 @@ defmodule Sower.SeedFixtures do
     {:ok, seed} =
       attrs
       |> valid_seed_attributes()
-      |> Sower.Seed.new()
+      |> Sower.Seed.create()
 
     seed
   end

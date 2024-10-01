@@ -6,6 +6,7 @@ defmodule Sower.Inputs.Repository do
 
   schema "repositories" do
     field :url, :string
+    field :org_id, Ecto.UUID
 
     timestamps()
   end

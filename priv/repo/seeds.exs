@@ -10,14 +10,22 @@
 # We recommend using the bang functions (`insert!`, `update!`
 # and so on) as they will fail if something goes wrong.
 
+{:ok, org} = Sower.Accounts.Organization.create(%{name: "dev"})
+Sower.Repo.put_org_id(org.org_id)
+
 Enum.to_list(1..20)
 |> Enum.map(fn t ->
   name = ~s"test#{t}"
 
-  Sower.Seed.submit(%{
-    name: name,
-    seed_type: "nixos",
-    store_path:
-      ~s"/nix/store/fqf9pp2pbcv64j0bz3mwv5grj60jkvzv-nixos-system-#{name}-24.11.20240703.9f4128e"
-  })
+  {:ok, seed} =
+    Sower.Seed.create(%{
+      name: name,
+      seed_type: "nixos",
+      org_id: org.org_id
+    })
+
+  Sower.Seed.submit(
+    seed,
+    ~s"/nix/store/fqf9pp2pbcv64j0bz3mwv5grj60jkvzv-nixos-system-#{name}-24.11.20240703.9f4128e"
+  )
 end)

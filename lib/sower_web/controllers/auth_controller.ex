@@ -4,10 +4,7 @@ defmodule SowerWeb.AuthController do
   require Logger
 
   def callback(%{assigns: %{ueberauth_auth: auth}} = conn, _params) do
-    case Sower.Accounts.User.find_or_create(auth.uid, %{
-           name: auth.info.name,
-           email: auth.info.email
-         }) do
+    case Sower.Accounts.find_or_create_user(auth.uid, auth.info) do
       {:ok, user} ->
         conn
         |> put_flash(:info, "Successfully authenticated.")

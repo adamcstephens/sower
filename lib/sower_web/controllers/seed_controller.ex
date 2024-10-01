@@ -23,7 +23,7 @@ defmodule SowerWeb.SeedController do
         "seed_type" => seed_type
       }) do
     with {:ok, %Sower.Seed{} = seed} <-
-           Sower.Seed.new(%{name: name, seed_type: seed_type}),
+           Sower.Seed.create(%{name: name, seed_type: seed_type}),
          Logger.debug(seed) do
       conn
       |> put_status(:created)

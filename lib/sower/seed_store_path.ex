@@ -6,17 +6,20 @@ defmodule Sower.SeedStorePath do
   alias Sower.Repo
 
   schema "seeds_store_paths" do
+    field :org_id, Ecto.UUID
     belongs_to :seed, Sower.Seed
     belongs_to :store_path, Sower.StorePath
     timestamps()
   end
 
   def submit!(seed, store_path) do
-    %Sower.SeedStorePath{}
+    %Sower.SeedStorePath{
+      org_id: Sower.Repo.get_org_id()
+    }
     |> changeset(%{seed_id: seed.id, store_path_id: store_path.id})
     |> Repo.insert!(
       on_conflict: {:replace, [:updated_at]},
-      conflict_target: [:seed_id, :store_path_id]
+      conflict_target: [:seed_id, :store_path_id, :org_id]
     )
   end
 

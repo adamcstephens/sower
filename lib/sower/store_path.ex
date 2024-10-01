@@ -6,6 +6,7 @@ defmodule Sower.StorePath do
 
   schema "store_paths" do
     field :path, :string
+    field :org_id, Ecto.UUID
 
     many_to_many :seeds, Sower.Seed, join_through: Sower.SeedStorePath
 
@@ -26,21 +27,25 @@ defmodule Sower.StorePath do
   end
 
   def submit!(%{path: _} = attrs) do
-    %Sower.StorePath{}
+    %Sower.StorePath{
+      org_id: Sower.Repo.get_org_id()
+    }
     |> changeset(attrs)
     |> Sower.Repo.insert!(
       on_conflict: {:replace, [:updated_at]},
-      conflict_target: [:path],
+      conflict_target: [:path, :org_id],
       returning: true
     )
   end
 
   def submit!(path) do
-    %Sower.StorePath{}
+    %Sower.StorePath{
+      org_id: Sower.Repo.get_org_id()
+    }
     |> changeset(%{path: path})
     |> Sower.Repo.insert!(
       on_conflict: {:replace, [:updated_at]},
-      conflict_target: [:path],
+      conflict_target: [:path, :org_id],
       returning: true
     )
   end

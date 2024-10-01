@@ -26,7 +26,7 @@ defmodule Sower.Accounts.AccessToken do
   def create(%AccessToken{} = access_token, %{"expires_at" => _} = attrs) do
     access_token
     |> changeset(attrs)
-    |> Repo.insert()
+    |> Repo.insert(skip_org_id: true)
     |> generate_token()
   end
 
@@ -73,7 +73,7 @@ defmodule Sower.Accounts.AccessToken do
   def update(%AccessToken{} = access_token, %{"expires_at" => _} = attrs) do
     access_token
     |> changeset(attrs)
-    |> Repo.update()
+    |> Repo.update(skip_org_id: true)
     |> generate_token()
   end
 
@@ -82,7 +82,7 @@ defmodule Sower.Accounts.AccessToken do
          {:ok, decrypted} <-
            Phoenix.Token.decrypt(SowerWeb.Endpoint, "access-token", token),
          [access_token_id, user_id] = String.split(decrypted, ":"),
-         access_token <- Repo.get(AccessToken, access_token_id),
+         access_token <- Repo.get(AccessToken, access_token_id, skip_org_id: true),
          true <- access_token.user_id == user_id do
       {:ok, Sower.Accounts.User.get_by_id!(user_id)}
     else
@@ -95,14 +95,14 @@ defmodule Sower.Accounts.AccessToken do
   end
 
   def delete(access_token) do
-    Repo.delete(access_token)
+    Repo.delete(access_token, skip_org_id: true)
   end
 
   def get!(id) do
-    AccessToken |> Sower.Repo.get!(id)
+    AccessToken |> Sower.Repo.get!(id, skip_org_id: true)
   end
 
   def list() do
-    AccessToken |> Sower.Repo.all()
+    AccessToken |> Sower.Repo.all(skip_org_id: true)
   end
 end

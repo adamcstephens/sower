@@ -4,33 +4,39 @@ defmodule Sower.Seed do
   import Ecto.Changeset
   import Ecto.Query, only: [from: 2]
 
-  alias Sower.{Repo, SeedStorePath, StorePath}
+  alias Sower.{Repo, Seed, SeedStorePath, StorePath}
 
   @derive {Jason.Encoder, only: [:id, :name, :seed_type]}
 
   schema "seeds" do
     field :name, :string
     field :seed_type, :string
+    field :org_id, Ecto.UUID
 
     many_to_many :store_paths, StorePath, join_through: Sower.SeedStorePath
 
     timestamps()
   end
 
-  def new(attrs) do
-    %Sower.Seed{}
+  def create(attrs) do
+    %Sower.Seed{
+      org_id: Sower.Repo.get_org_id()
+    }
     |> changeset(attrs)
     |> Repo.insert()
   end
 
-  def submit(seed_id, path) do
+  def submit(%Seed{} = seed, path) do
     store_path = StorePath.submit!(path)
-
-    seed = get_by_id!(seed_id)
 
     SeedStorePath.submit!(seed, store_path)
 
     {:ok, seed}
+  end
+
+  def submit(seed_id, path) do
+    seed = get_by_id!(seed_id)
+    submit(seed, path)
   end
 
   def get_by_id!(id) do
@@ -77,7 +83,7 @@ defmodule Sower.Seed do
     seed
     |> cast(attrs, [:name, :seed_type])
     |> validate_inclusion(:seed_type, ["nixos", "home-manager", "nix-darwin"])
-    |> validate_required([:name, :seed_type])
-    |> unique_constraint([:name, :seed_type], error_key: :unique_seed)
+    |> validate_required([:name, :seed_type, :org_id])
+    |> unique_constraint([:name, :seed_type, :org_id], error_key: :unique_seed)
   end
 end

@@ -12,21 +12,9 @@ defmodule Sower.Accounts.User do
     field :email, :string
     field :name, :string
     field :oidc_id, Ecto.UUID
+    field :org_id, Ecto.UUID
 
     timestamps()
-  end
-
-  # TODO upsert attrs to sync from OIDC provider
-  def find_or_create(oidc_id, attrs) do
-    case Repo.get_by(User, oidc_id: oidc_id) do
-      nil ->
-        %User{oidc_id: oidc_id}
-        |> changeset(%{oidc_id: oidc_id} |> Map.merge(attrs))
-        |> Repo.insert()
-
-      user ->
-        {:ok, user}
-    end
   end
 
   def get_by_id!(id) do
@@ -55,7 +43,7 @@ defmodule Sower.Accounts.User do
   """
   def get_by_session_token(token) do
     {:ok, query} = UserToken.verify_session_token_query(token)
-    Repo.one(query)
+    Repo.one(query, skip_org_id: true)
   end
 
   @doc """
@@ -66,10 +54,10 @@ defmodule Sower.Accounts.User do
     :ok
   end
 
-  defp changeset(user, attrs) do
+  def changeset(user, attrs) do
     user
-    |> cast(attrs, [:email, :name, :oidc_id])
-    |> validate_required([:oidc_id])
+    |> cast(attrs, [:email, :name, :oidc_id, :org_id])
+    |> validate_required([:oidc_id, :org_id])
     |> validate_email()
   end
 

@@ -8,12 +8,10 @@ defmodule Sower.Repo.Migrations.CreateUsersAuthTables do
       add :email, :citext, null: false
       add :name, :string, null: false
       add :oidc_id, :uuid, null: false
+      add :org_id, references(:organizations, column: :org_id), null: false
 
       timestamps()
     end
-
-    create unique_index(:users, [:email])
-    create unique_index(:users, [:oidc_id])
 
     create table(:users_tokens) do
       add :user_id, references(:users, on_delete: :delete_all), null: false
@@ -25,6 +23,9 @@ defmodule Sower.Repo.Migrations.CreateUsersAuthTables do
     end
 
     create index(:users_tokens, [:user_id])
+
+    create unique_index(:users, [:email])
+    create unique_index(:users, [:oidc_id])
     create unique_index(:users_tokens, [:context, :token])
   end
 end
