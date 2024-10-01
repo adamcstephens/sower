@@ -18,7 +18,7 @@ defmodule Sower.Accounts.User do
   end
 
   def get_by_id!(id) do
-    Repo.get!(User, id)
+    Repo.get!(User, id, skip_org_id: true)
   end
 
   def new(attrs) do
@@ -34,7 +34,7 @@ defmodule Sower.Accounts.User do
   """
   def generate_session_token(user) do
     {token, user_token} = UserToken.build_session_token(user)
-    Repo.insert!(user_token)
+    Repo.insert!(user_token, skip_org_id: true)
     token
   end
 
@@ -50,7 +50,7 @@ defmodule Sower.Accounts.User do
   Deletes the signed token with the given context.
   """
   def delete_session_token(token) do
-    Repo.delete_all(UserToken.by_token_and_context_query(token, "session"))
+    Repo.delete_all(UserToken.by_token_and_context_query(token, "session"), skip_org_id: true)
     :ok
   end
 

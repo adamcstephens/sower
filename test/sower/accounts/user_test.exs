@@ -4,6 +4,12 @@ defmodule Sower.AccountsTest do
   import Sower.AccountsFixtures
   alias Sower.Accounts.{User, UserToken}
 
+  setup _ do
+    org = organization_fixture()
+    Sower.Repo.put_org_id(org.org_id)
+    %{organization: org}
+  end
+
   describe "get_by_id!/1" do
     test "raises if id is invalid" do
       assert_raise Ecto.NoResultsError, fn ->
@@ -18,17 +24,27 @@ defmodule Sower.AccountsTest do
   end
 
   describe "new/1" do
-    test "validates email uniqueness" do
+    test "validates email uniqueness", %{organization: org} do
       %{email: email} = user_fixture()
 
       {:error, changeset} =
-        User.new(%{email: email, name: "Jane Doe", oidc_id: Ecto.UUID.generate()})
+        User.new(%{
+          email: email,
+          name: "Jane Doe",
+          oidc_id: Ecto.UUID.generate(),
+          org_id: org.org_id
+        })
 
       assert "has already been taken" in errors_on(changeset).email
 
       # Now try with the upper cased email too, to check that email case is ignored.
       {:error, changeset} =
-        User.new(%{email: String.upcase(email), name: "Jack Doe", oidc_id: Ecto.UUID.generate()})
+        User.new(%{
+          email: String.upcase(email),
+          name: "Jack Doe",
+          oidc_id: Ecto.UUID.generate(),
+          org_id: org.org_id
+        })
 
       assert "has already been taken" in errors_on(changeset).email
     end
@@ -39,9 +55,9 @@ defmodule Sower.AccountsTest do
       %{user: user_fixture()}
     end
 
-    test "generates a token", %{user: user} do
+    test "generates a token", %{user: user, organization: org} do
       token = User.generate_session_token(user)
-      assert user_token = Repo.get_by(UserToken, token: token)
+      assert user_token = Repo.get_by(UserToken, [token: token], skip_org_id: true)
       assert user_token.context == "session"
 
       # Creating the same token for another user should fail
@@ -72,7 +88,11 @@ defmodule Sower.AccountsTest do
     end
 
     test "does not return user for expired token", %{token: token} do
-      {1, nil} = Repo.update_all(UserToken, set: [inserted_at: ~N[2020-01-01 00:00:00]])
+      {1, nil} =
+        Repo.update_all(UserToken, [set: [inserted_at: ~N[2020-01-01 00:00:00]]],
+          skip_org_id: true
+        )
+
       refute User.get_by_session_token(token)
     end
   end

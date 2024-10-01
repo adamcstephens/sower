@@ -10,7 +10,8 @@ defmodule Sower.AccountsFixtures do
     Enum.into(attrs, %{
       email: unique_user_email(),
       name: "John Doe",
-      oidc_id: UUIDv7.generate()
+      oidc_id: UUIDv7.generate(),
+      org_id: organization_fixture(%{name: "John Doe Organization"}).org_id
     })
   end
 
@@ -36,5 +37,11 @@ defmodule Sower.AccountsFixtures do
       |> Sower.Accounts.AccessToken.create()
 
     access_token
+  end
+
+  def organization_fixture(attrs \\ %{}) do
+    {:ok, org} = attrs |> Enum.into(%{name: "test org"}) |> Sower.Accounts.Organization.create()
+
+    org
   end
 end

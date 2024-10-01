@@ -1,9 +1,17 @@
 defmodule Sower.SeedTest do
   use Sower.DataCase
 
+  import Sower.AccountsFixtures
   import Sower.SeedFixtures
 
   alias Sower.Seed
+
+  setup _ do
+    org = organization_fixture()
+    Sower.Repo.put_org_id(org.org_id)
+
+    %{organization: org}
+  end
 
   describe "latest/1" do
     test "does not return the seed if name does not exist" do
