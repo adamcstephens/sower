@@ -333,6 +333,19 @@ let
       beamDeps = [ castore hpax ];
     };
 
+    mix_test_watch = buildMix rec {
+      name = "mix_test_watch";
+      version = "1.2.0";
+
+      src = fetchHex {
+        pkg = "mix_test_watch";
+        version = "${version}";
+        sha256 = "278dc955c20b3fb9a3168b5c2493c2e5cffad133548d307e0a50c7f2cfbf34f6";
+      };
+
+      beamDeps = [ file_system ];
+    };
+
     nimble_options = buildMix rec {
       name = "nimble_options";
       version = "1.1.1";
@@ -409,6 +422,45 @@ let
       };
 
       beamDeps = [];
+    };
+
+    permit = buildMix rec {
+      name = "permit";
+      version = "0.2.1";
+
+      src = fetchHex {
+        pkg = "permit";
+        version = "${version}";
+        sha256 = "c38448dbc360c2d5717453fbc04c4ba4562efc63caad241f56bda22711a721a0";
+      };
+
+      beamDeps = [];
+    };
+
+    permit_ecto = buildMix rec {
+      name = "permit_ecto";
+      version = "0.2.3";
+
+      src = fetchHex {
+        pkg = "permit_ecto";
+        version = "${version}";
+        sha256 = "0b2b3a2b7a4e85b7f6f6278d61976f3e5b40484454f8fe58a90f79b4edc2ca1e";
+      };
+
+      beamDeps = [ ecto ecto_sql permit ];
+    };
+
+    permit_phoenix = buildMix rec {
+      name = "permit_phoenix";
+      version = "0.2.0";
+
+      src = fetchHex {
+        pkg = "permit_phoenix";
+        version = "${version}";
+        sha256 = "88de3369717d9ce0b1001720dbe18e3b9da416b6ecc872e28a94a8bf7f2eb2bb";
+      };
+
+      beamDeps = [ permit phoenix phoenix_live_view ];
     };
 
     phoenix = buildMix rec {
