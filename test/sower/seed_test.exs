@@ -38,26 +38,22 @@ defmodule Sower.SeedTest do
     test "adds a store path if seed already exists" do
       seed = seed_fixture()
 
-      {:ok, seed} =
+      {:ok, _} =
         Seed.submit(seed.id, random_store_path())
 
-      seed = seed |> Sower.Repo.preload(:store_paths)
+      assert Enum.count(seed |> Sower.Repo.preload(:store_paths) |> Map.get(:store_paths)) == 1
 
-      assert Enum.count(seed.store_paths) == 1
-
-      {:ok, seed} =
+      {:ok, _} =
         Seed.submit(seed.id, random_store_path())
 
-      seed = seed |> Sower.Repo.preload(:store_paths)
-
-      assert Enum.count(seed.store_paths) == 2
+      assert Enum.count(seed |> Sower.Repo.preload(:store_paths) |> Map.get(:store_paths)) == 2
     end
 
     test "no new store paths if seed and path already exist" do
       store_path = store_path_fixture()
       seed = seed_fixture()
 
-      {:ok, seed} = Seed.submit(seed.id, store_path.path)
+      {:ok, _} = Seed.submit(seed.id, store_path.path)
 
       seed = seed |> Sower.Repo.preload(:store_paths)
 

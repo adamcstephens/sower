@@ -2,6 +2,7 @@ defmodule SowerWeb.Router do
   use SowerWeb, :router
 
   import SowerWeb.UserAuth
+  import SowerWeb.TokenAuth
   use Plug.ErrorHandler
 
   pipeline :browser do
@@ -59,9 +60,12 @@ defmodule SowerWeb.Router do
 
   scope "/api" do
     pipe_through :api
-    get "/config", SowerWeb.AppController, :config
-
     get "/openapi", OpenApiSpex.Plug.RenderSpec, []
+  end
+
+  scope "/api" do
+    pipe_through [:api, :ensure_token_authenticated]
+    get "/config", SowerWeb.AppController, :config
 
     get "/seeds", SowerWeb.SeedController, :list
     get "/seeds/:id", SowerWeb.SeedController, :get

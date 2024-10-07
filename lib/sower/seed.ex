@@ -31,7 +31,7 @@ defmodule Sower.Seed do
 
     SeedStorePath.submit!(seed, store_path)
 
-    {:ok, seed}
+    {:ok, store_path}
   end
 
   def submit(seed_id, path) do

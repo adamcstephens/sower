@@ -7,6 +7,8 @@ defmodule SowerWeb.SeedController do
   alias OpenApiSpex.Schema
   alias SowerWeb.Schemas
 
+  plug OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true
+
   action_fallback SowerWeb.FallbackController
 
   operation :new,
@@ -18,10 +20,15 @@ defmodule SowerWeb.SeedController do
       ok: {"Seed response", "application/json", Schemas.Seed}
     ]
 
-  def new(conn, %{
-        "name" => name,
-        "seed_type" => seed_type
-      }) do
+  def new(
+        %Plug.Conn{
+          body_params: %Schemas.Seed{
+            name: name,
+            seed_type: seed_type
+          }
+        } = conn,
+        _params
+      ) do
     with {:ok, %Sower.Seed{} = seed} <-
            Sower.Seed.create(%{name: name, seed_type: seed_type}),
          Logger.debug(seed) do
@@ -47,7 +54,14 @@ defmodule SowerWeb.SeedController do
       created: {"Seed response", "application/json", Schemas.StorePath}
     ]
 
-  def new_store_path(conn, %{"id" => id, "path" => path}) do
+  def new_store_path(
+        %Plug.Conn{
+          body_params: %Schemas.StorePath{
+            path: path
+          }
+        } = conn,
+        %{id: id}
+      ) do
     with {:ok, %Sower.StorePath{} = store_path} <-
            Sower.Seed.submit(id, path),
          Logger.debug(store_path) do
@@ -72,8 +86,8 @@ defmodule SowerWeb.SeedController do
       ok: {"Seed response", "application/json", Schemas.StorePath}
     ]
 
-  def latest(conn, params) do
-    seed = Sower.Seed.latest_store_path_by_id(params["id"])
+  def latest(conn, %{id: id}) do
+    seed = Sower.Seed.latest_store_path_by_id(id)
     render(conn, :show, seed: seed)
   end
 
@@ -92,9 +106,13 @@ defmodule SowerWeb.SeedController do
       ok: {"Seed response", "application/json", Schemas.Seed}
     ]
 
-  def get(conn, params) do
-    seed = Sower.Seed.get_by_id!(params["id"])
+  def get(conn, %{id: id}) do
+    seed = Sower.Seed.get_by_id!(id)
     render(conn, :show, seed: seed)
+  end
+
+  def get(conn, _) do
+    conn |> put_status(404) |> render(:not_found)
   end
 
   operation :list,
@@ -119,7 +137,7 @@ defmodule SowerWeb.SeedController do
          %Schema{type: :object, properties: %{error: %Schema{type: :string}}}}
     ]
 
-  def list(conn, %{"name" => name, "seed_type" => seed_type}) do
+  def list(conn, %{name: name, seed_type: seed_type}) do
     seed = Sower.Seed.get(name, seed_type)
 
     case seed do
