@@ -49,6 +49,8 @@ start-client:
 test:
     nix build .#checks.x86_64-linux.default --print-build-logs
 
+update: update-elixir update-go
+
 update-elixir: && mix-nix-lock
     mix deps.clean --unused --unlock
     mix deps.update --all
