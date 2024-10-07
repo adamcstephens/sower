@@ -1,6 +1,15 @@
 default:
     just -l
 
+check: check-nix check-elixir
+
+check-elixir:
+    unset CI; MIX_ENV=test mix deps.get
+    mix test
+
+check-nix:
+    nix build .#checks.x86_64-linux.default --print-build-logs
+
 dev: && start
     mix deps.get
     mix deps.compile
@@ -45,9 +54,6 @@ start-pry:
 
 start-client:
     watchexec --watch ./cmd/client --restart -- go run ./cmd/client daemon --debug --config ./dev-client.toml
-
-test:
-    nix build .#checks.x86_64-linux.default --print-build-logs
 
 update: update-elixir update-go
 
