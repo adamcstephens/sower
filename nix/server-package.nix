@@ -3,6 +3,7 @@
   beamPackages,
   elixir,
   esbuild,
+  nixpkgs,
   tailwindcss,
   stdenv,
 }:
@@ -10,7 +11,7 @@ let
   arch = if stdenv.isAarch64 then "arm64" else "x64";
   os = if stdenv.isDarwin then "darwin" else "linux";
 in
-beamPackages.mixRelease {
+beamPackages.mixRelease rec {
   pname = "sower";
   version = builtins.readFile ../VERSION;
 
@@ -23,6 +24,7 @@ beamPackages.mixRelease {
       ../config
       ../lib
       ../mix.exs
+      ../mix.lock
       ../priv
       ../rel
       ../test
@@ -49,4 +51,22 @@ beamPackages.mixRelease {
 
     mix assets.deploy --no-deps-check
   '';
+
+  # disabled because requires a db to work
+  doCheck = false;
+  checkPhase = ''
+    runHook preCheck
+
+    export MIX_ENV=test
+
+    ${nixpkgs}/pkgs/development/beam-modules/mix-configure-hook.sh
+
+    mix do deps.loadpaths --no-deps-check, test
+
+    runHook postCheck
+  '';
+
+  passthru = {
+    inherit mixNixDeps;
+  };
 }

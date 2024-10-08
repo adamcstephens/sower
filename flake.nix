@@ -76,7 +76,10 @@
             packages = {
               seed-ci = pkgs.callPackage ./nix/seed-ci.nix { };
               client = pkgs.callPackage ./nix/client-package.nix { buildGoModule = pkgs.buildGo123Module; };
-              server = pkgs.callPackage ./nix/server-package.nix { inherit beamPackages elixir; };
+              server = pkgs.callPackage ./nix/server-package.nix {
+                inherit beamPackages elixir;
+                inherit (inputs) nixpkgs;
+              };
             };
 
             process-compose."default" = {
