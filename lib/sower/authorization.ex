@@ -1,3 +1,3 @@
 defmodule Sower.Authorization do
-  use Permit, permissions_module: Sower.Permissions
+  use Permit, permissions_module: Sower.Authorization.Permissions
 end

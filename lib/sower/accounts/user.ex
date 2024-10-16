@@ -57,7 +57,7 @@ defmodule Sower.Accounts.User do
   def changeset(user, attrs) do
     user
     |> cast(attrs, [:email, :name, :oidc_id, :org_id])
-    |> validate_required([:oidc_id, :org_id])
+    |> validate_required([:oidc_id, :org_id, :email, :name])
     |> validate_email()
   end
 

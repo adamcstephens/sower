@@ -450,19 +450,6 @@ let
       beamDeps = [ ecto ecto_sql permit ];
     };
 
-    permit_phoenix = buildMix rec {
-      name = "permit_phoenix";
-      version = "0.2.0";
-
-      src = fetchHex {
-        pkg = "permit_phoenix";
-        version = "${version}";
-        sha256 = "88de3369717d9ce0b1001720dbe18e3b9da416b6ecc872e28a94a8bf7f2eb2bb";
-      };
-
-      beamDeps = [ permit phoenix phoenix_live_view ];
-    };
-
     phoenix = buildMix rec {
       name = "phoenix";
       version = "1.7.14";

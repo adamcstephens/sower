@@ -39,6 +39,12 @@ defmodule Sower.Seed do
     submit(seed, path)
   end
 
+  def update(seed, attrs) do
+    seed
+    |> changeset(attrs)
+    |> Repo.update()
+  end
+
   def get_by_id!(id) do
     Repo.get!(Sower.Seed, id)
   end
@@ -81,7 +87,7 @@ defmodule Sower.Seed do
 
   defp changeset(seed, attrs) do
     seed
-    |> cast(attrs, [:name, :seed_type])
+    |> cast(attrs, [:name, :seed_type, :org_id])
     |> validate_inclusion(:seed_type, ["nixos", "home-manager", "nix-darwin"])
     |> validate_required([:name, :seed_type, :org_id])
     |> unique_constraint([:name, :seed_type, :org_id], error_key: :unique_seed)

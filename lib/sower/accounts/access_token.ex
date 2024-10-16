@@ -12,7 +12,12 @@ defmodule Sower.Accounts.AccessToken do
     field :expires_at, :date
     field :description, :string
 
-    belongs_to(:user, Sower.Accounts.User)
+    belongs_to :user, Sower.Accounts.User
+
+    embeds_many :permissions, Permission, on_replace: :delete do
+      field :action, Ecto.Enum, values: [:read, :update]
+      field :resource, Ecto.Enum, values: [Sower.Seed]
+    end
 
     timestamps()
   end
@@ -21,6 +26,13 @@ defmodule Sower.Accounts.AccessToken do
     access_token
     |> cast(attrs, [:expires_at, :user_id, :description])
     |> validate_required([:expires_at, :user_id, :description])
+    |> cast_embed(:permissions, required: false, with: &changeset_permission/2)
+  end
+
+  def changeset_permission(permission, attrs \\ %{}) do
+    permission
+    |> cast(attrs, [:action, :resource])
+    |> validate_required([:action, :resource])
   end
 
   def create(%AccessToken{} = access_token, %{"expires_at" => _} = attrs) do
@@ -70,7 +82,7 @@ defmodule Sower.Accounts.AccessToken do
     {:error, changeset}
   end
 
-  def update(%AccessToken{} = access_token, %{"expires_at" => _} = attrs) do
+  def update(%AccessToken{} = access_token, attrs) do
     access_token
     |> changeset(attrs)
     |> Repo.update(skip_org_id: true)

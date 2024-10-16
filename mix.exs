@@ -29,7 +29,6 @@ defmodule Sower.MixProject do
       {:mix_test_watch, "~> 1.0", only: [:dev, :test], runtime: false},
       {:open_api_spex, "~> 3.20"},
       {:permit, "~> 0.2.1"},
-      {:permit_phoenix, "~> 0.2.0"},
       {:permit_ecto, "~> 0.2.3"},
       {:phoenix, "~> 1.7.7"},
       {:phoenix_ecto, "~> 4.4"},
