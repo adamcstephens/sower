@@ -27,8 +27,10 @@ defmodule SowerWeb.Settings.AccessTokenLive.Index do
 
   defp apply_action(socket, :new, _params) do
     socket
-    |> assign(:page_title, "New Access token")
-    |> assign(:access_token, %AccessToken{})
+    |> assign(:page_title, "New access token")
+    |> assign(:access_token, %AccessToken{
+      expires_at: Date.utc_today() |> Date.add(1)
+    })
   end
 
   defp apply_action(socket, :index, _params) do

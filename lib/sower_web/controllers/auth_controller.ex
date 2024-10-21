@@ -9,7 +9,6 @@ defmodule SowerWeb.AuthController do
         conn
         |> put_flash(:info, "Successfully authenticated.")
         |> SowerWeb.UserAuth.log_in_user(user)
-        |> redirect(to: "/")
 
       {:error, reason} ->
         conn

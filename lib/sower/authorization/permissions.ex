@@ -3,13 +3,16 @@ defmodule Sower.Authorization.Permissions do
 
   def can(%Sower.Accounts.AccessToken{} = token) do
     permit()
-    |> map_permissions(token |> Sower.Repo.preload(:user))
+    |> map_token_permissions(token |> Sower.Repo.preload(:user))
   end
 
   # block by default
   def can(_), do: permit()
 
-  defp map_permissions(permit, token) do
+  defp map_token_permissions(
+         %Permit.Permissions{} = permit,
+         %Sower.Accounts.AccessToken{} = token
+       ) do
     Enum.reduce(token.permissions, permit, fn permission, permit ->
       permit
       |> permission_to(permission.action, permission.resource, org_id: token.user.org_id)

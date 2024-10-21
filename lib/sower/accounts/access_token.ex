@@ -1,6 +1,7 @@
 defmodule Sower.Accounts.AccessToken do
   use Sower.Schema
 
+  alias Ecto.Changeset
   alias Sower.Accounts.AccessToken
   alias Sower.Repo
 
@@ -11,6 +12,8 @@ defmodule Sower.Accounts.AccessToken do
   schema "access_tokens" do
     field :expires_at, :date
     field :description, :string
+    field :regenerate, :boolean, virtual: true
+    field :token, :string, virtual: true
 
     belongs_to :user, Sower.Accounts.User
 
@@ -24,8 +27,9 @@ defmodule Sower.Accounts.AccessToken do
 
   def changeset(access_token, attrs \\ %{}) do
     access_token
-    |> cast(attrs, [:expires_at, :user_id, :description])
+    |> cast(attrs, [:expires_at, :user_id, :description, :regenerate])
     |> validate_required([:expires_at, :user_id, :description])
+    |> force_expires_at_regeneration()
     |> cast_embed(:permissions, required: false, with: &changeset_permission/2)
   end
 
@@ -38,8 +42,8 @@ defmodule Sower.Accounts.AccessToken do
   def create(%AccessToken{} = access_token, %{"expires_at" => _} = attrs) do
     access_token
     |> changeset(attrs)
+    |> regenerate_token()
     |> Repo.insert(skip_org_id: true)
-    |> generate_token()
   end
 
   def create(%{"expires_at" => _} = attrs) do
@@ -56,37 +60,38 @@ defmodule Sower.Accounts.AccessToken do
     create(%{})
   end
 
-  defp generate_token({:ok, access_token}) do
-    {:ok, expire} =
-      access_token.expires_at
-      |> DateTime.new(Time.new!(0, 0, 0))
+  defp regenerate_token(%Changeset{} = changeset) do
+    case get_field(changeset, :regenerate) do
+      false ->
+        changeset
 
-    expire =
-      expire
-      |> DateTime.diff(DateTime.utc_now())
+      _ ->
+        {:ok, expire} =
+          get_field(changeset, :expires_at)
+          |> DateTime.new(Time.new!(0, 0, 0))
 
-    token =
-      "sower_" <>
-        Phoenix.Token.encrypt(
-          SowerWeb.Endpoint,
-          "access-token",
-          "#{access_token.id}:#{access_token.user_id}",
-          max_age: expire
-        )
+        expire =
+          expire
+          |> DateTime.diff(DateTime.utc_now())
 
-    # todo, return token for display
-    {:ok, access_token, token}
-  end
+        token =
+          "sower_" <>
+            Phoenix.Token.encrypt(
+              SowerWeb.Endpoint,
+              "access-token",
+              "#{get_field(changeset, :id)}:#{get_field(changeset, :user_id)}",
+              max_age: expire
+            )
 
-  defp generate_token({:error, changeset}) do
-    {:error, changeset}
+        changeset |> put_change(:token, token)
+    end
   end
 
   def update(%AccessToken{} = access_token, attrs) do
     access_token
     |> changeset(attrs)
+    |> regenerate_token()
     |> Repo.update(skip_org_id: true)
-    |> generate_token()
   end
 
   def authenticate(token) do
@@ -104,6 +109,20 @@ defmodule Sower.Accounts.AccessToken do
     end
 
     # Repo.one(from(a in AccessToken, where: a.id == ^access_token_id and a.user_id == ^user_id))
+  end
+
+  defp force_expires_at_regeneration(%Changeset{} = changeset) do
+    case get_change(changeset, :expires_at) do
+      nil ->
+        changeset
+
+      expires_at ->
+        if expires_at != changeset.data.expires_at do
+          put_change(changeset, :regenerate, true)
+        else
+          changeset
+        end
+    end
   end
 
   def delete(access_token) do

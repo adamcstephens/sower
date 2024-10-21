@@ -1,4 +1,5 @@
 defmodule SowerWeb.Settings.AccessTokenLive.FormComponent do
+  alias Sower.Accounts.AccessToken
   use SowerWeb, :live_component
 
   alias Sower.Accounts
@@ -9,7 +10,6 @@ defmodule SowerWeb.Settings.AccessTokenLive.FormComponent do
     <div>
       <.header>
         <%= @title %>
-        <:subtitle>Use this form to manage access_token records in your database.</:subtitle>
       </.header>
 
       <.simple_form
@@ -19,11 +19,19 @@ defmodule SowerWeb.Settings.AccessTokenLive.FormComponent do
         phx-change="validate"
         phx-submit="save"
       >
-        <.input field={@form[:description]} type="text" />
-        <.input field={@form[:expires_at]} value={Date.utc_today() |> Date.add(1)} type="date" />
+        <.input field={@form[:description]} type="text" label="Description" />
+        <.input field={@form[:expires_at]} type="date" label="Expiration date" />
+        <%= if @action == :edit do %>
+          <.input
+            field={@form[:regenerate]}
+            type="checkbox"
+            label="Regenerate"
+            disabled={is_force_expires_at_regeneration(@access_token, @form[:expires_at].value)}
+          />
+        <% end %>
 
         <:actions>
-          <.button phx-disable-with="Saving...">Save Access token</.button>
+          <.button phx-disable-with="Saving...">Save</.button>
         </:actions>
       </.simple_form>
     </div>
@@ -54,12 +62,12 @@ defmodule SowerWeb.Settings.AccessTokenLive.FormComponent do
 
   defp save_access_token(socket, :edit, access_token_params) do
     case Accounts.AccessToken.update(socket.assigns.access_token, access_token_params) do
-      {:ok, access_token, token} ->
+      {:ok, access_token} ->
         notify_parent({:saved, access_token})
 
         {:noreply,
          socket
-         |> put_flash(:token, token)
+         |> put_flash(:token, access_token.token)
          |> push_patch(to: socket.assigns.patch)}
 
       {:error, %Ecto.Changeset{} = changeset} ->
@@ -71,12 +79,12 @@ defmodule SowerWeb.Settings.AccessTokenLive.FormComponent do
     access_token_params = Map.put(access_token_params, "user_id", socket.assigns.current_user.id)
 
     case Accounts.AccessToken.create(access_token_params) do
-      {:ok, access_token, token} ->
+      {:ok, access_token} ->
         notify_parent({:saved, access_token})
 
         {:noreply,
          socket
-         |> put_flash(:token, token)
+         |> put_flash(:token, access_token.token)
          |> push_navigate(to: ~p"/settings/access-tokens/#{access_token.id}")}
 
       {:error, %Ecto.Changeset{} = changeset} ->
@@ -85,4 +93,13 @@ defmodule SowerWeb.Settings.AccessTokenLive.FormComponent do
   end
 
   defp notify_parent(msg), do: send(self(), {__MODULE__, msg})
+
+  defp is_force_expires_at_regeneration(%AccessToken{} = access_token, %Date{} = new_expires_at) do
+    access_token.expires_at != new_expires_at
+  end
+
+  defp is_force_expires_at_regeneration(%AccessToken{} = access_token, new_expires_at)
+       when is_binary(new_expires_at) do
+    access_token.expires_at != new_expires_at |> Date.from_iso8601!()
+  end
 end

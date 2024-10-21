@@ -50,7 +50,11 @@ defmodule SowerWeb.CoreComponents do
       data-cancel={JS.exec(@on_cancel, "phx-remove")}
       class="relative z-50 hidden"
     >
-      <div id={"#{@id}-bg"} class="bg-zinc-50/90 fixed inset-0 transition-opacity" aria-hidden="true" />
+      <div
+        id={"#{@id}-bg"}
+        class="bg-white/90 dark:bg-zinc-900/90 fixed inset-0 transition-opacity"
+        aria-hidden="true"
+      />
       <div
         class="fixed inset-0 overflow-y-auto"
         aria-labelledby={"#{@id}-title"}
@@ -66,7 +70,7 @@ defmodule SowerWeb.CoreComponents do
               phx-window-keydown={JS.exec("data-cancel", to: "##{@id}")}
               phx-key="escape"
               phx-click-away={JS.exec("data-cancel", to: "##{@id}")}
-              class="shadow-zinc-700/10 ring-zinc-700/10 relative hidden rounded-2xl bg-white p-14 shadow-lg ring-1 transition"
+              class="shadow-zinc-700/10 ring-zinc-700/10 relative hidden rounded-2xl bg-zinc-200 dark:bg-zinc-300 p-14 shadow-lg ring-1 transition"
             >
               <div class="absolute top-6 right-5">
                 <button
@@ -196,7 +200,7 @@ defmodule SowerWeb.CoreComponents do
   def simple_form(assigns) do
     ~H"""
     <.form :let={f} for={@for} as={@as} {@rest}>
-      <div class="mt-10 space-y-8 bg-white">
+      <div class="mt-10 space-y-8 bg-zinc-200 dark:bg-zinc-300 text-zinc-900 dark:text-zinc-900">
         <%= render_slot(@inner_block, f) %>
         <div :for={action <- @actions} class="mt-2 flex items-center justify-between gap-6">
           <%= render_slot(action, f) %>
@@ -225,7 +229,7 @@ defmodule SowerWeb.CoreComponents do
     <button
       type={@type}
       class={[
-        "phx-submit-loading:opacity-75 text-zinc-800 bg-zinc-300 dark:text-zinc-200 dark:bg-zinc-600 hover:text-zinc-800 hover:bg-orange-500 dark:hover:text-zinc-800 dark:hover:bg-orange-300 py-2 px-3 rounded",
+        "phx-submit-loading:opacity-75 text-zinc-100 bg-zinc-500 dark:text-zinc-200 dark:bg-zinc-600 hover:text-zinc-800 hover:bg-orange-500 dark:hover:text-zinc-800 dark:hover:bg-orange-500 py-2 px-3 rounded",
         "text-sm font-semibold leading-6 text-white active:text-white/80",
         @class
       ]}
@@ -422,7 +426,7 @@ defmodule SowerWeb.CoreComponents do
     ~H"""
     <header class={[@actions != [] && "flex items-center justify-between gap-6", @class]}>
       <div>
-        <h1 class="text-lg font-semibold leading-8">
+        <h1 class="text-lg font-semibold leading-8 text-zinc-900 dark:text-zinc-900 ">
           <%= render_slot(@inner_block) %>
         </h1>
         <p :if={@subtitle != []} class="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
