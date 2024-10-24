@@ -5,8 +5,6 @@
 
   attic-client,
   coreutils,
-  nix,
-  nix-eval-jobs,
   nushell,
 }:
 runCommandNoCC "seed-ci"
@@ -23,8 +21,6 @@ runCommandNoCC "seed-ci"
       lib.makeBinPath [
         attic-client
         coreutils
-        nix
-        nix-eval-jobs
       ]
     }
   ''
