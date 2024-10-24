@@ -3,7 +3,9 @@ defmodule Sower.Accounts.User do
 
   import Ecto.Changeset
 
-  alias Sower.Accounts.{User, UserToken}
+  alias Sower.Accounts.AccessToken
+  alias Sower.Accounts.User
+  alias Sower.Accounts.UserToken
   alias Sower.Repo
 
   @primary_key {:id, UUIDv7, autogenerate: true}
@@ -13,6 +15,8 @@ defmodule Sower.Accounts.User do
     field :name, :string
     field :oidc_id, Ecto.UUID
     field :org_id, Ecto.UUID
+
+    has_many :access_tokens, AccessToken
 
     timestamps()
   end

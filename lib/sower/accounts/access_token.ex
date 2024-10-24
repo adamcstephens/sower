@@ -136,4 +136,12 @@ defmodule Sower.Accounts.AccessToken do
   def list() do
     AccessToken |> Sower.Repo.all(skip_org_id: true)
   end
+
+  def permission_actions() do
+    Ecto.Enum.dump_values(Sower.Accounts.AccessToken.Permission, :action)
+  end
+
+  def permission_resources() do
+    Ecto.Enum.dump_values(Sower.Accounts.AccessToken.Permission, :resource)
+  end
 end

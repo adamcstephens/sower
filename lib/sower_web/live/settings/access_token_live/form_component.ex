@@ -30,6 +30,22 @@ defmodule SowerWeb.Settings.AccessTokenLive.FormComponent do
           />
         <% end %>
 
+        <.header>
+          Permissions
+        </.header>
+        <.inputs_for :let={perm} field={@form[:permissions]}>
+          <.input
+            field={perm[:resource]}
+            type="select"
+            options={Sower.Accounts.AccessToken.permission_resources()}
+          />
+          <.input
+            field={perm[:action]}
+            type="select"
+            options={Sower.Accounts.AccessToken.permission_actions()}
+          />
+        </.inputs_for>
+
         <:actions>
           <.button phx-disable-with="Saving...">Save</.button>
         </:actions>
