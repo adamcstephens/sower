@@ -90,7 +90,7 @@ func main() {
 				os.Exit(1)
 			}
 
-			seedClient, err := client.NewSeedClient(config.apiEndpoint.String())
+			seedClient, err := client.NewSeedClient(config.apiEndpoint.String(), config.apiToken)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to initialize seed client")
 				os.Exit(1)
@@ -131,7 +131,7 @@ func main() {
 				os.Exit(1)
 			}
 
-			seedClient, err := client.NewSeedClient(config.apiEndpoint.String())
+			seedClient, err := client.NewSeedClient(config.apiEndpoint.String(), config.apiToken)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to initialize seed client")
 				os.Exit(1)
@@ -169,7 +169,7 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			log.Debug().Any("args", args).Msg("submit seed")
 
-			seedClient, err := client.NewSeedClient(config.apiEndpoint.String())
+			seedClient, err := client.NewSeedClient(config.apiEndpoint.String(), config.apiToken)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to initialize seed client")
 				os.Exit(1)

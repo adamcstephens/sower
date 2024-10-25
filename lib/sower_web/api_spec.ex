@@ -14,7 +14,14 @@ defmodule SowerWeb.ApiSpec do
         Server.from_endpoint(Endpoint)
       ],
       components: %Components{
-        securitySchemes: %{"authorization" => %SecurityScheme{type: "http", scheme: "bearer"}}
+        securitySchemes: %{
+          "authorization" => %SecurityScheme{
+            type: "http",
+            scheme: "bearer",
+            bearerFormat: "sower",
+            description: "sower api token"
+          }
+        }
       },
       security: [%{"authorization" => []}]
     }

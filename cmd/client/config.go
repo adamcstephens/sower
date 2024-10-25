@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/knadh/koanf/parsers/toml/v2"
+	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/posflag"
 	"github.com/knadh/koanf/v2"
@@ -16,7 +17,7 @@ import (
 
 type config struct {
 	apiEndpoint     url.URL
-	bootstrapToken  string
+	apiToken        string
 	channelEndpoint url.URL
 	stateDirectory  string
 }
@@ -36,6 +37,9 @@ func initRootConfig(flags *flag.FlagSet) (*config, error) {
 		}
 	}
 
+	// load env vars
+	kConfig.Load(env.Provider("SOWER_", ".", nil), nil)
+
 	// load cli args
 	if err := kConfig.Load(posflag.Provider(flags, ".", kConfig), nil); err != nil {
 		return &config{}, fmt.Errorf("error parsing arguments")
@@ -50,12 +54,15 @@ func initRootConfig(flags *flag.FlagSet) (*config, error) {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	}
 
-	if kConfig.String("bootstrap-token-file") == "" {
-		return &config{}, fmt.Errorf("Missing required bootstrap-token")
+	if kConfig.String("api-token-file") == "" {
+		return &config{}, fmt.Errorf("Missing required api-token")
 	}
-	bootstrapToken, err := readSecret(kConfig.String("bootstrap-token-file"))
+	apiToken, err := readSecret(kConfig.String("api-token-file"))
 	if err != nil {
 		return &config{}, fmt.Errorf("failed to read secret, %v", err)
+	}
+	if envToken := kConfig.String("SOWER_API_TOKEN"); envToken != "" {
+		apiToken = envToken
 	}
 
 	channelEndpoint, err := url.Parse(fmt.Sprintf("%s/client", kConfig.String("url")))
@@ -72,7 +79,7 @@ func initRootConfig(flags *flag.FlagSet) (*config, error) {
 
 	config := &config{
 		apiEndpoint:     *apiEndpoint,
-		bootstrapToken:  bootstrapToken,
+		apiToken:        apiToken,
 		channelEndpoint: *channelEndpoint,
 		stateDirectory:  stateDirectory,
 	}

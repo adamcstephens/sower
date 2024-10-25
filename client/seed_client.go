@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+	"github.com/oapi-codegen/oapi-codegen/v2/pkg/securityprovider"
 
 	"github.com/rs/zerolog/log"
 )
@@ -15,10 +16,19 @@ type SeedClient struct {
 	client *ClientWithResponses
 }
 
-func NewSeedClient(endpoint string) (*SeedClient, error) {
+func NewSeedClient(endpoint, token string) (*SeedClient, error) {
+	log.Error().Msg(token)
+	if token == "" {
+		return nil, fmt.Errorf("API token missing")
+	}
 	hc := http.Client{}
 
-	newClient, err := NewClientWithResponses(endpoint, WithHTTPClient(&hc))
+	bearerAuth, err := securityprovider.NewSecurityProviderBearerToken(token)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to load API token, %s")
+	}
+
+	newClient, err := NewClientWithResponses(endpoint, WithRequestEditorFn(bearerAuth.Intercept), WithHTTPClient(&hc))
 	if err != nil {
 		return nil, err
 	}

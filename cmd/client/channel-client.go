@@ -22,7 +22,7 @@ func (c *channelClient) connect() error {
 	log.Info().Msg("Starting")
 
 	endpoint := c.config.channelEndpoint
-	token, _ := signToken(c.config.bootstrapToken, "name", "type")
+	token, _ := signToken(c.config.apiToken, "name", "type")
 	endpoint.RawQuery = fmt.Sprintf("token=%s", url.QueryEscape(token))
 
 	socket := phx.NewSocket(&endpoint)
@@ -101,11 +101,11 @@ func (c *channelClient) joinLobby() error {
 // 	return <-cont
 // }
 
-func signToken(bootstrapToken, name, seedType string) (string, error) {
+func signToken(apiToken, name, seedType string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"name":      name,
 		"seed_type": seedType,
 	})
 
-	return token.SignedString([]byte(bootstrapToken))
+	return token.SignedString([]byte(apiToken))
 }

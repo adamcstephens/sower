@@ -26,6 +26,11 @@
           },
           "seed_type": {
             "description": "Type of the seed",
+            "enum": [
+              "nixos",
+              "home-manager",
+              "nix-darwin"
+            ],
             "type": "string",
             "x-struct": null,
             "x-validate": null
@@ -69,6 +74,14 @@
         "type": "object",
         "x-struct": "Elixir.SowerWeb.Schemas.StorePath",
         "x-validate": null
+      }
+    },
+    "securitySchemes": {
+      "authorization": {
+        "bearerFormat": "sower",
+        "description": "sower api token",
+        "scheme": "bearer",
+        "type": "http"
       }
     }
   },
@@ -292,7 +305,11 @@
       }
     }
   },
-  "security": [],
+  "security": [
+    {
+      "authorization": []
+    }
+  ],
   "servers": [
     {
       "url": "http://localhost:4002",
