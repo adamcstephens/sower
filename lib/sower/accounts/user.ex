@@ -21,6 +21,14 @@ defmodule Sower.Accounts.User do
     timestamps()
   end
 
+  def get_by_email(email) do
+    Repo.get_by(User, [email: email], skip_org_id: true)
+  end
+
+  def get_by_email!(email) do
+    Repo.get_by!(User, [email: email], skip_org_id: true)
+  end
+
   def get_by_id!(id) do
     Repo.get!(User, id, skip_org_id: true)
   end
