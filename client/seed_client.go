@@ -17,7 +17,6 @@ type SeedClient struct {
 }
 
 func NewSeedClient(endpoint, token string) (*SeedClient, error) {
-	log.Error().Msg(token)
 	if token == "" {
 		return nil, fmt.Errorf("API token missing")
 	}
@@ -52,9 +51,18 @@ func (s *SeedClient) GetSeed(id, name, seedType string) (*Seed, error) {
 			return nil, err
 		}
 
-		if resp.StatusCode() != http.StatusOK {
-			return nil, err
+		if resp.StatusCode() == http.StatusUnauthorized {
+			return nil, fmt.Errorf(*(*resp.JSON401).Error)
 		}
+
+		if resp.StatusCode() == http.StatusNotFound {
+			return nil, fmt.Errorf(*(*resp.JSON404).Error)
+		}
+
+		if resp.StatusCode() != http.StatusOK {
+			return nil, fmt.Errorf("unknown error")
+		}
+
 		newSeed = (*resp.JSON200)[0]
 
 	} else {
@@ -68,10 +76,14 @@ func (s *SeedClient) GetSeed(id, name, seedType string) (*Seed, error) {
 			return nil, err
 		}
 
-		if resp.StatusCode() != http.StatusOK {
-			log.Error().Msg("Failed finding seed")
-			return nil, err
+		if resp.StatusCode() == http.StatusUnauthorized {
+			return nil, fmt.Errorf(*(*resp.JSON401).Error)
 		}
+
+		if resp.StatusCode() != http.StatusOK {
+			return nil, fmt.Errorf("unknown error")
+		}
+
 		newSeed = *resp.JSON200
 	}
 
@@ -81,15 +93,20 @@ func (s *SeedClient) GetSeed(id, name, seedType string) (*Seed, error) {
 }
 
 func (s *SeedClient) GetSeedLatestPath(seed *Seed) (*StorePath, error) {
-	pathResp, err := s.client.LatestStorePathBySeedWithResponse(context.TODO(), seed.Id.String())
+	resp, err := s.client.LatestStorePathBySeedWithResponse(context.TODO(), seed.Id.String())
 	if err != nil {
 		return nil, err
 	}
-	if pathResp.StatusCode() != http.StatusOK {
-		log.Error().Msg("Failed finding seed")
-		return nil, err
+
+	if resp.StatusCode() == http.StatusUnauthorized {
+		return nil, fmt.Errorf(*(*resp.JSON401).Error)
 	}
-	path := pathResp.JSON200
+
+	if resp.StatusCode() != http.StatusOK {
+		return nil, fmt.Errorf("unknown error")
+	}
+
+	path := resp.JSON200
 	log.Debug().Any("path", path).Any("seed", seed).Msg("Found path for seed")
 
 	return path, nil
@@ -100,9 +117,15 @@ func (s *SeedClient) SubmitSeedPath(seed *Seed, path string) (*StorePath, error)
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode() != http.StatusCreated {
-		return nil, err
+
+	if resp.StatusCode() == http.StatusUnauthorized {
+		return nil, fmt.Errorf(*(*resp.JSON401).Error)
 	}
+
+	if resp.StatusCode() != http.StatusCreated {
+		return nil, fmt.Errorf("unknown error")
+	}
+
 	storePath := resp.JSON201
 	log.Debug().Any("seed_id", seed.Id).Any("path", storePath).Msg("Created path for seed")
 

@@ -531,7 +531,10 @@ type ListSeedsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *[]Seed
-	JSON404      *struct {
+	JSON401      *struct {
+		Error *string `json:"error,omitempty"`
+	}
+	JSON404 *struct {
 		Error *string `json:"error,omitempty"`
 	}
 }
@@ -555,7 +558,10 @@ func (r ListSeedsResponse) StatusCode() int {
 type NewSeedResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *Seed
+	JSON201      *Seed
+	JSON401      *struct {
+		Error *string `json:"error,omitempty"`
+	}
 }
 
 // Status returns HTTPResponse.Status
@@ -578,6 +584,12 @@ type GetSeedResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *Seed
+	JSON401      *struct {
+		Error *string `json:"error,omitempty"`
+	}
+	JSON404 *struct {
+		Error *string `json:"error,omitempty"`
+	}
 }
 
 // Status returns HTTPResponse.Status
@@ -600,6 +612,9 @@ type NewSeedStorePathResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON201      *StorePath
+	JSON401      *struct {
+		Error *string `json:"error,omitempty"`
+	}
 }
 
 // Status returns HTTPResponse.Status
@@ -622,6 +637,9 @@ type LatestStorePathBySeedResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *StorePath
+	JSON401      *struct {
+		Error *string `json:"error,omitempty"`
+	}
 }
 
 // Status returns HTTPResponse.Status
@@ -722,6 +740,15 @@ func ParseListSeedsResponse(rsp *http.Response) (*ListSeedsResponse, error) {
 		}
 		response.JSON200 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest struct {
+			Error *string `json:"error,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest struct {
 			Error *string `json:"error,omitempty"`
@@ -750,12 +777,21 @@ func ParseNewSeedResponse(rsp *http.Response) (*NewSeedResponse, error) {
 	}
 
 	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
 		var dest Seed
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
-		response.JSON200 = &dest
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest struct {
+			Error *string `json:"error,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
 
 	}
 
@@ -783,6 +819,24 @@ func ParseGetSeedResponse(rsp *http.Response) (*GetSeedResponse, error) {
 		}
 		response.JSON200 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest struct {
+			Error *string `json:"error,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest struct {
+			Error *string `json:"error,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
 	}
 
 	return response, nil
@@ -809,6 +863,15 @@ func ParseNewSeedStorePathResponse(rsp *http.Response) (*NewSeedStorePathRespons
 		}
 		response.JSON201 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest struct {
+			Error *string `json:"error,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
 	}
 
 	return response, nil
@@ -834,6 +897,15 @@ func ParseLatestStorePathBySeedResponse(rsp *http.Response) (*LatestStorePathByS
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest struct {
+			Error *string `json:"error,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
 
 	}
 

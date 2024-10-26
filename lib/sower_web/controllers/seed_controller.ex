@@ -16,9 +16,12 @@ defmodule SowerWeb.SeedController do
     summary: "New Seed",
     parameters: [],
     request_body: {"Seed params", "application/json", Schemas.Seed},
-    responses: [
-      ok: {"Seed response", "application/json", Schemas.Seed}
-    ]
+    responses: %{
+      created: {"Seed response", "application/json", Schemas.Seed},
+      unauthorized:
+        {"Unauthorized", "application/json",
+         %Schema{type: :object, properties: %{error: %Schema{type: :string}}}}
+    }
 
   def new(
         %Plug.Conn{
@@ -51,7 +54,10 @@ defmodule SowerWeb.SeedController do
     ],
     request_body: {"Seed params", "application/json", Schemas.StorePath},
     responses: [
-      created: {"Seed response", "application/json", Schemas.StorePath}
+      created: {"Seed response", "application/json", Schemas.StorePath},
+      unauthorized:
+        {"Unauthorized", "application/json",
+         %Schema{type: :object, properties: %{error: %Schema{type: :string}}}}
     ]
 
   def new_store_path(
@@ -82,9 +88,12 @@ defmodule SowerWeb.SeedController do
         example: "1234-5678-1234-5678"
       ]
     ],
-    responses: [
-      ok: {"Seed response", "application/json", Schemas.StorePath}
-    ]
+    responses: %{
+      ok: {"Seed response", "application/json", Schemas.StorePath},
+      unauthorized:
+        {"Unauthorized", "application/json",
+         %Schema{type: :object, properties: %{error: %Schema{type: :string}}}}
+    }
 
   def latest(conn, %{id: id}) do
     seed = Sower.Seed.latest_store_path_by_id(id)
@@ -103,7 +112,13 @@ defmodule SowerWeb.SeedController do
       ]
     ],
     responses: [
-      ok: {"Seed response", "application/json", Schemas.Seed}
+      ok: {"Seed response", "application/json", Schemas.Seed},
+      not_found:
+        {"Seed error response", "application/json",
+         %Schema{type: :object, properties: %{error: %Schema{type: :string}}}},
+      unauthorized:
+        {"Unauthorized", "application/json",
+         %Schema{type: :object, properties: %{error: %Schema{type: :string}}}}
     ]
 
   def get(conn, %{id: id}) do
@@ -112,7 +127,7 @@ defmodule SowerWeb.SeedController do
   end
 
   def get(conn, _) do
-    conn |> put_status(404) |> render(:not_found)
+    conn |> put_status(:not_found) |> render(:not_found)
   end
 
   operation :list,
@@ -132,6 +147,9 @@ defmodule SowerWeb.SeedController do
     ],
     responses: [
       ok: {"Seed response", "application/json", %Schema{type: :array, items: Schemas.Seed}},
+      unauthorized:
+        {"Unauthorized", "application/json",
+         %Schema{type: :object, properties: %{error: %Schema{type: :string}}}},
       not_found:
         {"Seed error response", "application/json",
          %Schema{type: :object, properties: %{error: %Schema{type: :string}}}}
@@ -142,7 +160,7 @@ defmodule SowerWeb.SeedController do
 
     case seed do
       nil ->
-        conn |> put_status(404) |> render(:not_found)
+        conn |> put_status(:not_found) |> render(:not_found)
 
       seed ->
         render(conn, :list, seeds: [seed])

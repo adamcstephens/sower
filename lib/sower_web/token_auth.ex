@@ -2,7 +2,6 @@ defmodule SowerWeb.TokenAuth do
   use SowerWeb, :verified_routes
 
   import Plug.Conn
-  # import Phoenix.Controller
 
   def ensure_token_authenticated(conn, _opts) do
     with true <-
@@ -25,6 +24,7 @@ defmodule SowerWeb.TokenAuth do
 
   defp send_unauthorized(conn) do
     conn
+    |> put_resp_header("content-type", "application/json")
     |> resp(:unauthorized, %{error: "unauthorized"} |> Jason.encode!())
     |> send_resp()
     |> halt()
