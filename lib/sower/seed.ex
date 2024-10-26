@@ -31,6 +31,8 @@ defmodule Sower.Seed do
 
     SeedStorePath.submit!(seed, store_path)
 
+    {:ok, _} = updated_at_now(seed)
+
     {:ok, store_path}
   end
 
@@ -91,5 +93,12 @@ defmodule Sower.Seed do
     |> validate_inclusion(:seed_type, ["nixos", "home-manager", "nix-darwin"])
     |> validate_required([:name, :seed_type, :org_id])
     |> unique_constraint([:name, :seed_type, :org_id], error_key: :unique_seed)
+  end
+
+  defp updated_at_now(seed) do
+    seed
+    |> change()
+    |> put_change(:updated_at, NaiveDateTime.local_now())
+    |> Repo.update()
   end
 end
