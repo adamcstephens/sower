@@ -38,6 +38,10 @@ defmodule SowerWeb.SeedController do
       conn
       |> put_status(:created)
       |> render(:show, seed: seed)
+    else
+      {:error, %Ecto.Changeset{errors: errors}} ->
+        Logger.error(errors)
+        conn |> put_status(:unprocessable_content)
     end
   end
 

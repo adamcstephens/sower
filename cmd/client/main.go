@@ -75,6 +75,36 @@ func main() {
 	}
 	rootCmd.AddCommand(seedCmd)
 
+	var seedCreateCommand = &cobra.Command{
+		Use:   "create name seed_type",
+		Short: "Create a seed",
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 2 {
+				return fmt.Errorf("Expected 2 arguments, got %d", len(args))
+			}
+			return nil
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			name := args[0]
+			seedType := args[1]
+
+			seedClient, err := client.NewSeedClient(config.apiEndpoint.String(), config.apiToken)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to initialize seed client")
+				os.Exit(1)
+			}
+
+			seed, err := seedClient.CreateSeed(name, seedType)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to create seed")
+				os.Exit(1)
+			}
+
+			log.Info().Any("seed", seed).Msg("created")
+		},
+	}
+	seedCmd.AddCommand(seedCreateCommand)
+
 	var seedDownloadCommand = &cobra.Command{
 		Use:   "download id",
 		Short: "Download a seed",
@@ -154,8 +184,8 @@ func main() {
 		},
 	}
 	seedCmd.AddCommand(seedInfoCommand)
-	seedCmd.PersistentFlags().String("name", "", "seed name")
-	seedCmd.PersistentFlags().String("type", "", "seed type")
+	seedCmd.Flags().String("name", "", "seed name")
+	seedCmd.Flags().String("type", "", "seed type")
 
 	var seedSubmitCommand = &cobra.Command{
 		Use:   "submit name type out_path",
@@ -191,6 +221,7 @@ func main() {
 		},
 	}
 	seedCmd.AddCommand(seedSubmitCommand)
+	seedCmd.Flags().Bool("create", false, "create seed on submission")
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

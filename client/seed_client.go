@@ -38,6 +38,31 @@ func NewSeedClient(endpoint, token string) (*SeedClient, error) {
 	}, nil
 }
 
+func (s *SeedClient) CreateSeed(name, seedType string) (*Seed, error) {
+	st, err := stringToSeedSeedType(seedType)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := s.client.NewSeedWithResponse(context.TODO(), Seed{Name: name, SeedType: st})
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode() == http.StatusUnauthorized {
+		return nil, fmt.Errorf(*(*resp.JSON401).Error)
+	}
+
+	if resp.StatusCode() != http.StatusCreated {
+		return nil, fmt.Errorf("unknown error")
+	}
+
+	seed := resp.JSON201
+	log.Debug().Any("seed_id", seed.Id).Msg("Created seed")
+
+	return seed, nil
+}
+
 func (s *SeedClient) GetSeed(id, name, seedType string) (*Seed, error) {
 	newSeed := Seed{}
 
@@ -130,4 +155,17 @@ func (s *SeedClient) SubmitSeedPath(seed *Seed, path string) (*StorePath, error)
 	log.Debug().Any("seed_id", seed.Id).Any("path", storePath).Msg("Created path for seed")
 
 	return storePath, nil
+}
+
+func stringToSeedSeedType(s string) (SeedSeedType, error) {
+	switch s {
+	case "home-manager":
+		return HomeManager, nil
+	case "nix-darwin":
+		return NixDarwin, nil
+	case "nixos":
+		return Nixos, nil
+	default:
+		return "", fmt.Errorf("unknown seed type: %s", s)
+	}
 }
