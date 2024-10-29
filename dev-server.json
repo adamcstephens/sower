@@ -13,6 +13,13 @@
     "port": 5432,
     "password_file": "VERSION"
   },
+  "error_database": {
+    "username": "postgres",
+    "hostname": "localhost",
+    "database": "sower_dev_errors",
+    "port": 5432,
+    "password_file": "VERSION"
+  },
   "listen_port": 7150,
   "listen_address": "::",
   "nix_caches": [

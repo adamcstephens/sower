@@ -189,6 +189,22 @@ defmodule Sower.Config do
           json_config
       end
 
+    json_config =
+      with {:ok, database} <- json_config |> Keyword.fetch(:error_database),
+           {:ok, password_file} <- database |> Keyword.fetch(:password_file),
+           {:ok, password} <- read_credential(password_file) do
+        json_config |> Keyword.put(:error_database, database |> Keyword.put(:password, password))
+      else
+        # assume missing password_file is intentional
+        :error ->
+          Logger.debug("Configuration does not have `database.password_file` to read. Skipping.")
+          json_config
+
+        {:error, err} ->
+          Logger.warning("Failed to load database password from file, #{err}.")
+          json_config
+      end
+
     # oidc client secret file
     json_config =
       with {:ok, auth} <- json_config |> Keyword.fetch(:auth),

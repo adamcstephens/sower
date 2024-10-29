@@ -17,6 +17,7 @@ defmodule Sower.MixProject do
     [
       {:bandit, "~> 1.0"},
       {:ecto_sql, "~> 3.11"},
+      {:error_tracker, "~> 0.4"},
       {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
       {:ex_json_schema, "~> 0.10.2"},
       {:finch, "~> 0.13"},

@@ -8,6 +8,7 @@ defmodule Sower.Application do
     children = [
       SowerWeb.Telemetry,
       Sower.Repo,
+      Sower.ErrorRepo,
       {Phoenix.PubSub, name: Sower.PubSub},
       {Finch, name: Sower.Finch},
       SowerWeb.Endpoint,
