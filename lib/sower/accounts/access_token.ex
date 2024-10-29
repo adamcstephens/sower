@@ -42,8 +42,8 @@ defmodule Sower.Accounts.AccessToken do
   def create(%AccessToken{} = access_token, %{"expires_at" => _} = attrs) do
     access_token
     |> changeset(attrs)
-    |> regenerate_token()
     |> Repo.insert(skip_org_id: true)
+    |> generate_token()
   end
 
   def create(%{"expires_at" => _} = attrs) do
@@ -66,25 +66,39 @@ defmodule Sower.Accounts.AccessToken do
         changeset
 
       _ ->
-        {:ok, expire} =
-          get_field(changeset, :expires_at)
-          |> DateTime.new(Time.new!(0, 0, 0))
-
-        expire =
-          expire
-          |> DateTime.diff(DateTime.utc_now())
-
         token =
-          "sower_" <>
-            Phoenix.Token.encrypt(
-              SowerWeb.Endpoint,
-              "access-token",
-              "#{get_field(changeset, :id)}:#{get_field(changeset, :user_id)}",
-              max_age: expire
-            )
+          encrypt_token(
+            get_field(changeset, :id),
+            get_field(changeset, :user_id),
+            get_field(changeset, :expires_at)
+          )
 
         changeset |> put_change(:token, token)
     end
+  end
+
+  defp generate_token({:ok, %AccessToken{} = access_token}) do
+    token = encrypt_token(access_token.id, access_token.user_id, access_token.expires_at)
+
+    {:ok, access_token |> Map.put(:token, token)}
+  end
+
+  defp encrypt_token(id, user_id, expires_at) do
+    {:ok, expire} =
+      expires_at
+      |> DateTime.new(Time.new!(0, 0, 0))
+
+    expire =
+      expire
+      |> DateTime.diff(DateTime.utc_now())
+
+    "sower_" <>
+      Phoenix.Token.encrypt(
+        SowerWeb.Endpoint,
+        "access-token",
+        "#{id}:#{user_id}",
+        max_age: expire
+      )
   end
 
   def update(%AccessToken{} = access_token, attrs) do
@@ -99,12 +113,20 @@ defmodule Sower.Accounts.AccessToken do
          {:ok, decrypted} <-
            Phoenix.Token.decrypt(SowerWeb.Endpoint, "access-token", token),
          [access_token_id, user_id] = String.split(decrypted, ":"),
-         access_token <- Repo.get(AccessToken, access_token_id, skip_org_id: true),
-         true <- access_token.user_id == user_id do
-      {:ok, Sower.Accounts.User.get_by_id!(user_id)}
+         access_token <- Repo.get(AccessToken, access_token_id, skip_org_id: true) do
+      case access_token do
+        nil ->
+          {:error, "Invalid token"}
+
+        _ ->
+          if access_token.user_id == user_id do
+            {:ok, Sower.Accounts.User.get_by_id!(user_id)}
+          else
+            {:error, "Invalid token"}
+          end
+      end
     else
       _ ->
-        Logger.error("Invalid token")
         {:error, "Invalid token"}
     end
 
