@@ -34,6 +34,7 @@ defmodule SowerWeb.Settings.AccessTokenLive.FormComponent do
           Permissions
         </.header>
         <.inputs_for :let={perm} field={@form[:permissions]}>
+          <input type="hidden" name="access_token[permissions_sort][]" value={perm.index} />
           <.input
             field={perm[:resource]}
             type="select"
@@ -44,9 +45,27 @@ defmodule SowerWeb.Settings.AccessTokenLive.FormComponent do
             type="select"
             options={Sower.Accounts.AccessToken.permission_actions()}
           />
+          <button
+            type="button"
+            name="access_token[permissions_drop][]"
+            value={perm.index}
+            phx-click={JS.dispatch("change")}
+          >
+            <.icon name="hero-x-mark" class="w-6 h-6 relative top-2" />
+          </button>
         </.inputs_for>
 
+        <input type="hidden" name="access_token[permissions_drop][]" />
+
         <:actions>
+          <button
+            type="button"
+            name="access_token[permissions_sort][]"
+            value="new"
+            phx-click={JS.dispatch("change")}
+          >
+            add permission
+          </button>
           <.button phx-disable-with="Saving...">Save</.button>
         </:actions>
       </.simple_form>

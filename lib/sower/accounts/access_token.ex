@@ -30,7 +30,12 @@ defmodule Sower.Accounts.AccessToken do
     |> cast(attrs, [:expires_at, :user_id, :description, :regenerate])
     |> validate_required([:expires_at, :user_id, :description])
     |> force_expires_at_regeneration()
-    |> cast_embed(:permissions, required: false, with: &changeset_permission/2)
+    |> cast_embed(:permissions,
+      required: false,
+      with: &changeset_permission/2,
+      sort_param: :permissions_sort,
+      drop_param: :permissions_drop
+    )
   end
 
   def changeset_permission(permission, attrs \\ %{}) do
