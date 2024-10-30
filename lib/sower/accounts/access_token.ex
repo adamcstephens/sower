@@ -29,6 +29,7 @@ defmodule Sower.Accounts.AccessToken do
     access_token
     |> cast(attrs, [:expires_at, :user_id, :description, :regenerate])
     |> validate_required([:expires_at, :user_id, :description])
+    |> validate_expires_at()
     |> force_expires_at_regeneration()
     |> cast_embed(:permissions,
       required: false,
@@ -42,6 +43,20 @@ defmodule Sower.Accounts.AccessToken do
     permission
     |> cast(attrs, [:action, :resource])
     |> validate_required([:action, :resource])
+  end
+
+  def validate_expires_at(changeset) do
+    validate_change(changeset, :expires_at, fn field, value ->
+      {:ok, expire} =
+        value
+        |> DateTime.new(Time.new!(0, 0, 0), "Etc/UTC")
+
+      if DateTime.before?(expire, DateTime.utc_now()) do
+        [{field, "must be at least 24 hours"}]
+      else
+        []
+      end
+    end)
   end
 
   def create(%AccessToken{} = access_token, %{"expires_at" => _} = attrs) do
@@ -89,20 +104,12 @@ defmodule Sower.Accounts.AccessToken do
   end
 
   defp encrypt_token(id, user_id, expires_at) do
-    {:ok, expire} =
-      expires_at
-      |> DateTime.new(Time.new!(0, 0, 0))
-
-    expire =
-      expire
-      |> DateTime.diff(DateTime.utc_now())
-
     "sower_" <>
       Phoenix.Token.encrypt(
         SowerWeb.Endpoint,
         "access-token",
         "#{id}:#{user_id}",
-        max_age: expire
+        max_age: expires_at_to_max_age(expires_at, DateTime.utc_now())
       )
   end
 
@@ -121,21 +128,43 @@ defmodule Sower.Accounts.AccessToken do
          access_token <- Repo.get(AccessToken, access_token_id, skip_org_id: true) do
       case access_token do
         nil ->
-          {:error, "Invalid token"}
+          {:error, "Invalid token: Not found"}
 
         _ ->
-          if access_token.user_id == user_id do
-            {:ok, Sower.Accounts.User.get_by_id!(user_id)}
-          else
-            {:error, "Invalid token"}
+          case Phoenix.Token.decrypt(SowerWeb.Endpoint, "access-token", token,
+                 max_age: expires_at_to_max_age(access_token.expires_at, access_token.updated_at)
+               ) do
+            {:ok, _} ->
+              if access_token.user_id == user_id do
+                {:ok, Sower.Accounts.User.get_by_id!(user_id)}
+              else
+                {:error, "Invalid token: User Mismatch"}
+              end
+
+            {:error, err} ->
+              {:error, ~s"Invalid token: #{err}"}
           end
       end
     else
       _ ->
-        {:error, "Invalid token"}
+        {:error, "Invalid token: Parse Failure"}
     end
 
     # Repo.one(from(a in AccessToken, where: a.id == ^access_token_id and a.user_id == ^user_id))
+  end
+
+  defp expires_at_to_max_age(expires_at, %NaiveDateTime{} = from) do
+    {:ok, from} = DateTime.from_naive(from, "Etc/UTC")
+    expires_at_to_max_age(expires_at, from)
+  end
+
+  defp expires_at_to_max_age(expires_at, from) do
+    {:ok, expire} =
+      expires_at
+      |> DateTime.new(Time.new!(0, 0, 0))
+
+    expire
+    |> DateTime.diff(from)
   end
 
   defp force_expires_at_regeneration(%Changeset{} = changeset) do

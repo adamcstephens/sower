@@ -2,6 +2,7 @@ defmodule SowerWeb.TokenAuth do
   use SowerWeb, :verified_routes
 
   import Plug.Conn
+  require Logger
 
   def ensure_token_authenticated(conn, _opts) do
     with true <-
@@ -17,6 +18,10 @@ defmodule SowerWeb.TokenAuth do
       Sower.Repo.put_org_id(user.org_id)
       conn
     else
+      {:error, err} ->
+        Logger.error(~s"Unauthorized token received: #{err}")
+        conn |> send_unauthorized()
+
       _ ->
         conn |> send_unauthorized()
     end
