@@ -7,6 +7,7 @@ defmodule Sower.Repo.Migrations.AccessTokens do
       add :description, :string, null: false
       add :user_id, references(:users, on_delete: :delete_all), null: false
       add :permissions, :map
+      add :token_subset, :string
 
       timestamps()
     end

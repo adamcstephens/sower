@@ -14,6 +14,7 @@ defmodule Sower.Accounts.AccessToken do
     field :description, :string
     field :regenerate, :boolean, virtual: true
     field :token, :string, virtual: true
+    field :token_subset, :string
 
     belongs_to :user, Sower.Accounts.User
 
@@ -93,14 +94,19 @@ defmodule Sower.Accounts.AccessToken do
             get_field(changeset, :expires_at)
           )
 
-        changeset |> put_change(:token, token)
+        changeset
+        |> put_change(:token, token)
+        |> put_change(:token_subset, String.slice(token, -12..-1))
     end
   end
 
   defp generate_token({:ok, %AccessToken{} = access_token}) do
     token = encrypt_token(access_token.id, access_token.user_id, access_token.expires_at)
 
-    {:ok, access_token |> Map.put(:token, token)}
+    {:ok,
+     access_token
+     |> Map.put(:token, token)
+     |> Map.put(:token_subset, String.slice(token, -12..-1))}
   end
 
   defp encrypt_token(id, user_id, expires_at) do
@@ -124,7 +130,7 @@ defmodule Sower.Accounts.AccessToken do
     with "sower_" <> token <- token,
          {:ok, decrypted} <-
            Phoenix.Token.decrypt(SowerWeb.Endpoint, "access-token", token),
-         [access_token_id, user_id] = String.split(decrypted, ":"),
+         [access_token_id, user_id] <- String.split(decrypted, ":"),
          access_token <- Repo.get(AccessToken, access_token_id, skip_org_id: true) do
       case access_token do
         nil ->
@@ -136,7 +142,11 @@ defmodule Sower.Accounts.AccessToken do
                ) do
             {:ok, _} ->
               if access_token.user_id == user_id do
-                {:ok, Sower.Accounts.User.get_by_id!(user_id)}
+                if access_token.token_subset == String.slice(token, -8..-1) do
+                  {:ok, Sower.Accounts.User.get_by_id!(user_id)}
+                else
+                  {:error, "Invalid token: Token Mismatch"}
+                end
               else
                 {:error, "Invalid token: User Mismatch"}
               end

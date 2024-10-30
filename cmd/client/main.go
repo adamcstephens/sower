@@ -184,8 +184,8 @@ func main() {
 		},
 	}
 	seedCmd.AddCommand(seedInfoCommand)
-	seedCmd.Flags().String("name", "", "seed name")
-	seedCmd.Flags().String("type", "", "seed type")
+	seedInfoCommand.Flags().String("name", "", "seed name")
+	seedInfoCommand.Flags().String("type", "", "seed type")
 
 	var seedSubmitCommand = &cobra.Command{
 		Use:   "submit name type out_path",
