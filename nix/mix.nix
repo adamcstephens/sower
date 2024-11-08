@@ -112,14 +112,27 @@ let
       beamDeps = [];
     };
 
+    error_tracker = buildMix rec {
+      name = "error_tracker";
+      version = "0.4.0";
+
+      src = fetchHex {
+        pkg = "error_tracker";
+        version = "${version}";
+        sha256 = "00efa22d60ae5c8e519eaa1e2afd3e7d31a7822558d009ddaa6eca068b0b1a6b";
+      };
+
+      beamDeps = [ ecto ecto_sql jason phoenix_ecto phoenix_live_view plug postgrex ];
+    };
+
     esbuild = buildMix rec {
       name = "esbuild";
-      version = "0.8.1";
+      version = "0.8.2";
 
       src = fetchHex {
         pkg = "esbuild";
         version = "${version}";
-        sha256 = "25fc876a67c13cb0a776e7b5d7974851556baeda2085296c14ab48555ea7560f";
+        sha256 = "558a8a08ed78eb820efbfda1de196569d8bfa9b51e8371a1934fbb31345feda7";
       };
 
       beamDeps = [ castore jason ];
@@ -179,12 +192,12 @@ let
 
     floki = buildMix rec {
       name = "floki";
-      version = "0.36.2";
+      version = "0.36.3";
 
       src = fetchHex {
         pkg = "floki";
         version = "${version}";
-        sha256 = "a8766c0bc92f074e5cb36c4f9961982eda84c5d2b8e979ca67f5c268ec8ed580";
+        sha256 = "fe0158bff509e407735f6d40b3ee0d7deb47f3f3ee7c6c182ad28599f9f6b27a";
       };
 
       beamDeps = [];
@@ -387,12 +400,12 @@ let
 
     oidcc = buildMix rec {
       name = "oidcc";
-      version = "3.2.4";
+      version = "3.2.5";
 
       src = fetchHex {
         pkg = "oidcc";
         version = "${version}";
-        sha256 = "984956348f6f833577b7a6cb72b325936cab3fd1c9cf28d7d54773d3ea48a20a";
+        sha256 = "6038e227e971f1ebcbfbf183a52741947604d90103b15a5217f5619c738a114e";
       };
 
       beamDeps = [ jose telemetry telemetry_registry ];
@@ -465,12 +478,12 @@ let
 
     phoenix_ecto = buildMix rec {
       name = "phoenix_ecto";
-      version = "4.6.2";
+      version = "4.6.3";
 
       src = fetchHex {
         pkg = "phoenix_ecto";
         version = "${version}";
-        sha256 = "3f94d025f59de86be00f5f8c5dd7b5965a3298458d21ab1c328488be3b5fcd59";
+        sha256 = "909502956916a657a197f94cc1206d9a65247538de8a5e186f7537c895d95764";
       };
 
       beamDeps = [ ecto phoenix_html plug postgrex ];
@@ -582,12 +595,12 @@ let
 
     postgrex = buildMix rec {
       name = "postgrex";
-      version = "0.19.1";
+      version = "0.19.2";
 
       src = fetchHex {
         pkg = "postgrex";
         version = "${version}";
-        sha256 = "8bac7885a18f381e091ec6caf41bda7bb8c77912bb0e9285212829afe5d8a8f8";
+        sha256 = "618988886ab7ae8561ebed9a3c7469034bf6a88b8995785a3378746a4b9835ec";
       };
 
       beamDeps = [ db_connection decimal jason ];
@@ -595,12 +608,12 @@ let
 
     sentry = buildMix rec {
       name = "sentry";
-      version = "10.7.1";
+      version = "10.8.0";
 
       src = fetchHex {
         pkg = "sentry";
         version = "${version}";
-        sha256 = "56291312397bf2b6afab6cf4f7aa1f27413b0eb2ceeb63b8aab2d7658aaea882";
+        sha256 = "92549e7ba776b7ccfed4e74d58987272d37d99606b130e4141bc015a1a8e4235";
       };
 
       beamDeps = [ hackney jason nimble_options nimble_ownership phoenix phoenix_live_view plug telemetry ];
@@ -621,12 +634,12 @@ let
 
     swoosh = buildMix rec {
       name = "swoosh";
-      version = "1.17.2";
+      version = "1.17.3";
 
       src = fetchHex {
         pkg = "swoosh";
         version = "${version}";
-        sha256 = "de914359f0ddc134dc0d7735e28922d49d0503f31e4bd66b44e26039c2226d39";
+        sha256 = "14ad57cfbb70af57323e17f569f5840a33c01f8ebc531dd3846beef3c9c95e55";
       };
 
       beamDeps = [ bandit finch hackney jason mime plug telemetry ];
@@ -647,12 +660,12 @@ let
 
     tailwind = buildMix rec {
       name = "tailwind";
-      version = "0.2.3";
+      version = "0.2.4";
 
       src = fetchHex {
         pkg = "tailwind";
         version = "${version}";
-        sha256 = "8e45e7a34a676a7747d04f7913a96c770c85e6be810a1d7f91e713d3a3655b5d";
+        sha256 = "c6e4a82b8727bab593700c998a4d98cf3d8025678bfde059aed71d0000c3e463";
       };
 
       beamDeps = [ castore ];
