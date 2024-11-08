@@ -37,7 +37,7 @@
           in
           {
             devShells.default = pkgs.mkShell {
-              inputsFrom = [ config.process-compose.db.services.outputs.devShell ];
+              inputsFrom = [ config.process-compose.devServices.services.outputs.devShell ];
 
               packages =
                 [
@@ -60,12 +60,17 @@
                   pkgs.mix2nix
                   pkgs.nvfetcher
                   pkgs.process-compose
+                  config.process-compose.devServices.outputs.package
                   pkgs.watchexec
                 ]
                 ++ lib.optionals pkgs.stdenv.isLinux [
                   # elixir
                   pkgs.inotify-tools
                 ];
+
+              shellHook = ''
+                export PC_CONFIG_FILES=${config.process-compose.devServices.outputs.settingsFile}
+              '';
 
               # go delve fix
               hardeningDisable = [ "fortify" ];
@@ -84,16 +89,43 @@
               };
             };
 
-            process-compose.db = {
-              imports = [ inputs.services-flake.processComposeModules.default ];
+            process-compose.devServices =
+              { config, ... }:
+              {
+                imports = [ inputs.services-flake.processComposeModules.default ];
 
-              services.postgres.pg1 = {
-                enable = true;
-                superuser = "postgres";
+                services.postgres.postgres1 = {
+                  enable = true;
+                  superuser = "postgres";
+                };
+
+                services.grafana.grafana1 = {
+                  enable = true;
+                  datasources = [
+                    {
+                      name = "Tempo";
+                      type = "tempo";
+                      access = "proxy";
+                      url = "http://${config.services.tempo.tempo1.httpAddress}:${builtins.toString config.services.tempo.tempo1.httpPort}";
+                    }
+                  ];
+
+                  # https://grafana.com/docs/grafana/latest/setup-grafana/configure-grafana
+                  extraConf = {
+                    "auth.anonymous" = {
+                      enabled = true;
+                      org_role = "Admin";
+                      hide_version = false;
+                    };
+
+                    "auth.basic".enabled = false;
+                    "auth".disable_login_form = true;
+                  };
+                };
+                services.tempo.tempo1.enable = true;
+
+                cli.options.detached = true;
               };
-
-              cli.options.detached = true;
-            };
           };
 
         flake = {
