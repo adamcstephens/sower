@@ -4,6 +4,29 @@ defmodule Sower.Accounts do
   alias Sower.Accounts.{Organization, User}
   alias Sower.Repo
 
+  defp find_or_create_org_default(user_name) do
+    case Application.get_env(:sower, :organization, %{
+           mode: "single",
+           name: "default organization"
+         }) do
+      %{mode: "single", name: org_name} ->
+        case Sower.Accounts.Organization
+             |> Sower.Repo.get_by([name: org_name], skip_org_id: true) do
+          nil ->
+            Organization.create(%{name: org_name})
+
+          org ->
+            {:ok, org}
+        end
+
+      %{mode: "single"} ->
+        raise "single organization mode requires a name"
+
+      %{mode: "multi"} ->
+        Organization.create(%{name: user_name})
+    end
+  end
+
   # TODO upsert attrs to sync from OIDC provider
   def find_or_create_user(
         oidc_id,
@@ -14,7 +37,7 @@ defmodule Sower.Accounts do
       ) do
     case Repo.get_by(User, [oidc_id: oidc_id], skip_org_id: true) do
       nil ->
-        {:ok, organization} = Organization.create(%{name: name})
+        {:ok, organization} = find_or_create_org_default(name)
 
         %User{oidc_id: oidc_id}
         |> User.changeset(%{

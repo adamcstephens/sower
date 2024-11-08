@@ -12,5 +12,4 @@
 
 alias Sower.Repo.Seeds.Org
 
-Org.new(%Org{name: "seed"})
-Org.new(%Org{name: "trial"})
+Org.new(%Org{name: "default organization", email: "default@sower.dev"})

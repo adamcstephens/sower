@@ -122,6 +122,23 @@ defmodule Sower.Config do
         },
         "required" => ["public_key"]
       },
+      "organization" => %{
+        "type" => "object",
+        "properties" => %{
+          "mode" => %{
+            "type" => "string",
+            "enum" => ["single", "multi"],
+            "default" => "single",
+            "description" =>
+              "Whether to run in single or multiple organization mode. Will create all new resources in a default organization if set to single."
+          },
+          "name" => %{
+            "type" => "string",
+            "default" => "default organization",
+            "description" => "Name of the default organization in single org mode"
+          }
+        }
+      },
       "public_url" => %{
         "type" => "string",
         "format" => "uri"
