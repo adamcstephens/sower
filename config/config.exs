@@ -65,6 +65,16 @@ config :error_tracker,
   otp_app: :sower,
   enabled: true
 
+config :opentelemetry, :resource, service: %{name: "sower"}
+
+config :opentelemetry,
+  span_processor: :batch,
+  traces_exporter: :otlp
+
+config :opentelemetry_exporter,
+  otlp_protocol: :http_protobuf,
+  otlp_endpoint: "http://127.0.0.1:4318"
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"
