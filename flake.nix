@@ -25,6 +25,7 @@
 
         perSystem =
           {
+            config,
             lib,
             pkgs,
             self',
@@ -36,6 +37,8 @@
           in
           {
             devShells.default = pkgs.mkShell {
+              inputsFrom = [ config.process-compose.db.services.outputs.devShell ];
+
               packages =
                 [
                   # elixir
@@ -57,7 +60,6 @@
                   pkgs.mix2nix
                   pkgs.nvfetcher
                   pkgs.process-compose
-                  pkgs.postgresql
                   pkgs.watchexec
                 ]
                 ++ lib.optionals pkgs.stdenv.isLinux [
@@ -82,13 +84,15 @@
               };
             };
 
-            process-compose."default" = {
+            process-compose.db = {
               imports = [ inputs.services-flake.processComposeModules.default ];
 
-              services.postgres."pg1" = {
+              services.postgres.pg1 = {
                 enable = true;
                 superuser = "postgres";
               };
+
+              cli.options.detached = true;
             };
           };
 
