@@ -8,6 +8,19 @@ let
   self = packages // (overrides self packages);
 
   packages = with beamPackages; with self; {
+    acceptor_pool = buildRebar3 rec {
+      name = "acceptor_pool";
+      version = "1.0.0";
+
+      src = fetchHex {
+        pkg = "acceptor_pool";
+        version = "${version}";
+        sha256 = "0cbcd83fdc8b9ad2eee2067ef8b91a14858a5883cb7cd800e6fcd5803e158788";
+      };
+
+      beamDeps = [];
+    };
+
     bandit = buildMix rec {
       name = "bandit";
       version = "1.5.7";
@@ -42,6 +55,32 @@ let
         pkg = "certifi";
         version = "${version}";
         sha256 = "ee68d85df22e554040cdb4be100f33873ac6051387baf6a8f6ce82272340ff1c";
+      };
+
+      beamDeps = [];
+    };
+
+    chatterbox = buildRebar3 rec {
+      name = "chatterbox";
+      version = "0.15.1";
+
+      src = fetchHex {
+        pkg = "ts_chatterbox";
+        version = "${version}";
+        sha256 = "4f75b91451338bc0da5f52f3480fa6ef6e3a2aeecfc33686d6b3d0a0948f31aa";
+      };
+
+      beamDeps = [ hpack ];
+    };
+
+    ctx = buildRebar3 rec {
+      name = "ctx";
+      version = "0.6.0";
+
+      src = fetchHex {
+        pkg = "ctx";
+        version = "${version}";
+        sha256 = "a14ed2d1b67723dbebbe423b28d7615eb0bdcba6ff28f2d1f1b0a7e1d4aa5fc2";
       };
 
       beamDeps = [];
@@ -216,6 +255,32 @@ let
       beamDeps = [ expo ];
     };
 
+    gproc = buildRebar3 rec {
+      name = "gproc";
+      version = "0.9.1";
+
+      src = fetchHex {
+        pkg = "gproc";
+        version = "${version}";
+        sha256 = "905088e32e72127ed9466f0bac0d8e65704ca5e73ee5a62cb073c3117916d507";
+      };
+
+      beamDeps = [];
+    };
+
+    grpcbox = buildRebar3 rec {
+      name = "grpcbox";
+      version = "0.17.1";
+
+      src = fetchHex {
+        pkg = "grpcbox";
+        version = "${version}";
+        sha256 = "4a3b5d7111daabc569dc9cbd9b202a3237d81c80bf97212fbc676832cb0ceb17";
+      };
+
+      beamDeps = [ acceptor_pool chatterbox ctx gproc ];
+    };
+
     hackney = buildRebar3 rec {
       name = "hackney";
       version = "1.20.1";
@@ -227,6 +292,19 @@ let
       };
 
       beamDeps = [ certifi idna metrics mimerl parse_trans ssl_verify_fun unicode_util_compat ];
+    };
+
+    hpack = buildRebar3 rec {
+      name = "hpack";
+      version = "0.3.0";
+
+      src = fetchHex {
+        pkg = "hpack_erl";
+        version = "${version}";
+        sha256 = "d6137d7079169d8c485c6962dfe261af5b9ef60fbc557344511c1e65e3d95fb0";
+      };
+
+      beamDeps = [];
     };
 
     hpax = buildMix rec {
@@ -422,6 +500,123 @@ let
       };
 
       beamDeps = [ decimal jason plug ];
+    };
+
+    opentelemetry = buildRebar3 rec {
+      name = "opentelemetry";
+      version = "1.5.0";
+
+      src = fetchHex {
+        pkg = "opentelemetry";
+        version = "${version}";
+        sha256 = "cdf4f51d17b592fc592b9a75f86a6f808c23044ba7cf7b9534debbcc5c23b0ee";
+      };
+
+      beamDeps = [ opentelemetry_api ];
+    };
+
+    opentelemetry_api = buildMix rec {
+      name = "opentelemetry_api";
+      version = "1.4.0";
+
+      src = fetchHex {
+        pkg = "opentelemetry_api";
+        version = "${version}";
+        sha256 = "3dfbbfaa2c2ed3121c5c483162836c4f9027def469c41578af5ef32589fcfc58";
+      };
+
+      beamDeps = [];
+    };
+
+    opentelemetry_bandit = buildMix rec {
+      name = "opentelemetry_bandit";
+      version = "0.2.0-rc.2";
+
+      src = fetchHex {
+        pkg = "opentelemetry_bandit";
+        version = "${version}";
+        sha256 = "9a76c4e0463865d794fe568abb426704f7c776c27e1678983d80eaab193176e6";
+      };
+
+      beamDeps = [ nimble_options opentelemetry_api opentelemetry_semantic_conventions otel_http plug telemetry ];
+    };
+
+    opentelemetry_exporter = buildRebar3 rec {
+      name = "opentelemetry_exporter";
+      version = "1.8.0";
+
+      src = fetchHex {
+        pkg = "opentelemetry_exporter";
+        version = "${version}";
+        sha256 = "a1f9f271f8d3b02b81462a6bfef7075fd8457fdb06adff5d2537df5e2264d9af";
+      };
+
+      beamDeps = [ grpcbox opentelemetry opentelemetry_api tls_certificate_check ];
+    };
+
+    opentelemetry_phoenix = buildMix rec {
+      name = "opentelemetry_phoenix";
+      version = "2.0.0-rc.1";
+
+      src = fetchHex {
+        pkg = "opentelemetry_phoenix";
+        version = "${version}";
+        sha256 = "74accdfd9f3757b802064f267ecbc5208a97fcb54d100e8e834b56fe09e64a8e";
+      };
+
+      beamDeps = [ nimble_options opentelemetry_api opentelemetry_process_propagator opentelemetry_semantic_conventions opentelemetry_telemetry otel_http plug telemetry ];
+    };
+
+    opentelemetry_process_propagator = buildMix rec {
+      name = "opentelemetry_process_propagator";
+      version = "0.3.0";
+
+      src = fetchHex {
+        pkg = "opentelemetry_process_propagator";
+        version = "${version}";
+        sha256 = "7243cb6de1523c473cba5b1aefa3f85e1ff8cc75d08f367104c1e11919c8c029";
+      };
+
+      beamDeps = [ opentelemetry_api ];
+    };
+
+    opentelemetry_semantic_conventions = buildMix rec {
+      name = "opentelemetry_semantic_conventions";
+      version = "1.27.0";
+
+      src = fetchHex {
+        pkg = "opentelemetry_semantic_conventions";
+        version = "${version}";
+        sha256 = "9681ccaa24fd3d810b4461581717661fd85ff7019b082c2dff89c7d5b1fc2864";
+      };
+
+      beamDeps = [];
+    };
+
+    opentelemetry_telemetry = buildMix rec {
+      name = "opentelemetry_telemetry";
+      version = "1.1.2";
+
+      src = fetchHex {
+        pkg = "opentelemetry_telemetry";
+        version = "${version}";
+        sha256 = "641ab469deb181957ac6d59bce6e1321d5fe2a56df444fc9c19afcad623ab253";
+      };
+
+      beamDeps = [ opentelemetry_api telemetry ];
+    };
+
+    otel_http = buildRebar3 rec {
+      name = "otel_http";
+      version = "0.2.0";
+
+      src = fetchHex {
+        pkg = "otel_http";
+        version = "${version}";
+        sha256 = "f2beadf922c8cfeb0965488dd736c95cc6ea8b9efce89466b3904d317d7cc717";
+      };
+
+      beamDeps = [];
     };
 
     parse_trans = buildRebar3 rec {
@@ -734,6 +929,19 @@ let
       };
 
       beamDeps = [ telemetry ];
+    };
+
+    tls_certificate_check = buildRebar3 rec {
+      name = "tls_certificate_check";
+      version = "1.24.0";
+
+      src = fetchHex {
+        pkg = "tls_certificate_check";
+        version = "${version}";
+        sha256 = "90b25a58ee433d91c17f036d4d354bf8859a089bfda60e68a86f8eecae45ef1b";
+      };
+
+      beamDeps = [ ssl_verify_fun ];
     };
 
     ueberauth = buildMix rec {
