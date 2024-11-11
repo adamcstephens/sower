@@ -143,8 +143,8 @@ defmodule Sower.Accounts.AccessToken do
                ) do
             {:ok, _} ->
               if access_token.user_id == user_id do
-                if access_token.token_subset == String.slice(token, -8..-1) do
-                  {:ok, Sower.Accounts.User.get_by_id!(user_id)}
+                if access_token.token_subset == String.slice(token, -12..-1) do
+                  {:ok, access_token |> Sower.Repo.preload(:user)}
                 else
                   {:error, "Invalid token: Token Mismatch"}
                 end

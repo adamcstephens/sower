@@ -14,9 +14,11 @@ defmodule SowerWeb.TokenAuth do
            |> Kernel.elem(1)
            |> String.split(" ")
            |> Enum.at(1),
-         {:ok, user} <- Sower.Accounts.AccessToken.authenticate(token) do
-      Sower.Repo.put_org_id(user.org_id)
+         {:ok, access_token} <- Sower.Accounts.AccessToken.authenticate(token) do
+      Sower.Repo.put_org_id(access_token.user.org_id)
+
       conn
+      |> assign(:access_token, access_token)
     else
       {:error, err} ->
         Logger.error(~s"Unauthorized token received: #{err}")

@@ -6,12 +6,14 @@ defmodule SowerWeb.SeedController do
 
   alias OpenApiSpex.Schema
   alias SowerWeb.Schemas
+  import Sower.Authorization
+  require OpenTelemetry.Tracer, as: Tracer
 
-  plug OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true
+  plug(OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true)
 
-  action_fallback SowerWeb.FallbackController
+  action_fallback(SowerWeb.FallbackController)
 
-  operation :new,
+  operation(:new,
     operation_id: "NewSeed",
     summary: "New Seed",
     parameters: [],
@@ -22,6 +24,7 @@ defmodule SowerWeb.SeedController do
         {"Unauthorized", "application/json",
          %Schema{type: :object, properties: %{error: %Schema{type: :string}}}}
     }
+  )
 
   def new(
         %Plug.Conn{
@@ -45,7 +48,7 @@ defmodule SowerWeb.SeedController do
     end
   end
 
-  operation :new_store_path,
+  operation(:new_store_path,
     operation_id: "NewSeedStorePath",
     summary: "New Seed Store Path",
     parameters: [
@@ -63,6 +66,7 @@ defmodule SowerWeb.SeedController do
         {"Unauthorized", "application/json",
          %Schema{type: :object, properties: %{error: %Schema{type: :string}}}}
     ]
+  )
 
   def new_store_path(
         %Plug.Conn{
@@ -81,7 +85,7 @@ defmodule SowerWeb.SeedController do
     end
   end
 
-  operation :latest,
+  operation(:latest,
     operation_id: "LatestStorePathBySeed",
     summary: "Get latest Store Path for a Seed",
     parameters: [
@@ -98,13 +102,14 @@ defmodule SowerWeb.SeedController do
         {"Unauthorized", "application/json",
          %Schema{type: :object, properties: %{error: %Schema{type: :string}}}}
     }
+  )
 
   def latest(conn, %{id: id}) do
     seed = Sower.Seed.latest_store_path_by_id(id)
     render(conn, :show, seed: seed)
   end
 
-  operation :get,
+  operation(:get,
     operation_id: "GetSeed",
     summary: "Get Seed",
     parameters: [
@@ -124,8 +129,10 @@ defmodule SowerWeb.SeedController do
         {"Unauthorized", "application/json",
          %Schema{type: :object, properties: %{error: %Schema{type: :string}}}}
     ]
+  )
 
   def get(conn, %{id: id}) do
+    dbg(conn)
     seed = Sower.Seed.get_by_id!(id)
     render(conn, :show, seed: seed)
   end
@@ -134,7 +141,7 @@ defmodule SowerWeb.SeedController do
     conn |> put_status(:not_found) |> render(:not_found)
   end
 
-  operation :list,
+  operation(:list,
     operation_id: "ListSeeds",
     summary: "List Seeds",
     parameters: [
@@ -158,16 +165,27 @@ defmodule SowerWeb.SeedController do
         {"Seed error response", "application/json",
          %Schema{type: :object, properties: %{error: %Schema{type: :string}}}}
     ]
+  )
 
   def list(conn, %{name: name, seed_type: seed_type}) do
-    seed = Sower.Seed.get(name, seed_type)
+    Tracer.with_span "list single seed" do
+      Tracer.set_attributes(name: name, seed_type: seed_type)
 
-    case seed do
-      nil ->
-        conn |> put_status(:not_found) |> render(:not_found)
+      seed = Sower.Seed.get(name, seed_type)
 
-      seed ->
-        render(conn, :list, seeds: [seed])
+      case seed do
+        nil ->
+          Tracer.set_status(:error, "not found")
+          conn |> put_status(:not_found) |> render(:not_found)
+
+        seed ->
+          if can(conn.assigns.access_token) |> read?(seed) do
+            render(conn, :list, seeds: [seed])
+          else
+            Tracer.set_status(:error, "unauthorized")
+            conn |> put_status(:unauthorized) |> render(:unauthorized)
+          end
+      end
     end
   end
 

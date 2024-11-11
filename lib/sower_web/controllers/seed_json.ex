@@ -20,4 +20,8 @@ defmodule SowerWeb.SeedJSON do
   def not_found(_) do
     %{error: "seed not found"}
   end
+
+  def unauthorized(_) do
+    %{error: "unauthorized"}
+  end
 end
