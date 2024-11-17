@@ -8,6 +8,7 @@ defmodule Sower.Repo.Migrations.AccessTokens do
       add :user_id, references(:users, on_delete: :delete_all), null: false
       add :permissions, :map
       add :token_subset, :string
+      add :org_id, references(:organizations, column: :org_id), null: false
 
       timestamps()
     end

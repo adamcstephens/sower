@@ -15,6 +15,7 @@ defmodule Sower.Accounts.AccessToken do
     field :regenerate, :boolean, virtual: true
     field :token, :string, virtual: true
     field :token_subset, :string
+    field :org_id, Ecto.UUID
 
     belongs_to :user, Sower.Accounts.User
 
@@ -28,8 +29,8 @@ defmodule Sower.Accounts.AccessToken do
 
   def changeset(access_token, attrs \\ %{}) do
     access_token
-    |> cast(attrs, [:expires_at, :user_id, :description, :regenerate])
-    |> validate_required([:expires_at, :user_id, :description])
+    |> cast(attrs, [:expires_at, :user_id, :org_id, :description, :regenerate])
+    |> validate_required([:expires_at, :user_id, :org_id, :description])
     |> validate_expires_at()
     |> force_expires_at_regeneration()
     |> cast_embed(:permissions,
