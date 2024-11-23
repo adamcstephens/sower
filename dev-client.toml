@@ -1,4 +1,4 @@
 url = "http://localhost:7150"
-name = "blank"
+name = "local"
 type = "home-manager"
-api-token-file = "./.bootstrap.token"
+api-token-file = "./.dev-api-token"

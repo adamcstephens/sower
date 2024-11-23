@@ -35,16 +35,21 @@ defmodule SowerWeb.SeedController do
         } = conn,
         _params
       ) do
-    with {:ok, %Sower.Seed{} = seed} <-
-           Sower.Seed.create(%{name: name, seed_type: seed_type}),
-         Logger.debug(seed) do
-      conn
-      |> put_status(:created)
-      |> render(:show, seed: seed)
+    if can(conn.assigns.access_token)
+       |> create?(%Sower.Seed{org_id: conn.assigns.access_token.user.org_id}) do
+      with {:ok, %Sower.Seed{} = seed} <-
+             Sower.Seed.create(%{name: name, seed_type: seed_type}),
+           Logger.debug(seed) do
+        conn
+        |> put_status(:created)
+        |> render(:show, seed: seed)
+      else
+        {:error, %Ecto.Changeset{errors: errors}} ->
+          Logger.error(errors)
+          conn |> put_status(400) |> render(:error, error: "unauthorized")
+      end
     else
-      {:error, %Ecto.Changeset{errors: errors}} ->
-        Logger.error(errors)
-        conn |> put_status(:unprocessable_content)
+      conn |> put_status(401) |> render(:error, error: "unauthorized")
     end
   end
 
@@ -132,7 +137,6 @@ defmodule SowerWeb.SeedController do
   )
 
   def get(conn, %{id: id}) do
-    dbg(conn)
     seed = Sower.Seed.get_by_id!(id)
     render(conn, :show, seed: seed)
   end
