@@ -1,6 +1,5 @@
 {
   "public_url": "http://blank:7150",
-  "bootstrap_token_file": "./.bootstrap.token",
   "auth": {
     "oidc_base_url": "https://id.junco.dev/oauth2/openid/sower-dev",
     "oidc_client_id": "sower-dev",

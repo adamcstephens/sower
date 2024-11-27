@@ -6,6 +6,7 @@ defmodule SowerWeb.ClientSocket do
 
   @impl true
   def connect(%{"token" => token}, socket, _connect_info) do
+    # TODO replace with access token
     bootstrap_token =
       case Application.fetch_env(:sower, :bootstrap_token) do
         {:ok, token} -> token

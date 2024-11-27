@@ -1,5 +1,6 @@
 defmodule Sower.Accounts.AccessToken do
   use Sower.Schema
+  use Joken.Config
 
   alias Ecto.Changeset
   alias Sower.Accounts.AccessToken
@@ -65,7 +66,7 @@ defmodule Sower.Accounts.AccessToken do
   def create(%AccessToken{} = access_token, %{"expires_at" => _} = attrs) do
     access_token
     |> changeset(attrs)
-    |> Repo.insert(skip_org_id: true)
+    |> Repo.insert()
     |> generate_token()
   end
 
@@ -90,11 +91,7 @@ defmodule Sower.Accounts.AccessToken do
 
       _ ->
         token =
-          encrypt_token(
-            get_field(changeset, :id),
-            get_field(changeset, :user_id),
-            get_field(changeset, :expires_at)
-          )
+          sign_token(get_field(changeset, :id))
 
         changeset
         |> put_change(:token, token)
@@ -103,7 +100,7 @@ defmodule Sower.Accounts.AccessToken do
   end
 
   defp generate_token({:ok, %AccessToken{} = access_token}) do
-    token = encrypt_token(access_token.id, access_token.user_id, access_token.expires_at)
+    token = sign_token(access_token.id)
 
     {:ok,
      access_token
@@ -111,8 +108,10 @@ defmodule Sower.Accounts.AccessToken do
      |> Map.put(:token_subset, String.slice(token, -12..-1))}
   end
 
-  def decrypt_token(token) do
-    Phoenix.Token.decrypt(SowerWeb.Endpoint, "access-token", token)
+  def verify_token(token) do
+    signer = Joken.Signer.create("HS256", "secret")
+
+    AccessToken.verify_and_validate(token, signer)
   end
 
   def split_token(decrypted_token) do
@@ -122,14 +121,13 @@ defmodule Sower.Accounts.AccessToken do
     end
   end
 
-  defp encrypt_token(id, user_id, expires_at) do
-    "sower_" <>
-      Phoenix.Token.encrypt(
-        SowerWeb.Endpoint,
-        "access-token",
-        "#{id}:#{user_id}",
-        max_age: expires_at_to_max_age(expires_at, DateTime.utc_now())
-      )
+  defp sign_token(id) do
+    signer = Joken.Signer.create("HS256", "secret")
+
+    {:ok, token, _claims} =
+      AccessToken.generate_and_sign(%{id: id}, signer) |> dbg()
+
+    "sower_" <> token
   end
 
   def update(%AccessToken{} = access_token, attrs) do
@@ -141,30 +139,18 @@ defmodule Sower.Accounts.AccessToken do
 
   def authenticate(token) do
     with "sower_" <> token <- token,
-         {:ok, decrypted} <- decrypt_token(token),
-         {:ok, [access_token_id, user_id]} <- split_token(decrypted),
-         {:ok, access_token} <- get_by_token(access_token_id) do
+         {:ok, claims} <- verify_token(token) |> dbg(),
+         %{"id" => id} <- claims |> dbg(),
+         access_token <- get(id) |> dbg() do
       case access_token do
         nil ->
           {:error, "Invalid token: Not found"}
 
         _ ->
-          case Phoenix.Token.decrypt(SowerWeb.Endpoint, "access-token", token,
-                 max_age: expires_at_to_max_age(access_token.expires_at, access_token.updated_at)
-               ) do
-            {:ok, _} ->
-              if access_token.user_id == user_id do
-                if access_token.token_subset == String.slice(token, -12..-1) do
-                  {:ok, access_token |> Sower.Repo.preload(:user)}
-                else
-                  {:error, "Invalid token: Token Mismatch"}
-                end
-              else
-                {:error, "Invalid token: User Mismatch"}
-              end
-
-            {:error, err} ->
-              {:error, ~s"Invalid token: #{err}"}
+          if access_token.token_subset == String.slice(token, -12..-1) do
+            {:ok, access_token |> Sower.Repo.preload(:user)}
+          else
+            {:error, "Invalid token: Token Mismatch"}
           end
       end
     else
@@ -208,20 +194,14 @@ defmodule Sower.Accounts.AccessToken do
     Repo.delete(access_token, skip_org_id: true)
   end
 
-  def get!(id) do
-    AccessToken |> Sower.Repo.get!(id, skip_org_id: true)
+  def get(id) do
+    query = from at in AccessToken, where: at.id == ^id
+    Sower.Repo.one(query, skip_org_id: true)
   end
 
-  def get_by_token(token) do
-    case decrypt_token(token) |> dbg() do
-      {:ok, ids} ->
-        {:ok, [token_id, _]} = split_token(ids)
-
-        {:ok, Repo.one(from(at in AccessToken, where: at.id == ^token_id))}
-
-      _ ->
-        {:error, "could not decrypt token"}
-    end
+  def get!(id) do
+    query = from at in AccessToken, where: at.id == ^id
+    Sower.Repo.one!(query, skip_org_id: true)
   end
 
   def list() do
