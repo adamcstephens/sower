@@ -111,7 +111,10 @@ defmodule SowerWeb.Settings.AccessTokenLive.FormComponent do
   end
 
   defp save_access_token(socket, :new, access_token_params) do
-    access_token_params = Map.put(access_token_params, "user_id", socket.assigns.current_user.id)
+    access_token_params =
+      access_token_params
+      |> Map.put("user_id", socket.assigns.current_user.id)
+      |> Map.put("org_id", socket.assigns.current_user.org_id)
 
     case Accounts.AccessToken.create(access_token_params) do
       {:ok, access_token} ->

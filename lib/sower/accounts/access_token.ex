@@ -6,6 +6,7 @@ defmodule Sower.Accounts.AccessToken do
   alias Sower.Repo
 
   import Ecto.Changeset
+  import Ecto.Query
 
   require Logger
 
@@ -110,6 +111,17 @@ defmodule Sower.Accounts.AccessToken do
      |> Map.put(:token_subset, String.slice(token, -12..-1))}
   end
 
+  def decrypt_token(token) do
+    Phoenix.Token.decrypt(SowerWeb.Endpoint, "access-token", token)
+  end
+
+  def split_token(decrypted_token) do
+    case String.split(decrypted_token, ":") do
+      [_, _] = ids -> {:ok, ids}
+      _ -> {:error, "invalid token"}
+    end
+  end
+
   defp encrypt_token(id, user_id, expires_at) do
     "sower_" <>
       Phoenix.Token.encrypt(
@@ -129,10 +141,9 @@ defmodule Sower.Accounts.AccessToken do
 
   def authenticate(token) do
     with "sower_" <> token <- token,
-         {:ok, decrypted} <-
-           Phoenix.Token.decrypt(SowerWeb.Endpoint, "access-token", token),
-         [access_token_id, user_id] <- String.split(decrypted, ":"),
-         access_token <- Repo.get(AccessToken, access_token_id, skip_org_id: true) do
+         {:ok, decrypted} <- decrypt_token(token),
+         {:ok, [access_token_id, user_id]} <- split_token(decrypted),
+         {:ok, access_token} <- get_by_token(access_token_id) do
       case access_token do
         nil ->
           {:error, "Invalid token: Not found"}
@@ -157,11 +168,12 @@ defmodule Sower.Accounts.AccessToken do
           end
       end
     else
+      {:error, _} = error ->
+        error
+
       _ ->
         {:error, "Invalid token: Parse Failure"}
     end
-
-    # Repo.one(from(a in AccessToken, where: a.id == ^access_token_id and a.user_id == ^user_id))
   end
 
   defp expires_at_to_max_age(expires_at, %NaiveDateTime{} = from) do
@@ -198,6 +210,18 @@ defmodule Sower.Accounts.AccessToken do
 
   def get!(id) do
     AccessToken |> Sower.Repo.get!(id, skip_org_id: true)
+  end
+
+  def get_by_token(token) do
+    case decrypt_token(token) |> dbg() do
+      {:ok, ids} ->
+        {:ok, [token_id, _]} = split_token(ids)
+
+        {:ok, Repo.one(from(at in AccessToken, where: at.id == ^token_id))}
+
+      _ ->
+        {:error, "could not decrypt token"}
+    end
   end
 
   def list() do
