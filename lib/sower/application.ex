@@ -10,7 +10,7 @@ defmodule Sower.Application do
 
     children = [
       {Cluster.Supervisor,
-       [Application.get_env(:libcluster, :topologies), [name: Sower.ClusterSupervisor]]},
+       [Application.get_env(:libcluster, :topologies, []), [name: Sower.ClusterSupervisor]]},
       SowerWeb.Telemetry,
       Sower.Repo,
       Sower.ErrorRepo,
