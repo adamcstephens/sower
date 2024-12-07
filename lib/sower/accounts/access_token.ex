@@ -15,13 +15,14 @@ defmodule Sower.Accounts.AccessToken do
     field :description, :string
     field :regenerate, :boolean, virtual: true
     field :token, :string, virtual: true
+    field :token_preview, :string, virtual: true
     field :token_hash, :string
     field :org_id, Ecto.UUID
 
     belongs_to :user, Sower.Accounts.User
 
     embeds_many :permissions, Permission, on_replace: :delete do
-      field :action, Ecto.Enum, values: [:read, :update]
+      field :action, Ecto.Enum, values: [:read, :update, :create]
       field :resource, Ecto.Enum, values: [Sower.Seed]
     end
 
@@ -62,12 +63,22 @@ defmodule Sower.Accounts.AccessToken do
     end)
   end
 
+  defp put_preview(%AccessToken{} = access_token) do
+    preview = "sower_" <> String.slice(ShortUUID.encode!(access_token.id), 0, 8)
+    access_token |> Map.put(:token_preview, preview)
+  end
+
+  defp put_preview({:ok, %AccessToken{} = access_token}) do
+    {:ok, put_preview(access_token)}
+  end
+
   def create(%AccessToken{} = access_token, %{"expires_at" => _} = attrs) do
     access_token
     |> changeset(attrs)
     |> put_change(:regenerate, true)
     |> generate_token()
     |> Repo.insert()
+    |> put_preview()
   end
 
   def create(%{"expires_at" => _} = attrs) do
@@ -100,7 +111,6 @@ defmodule Sower.Accounts.AccessToken do
           end
 
         short_id = ShortUUID.encode!(id)
-
         rand = :crypto.strong_rand_bytes(48) |> Base.encode64()
         {:ok, hash} = :argon2.hash(rand)
 
@@ -127,7 +137,8 @@ defmodule Sower.Accounts.AccessToken do
     access_token
     |> changeset(attrs)
     |> generate_token()
-    |> Repo.update(skip_org_id: true)
+    |> Repo.update()
+    |> put_preview()
   end
 
   def authenticate(token) do
@@ -176,12 +187,16 @@ defmodule Sower.Accounts.AccessToken do
 
   def get(id) do
     query = from at in AccessToken, where: at.id == ^id
+
     Sower.Repo.one(query, skip_org_id: true)
+    |> put_preview()
   end
 
   def get!(id) do
     query = from at in AccessToken, where: at.id == ^id
+
     Sower.Repo.one!(query, skip_org_id: true)
+    |> put_preview()
   end
 
   def list() do

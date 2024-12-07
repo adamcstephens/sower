@@ -28,4 +28,8 @@ defmodule SowerWeb.SeedJSON do
   def error(_) do
     %{error: "unknown"}
   end
+
+  def unauthorized(_) do
+    %{error: "unauthorized"}
+  end
 end
