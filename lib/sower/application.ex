@@ -9,6 +9,8 @@ defmodule Sower.Application do
     OpentelemetryPhoenix.setup(adapter: :bandit)
 
     children = [
+      {Cluster.Supervisor,
+       [Application.get_env(:libcluster, :topologies), [name: Sower.ClusterSupervisor]]},
       SowerWeb.Telemetry,
       Sower.Repo,
       Sower.ErrorRepo,

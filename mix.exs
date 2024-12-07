@@ -26,6 +26,7 @@ defmodule Sower.MixProject do
       {:hackney, "~> 1.8"},
       {:jason, "~> 1.2"},
       {:joken, "~> 2.6.1"},
+      {:libcluster_consul, "~> 1.3"},
       {:mime, "~> 2.0.6"},
       {:mix_test_watch, "~> 1.0", only: [:dev, :test], runtime: false},
       {:open_api_spex, "~> 3.20"},
