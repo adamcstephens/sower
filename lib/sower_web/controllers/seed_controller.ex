@@ -81,12 +81,17 @@ defmodule SowerWeb.SeedController do
         } = conn,
         %{id: id}
       ) do
-    with {:ok, %Sower.StorePath{} = store_path} <-
-           Sower.Seed.submit(id, path),
-         Logger.debug(store_path) do
-      conn
-      |> put_status(:created)
-      |> render(:show, store_path: store_path)
+    if can(conn.assigns.access_token)
+       |> update?(%Sower.Seed{org_id: conn.assigns.access_token.user.org_id}) do
+      with {:ok, %Sower.StorePath{} = store_path} <-
+             Sower.Seed.submit(id, path),
+           Logger.debug(store_path) do
+        conn
+        |> put_status(:created)
+        |> render(:show, store_path: store_path)
+      end
+    else
+      conn |> put_status(401) |> render(:error, error: "unauthorized")
     end
   end
 
@@ -110,8 +115,13 @@ defmodule SowerWeb.SeedController do
   )
 
   def latest(conn, %{id: id}) do
-    seed = Sower.Seed.latest_store_path_by_id(id)
-    render(conn, :show, seed: seed)
+    if can(conn.assigns.access_token)
+       |> read?(%Sower.Seed{org_id: conn.assigns.access_token.user.org_id}) do
+      seed = Sower.Seed.latest_store_path_by_id(id)
+      render(conn, :show, seed: seed)
+    else
+      conn |> put_status(401) |> render(:error, error: "unauthorized")
+    end
   end
 
   operation(:get,
@@ -137,12 +147,22 @@ defmodule SowerWeb.SeedController do
   )
 
   def get(conn, %{id: id}) do
-    seed = Sower.Seed.get_by_id!(id)
-    render(conn, :show, seed: seed)
+    if can(conn.assigns.access_token)
+       |> read?(%Sower.Seed{org_id: conn.assigns.access_token.user.org_id}) do
+      seed = Sower.Seed.get_by_id!(id)
+      render(conn, :show, seed: seed)
+    else
+      conn |> put_status(401) |> render(:error, error: "unauthorized")
+    end
   end
 
   def get(conn, _) do
-    conn |> put_status(:not_found) |> render(:not_found)
+    if can(conn.assigns.access_token)
+       |> read?(%Sower.Seed{org_id: conn.assigns.access_token.user.org_id}) do
+      conn |> put_status(:not_found) |> render(:not_found)
+    else
+      conn |> put_status(401) |> render(:error, error: "unauthorized")
+    end
   end
 
   operation(:list,
@@ -172,29 +192,39 @@ defmodule SowerWeb.SeedController do
   )
 
   def list(conn, %{name: name, seed_type: seed_type}) do
-    Tracer.with_span "list single seed" do
-      Tracer.set_attributes(name: name, seed_type: seed_type)
+    if can(conn.assigns.access_token)
+       |> read?(%Sower.Seed{org_id: conn.assigns.access_token.user.org_id}) do
+      Tracer.with_span "list single seed" do
+        Tracer.set_attributes(name: name, seed_type: seed_type)
 
-      seed = Sower.Seed.get(name, seed_type)
+        seed = Sower.Seed.get(name, seed_type)
 
-      case seed do
-        nil ->
-          Tracer.set_status(:error, "not found")
-          conn |> put_status(:not_found) |> render(:not_found)
+        case seed do
+          nil ->
+            Tracer.set_status(:error, "not found")
+            conn |> put_status(:not_found) |> render(:not_found)
 
-        seed ->
-          if can(conn.assigns.access_token) |> read?(seed) do
-            render(conn, :list, seeds: [seed])
-          else
-            Tracer.set_status(:error, "unauthorized")
-            conn |> put_status(:unauthorized) |> render(:unauthorized)
-          end
+          seed ->
+            if can(conn.assigns.access_token) |> read?(seed) do
+              render(conn, :list, seeds: [seed])
+            else
+              Tracer.set_status(:error, "unauthorized")
+              conn |> put_status(:unauthorized) |> render(:unauthorized)
+            end
+        end
       end
+    else
+      conn |> put_status(401) |> render(:error, error: "unauthorized")
     end
   end
 
   def list(conn, _) do
-    seeds = Sower.Seed.list()
-    render(conn, :list, seeds: seeds)
+    if can(conn.assigns.access_token)
+       |> read?(%Sower.Seed{org_id: conn.assigns.access_token.user.org_id}) do
+      seeds = Sower.Seed.list()
+      render(conn, :list, seeds: seeds)
+    else
+      conn |> put_status(401) |> render(:error, error: "unauthorized")
+    end
   end
 end

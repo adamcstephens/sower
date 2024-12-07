@@ -22,8 +22,7 @@ defmodule Sower.Accounts.AccessToken do
     belongs_to :user, Sower.Accounts.User
 
     embeds_many :permissions, Permission, on_replace: :delete do
-      field :action, Ecto.Enum, values: [:read, :update, :create]
-      field :resource, Ecto.Enum, values: [Sower.Seed]
+      field :role, Ecto.Enum, values: [:"seed:read", :"seed:write"]
     end
 
     timestamps()
@@ -45,8 +44,8 @@ defmodule Sower.Accounts.AccessToken do
 
   def changeset_permission(permission, attrs \\ %{}) do
     permission
-    |> cast(attrs, [:action, :resource])
-    |> validate_required([:action, :resource])
+    |> cast(attrs, [:role])
+    |> validate_required([:role])
   end
 
   def validate_expires_at(changeset) do
@@ -188,8 +187,14 @@ defmodule Sower.Accounts.AccessToken do
   def get(id) do
     query = from at in AccessToken, where: at.id == ^id
 
-    Sower.Repo.one(query, skip_org_id: true)
-    |> put_preview()
+    case Sower.Repo.one(query, skip_org_id: true) do
+      nil ->
+        nil
+
+      token ->
+        token
+        |> put_preview()
+    end
   end
 
   def get!(id) do
@@ -203,11 +208,7 @@ defmodule Sower.Accounts.AccessToken do
     AccessToken |> Sower.Repo.all(skip_org_id: true)
   end
 
-  def permission_actions() do
-    Ecto.Enum.dump_values(Sower.Accounts.AccessToken.Permission, :action)
-  end
-
-  def permission_resources() do
-    Ecto.Enum.dump_values(Sower.Accounts.AccessToken.Permission, :resource)
+  def permission_roles() do
+    Ecto.Enum.dump_values(Sower.Accounts.AccessToken.Permission, :role)
   end
 end

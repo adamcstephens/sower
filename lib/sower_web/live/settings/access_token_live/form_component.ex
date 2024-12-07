@@ -36,14 +36,9 @@ defmodule SowerWeb.Settings.AccessTokenLive.FormComponent do
         <.inputs_for :let={perm} field={@form[:permissions]}>
           <input type="hidden" name="access_token[permissions_sort][]" value={perm.index} />
           <.input
-            field={perm[:resource]}
+            field={perm[:role]}
             type="select"
-            options={Sower.Accounts.AccessToken.permission_resources()}
-          />
-          <.input
-            field={perm[:action]}
-            type="select"
-            options={Sower.Accounts.AccessToken.permission_actions()}
+            options={Sower.Accounts.AccessToken.permission_roles()}
           />
           <button
             type="button"

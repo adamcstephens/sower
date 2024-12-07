@@ -22,6 +22,11 @@
   <:item title="description"><%= @access_token.description %></:item>
   <:item title="expiration date"><%= @access_token.expires_at %></:item>
   <:item title="token"><%= @access_token.token_preview %>...</:item>
+  <:item title="roles">
+    <.table id="permissions" rows={@access_token.permissions}>
+      <:col :let={permission}><%= permission.role %></:col>
+    </.table>
+  </:item>
 </.list>
 
 <.back navigate={~p"/settings/access-tokens"}>Back to access-tokens</.back>
