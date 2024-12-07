@@ -52,6 +52,9 @@
                   pkgs.gopls
                   pkgs.oapi-codegen
 
+                  # rust
+                  pkgs.cargo
+
                   pkgs.attic-client
                   self'.packages.seed-ci
 

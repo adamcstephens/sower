@@ -1,6 +1,5 @@
 defmodule Sower.Accounts.AccessToken do
   use Sower.Schema
-  use Joken.Config
 
   alias Ecto.Changeset
   alias Sower.Accounts.AccessToken
@@ -16,7 +15,7 @@ defmodule Sower.Accounts.AccessToken do
     field :description, :string
     field :regenerate, :boolean, virtual: true
     field :token, :string, virtual: true
-    field :token_subset, :string
+    field :token_hash, :string
     field :org_id, Ecto.UUID
 
     belongs_to :user, Sower.Accounts.User
@@ -66,8 +65,9 @@ defmodule Sower.Accounts.AccessToken do
   def create(%AccessToken{} = access_token, %{"expires_at" => _} = attrs) do
     access_token
     |> changeset(attrs)
-    |> Repo.insert()
+    |> put_change(:regenerate, true)
     |> generate_token()
+    |> Repo.insert()
   end
 
   def create(%{"expires_at" => _} = attrs) do
@@ -84,96 +84,70 @@ defmodule Sower.Accounts.AccessToken do
     create(%{})
   end
 
-  defp regenerate_token(%Changeset{} = changeset) do
+  defp generate_token(%Changeset{} = changeset) do
     case get_field(changeset, :regenerate) do
       false ->
         changeset
 
       _ ->
-        token =
-          sign_token(get_field(changeset, :id))
+        id =
+          case get_field(changeset, :id) do
+            nil ->
+              UUIDv7.generate()
+
+            id ->
+              id
+          end
+
+        short_id = ShortUUID.encode!(id)
+
+        rand = :crypto.strong_rand_bytes(48) |> Base.encode64()
+        {:ok, hash} = :argon2.hash(rand)
+
+        token = "sower_" <> short_id <> "_" <> rand
 
         changeset
+        |> put_change(:id, id)
         |> put_change(:token, token)
-        |> put_change(:token_subset, String.slice(token, -12..-1))
+        |> put_change(:token_hash, hash)
     end
   end
 
-  defp generate_token({:ok, %AccessToken{} = access_token}) do
-    token = sign_token(access_token.id)
+  def split_token(token) do
+    case String.split(token, "_") do
+      ["sower", id, rand] ->
+        {:ok, id, rand}
 
-    {:ok,
-     access_token
-     |> Map.put(:token, token)
-     |> Map.put(:token_subset, String.slice(token, -12..-1))}
-  end
-
-  def verify_token(token) do
-    signer = Joken.Signer.create("HS256", "secret")
-
-    AccessToken.verify_and_validate(token, signer)
-  end
-
-  def split_token(decrypted_token) do
-    case String.split(decrypted_token, ":") do
-      [_, _] = ids -> {:ok, ids}
-      _ -> {:error, "invalid token"}
+      _ ->
+        {:error, "invalid token"}
     end
-  end
-
-  defp sign_token(id) do
-    signer = Joken.Signer.create("HS256", "secret")
-
-    {:ok, token, _claims} =
-      AccessToken.generate_and_sign(%{id: id}, signer) |> dbg()
-
-    "sower_" <> token
   end
 
   def update(%AccessToken{} = access_token, attrs) do
     access_token
     |> changeset(attrs)
-    |> regenerate_token()
+    |> generate_token()
     |> Repo.update(skip_org_id: true)
   end
 
   def authenticate(token) do
-    with "sower_" <> token <- token,
-         {:ok, claims} <- verify_token(token) |> dbg(),
-         %{"id" => id} <- claims |> dbg(),
-         access_token <- get(id) |> dbg() do
-      case access_token do
-        nil ->
-          {:error, "Invalid token: Not found"}
-
-        _ ->
-          if access_token.token_subset == String.slice(token, -12..-1) do
-            {:ok, access_token |> Sower.Repo.preload(:user)}
-          else
-            {:error, "Invalid token: Token Mismatch"}
-          end
-      end
+    with {:ok, short_id, rand} <- split_token(token),
+         {:ok, id} <- ShortUUID.decode(short_id),
+         access_token when not is_nil(access_token) <- get(id),
+         true <- verify_not_expired(access_token),
+         {:ok, true} <- :argon2.verify(rand, access_token.token_hash) do
+      {:ok, access_token |> Sower.Repo.preload(:user)}
     else
+      {:ok, false} ->
+        {:error, "Invalid token: Verification failed"}
+
       {:error, _} = error ->
         error
 
-      _ ->
+      show ->
+        dbg(show)
         {:error, "Invalid token: Parse Failure"}
     end
-  end
-
-  defp expires_at_to_max_age(expires_at, %NaiveDateTime{} = from) do
-    {:ok, from} = DateTime.from_naive(from, "Etc/UTC")
-    expires_at_to_max_age(expires_at, from)
-  end
-
-  defp expires_at_to_max_age(expires_at, from) do
-    {:ok, expire} =
-      expires_at
-      |> DateTime.new(Time.new!(0, 0, 0))
-
-    expire
-    |> DateTime.diff(from)
   end
 
   defp force_expires_at_regeneration(%Changeset{} = changeset) do
@@ -188,6 +162,12 @@ defmodule Sower.Accounts.AccessToken do
           changeset
         end
     end
+  end
+
+  defp verify_not_expired(%__MODULE__{} = access_token) do
+    expires = DateTime.new!(access_token.expires_at, Time.new!(0, 0, 0, 0), "Etc/UTC")
+
+    DateTime.before?(DateTime.utc_now(), expires)
   end
 
   def delete(access_token) do

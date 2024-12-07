@@ -15,6 +15,7 @@ defmodule Sower.MixProject do
 
   defp deps do
     [
+      {:argon2, "~> 1.2"},
       {:bandit, "~> 1.0"},
       {:ecto_sql, "~> 3.11"},
       {:error_tracker, "~> 0.4"},
@@ -44,6 +45,7 @@ defmodule Sower.MixProject do
       {:phoenix_live_view, "~> 0.20.0"},
       {:postgrex, ">= 0.0.0"},
       {:sentry, "~> 10.5"},
+      {:shortuuid, "~> 3.0"},
       {:swoosh, "~> 1.3"},
       {:systemd, "~> 0.6"},
       {:tailwind, "~> 0.2.0", runtime: Mix.env() == :dev},
