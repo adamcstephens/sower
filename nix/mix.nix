@@ -21,6 +21,19 @@ let
       beamDeps = [];
     };
 
+    argon2 = buildRebar3 rec {
+      name = "argon2";
+      version = "1.2.0";
+
+      src = fetchHex {
+        pkg = "argon2";
+        version = "${version}";
+        sha256 = "76ae94bee3eee9a34079e92993c9fb3f49fbd9976680452cc84d0335244911a3";
+      };
+
+      beamDeps = [];
+    };
+
     bandit = buildMix rec {
       name = "bandit";
       version = "1.5.7";
@@ -370,6 +383,32 @@ let
       };
 
       beamDeps = [];
+    };
+
+    libcluster = buildMix rec {
+      name = "libcluster";
+      version = "3.3.3";
+
+      src = fetchHex {
+        pkg = "libcluster";
+        version = "${version}";
+        sha256 = "7c0a2275a0bb83c07acd17dab3c3bfb4897b145106750eeccc62d302e3bdfee5";
+      };
+
+      beamDeps = [ jason ];
+    };
+
+    libcluster_consul = buildMix rec {
+      name = "libcluster_consul";
+      version = "1.3.0";
+
+      src = fetchHex {
+        pkg = "libcluster_consul";
+        version = "${version}";
+        sha256 = "fb63bc580f931a5af041c582a565df52bca3c8005c2ada13cce71647e674da25";
+      };
+
+      beamDeps = [ libcluster ];
     };
 
     metrics = buildRebar3 rec {
@@ -812,6 +851,19 @@ let
       };
 
       beamDeps = [ hackney jason nimble_options nimble_ownership phoenix phoenix_live_view plug telemetry ];
+    };
+
+    shortuuid = buildMix rec {
+      name = "shortuuid";
+      version = "3.0.0";
+
+      src = fetchHex {
+        pkg = "shortuuid";
+        version = "${version}";
+        sha256 = "dfd8f80f514cbb91622cb83f4ac0d6e2f06d98cc6d4aeba94444a212289d0d39";
+      };
+
+      beamDeps = [];
     };
 
     ssl_verify_fun = buildRebar3 rec {

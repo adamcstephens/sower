@@ -4,6 +4,7 @@
   elixir,
   esbuild,
   nixpkgs,
+  rustPlatform,
   tailwindcss,
   stdenv,
 }:
@@ -35,9 +36,28 @@ beamPackages.mixRelease rec {
   mixNixDeps = import ./mix.nix {
     inherit lib beamPackages;
     overrides = _: prev: {
+      argon2 = prev.argon2.override (
+        old:
+        let
+          native = rustPlatform.buildRustPackage {
+            pname = "argon2";
+            version = old.version;
+            src = "${old.src}/native";
+            cargoHash = "sha256-vlWLcEvqQVvc4ksdSYLzjrL7nJxux+Kz4LrrhK/ph9c=";
+          };
+        in
+        {
+          preBuild = ''
+            mkdir -p priv/
+            cp ${native}/lib/libargon2.so priv/argon2_${old.version}.so
+          '';
+        }
+      );
+
       esbuild = prev.esbuild.override (old: {
         patches = [ ./esbuild-loadpaths.patch ];
       });
+
       tailwind = prev.tailwind.override (old: {
         patches = [ ./tailwind-loadpaths.patch ];
       });
