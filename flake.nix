@@ -80,16 +80,15 @@
             };
 
             checks = lib.optionalAttrs pkgs.stdenv.isLinux {
-              default = pkgs.callPackage ./nix/test-end-to-end.nix { flake = self; };
+              default = pkgs.callPackage ./nix/test-end-to-end.nix {
+                flake = self;
+              };
             };
 
             packages = {
               seed-ci = pkgs.callPackage ./nix/seed-ci.nix { };
               client = pkgs.callPackage ./nix/client-package.nix { buildGoModule = pkgs.buildGo123Module; };
-              server = pkgs.callPackage ./nix/server-package.nix {
-                inherit beamPackages elixir;
-                inherit (inputs) nixpkgs;
-              };
+              server = pkgs.callPackage ./nix/server-package.nix { inherit beamPackages elixir; };
             };
 
             process-compose.devServices =

@@ -3,7 +3,6 @@
   beamPackages,
   elixir,
   esbuild,
-  nixpkgs,
   rustPlatform,
   tailwindcss,
   stdenv,
@@ -47,9 +46,15 @@ beamPackages.mixRelease rec {
           };
         in
         {
+          # pre-build the make target
           preBuild = ''
             mkdir -p priv/
             cp ${native}/lib/libargon2.so priv/argon2_${old.version}.so
+          '';
+
+          # move native into expected location
+          postInstall = ''
+            mv $out/lib/erlang/lib/argon2-${old.version}/priv/argon2_${old.version}.so $out/lib/erlang/lib/argon2-${old.version}/priv/argon2.so
           '';
         }
       );
@@ -73,20 +78,22 @@ beamPackages.mixRelease rec {
   '';
 
   # disabled because requires a db to work
-  doCheck = false;
-  checkPhase = ''
-    runHook preCheck
-
-    export MIX_ENV=test
-
-    ${nixpkgs}/pkgs/development/beam-modules/mix-configure-hook.sh
-
-    mix do deps.loadpaths --no-deps-check, test
-
-    runHook postCheck
-  '';
+  # doCheck = false;
+  # checkPhase = ''
+  #   runHook preCheck
+  #
+  #   export MIX_ENV=test
+  #
+  #   ${nixpkgs}/pkgs/development/beam-modules/mix-configure-hook.sh
+  #
+  #   mix do deps.loadpaths --no-deps-check, test
+  #
+  #   runHook postCheck
+  # '';
 
   passthru = {
     inherit mixNixDeps;
   };
+
+  meta.mainProgram = "sower";
 }

@@ -24,17 +24,15 @@ testers.runNixOSTest {
           enable = true;
           package = flake.packages.${pkgs.system}.client;
 
-          credentials = [ "SOWER_BOOTSTRAP_TOKEN_FILE:${pkgs.writeText "token" "aninsecuretoken"}" ];
-
           settings = {
             url = "http://localhost:4000";
             mode = "dry-activate";
-            bootstrap_token_file = "${pkgs.writeText "token" "aninsecuretoken"}";
           };
         };
 
         services.sower.server = {
           enable = true;
+          package = flake.packages.${pkgs.system}.server;
           initSecrets = true;
 
           settings = {
@@ -45,6 +43,12 @@ testers.runNixOSTest {
               socket = "/run/postgresql/.s.PGSQL.5432";
               username = "sower";
               database = "sower";
+            };
+
+            error_database = {
+              socket = "/run/postgresql/.s.PGSQL.5432";
+              username = "sower";
+              database = "sower_error";
             };
 
             auth = {
@@ -63,13 +67,16 @@ testers.runNixOSTest {
 
         services.postgresql = {
           enable = true;
-          ensureUsers = [
-            {
-              name = "sower";
-              ensureDBOwnership = true;
-            }
-          ];
-          ensureDatabases = [ "sower" ];
+
+          initialScript = pkgs.writeText "sower-pg-init" ''
+            CREATE USER sower;
+            CREATE DATABASE sower OWNER sower;
+            CREATE DATABASE sower_error OWNER sower;
+          '';
+
+          authentication = ''
+            local sower_error sower peer
+          '';
         };
       };
     };

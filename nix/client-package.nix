@@ -28,4 +28,6 @@ buildGoModule rec {
   doCheck = false;
 
   vendorHash = "sha256-Pr2zhkI4Sthu2IUyt+L+M67BmePmt6IbS8H3A/rlNBM=";
+
+  meta.mainProgram = "sower";
 }
