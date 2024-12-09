@@ -125,8 +125,6 @@
                   };
                 };
                 services.tempo.tempo1.enable = true;
-
-                cli.options.detached = true;
               };
           };
 
