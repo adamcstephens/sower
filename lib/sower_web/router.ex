@@ -41,6 +41,8 @@ defmodule SowerWeb.Router do
       live "/clients/:id/show/edit", ClientLive.Show, :edit
       live "/seeds", SeedLive.Index, :index
       live "/seeds/:id", SeedLive.Show, :show
+      live "/store_paths", StorePathLive.Index, :index
+      live "/store_paths/:id", StorePathLive.Show, :show
       live "/inputs/repos", RepositoryLive.Index, :index
       live "/inputs/repos/:id", RepositoryLive.Show, :show
 

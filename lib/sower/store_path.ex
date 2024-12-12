@@ -23,7 +23,11 @@ defmodule Sower.StorePath do
   end
 
   def get!(id) do
-    Sower.Repo.get!(Sower.StorePath, id)
+    Sower.Repo.get!(Sower.StorePath, id) |> Sower.Repo.preload(:seeds)
+  end
+
+  def list() do
+    Sower.Repo.all(Sower.StorePath)
   end
 
   def submit!(%{path: _} = attrs) do

@@ -1,0 +1,20 @@
+<.header>
+  Store path <%= @store_path.id %>
+</.header>
+
+<.list>
+  <:item title="inserted"><%= @store_path.inserted_at %></:item>
+  <:item title="updated"><%= @store_path.updated_at %></:item>
+
+  <:item title="seeds">
+    <.table
+      id="seeds"
+      rows={@store_path.seeds}
+      row_click={fn seed -> JS.navigate(~p"/seeds/#{seed.id}") end}
+    >
+      <:col :let={seed}><%= seed.name %></:col>
+    </.table>
+  </:item>
+</.list>
+
+<.back navigate={~p"/store_paths"}>Back to store_paths</.back>

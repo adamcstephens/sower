@@ -8,9 +8,10 @@
     <.table
       id="store_paths"
       rows={@seed.store_paths}
-      row_click={fn store_path -> JS.navigate(~p"/store_path/#{store_path.id}") end}
+      row_click={fn store_path -> JS.navigate(~p"/store_paths/#{store_path.id}") end}
     >
       <:col :let={store_path}><%= store_path.path %></:col>
+      <:col :let={store_path}><%= store_path.updated_at %></:col>
     </.table>
   </:item>
   <:item title="created"><%= @seed.inserted_at %></:item>
