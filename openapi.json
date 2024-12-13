@@ -223,6 +223,25 @@
               }
             },
             "description": "Unauthorized"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Seed conflict response"
           }
         },
         "summary": "New Seed",
@@ -412,6 +431,25 @@
               }
             },
             "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Store Path error response"
           }
         },
         "summary": "Get latest Store Path for a Seed",

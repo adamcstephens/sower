@@ -20,6 +20,9 @@ defmodule SowerWeb.SeedController do
     request_body: {"Seed params", "application/json", Schemas.Seed},
     responses: %{
       created: {"Seed response", "application/json", Schemas.Seed},
+      conflict:
+        {"Seed conflict response", "application/json",
+         %Schema{type: :object, properties: %{error: %Schema{type: :string}}}},
       unauthorized:
         {"Unauthorized", "application/json",
          %Schema{type: :object, properties: %{error: %Schema{type: :string}}}}
@@ -46,7 +49,7 @@ defmodule SowerWeb.SeedController do
       else
         {:error, %Ecto.Changeset{errors: errors}} ->
           Logger.error(errors)
-          conn |> put_status(400) |> render(:error, error: "unauthorized")
+          conn |> put_status(409) |> render(:error, error: "seed already exists")
       end
     else
       conn |> put_status(401) |> render(:error, error: "unauthorized")
@@ -108,6 +111,9 @@ defmodule SowerWeb.SeedController do
     ],
     responses: %{
       ok: {"Seed response", "application/json", Schemas.StorePath},
+      not_found:
+        {"Store Path error response", "application/json",
+         %Schema{type: :object, properties: %{error: %Schema{type: :string}}}},
       unauthorized:
         {"Unauthorized", "application/json",
          %Schema{type: :object, properties: %{error: %Schema{type: :string}}}}
@@ -117,8 +123,13 @@ defmodule SowerWeb.SeedController do
   def latest(conn, %{id: id}) do
     if can(conn.assigns.access_token)
        |> read?(%Sower.Seed{org_id: conn.assigns.access_token.user.org_id}) do
-      seed = Sower.Seed.latest_store_path_by_id(id)
-      render(conn, :show, seed: seed)
+      case Sower.Seed.latest_store_path_by_id(id) do
+        nil ->
+          conn |> put_status(404) |> render(:not_found)
+
+        seed ->
+          render(conn, :show, seed: seed)
+      end
     else
       conn |> put_status(401) |> render(:error, error: "unauthorized")
     end

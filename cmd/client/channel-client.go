@@ -2,11 +2,10 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"net/url"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/nshafer/phx"
-	"github.com/rs/zerolog/log"
 )
 
 type channelClient struct {
@@ -19,15 +18,13 @@ func newClient(config *config) *channelClient {
 }
 
 func (c *channelClient) connect() error {
-	log.Info().Msg("Starting")
+	slog.Debug("Starting daemon")
 
-	endpoint := c.config.channelEndpoint
-	token, _ := signToken(c.config.apiToken, "name", "type")
-	endpoint.RawQuery = fmt.Sprintf("token=%s", url.QueryEscape(token))
+	endpoint, err := url.Parse(fmt.Sprintf("%s/client", c.config.Endpoint))
+	endpoint.RawQuery = fmt.Sprintf("token=%s", url.QueryEscape(c.config.ApiToken))
 
-	socket := phx.NewSocket(&endpoint)
-	zerologLogger := logger{}
-	socket.Logger = &zerologLogger
+	socket := phx.NewSocket(endpoint)
+	socket.Logger = &logger{}
 
 	// Wait for the socket to connect before continuing. If it's not able to, it will keep
 	// retrying forever.
@@ -36,13 +33,13 @@ func (c *channelClient) connect() error {
 		cont <- true
 	})
 	socket.OnError(func(err error) {
-		log.Error().Err(err).Msg("failed to open socket connection")
+		slog.Error("failed to open socket connection", "error", err)
 	})
 
 	// Tell the socket to connect (or start retrying until it can connect)
-	err := socket.Connect()
+	err = socket.Connect()
 	if err != nil {
-		log.Error().Err(err).Msg("failed to connect to server")
+		slog.Error("failed to connect to server", "error", err)
 	}
 
 	// Wait for the connection
@@ -52,7 +49,7 @@ func (c *channelClient) connect() error {
 
 	err = c.joinLobby()
 	if err != nil {
-		log.Error().Err(err).Msg("failed to join lobby")
+		slog.Error("failed to join lobby", "error", err)
 	}
 
 	return nil
@@ -100,12 +97,3 @@ func (c *channelClient) joinLobby() error {
 //
 // 	return <-cont
 // }
-
-func signToken(apiToken, name, seedType string) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"name":      name,
-		"seed_type": seedType,
-	})
-
-	return token.SignedString([]byte(apiToken))
-}

@@ -2,228 +2,209 @@ package main
 
 import (
 	_ "embed"
-	"fmt"
+	"log"
+	"log/slog"
 	"os"
+	"strings"
 
 	"codeberg.org/adamcstephens/sower/client"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
-
-	"github.com/spf13/cobra"
+	"github.com/alexflint/go-arg"
 )
 
-var version string
+var version = "dev"
+
+type config struct {
+	Seed *seedCmd `arg:"subcommand:seed"`
+
+	ApiTokenFile string `arg:"--api-token-file,env:SOWER_API_TOKEN_FILE"`
+	ApiToken     string `arg:"--api-token,env:SOWER_API_TOKEN"`
+	Debug        bool   `arg:"--debug"`
+	Endpoint     string `arg:"--endpoint,-e,env:SOWER_ENDPOINT"`
+	Version      bool   `arg:"--version"`
+}
+
+type seedCmd struct {
+	Create   *seedCreateCmd   `arg:"subcommand:create"`
+	Download *seedDownloadCmd `arg:"subcommand:download"`
+	Info     *seedInfoCmd     `arg:"subcommand:info"`
+	Submit   *seedSubmitCmd   `arg:"subcommand:submit"`
+}
+
+type seedFields struct {
+	SeedType string `arg:"--type,-t,required"`
+	Name     string `arg:"--name,-n,required"`
+}
+
+type seedCreateCmd struct {
+	seedFields
+}
+
+type seedDownloadCmd struct {
+	seedFields
+}
+
+type seedInfoCmd struct {
+	seedFields
+}
+
+type seedSubmitCmd struct {
+	seedFields
+	Path string `arg:"--path,-p,required"`
+}
 
 func main() {
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-
-	var config *config
-
-	var rootCmd = &cobra.Command{
-		Use:   "sower",
-		Short: "sower client",
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			var err error
-
-			// load the configuration for every subcommand
-			config, err = initRootConfig(cmd.Flags())
-			if err != nil {
-				return fmt.Errorf("Failed loading configuration, %v", err)
-			}
-
-			return nil
-		},
-	}
-	rootCmd.PersistentFlags().Bool("debug", false, "enable debug logging")
-	rootCmd.PersistentFlags().StringSlice("config", []string{}, "path to toml config file, repeatable")
-
-	var versionCmd = &cobra.Command{
-		Use:   "version",
-		Short: "Print the version",
-		Run: func(cmd *cobra.Command, args []string) {
-			if version == "" {
-				fmt.Println("dev")
-			} else {
-				fmt.Println(version)
-			}
-		},
-	}
-	rootCmd.AddCommand(versionCmd)
-
-	var daemonCmd = &cobra.Command{
-		Use:   "daemon",
-		Short: "Run the daemon",
-		Run: func(cmd *cobra.Command, args []string) {
-			client := newClient(config)
-
-			err := client.connect()
-			if err != nil {
-				log.Error().Err(err).Msg("failed to connect")
-			}
-
-			client.run()
-		},
-	}
-	rootCmd.AddCommand(daemonCmd)
-
-	var seedCmd = &cobra.Command{
-		Use:   "seed",
-		Short: "Run seed related actions",
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println(args)
-		},
-	}
-	rootCmd.AddCommand(seedCmd)
-
-	var seedCreateCommand = &cobra.Command{
-		Use:   "create name seed_type",
-		Short: "Create a seed",
-		PreRunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) != 2 {
-				return fmt.Errorf("Expected 2 arguments, got %d", len(args))
-			}
-			return nil
-		},
-		Run: func(cmd *cobra.Command, args []string) {
-			name := args[0]
-			seedType := args[1]
-
-			seedClient, err := client.NewSeedClient(config.apiEndpoint.String(), config.apiToken)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to initialize seed client")
-				os.Exit(1)
-			}
-
-			seed, err := seedClient.CreateSeed(name, seedType)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to create seed")
-				os.Exit(1)
-			}
-
-			log.Info().Any("seed", seed).Msg("created")
-		},
-	}
-	seedCmd.AddCommand(seedCreateCommand)
-
-	var seedDownloadCommand = &cobra.Command{
-		Use:   "download id",
-		Short: "Download a seed",
-		Run: func(cmd *cobra.Command, args []string) {
-			var id, name, seedType string
-			if len(args) == 0 {
-				name, _ = cmd.Flags().GetString("name")
-				seedType, _ = cmd.Flags().GetString("type")
-			} else if len(args) == 1 {
-				id = args[0]
-			} else {
-				log.Error().Msg("Unknown extra arguments")
-				os.Exit(1)
-			}
-
-			seedClient, err := client.NewSeedClient(config.apiEndpoint.String(), config.apiToken)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to initialize seed client")
-				os.Exit(1)
-			}
-
-			s, err := seedClient.GetSeed(id, name, seedType)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to get seed")
-				os.Exit(1)
-			}
-
-			path, err := seedClient.GetSeedLatestPath(s)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to get seed path")
-				os.Exit(1)
-			}
-
-			if err := Realize(path.Path); err != nil {
-				log.Error().Err(err).Msg("Failed realizing seed")
-				os.Exit(1)
-			}
-		},
-	}
-	seedCmd.AddCommand(seedDownloadCommand)
-
-	var seedInfoCommand = &cobra.Command{
-		Use:   "info id",
-		Short: "Display seed information",
-		Run: func(cmd *cobra.Command, args []string) {
-			var id, name, seedType string
-			if len(args) == 0 {
-				name, _ = cmd.Flags().GetString("name")
-				seedType, _ = cmd.Flags().GetString("type")
-			} else if len(args) == 1 {
-				id = args[0]
-			} else {
-				log.Error().Msg("Unknown extra arguments")
-				os.Exit(1)
-			}
-
-			seedClient, err := client.NewSeedClient(config.apiEndpoint.String(), config.apiToken)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to initialize seed client")
-				os.Exit(1)
-			}
-
-			s, err := seedClient.GetSeed(id, name, seedType)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to get seed")
-				os.Exit(1)
-			}
-
-			path, err := seedClient.GetSeedLatestPath(s)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to get seed path")
-				os.Exit(1)
-			}
-
-			fmt.Printf("Seed: %v\n", s)
-			fmt.Printf("Path: %v\n", path)
-		},
-	}
-	seedCmd.AddCommand(seedInfoCommand)
-	seedInfoCommand.Flags().String("name", "", "seed name")
-	seedInfoCommand.Flags().String("type", "", "seed type")
-
-	var seedSubmitCommand = &cobra.Command{
-		Use:   "submit name type out_path",
-		Short: "submit a seed",
-		PreRunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) != 3 {
-				return fmt.Errorf("Expected 3 arguments, got %d", len(args))
-			}
-			return nil
-		},
-		Run: func(cmd *cobra.Command, args []string) {
-			log.Debug().Any("args", args).Msg("submit seed")
-
-			seedClient, err := client.NewSeedClient(config.apiEndpoint.String(), config.apiToken)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to initialize seed client")
-				os.Exit(1)
-			}
-
-			s, err := seedClient.GetSeed("", args[0], args[1])
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to get seed")
-				os.Exit(1)
-			}
-
-			_, err = seedClient.SubmitSeedPath(s, args[2])
-			if err != nil {
-				log.Error().Err(err).Msg("Failed submitting seed")
-				os.Exit(1)
-			}
-
-			log.Info().Any("args", args).Msg("Submitted seed")
-		},
-	}
-	seedCmd.AddCommand(seedSubmitCommand)
-	seedCmd.Flags().Bool("create", false, "create seed on submission")
-
-	if err := rootCmd.Execute(); err != nil {
+	var args config
+	p, err := arg.NewParser(arg.Config{}, &args)
+	if err != nil {
+		log.Fatalf("Fatal error in argument specification")
 		os.Exit(1)
 	}
+	err = p.Parse(os.Args[1:])
+
+	logLevel := slog.LevelInfo
+	if args.Debug {
+		logLevel = slog.LevelDebug
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
+	slog.SetDefault(logger)
+
+	slog.Debug("Loaded args", "args", args)
+
+	if args.ApiToken == "" && args.ApiTokenFile != "" {
+		slog.Debug("Reading api-token file", "file", args.ApiTokenFile)
+
+		token, err := os.ReadFile(args.ApiTokenFile)
+		if err != nil {
+			slog.Error("Failed to read token file", "file", args.ApiTokenFile)
+			os.Exit(1)
+		}
+
+		args.ApiToken = strings.TrimSpace(string(token))
+	}
+
+	switch {
+	case args.Version:
+		slog.Info("Version", "version", version)
+		os.Exit(0)
+	case err == arg.ErrHelp: // found "--help" on command line
+		p.WriteHelp(os.Stdout)
+		os.Exit(0)
+	case err != nil:
+		slog.Error("Unknown error", "error", err)
+		os.Exit(1)
+	}
+
+	switch {
+	case args.Seed != nil:
+		seedSubcommand(args)
+	default:
+		p.WriteHelp(os.Stdout)
+	}
 }
+
+func seedSubcommand(args config) {
+	switch {
+	case args.Seed.Create != nil:
+		cmdArgs := args.Seed.Create
+
+		seedClient, err := client.NewSeedClient(args.Endpoint, args.ApiToken)
+		if err != nil {
+			slog.Error("Failed to initialize seed client")
+			os.Exit(1)
+		}
+
+		s, err := seedClient.CreateSeed(cmdArgs.Name, cmdArgs.SeedType)
+		if err != nil {
+			slog.Error("Failed to create seed", "error", err)
+			os.Exit(1)
+		}
+
+		slog.Info("Created seed", "name", cmdArgs.Name, "type", cmdArgs.SeedType, "id", s.Id)
+
+	case args.Seed.Download != nil:
+		cmdArgs := args.Seed.Download
+
+		seedClient, err := client.NewSeedClient(args.Endpoint, args.ApiToken)
+		if err != nil {
+			slog.Error("Failed to initialize seed client")
+			os.Exit(1)
+		}
+
+		s, err := seedClient.GetSeed(cmdArgs.Name, cmdArgs.SeedType)
+		if err != nil {
+			slog.Error("Failed to get seed", "error", err)
+			os.Exit(1)
+		}
+
+		storePath, err := seedClient.GetSeedLatestPath(s)
+		if err != nil {
+			slog.Error("Failed to get seed store path", "error", err)
+			os.Exit(1)
+		}
+
+		if err := Realize(storePath.Path); err != nil {
+			slog.Error("Failed realizing seed", "error", err)
+			os.Exit(1)
+		}
+
+		slog.Info("Downloaded seed", "name", cmdArgs.Name, "type", cmdArgs.SeedType, "path", storePath.Path)
+
+	case args.Seed.Info != nil:
+		cmdArgs := args.Seed.Info
+
+		seedClient, err := client.NewSeedClient(args.Endpoint, args.ApiToken)
+		if err != nil {
+			slog.Error("Failed to initialize seed client", "error", err)
+			os.Exit(1)
+		}
+
+		s, err := seedClient.GetSeed(cmdArgs.Name, cmdArgs.SeedType)
+		if err != nil {
+			slog.Error("Failed to get seed", "error", err)
+			os.Exit(1)
+		}
+
+		storePath, err := seedClient.GetSeedLatestPath(s)
+		if err != nil {
+			slog.Error("Failed to get seed store path", "error", err)
+			os.Exit(1)
+		}
+
+		slog.Info("Found seed", "name", cmdArgs.Name, "type", cmdArgs.SeedType, "path", storePath.Path)
+
+	case args.Seed.Submit != nil:
+		cmdArgs := args.Seed.Submit
+
+		seedClient, err := client.NewSeedClient(args.Endpoint, args.ApiToken)
+		if err != nil {
+			slog.Error("Failed to initialize seed client", "error", err)
+			os.Exit(1)
+		}
+
+		s, err := seedClient.GetSeed(cmdArgs.Name, cmdArgs.SeedType)
+		if err != nil {
+			slog.Error("Failed to get seed", "error", err)
+			os.Exit(1)
+		}
+
+		storePath, err := seedClient.SubmitSeedPath(s, cmdArgs.Path)
+		if err != nil {
+			slog.Error("Failed submitting seed")
+			os.Exit(1)
+		}
+
+		slog.Info("Submitted seed", "name", cmdArgs.Name, "type", cmdArgs.SeedType, "path", storePath.Path)
+	}
+}
+
+// func daemonCommand(args args) {
+// 	client := newClient(config)
+//
+// 	err := client.connect()
+// 	if err != nil {
+// 		slog.Error("failed to connect")
+// 	}
+//
+// 	client.run()
+// }

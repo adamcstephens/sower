@@ -1,11 +1,14 @@
 default:
     just -l
 
-check: check-nix check-elixir
+check: check-nix check-elixir check-go
 
 check-elixir:
     unset CI; MIX_ENV=test mix deps.get
     mix test
+
+check-go:
+    golangci-lint run
 
 check-nix:
     nix build .#checks.x86_64-linux.default --print-build-logs

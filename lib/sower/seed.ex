@@ -84,7 +84,13 @@ defmodule Sower.Seed do
         order_by: [desc: sp.updated_at],
         limit: 1
 
-    Repo.one(query) |> Repo.preload(:store_path) |> Map.get(:store_path)
+    case Repo.one(query) do
+      nil ->
+        nil
+
+      store_path ->
+        store_path |> Repo.preload(:store_path) |> Map.get(:store_path)
+    end
   end
 
   defp changeset(seed, attrs) do

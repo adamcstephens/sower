@@ -128,7 +128,7 @@ defmodule Sower.Accounts.AccessToken do
         {:ok, id, rand}
 
       _ ->
-        {:error, "invalid token"}
+        {:error, "Invalid token: failed to split"}
     end
   end
 

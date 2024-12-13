@@ -3,14 +3,13 @@ package main
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
-
-	"github.com/rs/zerolog/log"
 )
 
 func Realize(path string) error {
-	log.Debug().Any("path", path).Msgf("Realizing path")
+	slog.Debug("Realizing path", "path", path)
 
 	if path == "" {
 		return fmt.Errorf("Cannot download without seed out_path")

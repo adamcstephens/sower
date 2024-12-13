@@ -562,6 +562,9 @@ type NewSeedResponse struct {
 	JSON401      *struct {
 		Error *string `json:"error,omitempty"`
 	}
+	JSON409 *struct {
+		Error *string `json:"error,omitempty"`
+	}
 }
 
 // Status returns HTTPResponse.Status
@@ -638,6 +641,9 @@ type LatestStorePathBySeedResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *StorePath
 	JSON401      *struct {
+		Error *string `json:"error,omitempty"`
+	}
+	JSON404 *struct {
 		Error *string `json:"error,omitempty"`
 	}
 }
@@ -793,6 +799,15 @@ func ParseNewSeedResponse(rsp *http.Response) (*NewSeedResponse, error) {
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest struct {
+			Error *string `json:"error,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
 	}
 
 	return response, nil
@@ -906,6 +921,15 @@ func ParseLatestStorePathBySeedResponse(rsp *http.Response) (*LatestStorePathByS
 			return nil, err
 		}
 		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest struct {
+			Error *string `json:"error,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
 
 	}
 

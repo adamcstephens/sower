@@ -3,12 +3,10 @@ package client
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 
-	"github.com/google/uuid"
 	"github.com/oapi-codegen/oapi-codegen/v2/pkg/securityprovider"
-
-	"github.com/rs/zerolog/log"
 )
 
 type SeedClient struct {
@@ -53,66 +51,78 @@ func (s *SeedClient) CreateSeed(name, seedType string) (*Seed, error) {
 		return nil, fmt.Errorf(*(*resp.JSON401).Error)
 	}
 
+	if resp.StatusCode() == http.StatusConflict {
+		return nil, fmt.Errorf(*(*resp.JSON409).Error)
+	}
+
 	if resp.StatusCode() != http.StatusCreated {
 		return nil, fmt.Errorf("unknown error")
 	}
 
 	seed := resp.JSON201
-	log.Debug().Any("seed_id", seed.Id).Msg("Created seed")
+	slog.Debug("Created seed", "seed_id", seed.Id)
 
 	return seed, nil
 }
 
-func (s *SeedClient) GetSeed(id, name, seedType string) (*Seed, error) {
+func (s *SeedClient) GetSeed(name, seedType string) (*Seed, error) {
+	newSeed := Seed{}
+
+	if name == "" && seedType == "" {
+		return nil, fmt.Errorf("Must specify both name and type")
+	}
+
+	resp, err := s.client.ListSeedsWithResponse(context.TODO(), &ListSeedsParams{Name: &name, SeedType: &seedType})
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode() == http.StatusUnauthorized {
+		return nil, fmt.Errorf(*(*resp.JSON401).Error)
+	}
+
+	if resp.StatusCode() == http.StatusNotFound {
+		return nil, fmt.Errorf(*(*resp.JSON404).Error)
+	}
+
+	if resp.StatusCode() != http.StatusOK {
+		return nil, fmt.Errorf("unknown error")
+	}
+
+	newSeed = (*resp.JSON200)[0]
+
+	slog.Debug("Found seed", "seed", newSeed)
+
+	return &newSeed, nil
+}
+
+func (s *SeedClient) GetSeedById(id string) (*Seed, error) {
 	newSeed := Seed{}
 
 	if id == "" {
-		if name == "" && seedType == "" {
-			return nil, fmt.Errorf("Must specify both name and type if not querying by id")
-		}
-
-		resp, err := s.client.ListSeedsWithResponse(context.TODO(), &ListSeedsParams{Name: &name, SeedType: &seedType})
-		if err != nil {
-			return nil, err
-		}
-
-		if resp.StatusCode() == http.StatusUnauthorized {
-			return nil, fmt.Errorf(*(*resp.JSON401).Error)
-		}
-
-		if resp.StatusCode() == http.StatusNotFound {
-			return nil, fmt.Errorf(*(*resp.JSON404).Error)
-		}
-
-		if resp.StatusCode() != http.StatusOK {
-			return nil, fmt.Errorf("unknown error")
-		}
-
-		newSeed = (*resp.JSON200)[0]
-
-	} else {
-		id, err := uuid.Parse(id)
-		if err != nil {
-			return nil, err
-		}
-
-		resp, err := s.client.GetSeedWithResponse(context.TODO(), id.String())
-		if err != nil {
-			return nil, err
-		}
-
-		if resp.StatusCode() == http.StatusUnauthorized {
-			return nil, fmt.Errorf(*(*resp.JSON401).Error)
-		}
-
-		if resp.StatusCode() != http.StatusOK {
-			return nil, fmt.Errorf("unknown error")
-		}
-
-		newSeed = *resp.JSON200
+		return nil, fmt.Errorf("seed id is required")
 	}
 
-	log.Debug().Any("seed", newSeed).Msg("Found seed")
+	resp, err := s.client.GetSeedWithResponse(context.TODO(), id)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode() == http.StatusUnauthorized {
+		return nil, fmt.Errorf(*(*resp.JSON401).Error)
+	}
+
+	if resp.StatusCode() == http.StatusNotFound {
+		return nil, fmt.Errorf(*(*resp.JSON404).Error)
+	}
+
+	if resp.StatusCode() != http.StatusOK {
+		return nil, fmt.Errorf("unknown error")
+	}
+
+	newSeed = *resp.JSON200
+
+	slog.Debug("Found seed", "seed", newSeed)
 
 	return &newSeed, nil
 }
@@ -127,14 +137,18 @@ func (s *SeedClient) GetSeedLatestPath(seed *Seed) (*StorePath, error) {
 		return nil, fmt.Errorf(*(*resp.JSON401).Error)
 	}
 
+	if resp.StatusCode() == http.StatusNotFound {
+		return nil, fmt.Errorf(*(*resp.JSON404).Error)
+	}
+
 	if resp.StatusCode() != http.StatusOK {
 		return nil, fmt.Errorf("unknown error")
 	}
 
-	path := resp.JSON200
-	log.Debug().Any("path", path).Any("seed", seed).Msg("Found path for seed")
+	seedPath := resp.JSON200
+	slog.Debug("Found path for seed", "path", seedPath, "seed", seed)
 
-	return path, nil
+	return seedPath, nil
 }
 
 func (s *SeedClient) SubmitSeedPath(seed *Seed, path string) (*StorePath, error) {
@@ -152,7 +166,8 @@ func (s *SeedClient) SubmitSeedPath(seed *Seed, path string) (*StorePath, error)
 	}
 
 	storePath := resp.JSON201
-	log.Debug().Any("seed_id", seed.Id).Any("path", storePath).Msg("Created path for seed")
+
+	slog.Debug("Created path for seed", "path", storePath, "seed_id", seed.Id)
 
 	return storePath, nil
 }

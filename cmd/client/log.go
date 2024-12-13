@@ -2,16 +2,10 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/nshafer/phx"
-	"github.com/rs/zerolog/log"
 )
-
-// type Logger interface {
-// 	Print(level LoggerLevel, kind string, v ...any)
-// 	Println(level LoggerLevel, kind string, v ...any)
-// 	Printf(level LoggerLevel, kind string, format string, v ...any)
-// }
 
 type logger struct{}
 
@@ -19,13 +13,13 @@ func (l *logger) Print(level phx.LoggerLevel, kind string, v ...any) { l.Println
 func (l *logger) Println(level phx.LoggerLevel, kind string, v ...any) {
 	switch level {
 	case phx.LogDebug:
-		log.Debug().Msg(fmt.Sprintf("%v", v))
+		slog.Debug(fmt.Sprintf("%v", v))
 	case phx.LogInfo:
-		log.Info().Msg(fmt.Sprintf("%v", v))
+		slog.Info(fmt.Sprintf("%v", v))
 	case phx.LogWarning:
-		log.Warn().Msg(fmt.Sprintf("%v", v))
+		slog.Warn(fmt.Sprintf("%v", v))
 	case phx.LogError:
-		log.Error().Msg(fmt.Sprintf("%v", v))
+		slog.Error(fmt.Sprintf("%v", v))
 	}
 }
 
