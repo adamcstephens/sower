@@ -1,6 +1,6 @@
 module codeberg.org/adamcstephens/sower
 
-go 1.23.2
+go 1.23.3
 
 require (
 	github.com/alexflint/go-arg v1.5.1
