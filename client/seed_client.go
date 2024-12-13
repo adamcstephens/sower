@@ -24,7 +24,7 @@ func NewSeedClient(endpoint, token string) (*SeedClient, error) {
 
 	bearerAuth, err := securityprovider.NewSecurityProviderBearerToken(token)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to load API token, %s")
+		return nil, fmt.Errorf("Failed to load API token, %s", err)
 	}
 
 	newClient, err := NewClientWithResponses(endpoint, WithRequestEditorFn(bearerAuth.Intercept), WithHTTPClient(&hc))

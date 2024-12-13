@@ -20,7 +20,7 @@ func TestClient_RawRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resp, err := c.ListSeeds(context.TODO())
+	resp, err := c.ListSeeds(context.TODO(), &client.ListSeedsParams{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func TestClient_SeedList(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resp, err := c.ListSeedsWithResponse(context.TODO())
+	resp, err := c.ListSeedsWithResponse(context.TODO(), &client.ListSeedsParams{})
 	if err != nil {
 		t.Fatal(err)
 	}
