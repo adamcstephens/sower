@@ -10,20 +10,35 @@ import (
 	"codeberg.org/adamcstephens/sower/client"
 )
 
-func activate(seedType client.SeedSeedType, storePath string) error {
+func activate(seedType client.SeedSeedType, storePath string, mode string) error {
 	var err error
 
 	switch {
 	case seedType == client.HomeManager:
 		cmd := exec.Command(fmt.Sprintf("%s/activate", storePath))
 		err = run(cmd)
+		if err != nil {
+			return fmt.Errorf("Failed to activate home-manager generation: %v", err)
+		}
+
 	case seedType == client.Nixos:
-		return fmt.Errorf("TODO %v", storePath)
+		profileCmd := exec.Command("nix-env", "--set", "--profile", "/nix/var/nix/profiles/system", storePath)
+		err = run(profileCmd)
+		if err != nil {
+			return fmt.Errorf("Failed to set nixos profile: %v", err)
+		}
+
+		switchCmd := exec.Command(fmt.Sprintf("%s/bin/switch-to-configuration", storePath), mode)
+		err = run(switchCmd)
+		if err != nil {
+			return fmt.Errorf("Failed to set nixos profile: %v", err)
+		}
+
 	default:
-		err = fmt.Errorf("Unsupported seed type: %s", seedType)
+		return fmt.Errorf("Unsupported seed type: %s", seedType)
 	}
 
-	return err
+	return nil
 }
 
 func realize(storePath string) error {

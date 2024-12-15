@@ -57,6 +57,7 @@ type seedSubmitCmd struct {
 
 type seedUpgradeCmd struct {
 	seedFields
+	Mode string `arg:"--mode,-m" default:"switch"`
 }
 
 func main() {
@@ -251,7 +252,7 @@ func seedSubcommand(cfg config) {
 			os.Exit(1)
 		}
 
-		if err := activate(seed.SeedType, storePath.Path); err != nil {
+		if err := activate(seed.SeedType, storePath.Path, cmdArgs.Mode); err != nil {
 			slog.Error("Failed realizing seed", "error", err)
 			os.Exit(1)
 		}
