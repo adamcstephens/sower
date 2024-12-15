@@ -48,11 +48,11 @@ func (s *SeedClient) CreateSeed(name, seedType string) (*Seed, error) {
 	}
 
 	if resp.StatusCode() == http.StatusUnauthorized {
-		return nil, fmt.Errorf(*(*resp.JSON401).Error)
+		return nil, fmt.Errorf("%s", *(*resp.JSON401).Error)
 	}
 
 	if resp.StatusCode() == http.StatusConflict {
-		return nil, fmt.Errorf(*(*resp.JSON409).Error)
+		return nil, fmt.Errorf("%s", *(*resp.JSON409).Error)
 	}
 
 	if resp.StatusCode() != http.StatusCreated {
@@ -78,11 +78,11 @@ func (s *SeedClient) GetSeed(name, seedType string) (*Seed, error) {
 	}
 
 	if resp.StatusCode() == http.StatusUnauthorized {
-		return nil, fmt.Errorf(*(*resp.JSON401).Error)
+		return nil, fmt.Errorf("%s", *(*resp.JSON401).Error)
 	}
 
 	if resp.StatusCode() == http.StatusNotFound {
-		return nil, fmt.Errorf(*(*resp.JSON404).Error)
+		return nil, fmt.Errorf("%s", *(*resp.JSON404).Error)
 	}
 
 	if resp.StatusCode() != http.StatusOK {
@@ -109,11 +109,11 @@ func (s *SeedClient) GetSeedById(id string) (*Seed, error) {
 	}
 
 	if resp.StatusCode() == http.StatusUnauthorized {
-		return nil, fmt.Errorf(*(*resp.JSON401).Error)
+		return nil, fmt.Errorf("%s", *(*resp.JSON401).Error)
 	}
 
 	if resp.StatusCode() == http.StatusNotFound {
-		return nil, fmt.Errorf(*(*resp.JSON404).Error)
+		return nil, fmt.Errorf("%s", *(*resp.JSON404).Error)
 	}
 
 	if resp.StatusCode() != http.StatusOK {
@@ -134,11 +134,11 @@ func (s *SeedClient) GetSeedLatestPath(seed *Seed) (*StorePath, error) {
 	}
 
 	if resp.StatusCode() == http.StatusUnauthorized {
-		return nil, fmt.Errorf(*(*resp.JSON401).Error)
+		return nil, fmt.Errorf("%s", *(*resp.JSON401).Error)
 	}
 
 	if resp.StatusCode() == http.StatusNotFound {
-		return nil, fmt.Errorf(*(*resp.JSON404).Error)
+		return nil, fmt.Errorf("%s", *(*resp.JSON404).Error)
 	}
 
 	if resp.StatusCode() != http.StatusOK {
@@ -158,7 +158,7 @@ func (s *SeedClient) SubmitSeedPath(seed *Seed, path string) (*StorePath, error)
 	}
 
 	if resp.StatusCode() == http.StatusUnauthorized {
-		return nil, fmt.Errorf(*(*resp.JSON401).Error)
+		return nil, fmt.Errorf("%s", *(*resp.JSON401).Error)
 	}
 
 	if resp.StatusCode() != http.StatusCreated {

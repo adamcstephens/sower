@@ -14,7 +14,8 @@ import (
 var version = "dev"
 
 type config struct {
-	Seed *seedCmd `arg:"subcommand:seed"`
+	Daemon *seedCmd `arg:"subcommand:seed"`
+	Seed   *seedCmd `arg:"subcommand:seed"`
 
 	ApiTokenFile string `arg:"--api-token-file,env:SOWER_API_TOKEN_FILE"`
 	ApiToken     string `arg:"--api-token,env:SOWER_API_TOKEN"`
@@ -53,8 +54,8 @@ type seedSubmitCmd struct {
 }
 
 func main() {
-	var args config
-	p, err := arg.NewParser(arg.Config{}, &args)
+	var cfg config
+	p, err := arg.NewParser(arg.Config{}, &cfg)
 	if err != nil {
 		log.Fatalf("Fatal error in argument specification")
 		os.Exit(1)
@@ -62,29 +63,29 @@ func main() {
 	err = p.Parse(os.Args[1:])
 
 	logLevel := slog.LevelInfo
-	if args.Debug {
+	if cfg.Debug {
 		logLevel = slog.LevelDebug
 	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
 	slog.SetDefault(logger)
 
-	slog.Debug("Loaded args", "args", args)
+	slog.Debug("Loaded args", "args", cfg)
 
-	if args.ApiToken == "" && args.ApiTokenFile != "" {
-		slog.Debug("Reading api-token file", "file", args.ApiTokenFile)
+	if cfg.ApiToken == "" && cfg.ApiTokenFile != "" {
+		slog.Debug("Reading api-token file", "file", cfg.ApiTokenFile)
 
-		token, err := os.ReadFile(args.ApiTokenFile)
+		token, err := os.ReadFile(cfg.ApiTokenFile)
 		if err != nil {
-			slog.Error("Failed to read token file", "file", args.ApiTokenFile)
+			slog.Error("Failed to read token file", "file", cfg.ApiTokenFile)
 			os.Exit(1)
 		}
 
-		args.ApiToken = strings.TrimSpace(string(token))
+		cfg.ApiToken = strings.TrimSpace(string(token))
 	}
 
 	switch {
-	case args.Version:
+	case cfg.Version:
 		slog.Info("Version", "version", version)
 		os.Exit(0)
 	case err == arg.ErrHelp: // found "--help" on command line
@@ -96,19 +97,21 @@ func main() {
 	}
 
 	switch {
-	case args.Seed != nil:
-		seedSubcommand(args)
+	case cfg.Seed != nil:
+		seedSubcommand(cfg)
+	case cfg.Daemon != nil:
+		daemonCommand(cfg)
 	default:
 		p.WriteHelp(os.Stdout)
 	}
 }
 
-func seedSubcommand(args config) {
+func seedSubcommand(cfg config) {
 	switch {
-	case args.Seed.Create != nil:
-		cmdArgs := args.Seed.Create
+	case cfg.Seed.Create != nil:
+		cmdArgs := cfg.Seed.Create
 
-		seedClient, err := client.NewSeedClient(args.Endpoint, args.ApiToken)
+		seedClient, err := client.NewSeedClient(cfg.Endpoint, cfg.ApiToken)
 		if err != nil {
 			slog.Error("Failed to initialize seed client")
 			os.Exit(1)
@@ -122,10 +125,10 @@ func seedSubcommand(args config) {
 
 		slog.Info("Created seed", "name", cmdArgs.Name, "type", cmdArgs.SeedType, "id", s.Id)
 
-	case args.Seed.Download != nil:
-		cmdArgs := args.Seed.Download
+	case cfg.Seed.Download != nil:
+		cmdArgs := cfg.Seed.Download
 
-		seedClient, err := client.NewSeedClient(args.Endpoint, args.ApiToken)
+		seedClient, err := client.NewSeedClient(cfg.Endpoint, cfg.ApiToken)
 		if err != nil {
 			slog.Error("Failed to initialize seed client")
 			os.Exit(1)
@@ -150,10 +153,10 @@ func seedSubcommand(args config) {
 
 		slog.Info("Downloaded seed", "name", cmdArgs.Name, "type", cmdArgs.SeedType, "path", storePath.Path)
 
-	case args.Seed.Info != nil:
-		cmdArgs := args.Seed.Info
+	case cfg.Seed.Info != nil:
+		cmdArgs := cfg.Seed.Info
 
-		seedClient, err := client.NewSeedClient(args.Endpoint, args.ApiToken)
+		seedClient, err := client.NewSeedClient(cfg.Endpoint, cfg.ApiToken)
 		if err != nil {
 			slog.Error("Failed to initialize seed client", "error", err)
 			os.Exit(1)
@@ -173,10 +176,10 @@ func seedSubcommand(args config) {
 
 		slog.Info("Found seed", "name", cmdArgs.Name, "type", cmdArgs.SeedType, "path", storePath.Path)
 
-	case args.Seed.Submit != nil:
-		cmdArgs := args.Seed.Submit
+	case cfg.Seed.Submit != nil:
+		cmdArgs := cfg.Seed.Submit
 
-		seedClient, err := client.NewSeedClient(args.Endpoint, args.ApiToken)
+		seedClient, err := client.NewSeedClient(cfg.Endpoint, cfg.ApiToken)
 		if err != nil {
 			slog.Error("Failed to initialize seed client", "error", err)
 			os.Exit(1)
@@ -198,13 +201,13 @@ func seedSubcommand(args config) {
 	}
 }
 
-// func daemonCommand(args args) {
-// 	client := newClient(config)
-//
-// 	err := client.connect()
-// 	if err != nil {
-// 		slog.Error("failed to connect")
-// 	}
-//
-// 	client.run()
-// }
+func daemonCommand(cfg config) {
+	client := newClient(cfg)
+
+	err := client.connect()
+	if err != nil {
+		slog.Error("failed to connect")
+	}
+
+	client.run()
+}

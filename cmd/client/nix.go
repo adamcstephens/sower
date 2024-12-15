@@ -34,10 +34,16 @@ func Realize(path string) error {
 
 	var ioErr error
 	go func() {
-		io.Copy(os.Stdout, stdout) // Redirect stdout to terminal's stdout
+		_, err = io.Copy(os.Stdout, stdout) // Redirect stdout to terminal's stdout
+		if err != nil {
+			slog.Error("Failed to configure stdout")
+		}
 	}()
 	go func() {
-		io.Copy(os.Stderr, stderr) // Redirect stderr to terminal's stderr
+		_, err = io.Copy(os.Stderr, stderr) // Redirect stderr to terminal's stderr
+		if err != nil {
+			slog.Error("Failed to configure stderr")
+		}
 	}()
 
 	err = cmd.Wait()

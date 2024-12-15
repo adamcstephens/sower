@@ -9,11 +9,11 @@ import (
 )
 
 type channelClient struct {
-	config *config
+	config config
 	socket *phx.Socket
 }
 
-func newClient(config *config) *channelClient {
+func newClient(config config) *channelClient {
 	return &channelClient{config: config}
 }
 
@@ -21,6 +21,9 @@ func (c *channelClient) connect() error {
 	slog.Debug("Starting daemon")
 
 	endpoint, err := url.Parse(fmt.Sprintf("%s/client", c.config.Endpoint))
+	if err != nil {
+		return fmt.Errorf("Failed to parse endpoint: %v", err)
+	}
 	endpoint.RawQuery = fmt.Sprintf("token=%s", url.QueryEscape(c.config.ApiToken))
 
 	socket := phx.NewSocket(endpoint)
