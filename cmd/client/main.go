@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "embed"
+	"encoding/json"
 	"log"
 	"log/slog"
 	"os"
@@ -17,11 +18,12 @@ type config struct {
 	Daemon *seedCmd `arg:"subcommand:daemon"`
 	Seed   *seedCmd `arg:"subcommand:seed"`
 
-	ApiTokenFile string `arg:"--api-token-file,env:SOWER_API_TOKEN_FILE"`
-	ApiToken     string `arg:"--api-token,env:SOWER_API_TOKEN"`
-	Debug        bool   `arg:"--debug"`
-	Endpoint     string `arg:"--endpoint,-e,env:SOWER_ENDPOINT"`
-	Version      bool   `arg:"--version"`
+	ApiTokenFile string   `arg:"--api-token-file,env:SOWER_API_TOKEN_FILE" json:"api-token-file"`
+	ApiToken     string   `arg:"--api-token,env:SOWER_API_TOKEN"`
+	ConfigFiles  []string `arg:"--config-file,-c,separate,env:SOWER_CONFIG_FILE"`
+	Debug        bool     `arg:"--debug"`
+	Endpoint     string   `arg:"--endpoint,-e,env:SOWER_ENDPOINT"`
+	Version      bool     `arg:"--version"`
 }
 
 type seedCmd struct {
@@ -30,44 +32,58 @@ type seedCmd struct {
 	Info     *seedInfoCmd     `arg:"subcommand:info"`
 	Submit   *seedSubmitCmd   `arg:"subcommand:submit"`
 	Upgrade  *seedUpgradeCmd  `arg:"subcommand:upgrade"`
+
+	SeedType string `arg:"--type,-t" json:"type"`
+	Name     string `arg:"--name,-n"`
 }
 
-type seedFields struct {
-	SeedType string `arg:"--type,-t,required"`
-	Name     string `arg:"--name,-n,required"`
-}
+type seedCreateCmd struct{}
 
-type seedCreateCmd struct {
-	seedFields
-}
+type seedDownloadCmd struct{}
 
-type seedDownloadCmd struct {
-	seedFields
-}
-
-type seedInfoCmd struct {
-	seedFields
-}
+type seedInfoCmd struct{}
 
 type seedSubmitCmd struct {
-	seedFields
 	Path   string `arg:"--path,-p,required"`
 	Create bool   `arg:"--create"`
 }
 
 type seedUpgradeCmd struct {
-	seedFields
 	Mode string `arg:"--mode,-m" default:"switch"`
 }
 
 func main() {
 	var cfg config
+	var parseResult error
 	p, err := arg.NewParser(arg.Config{}, &cfg)
 	if err != nil {
 		log.Fatalf("Fatal error in argument specification")
 		os.Exit(1)
 	}
-	err = p.Parse(os.Args[1:])
+	parseResult = p.Parse(os.Args[1:])
+
+	if len(cfg.ConfigFiles) != 0 {
+		for _, configFile := range cfg.ConfigFiles {
+			_, err := os.Stat(configFile)
+			if err != nil {
+				slog.Warn("Configuration file does not exist", "config-file", configFile)
+				continue
+			}
+
+			j, err := os.ReadFile(configFile)
+			if err != nil {
+				slog.Error("Failed to read configuration file", "config-file", configFile)
+				os.Exit(1)
+			}
+
+			if err := json.Unmarshal(j, &cfg); err != nil {
+				slog.Error("Failed to parse configuration file", "config-file", configFile)
+				os.Exit(1)
+			}
+		}
+		// reparse flags on top of config
+		parseResult = p.Parse(os.Args[1:])
+	}
 
 	logLevel := slog.LevelInfo
 	if cfg.Debug {
@@ -95,11 +111,11 @@ func main() {
 	case cfg.Version:
 		slog.Info("Version", "version", version)
 		os.Exit(0)
-	case err == arg.ErrHelp: // found "--help" on command line
+	case parseResult == arg.ErrHelp: // found "--help" on command line
 		p.WriteHelp(os.Stdout)
 		os.Exit(0)
-	case err != nil:
-		slog.Error("Unknown error", "error", err)
+	case parseResult != nil:
+		slog.Error("Unknown error", "error", parseResult)
 		os.Exit(1)
 	}
 
@@ -127,34 +143,30 @@ func daemonCommand(cfg config) {
 func seedSubcommand(cfg config) {
 	switch {
 	case cfg.Seed.Create != nil:
-		cmdArgs := cfg.Seed.Create
-
 		seedClient, err := client.NewSeedClient(cfg.Endpoint, cfg.ApiToken)
 		if err != nil {
 			slog.Error("Failed to initialize seed client")
 			os.Exit(1)
 		}
 
-		seed, err := seedClient.CreateSeed(cmdArgs.Name, cmdArgs.SeedType)
+		seed, err := seedClient.CreateSeed(cfg.Seed.Name, cfg.Seed.SeedType)
 		if err != nil {
 			slog.Error("Failed to create seed", "error", err)
 			os.Exit(1)
 		}
 
-		slog.Info("Created seed", "name", cmdArgs.Name, "type", cmdArgs.SeedType, "id", seed.Id)
+		slog.Info("Created seed", "name", seed.Name, "type", seed.SeedType, "id", seed.Id)
 
 	case cfg.Seed.Download != nil:
-		cmdArgs := cfg.Seed.Download
-
 		seedClient, err := client.NewSeedClient(cfg.Endpoint, cfg.ApiToken)
 		if err != nil {
 			slog.Error("Failed to initialize seed client")
 			os.Exit(1)
 		}
 
-		seed, err := seedClient.GetSeed(cmdArgs.Name, cmdArgs.SeedType)
+		seed, err := seedClient.GetSeed(cfg.Seed.Name, cfg.Seed.SeedType)
 		if err != nil {
-			slog.Error("Failed to get seed", "error", err)
+			slog.Error("Failed to get seed", "error", err, "name", cfg.Seed.Name, "type", cfg.Seed.SeedType)
 			os.Exit(1)
 		}
 
@@ -169,20 +181,18 @@ func seedSubcommand(cfg config) {
 			os.Exit(1)
 		}
 
-		slog.Info("Downloaded seed", "name", cmdArgs.Name, "type", cmdArgs.SeedType, "path", storePath.Path)
+		slog.Info("Downloaded seed", "name", seed.Name, "type", seed.SeedType, "path", storePath.Path)
 
 	case cfg.Seed.Info != nil:
-		cmdArgs := cfg.Seed.Info
-
 		seedClient, err := client.NewSeedClient(cfg.Endpoint, cfg.ApiToken)
 		if err != nil {
 			slog.Error("Failed to initialize seed client", "error", err)
 			os.Exit(1)
 		}
 
-		seed, err := seedClient.GetSeed(cmdArgs.Name, cmdArgs.SeedType)
+		seed, err := seedClient.GetSeed(cfg.Seed.Name, cfg.Seed.SeedType)
 		if err != nil {
-			slog.Error("Failed to get seed", "error", err)
+			slog.Error("Failed to get seed", "error", err, "name", cfg.Seed.Name, "type", cfg.Seed.SeedType)
 			os.Exit(1)
 		}
 
@@ -192,7 +202,7 @@ func seedSubcommand(cfg config) {
 			os.Exit(1)
 		}
 
-		slog.Info("Found seed", "name", cmdArgs.Name, "type", cmdArgs.SeedType, "path", storePath.Path)
+		slog.Info("Found seed", "name", seed.Name, "type", seed.SeedType, "path", storePath.Path)
 
 	case cfg.Seed.Submit != nil:
 		cmdArgs := cfg.Seed.Submit
@@ -205,9 +215,9 @@ func seedSubcommand(cfg config) {
 
 		var seed *client.Seed
 
-		seed, err = seedClient.GetSeed(cmdArgs.Name, cmdArgs.SeedType)
+		seed, err = seedClient.GetSeed(cfg.Seed.Name, cfg.Seed.SeedType)
 		if err != nil && cmdArgs.Create {
-			seed, err = seedClient.CreateSeed(cmdArgs.Name, cmdArgs.SeedType)
+			seed, err = seedClient.CreateSeed(cfg.Seed.Name, cfg.Seed.SeedType)
 			if err != nil {
 				slog.Error("Failed to create seed", "error", err)
 				os.Exit(1)
@@ -224,7 +234,7 @@ func seedSubcommand(cfg config) {
 			os.Exit(1)
 		}
 
-		slog.Info("Submitted seed", "name", cmdArgs.Name, "type", cmdArgs.SeedType, "path", storePath.Path)
+		slog.Info("Submitted seed", "name", seed.Name, "type", seed.SeedType, "path", storePath.Path)
 
 	case cfg.Seed.Upgrade != nil:
 		cmdArgs := cfg.Seed.Upgrade
@@ -235,7 +245,7 @@ func seedSubcommand(cfg config) {
 			os.Exit(1)
 		}
 
-		seed, err := seedClient.GetSeed(cmdArgs.Name, cmdArgs.SeedType)
+		seed, err := seedClient.GetSeed(cfg.Seed.Name, cfg.Seed.SeedType)
 		if err != nil {
 			slog.Error("Failed to get seed", "error", err)
 			os.Exit(1)
@@ -257,7 +267,7 @@ func seedSubcommand(cfg config) {
 			os.Exit(1)
 		}
 
-		slog.Info("Upgraded seed", "name", cmdArgs.Name, "type", cmdArgs.SeedType, "path", storePath.Path)
+		slog.Info("Upgraded seed", "name", cfg.Seed.Name, "type", seed.SeedType, "path", storePath.Path)
 
 	}
 }

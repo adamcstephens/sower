@@ -37,6 +37,10 @@ func NewSeedClient(endpoint, token string) (*SeedClient, error) {
 }
 
 func (s *SeedClient) CreateSeed(name, seedType string) (*Seed, error) {
+	if name == "" || seedType == "" {
+		return nil, fmt.Errorf("seed name and type are required")
+	}
+
 	st, err := stringToSeedSeedType(seedType)
 	if err != nil {
 		return nil, err
@@ -66,6 +70,10 @@ func (s *SeedClient) CreateSeed(name, seedType string) (*Seed, error) {
 }
 
 func (s *SeedClient) GetSeed(name, seedType string) (*Seed, error) {
+	if name == "" || seedType == "" {
+		return nil, fmt.Errorf("seed name and type are required")
+	}
+
 	newSeed := Seed{}
 
 	if name == "" && seedType == "" {

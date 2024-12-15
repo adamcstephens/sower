@@ -49,6 +49,7 @@
                   # go
                   pkgs.go_1_23
                   pkgs.delve
+                  pkgs.gci
                   pkgs.golangci-lint
                   pkgs.gopls
                   pkgs.oapi-codegen

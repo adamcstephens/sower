@@ -1,4 +1,0 @@
-url = "http://localhost:7150"
-name = "local"
-type = "home-manager"
-api-token-file = "./.dev-api-token"
