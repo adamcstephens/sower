@@ -6,17 +6,41 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+
+	"codeberg.org/adamcstephens/sower/client"
 )
 
-func Realize(path string) error {
-	slog.Debug("Realizing path", "path", path)
+func activate(seedType client.SeedSeedType, storePath string) error {
+	var err error
 
-	if path == "" {
+	switch {
+	case seedType == client.HomeManager:
+		cmd := exec.Command(fmt.Sprintf("%s/activate", storePath))
+		err = run(cmd)
+	case seedType == client.Nixos:
+		return fmt.Errorf("TODO %v", storePath)
+	default:
+		err = fmt.Errorf("Unsupported seed type: %s", seedType)
+	}
+
+	return err
+}
+
+func realize(storePath string) error {
+	slog.Debug("Realizing path", "path", storePath)
+
+	if storePath == "" {
 		return fmt.Errorf("Cannot download without seed out_path")
 	}
 
-	cmd := exec.Command("nix-store", "--realize", path)
+	cmd := exec.Command("nix-store", "--realize", storePath)
 
+	err := run(cmd)
+
+	return err
+}
+
+func run(cmd *exec.Cmd) error {
 	// Set up the pipes for stdout and stderr
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -46,6 +70,7 @@ func Realize(path string) error {
 		}
 	}()
 
+	slog.Debug("Running command", "cmd", cmd.String())
 	err = cmd.Wait()
 	if err != nil {
 		return fmt.Errorf("Failed to download seed: %v", err)

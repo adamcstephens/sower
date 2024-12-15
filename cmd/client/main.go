@@ -14,7 +14,7 @@ import (
 var version = "dev"
 
 type config struct {
-	Daemon *seedCmd `arg:"subcommand:seed"`
+	Daemon *seedCmd `arg:"subcommand:daemon"`
 	Seed   *seedCmd `arg:"subcommand:seed"`
 
 	ApiTokenFile string `arg:"--api-token-file,env:SOWER_API_TOKEN_FILE"`
@@ -29,6 +29,7 @@ type seedCmd struct {
 	Download *seedDownloadCmd `arg:"subcommand:download"`
 	Info     *seedInfoCmd     `arg:"subcommand:info"`
 	Submit   *seedSubmitCmd   `arg:"subcommand:submit"`
+	Upgrade  *seedUpgradeCmd  `arg:"subcommand:upgrade"`
 }
 
 type seedFields struct {
@@ -50,7 +51,12 @@ type seedInfoCmd struct {
 
 type seedSubmitCmd struct {
 	seedFields
-	Path string `arg:"--path,-p,required"`
+	Path   string `arg:"--path,-p,required"`
+	Create bool   `arg:"--create"`
+}
+
+type seedUpgradeCmd struct {
+	seedFields
 }
 
 func main() {
@@ -106,6 +112,17 @@ func main() {
 	}
 }
 
+func daemonCommand(cfg config) {
+	client := newClient(cfg)
+
+	err := client.connect()
+	if err != nil {
+		slog.Error("failed to connect")
+	}
+
+	client.run()
+}
+
 func seedSubcommand(cfg config) {
 	switch {
 	case cfg.Seed.Create != nil:
@@ -117,13 +134,13 @@ func seedSubcommand(cfg config) {
 			os.Exit(1)
 		}
 
-		s, err := seedClient.CreateSeed(cmdArgs.Name, cmdArgs.SeedType)
+		seed, err := seedClient.CreateSeed(cmdArgs.Name, cmdArgs.SeedType)
 		if err != nil {
 			slog.Error("Failed to create seed", "error", err)
 			os.Exit(1)
 		}
 
-		slog.Info("Created seed", "name", cmdArgs.Name, "type", cmdArgs.SeedType, "id", s.Id)
+		slog.Info("Created seed", "name", cmdArgs.Name, "type", cmdArgs.SeedType, "id", seed.Id)
 
 	case cfg.Seed.Download != nil:
 		cmdArgs := cfg.Seed.Download
@@ -134,19 +151,19 @@ func seedSubcommand(cfg config) {
 			os.Exit(1)
 		}
 
-		s, err := seedClient.GetSeed(cmdArgs.Name, cmdArgs.SeedType)
+		seed, err := seedClient.GetSeed(cmdArgs.Name, cmdArgs.SeedType)
 		if err != nil {
 			slog.Error("Failed to get seed", "error", err)
 			os.Exit(1)
 		}
 
-		storePath, err := seedClient.GetSeedLatestPath(s)
+		storePath, err := seedClient.GetSeedLatestPath(seed)
 		if err != nil {
 			slog.Error("Failed to get seed store path", "error", err)
 			os.Exit(1)
 		}
 
-		if err := Realize(storePath.Path); err != nil {
+		if err := realize(storePath.Path); err != nil {
 			slog.Error("Failed realizing seed", "error", err)
 			os.Exit(1)
 		}
@@ -162,13 +179,13 @@ func seedSubcommand(cfg config) {
 			os.Exit(1)
 		}
 
-		s, err := seedClient.GetSeed(cmdArgs.Name, cmdArgs.SeedType)
+		seed, err := seedClient.GetSeed(cmdArgs.Name, cmdArgs.SeedType)
 		if err != nil {
 			slog.Error("Failed to get seed", "error", err)
 			os.Exit(1)
 		}
 
-		storePath, err := seedClient.GetSeedLatestPath(s)
+		storePath, err := seedClient.GetSeedLatestPath(seed)
 		if err != nil {
 			slog.Error("Failed to get seed store path", "error", err)
 			os.Exit(1)
@@ -185,29 +202,61 @@ func seedSubcommand(cfg config) {
 			os.Exit(1)
 		}
 
-		s, err := seedClient.GetSeed(cmdArgs.Name, cmdArgs.SeedType)
+		var seed *client.Seed
+
+		seed, err = seedClient.GetSeed(cmdArgs.Name, cmdArgs.SeedType)
+		if err != nil && cmdArgs.Create {
+			seed, err = seedClient.CreateSeed(cmdArgs.Name, cmdArgs.SeedType)
+			if err != nil {
+				slog.Error("Failed to create seed", "error", err)
+				os.Exit(1)
+			}
+		}
 		if err != nil {
 			slog.Error("Failed to get seed", "error", err)
 			os.Exit(1)
 		}
 
-		storePath, err := seedClient.SubmitSeedPath(s, cmdArgs.Path)
+		storePath, err := seedClient.SubmitSeedPath(seed, cmdArgs.Path)
 		if err != nil {
 			slog.Error("Failed submitting seed")
 			os.Exit(1)
 		}
 
 		slog.Info("Submitted seed", "name", cmdArgs.Name, "type", cmdArgs.SeedType, "path", storePath.Path)
+
+	case cfg.Seed.Upgrade != nil:
+		cmdArgs := cfg.Seed.Upgrade
+
+		seedClient, err := client.NewSeedClient(cfg.Endpoint, cfg.ApiToken)
+		if err != nil {
+			slog.Error("Failed to initialize seed client")
+			os.Exit(1)
+		}
+
+		seed, err := seedClient.GetSeed(cmdArgs.Name, cmdArgs.SeedType)
+		if err != nil {
+			slog.Error("Failed to get seed", "error", err)
+			os.Exit(1)
+		}
+
+		storePath, err := seedClient.GetSeedLatestPath(seed)
+		if err != nil {
+			slog.Error("Failed to get seed store path", "error", err)
+			os.Exit(1)
+		}
+
+		if err := realize(storePath.Path); err != nil {
+			slog.Error("Failed realizing seed", "error", err)
+			os.Exit(1)
+		}
+
+		if err := activate(seed.SeedType, storePath.Path); err != nil {
+			slog.Error("Failed realizing seed", "error", err)
+			os.Exit(1)
+		}
+
+		slog.Info("Upgraded seed", "name", cmdArgs.Name, "type", cmdArgs.SeedType, "path", storePath.Path)
+
 	}
-}
-
-func daemonCommand(cfg config) {
-	client := newClient(cfg)
-
-	err := client.connect()
-	if err != nil {
-		slog.Error("failed to connect")
-	}
-
-	client.run()
 }
