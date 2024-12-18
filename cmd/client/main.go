@@ -30,6 +30,7 @@ type seedCmd struct {
 	Create   *seedCreateCmd   `arg:"subcommand:create"`
 	Download *seedDownloadCmd `arg:"subcommand:download"`
 	Info     *seedInfoCmd     `arg:"subcommand:info"`
+	Reboot   *seedRebootCmd   `arg:"subcommand:reboot"`
 	Submit   *seedSubmitCmd   `arg:"subcommand:submit"`
 	Upgrade  *seedUpgradeCmd  `arg:"subcommand:upgrade"`
 
@@ -43,6 +44,10 @@ type seedDownloadCmd struct{}
 
 type seedInfoCmd struct{}
 
+type seedRebootCmd struct {
+	Yes bool `arg:"--yes,-y"`
+}
+
 type seedSubmitCmd struct {
 	Path   string `arg:"--path,-p,required"`
 	Create bool   `arg:"--create"`
@@ -50,6 +55,7 @@ type seedSubmitCmd struct {
 
 type seedUpgradeCmd struct {
 	Mode string `arg:"--mode,-m" default:"switch"`
+	Yes  bool   `arg:"--yes,-y"`
 }
 
 func main() {
@@ -204,6 +210,13 @@ func seedSubcommand(cfg config) {
 
 		slog.Info("Found seed", "name", seed.Name, "type", seed.SeedType, "path", storePath.Path)
 
+	case cfg.Seed.Reboot != nil:
+		err := reboot(cfg.Seed.Reboot.Yes)
+		if err != nil {
+			slog.Error("Failed to reboot", "error", err)
+			os.Exit(1)
+		}
+
 	case cfg.Seed.Submit != nil:
 		cmdArgs := cfg.Seed.Submit
 
@@ -269,5 +282,12 @@ func seedSubcommand(cfg config) {
 
 		slog.Info("Upgraded seed", "name", cfg.Seed.Name, "type", seed.SeedType, "path", storePath.Path)
 
+		if seed.SeedType == client.Nixos {
+			err := reboot(cmdArgs.Yes)
+			if err != nil {
+				slog.Error("Failed to reboot", "error", err)
+				os.Exit(1)
+			}
+		}
 	}
 }

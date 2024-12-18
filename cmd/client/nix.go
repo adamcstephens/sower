@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"codeberg.org/adamcstephens/sower/client"
 )
@@ -55,6 +56,60 @@ func realize(storePath string) error {
 	return err
 }
 
+func reboot(yes bool) error {
+	slog.Debug("Checking reboot")
+
+	compPaths := []string{"", "/initrd", "/kernel", "/kernel-modules"}
+
+	profileStorePath, err := filepath.EvalSymlinks("/nix/var/nix/profiles/system")
+	if err != nil {
+		return fmt.Errorf("Failed to eval symlink for %s: %v", "/nix/var/nix/profiles/system", err)
+	}
+	currentStorePath, err := filepath.EvalSymlinks("/run/current-system")
+	if err != nil {
+		return fmt.Errorf("Failed to eval symlink for %s: %v", "/run/current-system", err)
+	}
+	bootedStorePath, err := filepath.EvalSymlinks("/run/booted-system")
+	if err != nil {
+		return fmt.Errorf("Failed to eval symlink for %s: %v", "/run/booted-system", err)
+	}
+
+	var needReboot bool
+
+	for _, path := range compPaths {
+		profile := fmt.Sprintf("%s%s", profileStorePath, path)
+		current := fmt.Sprintf("%s%s", currentStorePath, path)
+		booted := fmt.Sprintf("%s%s", bootedStorePath, path)
+
+		if path == "" {
+			if current != profile {
+				slog.Debug("Need to reboot", "path", path, "current", current, "profile", profile)
+				needReboot = true
+			}
+		} else {
+			if current != booted {
+				slog.Debug("Need to reboot", "path", path, "current", current, "booted", booted)
+				needReboot = true
+			}
+		}
+	}
+
+	if needReboot {
+		if yes {
+			slog.Info("Scheduling reboot in ~5 seconds")
+			cmd := exec.Command("systemd-run", "--on-active=5s", "--no-block", "--unit=sower-client-reboot", "systemctl", "reboot")
+			err := run(cmd)
+			if err != nil {
+				return fmt.Errorf("Failed to schedule reboot: %v", err)
+			}
+		} else {
+			slog.Warn("Reboot needed, but skipping without --yes")
+		}
+	}
+
+	return nil
+}
+
 func run(cmd *exec.Cmd) error {
 	// Set up the pipes for stdout and stderr
 	stdout, err := cmd.StdoutPipe()
@@ -66,6 +121,7 @@ func run(cmd *exec.Cmd) error {
 		return fmt.Errorf("Error creating stderr: %v", err)
 	}
 
+	slog.Debug("Running command", "cmd", cmd.String())
 	err = cmd.Start()
 	if err != nil {
 		return fmt.Errorf("Error starting command: %v", err)
@@ -73,19 +129,18 @@ func run(cmd *exec.Cmd) error {
 
 	var ioErr error
 	go func() {
-		_, err = io.Copy(os.Stdout, stdout) // Redirect stdout to terminal's stdout
-		if err != nil {
+		_, ioErr = io.Copy(os.Stdout, stdout) // Redirect stdout to terminal's stdout
+		if ioErr != nil {
 			slog.Error("Failed to configure stdout")
 		}
 	}()
 	go func() {
-		_, err = io.Copy(os.Stderr, stderr) // Redirect stderr to terminal's stderr
-		if err != nil {
+		_, ioErr = io.Copy(os.Stderr, stderr) // Redirect stderr to terminal's stderr
+		if ioErr != nil {
 			slog.Error("Failed to configure stderr")
 		}
 	}()
 
-	slog.Debug("Running command", "cmd", cmd.String())
 	err = cmd.Wait()
 	if err != nil {
 		return fmt.Errorf("Failed to download seed: %v", err)
