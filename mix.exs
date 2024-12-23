@@ -42,7 +42,7 @@ defmodule Sower.MixProject do
       {:phoenix_html, "~> 4.1.1"},
       {:phoenix_live_dashboard, "~> 0.8.0"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
-      {:phoenix_live_view, "~> 0.20.0"},
+      {:phoenix_live_view, "~> 1.0.0"},
       {:postgrex, ">= 0.0.0"},
       {:sentry, "~> 10.5"},
       {:shortuuid, "~> 3.0"},
