@@ -46,6 +46,8 @@ in
           Whether to initialise non-existent secrets with random values.
         '';
       };
+
+      e2eTest = lib.mkEnableOption "e2e test mode. will preseed and write a token file";
     };
   };
 
@@ -88,6 +90,7 @@ in
           ''}
 
           ${cfg.package}/bin/sower eval Sower.Release.migrate
+          ${lib.optionalString cfg.e2eTest "${cfg.package}/bin/sower eval Sower.Repo.Seeds.Preseed.for_e2e"}
           exec ${cfg.package}/bin/sower start
         '';
         ExecStop = "${cfg.package}/bin/sower stop";

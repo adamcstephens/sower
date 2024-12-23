@@ -6,8 +6,8 @@
 }:
 let
   cfg = config.services.sower.client;
-  toml = pkgs.formats.toml { };
-  tomlType = toml.type;
+  json = pkgs.formats.json { };
+  jsonType = json.type;
 in
 {
   options = {
@@ -24,21 +24,29 @@ in
 
       config = lib.mkOption {
         type = lib.types.submodule {
-          freeformType = tomlType;
+          freeformType = jsonType;
 
           options = {
-            url = lib.mkOption {
+            endpoint = lib.mkOption {
               type = lib.types.str;
-              description = "URL to Sower, e.g. https://mysower.org/";
+              description = "Endpoint URL to Sower, e.g. https://mysower.org/";
             };
 
-            type = lib.mkOption {
-              type = lib.types.enum [
-                "home-manager"
-                "nix-darwin"
-                "nixos"
-              ];
-              default = "home-manager";
+            seed = {
+              name = lib.mkOption {
+                type = lib.types.str;
+                description = "seed name";
+                default = config.home.username;
+              };
+
+              type = lib.mkOption {
+                type = lib.types.enum [
+                  "home-manager"
+                  "nix-darwin"
+                  "nixos"
+                ];
+                default = "home-manager";
+              };
             };
           };
         };
@@ -53,21 +61,26 @@ in
       {
         assertions = [
           {
-            assertion = cfg.config.url != null;
-            message = "Sower URL is required";
+            assertion = cfg.config.endpoint != null;
+            message = "Sower endpoint is required";
           }
         ];
 
-        xdg.configFile."sower/client.toml".source = lib.mkIf (cfg.config != null) (
-          toml.generate "sower-client.toml" cfg.config
+        home.packages = [ cfg.package ];
+
+        xdg.configFile."sower/client.json".source = lib.mkIf (cfg.config != null) (
+          json.generate "sower-client.json" cfg.config
         );
       }
 
       (lib.mkIf pkgs.stdenv.isLinux {
         systemd.user.services.sower-client = {
           Service = {
-            Environment = [ "PATH=${lib.makeBinPath [ pkgs.nix ]}" ];
-            ExecStart = "${lib.getExe cfg.package} tree upgrade";
+            Environment = [
+              "PATH=${lib.makeBinPath [ config.nix.package ]}"
+              "SOWER_CONFIG_FILE=%E/sower/client.json"
+            ];
+            ExecStart = "${lib.getExe cfg.package} seed upgrade";
             Type = "oneshot";
           };
 
@@ -95,7 +108,7 @@ in
               KeepAlive = false;
               ProgramArguments = [
                 (lib.getExe cfg.package)
-                "tree"
+                "seed"
                 "upgrade"
               ];
               StartCalendarInterval = [

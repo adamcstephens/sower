@@ -6,8 +6,8 @@
 }:
 let
   cfg = config.services.sower.client;
-  toml = pkgs.formats.toml { };
-  tomlType = toml.type;
+  json = pkgs.formats.json { };
+  jsonType = json.type;
 in
 {
   options = {
@@ -32,21 +32,34 @@ in
 
       settings = lib.mkOption {
         type = lib.types.submodule {
-          freeformType = tomlType;
+          freeformType = jsonType;
 
           options = {
-            url = lib.mkOption {
+            endpoint = lib.mkOption {
               type = lib.types.str;
-              description = "URL to Sower, e.g. https://mysower.org/";
+              description = "Endpoint URL to Sower, e.g. https://mysower.org/";
             };
 
-            type = lib.mkOption {
-              type = lib.types.enum [
-                "home-manager"
-                "nix-darwin"
-                "nixos"
-              ];
-              default = "nixos";
+            api-token-file = lib.mkOption {
+              type = lib.types.str;
+              description = "path to API token file. This is a secret so should not be in the nix store";
+            };
+
+            seed = {
+              name = lib.mkOption {
+                type = lib.types.str;
+                description = "seed name";
+                default = config.networking.hostName;
+              };
+
+              type = lib.mkOption {
+                type = lib.types.enum [
+                  "home-manager"
+                  "nix-darwin"
+                  "nixos"
+                ];
+                default = "nixos";
+              };
             };
           };
         };
@@ -57,22 +70,28 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    environment.etc."sower/client.toml".source = lib.mkIf (cfg.settings != null) (
-      toml.generate "sower-client.toml" (
+    environment.etc."sower/client.json".source = lib.mkIf (cfg.settings != null) (
+      json.generate "sower-client.json" (
         cfg.settings // (lib.optionalAttrs cfg.autoreboot { reboot = true; })
       )
     );
 
+    environment.systemPackages = [ cfg.package ];
+
     systemd.services.sower-client = {
       after = [ "network-online.target" ];
       requires = [ "network-online.target" ];
-      path = [ pkgs.nix ];
+      path = [ config.nix.package ];
+
+      environment = {
+        SOWER_CONFIG_FILE = "/etc/sower/client.json";
+      };
 
       # avoid restarting mid-switch
       restartIfChanged = false;
 
       serviceConfig = {
-        ExecStart = "${lib.getExe cfg.package} tree upgrade ${lib.optionalString cfg.autoreboot "--yes"}";
+        ExecStart = "${lib.getExe cfg.package} seed upgrade ${lib.optionalString cfg.autoreboot "--yes"}";
         Type = "oneshot";
         LoadCredential = cfg.credentials;
       };

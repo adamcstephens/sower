@@ -12,4 +12,7 @@
 
 alias Sower.Repo.Seeds.Org
 
-Org.new(%Org{name: "default organization", email: "default@sower.dev"})
+user = Org.new_org_and_user(%Org{name: "default organization", email: "default@sower.dev"})
+
+user |> Org.access_token()
+user |> Org.fake_seeds()

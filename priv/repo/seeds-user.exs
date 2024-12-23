@@ -11,4 +11,4 @@ end
 email = args |> List.first()
 name = email |> String.split("@") |> List.first()
 
-Org.new(%Org{name: name, email: email})
+Org.new_org_and_user(%Org{name: name, email: email})

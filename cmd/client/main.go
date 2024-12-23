@@ -3,13 +3,18 @@ package main
 import (
 	_ "embed"
 	"encoding/json"
+	"fmt"
 	"log"
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"codeberg.org/adamcstephens/sower/client"
+	"github.com/adrg/xdg"
 	"github.com/alexflint/go-arg"
+	"github.com/lmittmann/tint"
+	"github.com/mattn/go-isatty"
 )
 
 var version = "dev"
@@ -20,7 +25,7 @@ type config struct {
 
 	ApiTokenFile string   `arg:"--api-token-file,env:SOWER_API_TOKEN_FILE" json:"api-token-file"`
 	ApiToken     string   `arg:"--api-token,env:SOWER_API_TOKEN"`
-	ConfigFiles  []string `arg:"--config-file,-c,separate,env:SOWER_CONFIG_FILE"`
+	ConfigFiles  []string `arg:"--config-file,-c,separate,env:SOWER_CONFIG_FILE" help:"Can be repeated. Defaults are root:/etc/sower/client.json, non-root:$XDG_CONFIG_HOME/sower/client.json"`
 	Debug        bool     `arg:"--debug"`
 	Endpoint     string   `arg:"--endpoint,-e,env:SOWER_ENDPOINT"`
 	Version      bool     `arg:"--version"`
@@ -66,38 +71,50 @@ func main() {
 		log.Fatalf("Fatal error in argument specification")
 		os.Exit(1)
 	}
+
+	// read args for finding config files
+	_ = p.Parse(os.Args[1:])
+
+	initLogger(cfg.Debug)
+
+	if len(cfg.ConfigFiles) == 0 {
+		defaultConfig, err := default_config_path()
+		if err != nil {
+			slog.Error("Failed to find default configuration file.", "error", err)
+			os.Exit(1)
+		}
+
+		slog.Debug("Found default configuration file", "config-file", defaultConfig)
+
+		cfg.ConfigFiles = []string{defaultConfig}
+	}
+
+	for _, configFile := range cfg.ConfigFiles {
+		slog.Debug("Loading configuration file", "config-file", configFile)
+
+		_, err := os.Stat(configFile)
+		if err != nil {
+			slog.Warn("Configuration file does not exist", "config-file", configFile)
+			continue
+		}
+
+		j, err := os.ReadFile(configFile)
+		if err != nil {
+			slog.Error("Failed to read configuration file", "config-file", configFile)
+			os.Exit(1)
+		}
+
+		if err := json.Unmarshal(j, &cfg); err != nil {
+			slog.Error("Failed to parse configuration file", "config-file", configFile)
+			os.Exit(1)
+		}
+	}
+
+	// reparse flags on top of config
 	parseResult = p.Parse(os.Args[1:])
 
-	if len(cfg.ConfigFiles) != 0 {
-		for _, configFile := range cfg.ConfigFiles {
-			_, err := os.Stat(configFile)
-			if err != nil {
-				slog.Warn("Configuration file does not exist", "config-file", configFile)
-				continue
-			}
-
-			j, err := os.ReadFile(configFile)
-			if err != nil {
-				slog.Error("Failed to read configuration file", "config-file", configFile)
-				os.Exit(1)
-			}
-
-			if err := json.Unmarshal(j, &cfg); err != nil {
-				slog.Error("Failed to parse configuration file", "config-file", configFile)
-				os.Exit(1)
-			}
-		}
-		// reparse flags on top of config
-		parseResult = p.Parse(os.Args[1:])
-	}
-
-	logLevel := slog.LevelInfo
-	if cfg.Debug {
-		logLevel = slog.LevelDebug
-	}
-
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
-	slog.SetDefault(logger)
+	// re-initialize logging in case level is only set in config
+	initLogger(cfg.Debug)
 
 	slog.Debug("Loaded args", "args", cfg)
 
@@ -127,12 +144,39 @@ func main() {
 
 	switch {
 	case cfg.Seed != nil:
-		seedSubcommand(cfg)
+		err := seedSubcommand(cfg)
+		if err != nil {
+			p.WriteHelp(os.Stdout)
+		}
 	case cfg.Daemon != nil:
 		daemonCommand(cfg)
 	default:
 		p.WriteHelp(os.Stdout)
 	}
+}
+
+func initLogger(debug bool) {
+	logLevel := slog.LevelInfo
+	stdout := os.Stdout
+
+	if debug {
+		logLevel = slog.LevelDebug
+	}
+
+	logger := slog.New(tint.NewHandler(stdout, &tint.Options{
+		Level:      logLevel,
+		TimeFormat: time.DateTime,
+		NoColor:    !isatty.IsTerminal(stdout.Fd()),
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			// if not a tty, strip the time
+			if a.Key == slog.TimeKey && len(groups) == 0 && !isatty.IsTerminal(stdout.Fd()) {
+				return slog.Attr{}
+			}
+			return a
+		},
+	}))
+
+	slog.SetDefault(logger)
 }
 
 func daemonCommand(cfg config) {
@@ -146,7 +190,7 @@ func daemonCommand(cfg config) {
 	client.run()
 }
 
-func seedSubcommand(cfg config) {
+func seedSubcommand(cfg config) error {
 	switch {
 	case cfg.Seed.Create != nil:
 		seedClient, err := client.NewSeedClient(cfg.Endpoint, cfg.ApiToken)
@@ -289,5 +333,24 @@ func seedSubcommand(cfg config) {
 				os.Exit(1)
 			}
 		}
+	default:
+		return fmt.Errorf("No seed subcommand selected")
+	}
+
+	return nil
+}
+
+func default_config_path() (string, error) {
+	slog.Debug("Finding default configuration file")
+
+	user := os.Getenv("USER")
+
+	switch user {
+	case "root":
+		return "/etc/sower/client.json", nil
+	case "":
+		return "", fmt.Errorf("Failed to detect user, not loading default config file")
+	default:
+		return fmt.Sprintf("%s/sower/client.json", xdg.ConfigHome), nil
 	}
 }

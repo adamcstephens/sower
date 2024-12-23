@@ -2,7 +2,7 @@ defmodule Sower.Repo.Seeds.Org do
   @enforce_keys [:name]
   defstruct [:name, :email]
 
-  def new(%__MODULE__{} = org_seed) do
+  def new_org_and_user(%__MODULE__{} = org_seed) do
     org_seed =
       if is_nil(org_seed.email) do
         org_seed |> Map.put(:email, ~s"dev-#{org_seed.name}@sower.dev")
@@ -27,20 +27,29 @@ defmodule Sower.Repo.Seeds.Org do
           {:ok, user}
       end
 
+    user
+  end
+
+  def access_token(%Sower.Accounts.User{} = user, name \\ "token") do
     Sower.Repo.put_org_id(user.org_id)
 
-    {:ok, _access_token} =
+    {:ok, access_token} =
       Sower.Accounts.AccessToken.create(%{
         "permissions" => [
           %{
-            "action" => "read",
-            "resource" => "Elixir.Sower.Seed"
+            "role" => "seed:write"
           }
         ],
         "user_id" => user.id,
         "org_id" => user.org_id,
-        "description" => ~s"token #{org_seed.name}"
+        "description" => name
       })
+
+    access_token
+  end
+
+  def fake_seeds(%Sower.Accounts.User{} = user) do
+    Sower.Repo.put_org_id(user.org_id)
 
     Enum.to_list(1..20)
     |> Enum.map(fn t ->

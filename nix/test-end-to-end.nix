@@ -4,7 +4,6 @@
 # >>> start_all()
 # >>> machine.shell_interact()
 {
-  curl,
   flake,
   testers,
 }:
@@ -18,15 +17,19 @@ testers.runNixOSTest {
       imports = [ ./nixos-module.nix ];
 
       config = {
-        environment.systemPackages = [ curl ];
+        # need switch-to-configuration
+        system.switch.enable = true;
+        # without trying to install grub
+        boot.loader.grub.enable = false;
 
         services.sower.client = {
           enable = true;
           package = flake.packages.${pkgs.system}.client;
 
           settings = {
-            url = "http://localhost:4000";
-            mode = "dry-activate";
+            api-token-file = "/run/sower/test_token";
+            debug = true;
+            endpoint = "http://localhost:4000";
           };
         };
 
@@ -34,9 +37,9 @@ testers.runNixOSTest {
           enable = true;
           package = flake.packages.${pkgs.system}.server;
           initSecrets = true;
+          e2eTest = true;
 
           settings = {
-            bootstrap_token_file = "${pkgs.writeText "token" "aninsecuretken"}";
             public_url = "http://127.0.0.1:4000";
 
             database = {
@@ -60,9 +63,9 @@ testers.runNixOSTest {
             log_level = "debug";
 
             clients."${pkgs.system}".path = builtins.toString flake.packages.${pkgs.system}.client;
-            # clients.aarch64-linux.path = builtins.toString flake.packages.aarch64-linux.client;
           };
         };
+        # if server fails to start, fail immediately
         systemd.services.sower.serviceConfig.Restart = "no";
 
         services.postgresql = {
@@ -81,16 +84,15 @@ testers.runNixOSTest {
       };
     };
 
-  testScript = ''
-    start_all()
-    server.wait_for_unit("postgresql.service")
-    server.wait_for_unit("sower.service")
-    server.wait_for_open_port(4000)
+  testScript = # python
+    ''
+      start_all()
+      server.wait_for_unit("postgresql.service")
+      server.wait_for_unit("sower.service")
+      server.wait_for_open_port(4000)
 
-    nixos_profile = server.succeed("readlink -f /run/booted-system").strip()
-    server.succeed('curl --fail -X POST --header "Content-Type: application/json" http://localhost:4000/api/seeds -d \'{"name": "server", "type": "nixos", "out_path": "' + nixos_profile + "\"}'")
-    server.succeed("systemctl start sower-client")
-    server.succeed('curl --fail -X POST --header "Content-Type: application/json" http://localhost:4000/api/seeds -d \'{"name": "server", "type": "nixos", "branch": "testbranch", "repo_url": "https://test.com", "out_path": "' + nixos_profile + "\"}'")
-    server.succeed("systemctl start sower-client")
-  '';
+      nixos_profile = server.succeed("readlink -f /run/booted-system").strip()
+      server.succeed(f"sower seed submit --create --path {nixos_profile} --debug")
+      server.succeed("systemctl start sower-client")
+    '';
 }
