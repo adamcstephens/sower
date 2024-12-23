@@ -7,8 +7,8 @@ if [[ "$os" == "darwin" && "$arch" == "arm64" ]]; then
 arch="aarch64"
 fi
 
-system="${arch}-${os}"
-echo ":: Found system ${system}"
+system="$arch-$os"
+echo ":: Found system $system"
 
 cache_args="<.cache_args nix_caches={@nix_caches} />"
 export SOWER_URL="<%= @sower_url %>"
