@@ -476,19 +476,6 @@ let
       beamDeps = [];
     };
 
-    nimble_ownership = buildMix rec {
-      name = "nimble_ownership";
-      version = "1.0.1";
-
-      src = fetchHex {
-        pkg = "nimble_ownership";
-        version = "${version}";
-        sha256 = "3825e461025464f519f3f3e4a1f9b68c47dc151369611629ad08b636b73bb22d";
-      };
-
-      beamDeps = [];
-    };
-
     nimble_pool = buildMix rec {
       name = "nimble_pool";
       version = "1.1.0";
@@ -825,19 +812,6 @@ let
       };
 
       beamDeps = [ db_connection decimal jason ];
-    };
-
-    sentry = buildMix rec {
-      name = "sentry";
-      version = "10.8.1";
-
-      src = fetchHex {
-        pkg = "sentry";
-        version = "${version}";
-        sha256 = "495b3cdadad90ba72eef973aa3dec39b3b8b2a362fe87e2f4ef32133ac3b4097";
-      };
-
-      beamDeps = [ hackney jason nimble_options nimble_ownership phoenix phoenix_live_view plug telemetry ];
     };
 
     shortuuid = buildMix rec {

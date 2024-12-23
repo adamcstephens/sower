@@ -43,7 +43,6 @@ defmodule Sower.MixProject do
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.0.0"},
       {:postgrex, ">= 0.0.0"},
-      {:sentry, "~> 10.5"},
       {:shortuuid, "~> 3.0"},
       {:swoosh, "~> 1.3"},
       {:systemd, "~> 0.6"},
