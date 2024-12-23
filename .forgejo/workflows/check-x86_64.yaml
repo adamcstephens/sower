@@ -8,6 +8,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - run: |
+      - name: go
+        run: |
           export HOME=$PWD
           nix develop .# --command just check-go
+
+      - name: e2e
+        run: |
+          export HOME=$PWD
+          nix build .#checks.x86_64-linux.default
