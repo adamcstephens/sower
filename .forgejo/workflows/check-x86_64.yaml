@@ -2,18 +2,22 @@ on:
   push:
 
 jobs:
-  checks:
+  go:
     runs-on: local/x86_64-linux
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: go
-        run: |
+      - run: |
           export HOME=$PWD
           nix develop .# --command just check-go
 
-      - name: e2e
-        run: |
+  e2e:
+    runs-on: local/x86_64-linux
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: |
           export HOME=$PWD
           nix build .#checks.x86_64-linux.default
