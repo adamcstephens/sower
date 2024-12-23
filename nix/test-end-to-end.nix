@@ -48,12 +48,6 @@ testers.runNixOSTest {
               database = "sower";
             };
 
-            error_database = {
-              socket = "/run/postgresql/.s.PGSQL.5432";
-              username = "sower";
-              database = "sower_error";
-            };
-
             auth = {
               oidc_client_id = "sower";
               oidc_base_url = "http://localhost:9000";
@@ -74,11 +68,6 @@ testers.runNixOSTest {
           initialScript = pkgs.writeText "sower-pg-init" ''
             CREATE USER sower;
             CREATE DATABASE sower OWNER sower;
-            CREATE DATABASE sower_error OWNER sower;
-          '';
-
-          authentication = ''
-            local sower_error sower peer
           '';
         };
       };

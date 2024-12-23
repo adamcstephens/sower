@@ -7,7 +7,7 @@
 # General application configuration
 import Config
 
-config :sower, ecto_repos: [Sower.Repo, Sower.ErrorRepo]
+config :sower, ecto_repos: [Sower.Repo]
 config :sower, Sower.Repo, migration_primary_key: [name: :id, type: :uuid]
 
 # Configures the endpoint
@@ -59,11 +59,6 @@ config :logger, :console,
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
-
-config :error_tracker,
-  repo: Sower.ErrorRepo,
-  otp_app: :sower,
-  enabled: true
 
 config :opentelemetry, :resource, service: %{name: "sower"}
 

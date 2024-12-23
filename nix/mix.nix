@@ -164,19 +164,6 @@ let
       beamDeps = [];
     };
 
-    error_tracker = buildMix rec {
-      name = "error_tracker";
-      version = "0.5.0";
-
-      src = fetchHex {
-        pkg = "error_tracker";
-        version = "${version}";
-        sha256 = "b4b434f484166428168358668bf702efce4e991d77f1656d568fe58e035ee73e";
-      };
-
-      beamDeps = [ ecto ecto_sql jason phoenix_ecto phoenix_live_view plug postgrex ];
-    };
-
     esbuild = buildMix rec {
       name = "esbuild";
       version = "0.8.2";

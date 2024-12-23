@@ -1,6 +1,5 @@
 defmodule SowerWeb.Router do
   use SowerWeb, :router
-  use ErrorTracker.Web, :router
 
   import Phoenix.LiveDashboard.Router
   import SowerWeb.UserAuth
@@ -64,7 +63,6 @@ defmodule SowerWeb.Router do
     scope "/dev" do
       live_dashboard "/dashboard", metrics: SowerWeb.Telemetry
       forward "/mailbox", Plug.Swoosh.MailboxPreview
-      error_tracker_dashboard("/errors")
     end
   end
 
