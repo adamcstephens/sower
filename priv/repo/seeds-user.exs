@@ -1,4 +1,4 @@
-alias Sower.Repo.Seeds.Org
+alias Sower.Repo.Seeds.Preseed
 require Logger
 
 args = System.argv() |> dbg()
@@ -9,6 +9,5 @@ if length(args) < 1 do
 end
 
 email = args |> List.first()
-name = email |> String.split("@") |> List.first()
 
-Org.new_org_and_user(%Org{name: name, email: email})
+Preseed.for_dev(email)

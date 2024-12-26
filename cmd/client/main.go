@@ -264,6 +264,12 @@ func seedSubcommand(cfg config) error {
 	case cfg.Seed.Submit != nil:
 		cmdArgs := cfg.Seed.Submit
 
+		err := preCheckSeed(cmdArgs.Path, cfg.Seed.SeedType)
+		if err != nil {
+			slog.Error("Failed to pre-check seed for submission:", "error", err)
+			os.Exit(1)
+		}
+
 		seedClient, err := client.NewSeedClient(cfg.Endpoint, cfg.ApiToken)
 		if err != nil {
 			slog.Error("Failed to initialize seed client", "error", err)
@@ -295,6 +301,11 @@ func seedSubcommand(cfg config) error {
 
 	case cfg.Seed.Upgrade != nil:
 		cmdArgs := cfg.Seed.Upgrade
+
+		if cfg.Seed.SeedType == string(client.Nixos) && os.Getenv("USER") != "root" {
+			slog.Error("Upgrades for nixos must be run by root")
+			os.Exit(1)
+		}
 
 		seedClient, err := client.NewSeedClient(cfg.Endpoint, cfg.ApiToken)
 		if err != nil {

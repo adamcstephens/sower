@@ -152,3 +152,23 @@ func run(cmd *exec.Cmd) error {
 
 	return nil
 }
+
+func preCheckSeed(storePath, seedType string) error {
+	var versionFile string
+
+	switch seedType {
+	case string(client.HomeManager):
+		versionFile = fmt.Sprintf("%v/hm-version", storePath)
+	case string(client.Nixos):
+		versionFile = fmt.Sprintf("%v/nixos-version", storePath)
+	default:
+		return fmt.Errorf("Unsupported seed type %s", seedType)
+	}
+
+	_, err := os.Stat(versionFile)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
