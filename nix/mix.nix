@@ -281,19 +281,6 @@ let
       beamDeps = [ acceptor_pool chatterbox ctx gproc ];
     };
 
-    hackney = buildRebar3 rec {
-      name = "hackney";
-      version = "1.20.1";
-
-      src = fetchHex {
-        pkg = "hackney";
-        version = "${version}";
-        sha256 = "fe9094e5f1a2a2c0a7d10918fee36bfec0ec2a979994cff8cfe8058cd9af38e3";
-      };
-
-      beamDeps = [ certifi idna metrics mimerl parse_trans ssl_verify_fun unicode_util_compat ];
-    };
-
     hpack = buildRebar3 rec {
       name = "hpack";
       version = "0.3.0";
@@ -838,19 +825,6 @@ let
       };
 
       beamDeps = [];
-    };
-
-    swoosh = buildMix rec {
-      name = "swoosh";
-      version = "1.17.5";
-
-      src = fetchHex {
-        pkg = "swoosh";
-        version = "${version}";
-        sha256 = "629113d477bc82c4c3bffd15a25e8becc1c7ccc0f0e67743b017caddebb06f04";
-      };
-
-      beamDeps = [ bandit finch hackney jason mime plug telemetry ];
     };
 
     systemd = buildRebar3 rec {

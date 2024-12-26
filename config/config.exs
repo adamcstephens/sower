@@ -20,15 +20,6 @@ config :sower, SowerWeb.Endpoint,
   pubsub_server: Sower.PubSub,
   live_view: [signing_salt: "nrwHFIM7"]
 
-# Configures the mailer
-#
-# By default it uses the "Local" adapter which stores the emails
-# locally. You can see the emails in your browser, at "/dev/mailbox".
-#
-# For production it's recommended to configure a different adapter
-# at the `config/runtime.exs`.
-config :sower, Sower.Mailer, adapter: Swoosh.Adapters.Local
-
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.17.11",

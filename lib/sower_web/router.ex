@@ -62,7 +62,6 @@ defmodule SowerWeb.Router do
 
     scope "/dev" do
       live_dashboard "/dashboard", metrics: SowerWeb.Telemetry
-      forward "/mailbox", Plug.Swoosh.MailboxPreview
     end
   end
 

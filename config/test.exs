@@ -20,12 +20,6 @@ config :sower, SowerWeb.Endpoint,
   secret_key_base: "+qA3jXKscezV25y28C5SmMaQum/CvKrh0+1obODeDAlsBR8V94RaTB0rp8lDVhB9",
   server: false
 
-# In test we don't send emails.
-config :sower, Sower.Mailer, adapter: Swoosh.Adapters.Test
-
-# Disable swoosh api client as it is only required for production adapters.
-config :swoosh, :api_client, false
-
 # Print only warnings and errors during test
 config :logger, level: :warning
 
