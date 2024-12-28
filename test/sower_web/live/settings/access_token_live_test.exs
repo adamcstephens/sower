@@ -8,7 +8,8 @@ defmodule SowerWeb.Settings.AccessTokenLiveTest do
     description: "test"
   }
   @update_attrs %{
-    description: "second"
+    description: "second",
+    regenerate: true
   }
   @invalid_attrs %{
     description: ""

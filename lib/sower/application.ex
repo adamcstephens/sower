@@ -13,7 +13,6 @@ defmodule Sower.Application do
        [Application.get_env(:libcluster, :topologies, []), [name: Sower.ClusterSupervisor]]},
       SowerWeb.Telemetry,
       Sower.Repo,
-      Sower.ErrorRepo,
       {Phoenix.PubSub, name: Sower.PubSub},
       {Finch, name: Sower.Finch},
       SowerWeb.Endpoint,

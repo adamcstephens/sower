@@ -31,9 +31,11 @@ defmodule Sower.AccountsFixtures do
   end
 
   def access_token_fixture(attrs \\ %{}) do
-    {:ok, access_token, _token} =
+    user = user_fixture()
+
+    {:ok, access_token} =
       attrs
-      |> Enum.into(%{"description" => "sample", "user_id" => user_fixture().id})
+      |> Enum.into(%{"description" => "sample", "user_id" => user.id, "org_id" => user.org_id})
       |> Sower.Accounts.AccessToken.create()
 
     access_token
