@@ -6,7 +6,7 @@ defmodule SowerWeb.ClientLive.FormComponent do
     ~H"""
     <div>
       <.header>
-        <%= @title %>
+        {@title}
         <:subtitle>Use this form to manage client records in your database.</:subtitle>
       </.header>
 

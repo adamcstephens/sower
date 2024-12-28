@@ -88,7 +88,7 @@
           >
             <div class="px-4 py-3">
               <span class="px-3 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-200 rounded-md">
-                Hello, <%= @current_user.name %>!
+                Hello, {@current_user.name}!
               </span>
             </div>
             <ul class="py-2" aria-labelledby="user-menu-button">
@@ -133,6 +133,6 @@
 <main class="px-4 py-8 sm:px-6 lg:px-8 relative">
   <div class="mx-auto max-w-6xl">
     <.flash_group flash={@flash} />
-    <%= @inner_content %>
+    {@inner_content}
   </div>
 </main>

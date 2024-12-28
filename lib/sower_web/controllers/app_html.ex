@@ -8,9 +8,9 @@ defmodule SowerWeb.AppHTML do
 
   def case_arch(assigns) do
     ~H"""
-    <%= @arch %>)
-    nix-store --realize <%= @path %> $cache_args #
-    exec <%= @path %>/bin/sower "$@"
+    {@arch})
+    nix-store --realize {@path} $cache_args #
+    exec {@path}/bin/sower "$@"
     ;;
     """
   end
@@ -34,6 +34,6 @@ defmodule SowerWeb.AppHTML do
         ""
       end
 
-    ~H"<%= substituters %> <%= keys %>"
+    ~H"{substituters} {keys}"
   end
 end

@@ -3,11 +3,18 @@ default:
 
 check: check-nix check-elixir check-go
 
-check-elixir:
+check-elixir: check-elixir-format check-elixir-test
+
+check-elixir-format:
+    mix format --check-formatted
+
+check-elixir-test:
     unset CI; MIX_ENV=test mix deps.get
     mix test
 
-check-go:
+check-go: check-go-lint
+
+check-go-lint:
     golangci-lint run
 
 check-nix:

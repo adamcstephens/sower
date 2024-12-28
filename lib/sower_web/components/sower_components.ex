@@ -10,7 +10,7 @@ defmodule SowerWeb.SowerComponents do
       assign(assigns, :id, id)
 
     ~H"""
-    <span title={@__given__.id}><%= @id %></span>
+    <span title={@__given__.id}>{@id}</span>
     """
   end
 end

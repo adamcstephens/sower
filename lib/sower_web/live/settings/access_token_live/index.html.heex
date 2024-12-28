@@ -29,8 +29,8 @@
     </.link>
   </:action>
 
-  <:col :let={{_id, access_token}} label="Description"><%= access_token.description %></:col>
-  <:col :let={{_id, access_token}} label="Expires"><%= access_token.expires_at %></:col>
+  <:col :let={{_id, access_token}} label="Description">{access_token.description}</:col>
+  <:col :let={{_id, access_token}} label="Expires">{access_token.expires_at}</:col>
 </.table>
 
 <.modal

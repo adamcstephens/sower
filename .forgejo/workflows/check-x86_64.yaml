@@ -1,7 +1,29 @@
+name: checks
+
 on:
   push:
 
 jobs:
+  elixir-format:
+    runs-on: local/x86_64-linux
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: |
+          export HOME=$PWD
+          nix develop .# --command just check-elixir-format
+
+  elixir-test:
+    runs-on: local/x86_64-linux
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: |
+          export HOME=$PWD
+          nix develop .# --command just check-elixir-test
+
   go:
     runs-on: local/x86_64-linux
 
@@ -20,4 +42,4 @@ jobs:
 
       - run: |
           export HOME=$PWD
-          nix build .#checks.x86_64-linux.default
+          nix develop .# --command just check-nix

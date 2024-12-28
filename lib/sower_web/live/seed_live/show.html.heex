@@ -1,6 +1,6 @@
 <.header>
-  <%= @seed.name %> @ <%= @seed.id %>
-  <:subtitle><%= @seed.seed_type %></:subtitle>
+  {@seed.name} @ {@seed.id}
+  <:subtitle>{@seed.seed_type}</:subtitle>
 </.header>
 
 <.list>
@@ -10,12 +10,12 @@
       rows={@seed.store_paths}
       row_click={fn store_path -> JS.navigate(~p"/store_paths/#{store_path.id}") end}
     >
-      <:col :let={store_path}><%= store_path.path %></:col>
-      <:col :let={store_path}><%= store_path.updated_at %></:col>
+      <:col :let={store_path}>{store_path.path}</:col>
+      <:col :let={store_path}>{store_path.updated_at}</:col>
     </.table>
   </:item>
-  <:item title="created"><%= @seed.inserted_at %></:item>
-  <:item title="updated"><%= @seed.updated_at %></:item>
+  <:item title="created">{@seed.inserted_at}</:item>
+  <:item title="updated">{@seed.updated_at}</:item>
 </.list>
 
 <.back navigate={~p"/seeds"}>Back to seeds</.back>

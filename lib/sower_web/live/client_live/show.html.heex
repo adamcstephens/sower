@@ -1,5 +1,5 @@
 <.header>
-  Client <%= @client.id %>
+  Client {@client.id}
   <:subtitle>This is a client record from your database.</:subtitle>
   <:actions>
     <.link patch={~p"/clients/#{@client}/show/edit"} phx-click={JS.push_focus()}>
