@@ -17,7 +17,7 @@ defmodule SowerWeb.CoreComponents do
   use Phoenix.Component
 
   alias Phoenix.LiveView.JS
-  import SowerWeb.Gettext
+  use Gettext, backend: SowerWeb.Gettext
 
   @doc """
   Renders a modal.

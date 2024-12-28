@@ -45,8 +45,7 @@ defmodule SowerWeb.Settings.AccessTokenLiveTest do
              |> form("#access_token-form", access_token: @create_attrs)
              |> render_submit()
 
-      path = assert_redirect(index_live)
-      assert path = ~r"/settings/access-tokens/+"
+      assert_redirect(index_live)
     end
 
     test "updates access_token in listing", %{conn: conn, access_token: access_token} do
@@ -66,8 +65,7 @@ defmodule SowerWeb.Settings.AccessTokenLiveTest do
              |> form("#access_token-form", access_token: @update_attrs)
              |> render_submit()
 
-      path = assert_patch(index_live)
-      assert path = ~r"/settings/access-tokens/+"
+      assert_patch(index_live)
     end
 
     test "deletes access_token in listing", %{conn: conn, access_token: access_token} do
@@ -119,8 +117,7 @@ defmodule SowerWeb.Settings.AccessTokenLiveTest do
              |> element("a", "Delete")
              |> render_click()
 
-      path = assert_redirect(show_live)
-      assert path = ~r"/settings/access-tokens/+"
+      assert_redirect(show_live)
     end
   end
 end

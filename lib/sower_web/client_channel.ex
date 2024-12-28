@@ -20,23 +20,23 @@ defmodule SowerWeb.ClientChannel do
     {:error, %{reason: "unauthorized"}}
   end
 
-  def handle_in(
-        "seed:submit",
-        %{
-          "name" => name,
-          "seed_type" => seed_type,
-          "out_path" => out_path
-        } = _seed,
-        socket
-      ) do
-    case Sower.Seed.submit(%{name: name, seed_type: seed_type, out_path: out_path}) do
-      {:ok, %Sower.Seed{} = seed} ->
-        {:reply, {:ok, %{seed_id: seed.id}}, socket}
-
-      {:error, _err} ->
-        {:reply, {:error, "failed to submit"}, socket}
-    end
-  end
+  # def handle_in(
+  #       "seed:submit",
+  #       %{
+  #         "name" => name,
+  #         "seed_type" => seed_type,
+  #         "out_path" => out_path
+  #       } = _seed,
+  #       socket
+  #     ) do
+  #   case Sower.Seed.submit(%{name: name, seed_type: seed_type, out_path: out_path}) do
+  #     {:ok, %Sower.Seed{} = seed} ->
+  #       {:reply, {:ok, %{seed_id: seed.id}}, socket}
+  #
+  #     {:error, _err} ->
+  #       {:reply, {:error, "failed to submit"}, socket}
+  #   end
+  # end
 
   def handle_info(:push_tree_id_to_client, socket) do
     # push(socket, "tree:id", %{tree_id: socket.assigns.tree_id})

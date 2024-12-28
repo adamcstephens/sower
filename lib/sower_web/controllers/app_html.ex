@@ -34,6 +34,8 @@ defmodule SowerWeb.AppHTML do
         ""
       end
 
-    ~H"{substituters} {keys}"
+    assigns = assign(assigns, :substituters, substituters)
+    assigns = assign(assigns, :keys, keys)
+    ~H"{@substituters} {@keys}"
   end
 end
