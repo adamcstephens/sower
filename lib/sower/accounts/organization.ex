@@ -23,4 +23,8 @@ defmodule Sower.Accounts.Organization do
     |> cast(attrs, [:name])
     |> validate_required([:name])
   end
+
+  def list() do
+    Sower.Repo.all(Organization, skip_org_id: true)
+  end
 end

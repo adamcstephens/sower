@@ -2,6 +2,7 @@ defmodule Sower.SeedStorePath do
   use Sower.Schema
 
   import Ecto.Changeset
+  import Ecto.Query
 
   alias Sower.Repo
 
@@ -10,6 +11,15 @@ defmodule Sower.SeedStorePath do
     belongs_to :seed, Sower.Seed
     belongs_to :store_path, Sower.StorePath
     timestamps()
+  end
+
+  def find!(seed_id, store_path_id) do
+    query =
+      from ssp in Sower.SeedStorePath,
+        where: ssp.seed_id == ^seed_id,
+        where: ssp.store_path_id == ^store_path_id
+
+    Repo.one!(query)
   end
 
   def submit!(seed, store_path) do
