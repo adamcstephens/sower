@@ -6,6 +6,7 @@ check: check-nix check-elixir check-go
 check-elixir: check-elixir-format check-elixir-test
 
 check-elixir-format:
+    mix deps.get
     mix format --check-formatted
 
 check-elixir-test:
