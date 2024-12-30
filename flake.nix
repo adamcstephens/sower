@@ -34,6 +34,9 @@
           let
             beamPackages = pkgs.beam_minimal.packages.erlang_27;
             elixir = beamPackages.elixir_1_18;
+
+            arch = if pkgs.stdenv.isAarch64 then "arm64" else "x64";
+            os = if pkgs.stdenv.isDarwin then "darwin" else "linux";
           in
           {
             devShells.default = pkgs.mkShell {
@@ -76,6 +79,18 @@
 
               shellHook = ''
                 export PC_CONFIG_FILES=${config.process-compose.devServices.outputs.settingsFile}
+
+                mkdir -vp _build
+
+                if [ ! -h _build/tailwind-${os}-${arch} ]; then
+                  rm -f _build/tailwind-${os}-${arch}
+                  ln -sf ${lib.getExe pkgs.tailwindcss} _build/tailwind-${os}-${arch}
+                fi
+
+                if [ ! -h _build/esbuild-${os}-${arch} ]; then
+                  rm -f _build/esbuild-${os}-${arch}
+                  ln -sf ${lib.getExe pkgs.esbuild} _build/esbuild-${os}-${arch}
+                fi
               '';
 
               # go delve fix

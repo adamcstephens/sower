@@ -20,14 +20,18 @@ check-go-lint:
 check-nix:
     nix build .#checks.x86_64-linux.default --print-build-logs
 
-dev: && start
+dev: dev-services && start
     mix deps.get
     mix deps.compile
     mix ecto.setup
+    mix assets.build
 
 dev-seed-from-local:
     go run ./cmd/client seed submit --path $(readlink -f /run/booted-system) --create --name $(hostname -s) --type nixos
     go run ./cmd/client seed submit --path $(readlink -f $HOME/.local/state/nix/profiles/home-manager) --create --name $(hostname -s) --type home-manager
+
+dev-services:
+    nix run .#devServices -- --detached
 
 docker-build:
     eval $(nix build --print-build-logs --no-link --print-out-paths --system aarch64-linux .#seed-ci-docker) | docker load
