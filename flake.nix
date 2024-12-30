@@ -42,6 +42,7 @@
               packages =
                 [
                   # elixir
+                  beamPackages.erlang
                   elixir
                   (beamPackages.elixir-ls.override { inherit elixir; })
                   pkgs.next-ls
@@ -96,7 +97,15 @@
             process-compose.devServices =
               { config, ... }:
               {
-                imports = [ inputs.services-flake.processComposeModules.default ];
+                imports = [
+                  inputs.services-flake.processComposeModules.default
+                  (inputs.services-flake.lib.multiService ./nix/epmd.nix)
+                ];
+
+                services.epmd.epmd1 = {
+                  enable = true;
+                  package = beamPackages.erlang;
+                };
 
                 services.postgres.postgres1 = {
                   enable = true;
