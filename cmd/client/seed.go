@@ -17,20 +17,20 @@ func activate(seedType client.SeedSeedType, storePath string, mode string) error
 	switch {
 	case seedType == client.HomeManager:
 		cmd := exec.Command(fmt.Sprintf("%s/activate", storePath))
-		err = run(cmd)
+		err = simpleRun(cmd)
 		if err != nil {
 			return fmt.Errorf("Failed to activate home-manager generation: %v", err)
 		}
 
 	case seedType == client.Nixos:
 		profileCmd := exec.Command("nix-env", "--set", "--profile", "/nix/var/nix/profiles/system", storePath)
-		err = run(profileCmd)
+		err = simpleRun(profileCmd)
 		if err != nil {
 			return fmt.Errorf("Failed to set nixos profile: %v", err)
 		}
 
 		switchCmd := exec.Command(fmt.Sprintf("%s/bin/switch-to-configuration", storePath), mode)
-		err = run(switchCmd)
+		err = simpleRun(switchCmd)
 		if err != nil {
 			return fmt.Errorf("Failed to set nixos profile: %v", err)
 		}
@@ -51,7 +51,7 @@ func realize(storePath string) error {
 
 	cmd := exec.Command("nix-store", "--realize", storePath)
 
-	err := run(cmd)
+	err := simpleRun(cmd)
 
 	return err
 }
@@ -98,7 +98,7 @@ func reboot(yes bool) error {
 		if yes {
 			slog.Info("Scheduling reboot in ~5 seconds")
 			cmd := exec.Command("systemd-run", "--on-active=5s", "--no-block", "--unit=sower-client-reboot", "systemctl", "reboot")
-			err := run(cmd)
+			err := simpleRun(cmd)
 			if err != nil {
 				return fmt.Errorf("Failed to schedule reboot: %v", err)
 			}
@@ -110,7 +110,7 @@ func reboot(yes bool) error {
 	return nil
 }
 
-func run(cmd *exec.Cmd) error {
+func simpleRun(cmd *exec.Cmd) error {
 	// Set up the pipes for stdout and stderr
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

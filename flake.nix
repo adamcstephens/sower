@@ -13,7 +13,7 @@
       { ... }:
       {
         imports = [
-          ./nix/flakemodule.nix
+          ./nix/flake-module.nix
           inputs.process-compose-flake.flakeModule
         ];
 
@@ -32,6 +32,8 @@
             ...
           }:
           let
+            version = builtins.readFile ./VERSION;
+
             beamPackages = pkgs.beam_minimal.packages.erlang_27;
             elixir = beamPackages.elixir_1_18;
 
@@ -104,9 +106,12 @@
             };
 
             packages = {
-              seed-ci = pkgs.callPackage ./nix/seed-ci.nix { };
-              client = pkgs.callPackage ./nix/client-package.nix { buildGoModule = pkgs.buildGo123Module; };
-              server = pkgs.callPackage ./nix/server-package.nix { inherit beamPackages elixir; };
+              seed-ci = pkgs.callPackage ./nix/packages/seed-ci.nix { };
+              client = pkgs.callPackage ./nix/packages/client.nix {
+                buildGoModule = pkgs.buildGo123Module;
+                inherit version;
+              };
+              server = pkgs.callPackage ./nix/packages/server.nix { inherit beamPackages elixir version; };
             };
 
             process-compose.devServices =
@@ -114,7 +119,7 @@
               {
                 imports = [
                   inputs.services-flake.processComposeModules.default
-                  (inputs.services-flake.lib.multiService ./nix/epmd.nix)
+                  (inputs.services-flake.lib.multiService ./nix/dev-services/epmd.nix)
                 ];
 
                 services.epmd.epmd1 = {
@@ -155,8 +160,8 @@
           };
 
         flake = {
-          nixosModules.sower = ./nix/nixos-module.nix;
-          homeModules.sower = ./nix/home-module.nix;
+          nixosModules.sower = ./nix/nixos/module.nix;
+          homeModules.sower = ./nix/home/module.nix;
         };
       }
     );

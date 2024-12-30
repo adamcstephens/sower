@@ -6,6 +6,7 @@
   rustPlatform,
   tailwindcss,
   stdenv,
+  version,
 }:
 let
   arch = if stdenv.isAarch64 then "arm64" else "x64";
@@ -13,22 +14,22 @@ let
 in
 beamPackages.mixRelease rec {
   pname = "sower";
-  version = builtins.readFile ../VERSION;
+  inherit version;
 
   inherit elixir;
 
   src = lib.fileset.toSource {
-    root = ../.;
+    root = ../..;
     fileset = lib.fileset.unions [
-      ../assets
-      ../config
-      ../lib
-      ../mix.exs
-      ../mix.lock
-      ../priv
-      ../rel
-      ../test
-      ../VERSION
+      ../../assets
+      ../../config
+      ../../lib
+      ../../mix.exs
+      ../../mix.lock
+      ../../priv
+      ../../rel
+      ../../test
+      ../../VERSION
     ];
   };
 

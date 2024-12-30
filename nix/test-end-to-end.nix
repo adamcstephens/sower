@@ -14,7 +14,7 @@ testers.runNixOSTest {
   nodes.server =
     { pkgs, ... }:
     {
-      imports = [ ./nixos-module.nix ];
+      imports = [ ./nixos/module.nix ];
 
       config = {
         # need switch-to-configuration

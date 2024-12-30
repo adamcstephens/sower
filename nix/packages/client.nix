@@ -1,22 +1,26 @@
-{ lib, buildGoModule }:
+{
+  lib,
+  buildGoModule,
+  version,
+}:
 buildGoModule rec {
   pname = "sower";
-  version = builtins.readFile ../VERSION;
+  inherit version;
 
   src =
     with lib.fileset;
     toSource {
-      root = ./..;
+      root = ../..;
       fileset = unions [
-        ../client
-        ../cmd/client
-        ../go.mod
-        ../go.sum
-        ../openapi.json
+        ../../client
+        ../../cmd/client
+        ../../go.mod
+        ../../go.sum
+        ../../openapi.json
       ];
     };
 
-  CGO_ENABLED = 0;
+  env.CGO_ENABLED = 0;
 
   ldflags = [ "-X main.version=${version}" ];
 
