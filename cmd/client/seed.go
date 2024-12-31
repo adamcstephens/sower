@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 
 	"codeberg.org/adamcstephens/sower/client"
+	"codeberg.org/adamcstephens/sower/cmd/client/commands"
 )
 
 func activate(seedType client.SeedSeedType, storePath string, mode string) error {
@@ -17,20 +17,20 @@ func activate(seedType client.SeedSeedType, storePath string, mode string) error
 	switch {
 	case seedType == client.HomeManager:
 		cmd := exec.Command(fmt.Sprintf("%s/activate", storePath))
-		err = simpleRun(cmd)
+		err = commands.SimpleRun(cmd)
 		if err != nil {
 			return fmt.Errorf("Failed to activate home-manager generation: %v", err)
 		}
 
 	case seedType == client.Nixos:
 		profileCmd := exec.Command("nix-env", "--set", "--profile", "/nix/var/nix/profiles/system", storePath)
-		err = simpleRun(profileCmd)
+		err = commands.SimpleRun(profileCmd)
 		if err != nil {
 			return fmt.Errorf("Failed to set nixos profile: %v", err)
 		}
 
 		switchCmd := exec.Command(fmt.Sprintf("%s/bin/switch-to-configuration", storePath), mode)
-		err = simpleRun(switchCmd)
+		err = commands.SimpleRun(switchCmd)
 		if err != nil {
 			return fmt.Errorf("Failed to set nixos profile: %v", err)
 		}
@@ -51,7 +51,7 @@ func realize(storePath string) error {
 
 	cmd := exec.Command("nix-store", "--realize", storePath)
 
-	err := simpleRun(cmd)
+	err := commands.SimpleRun(cmd)
 
 	return err
 }
@@ -98,56 +98,13 @@ func reboot(yes bool) error {
 		if yes {
 			slog.Info("Scheduling reboot in ~5 seconds")
 			cmd := exec.Command("systemd-run", "--on-active=5s", "--no-block", "--unit=sower-client-reboot", "systemctl", "reboot")
-			err := simpleRun(cmd)
+			err := commands.SimpleRun(cmd)
 			if err != nil {
 				return fmt.Errorf("Failed to schedule reboot: %v", err)
 			}
 		} else {
 			slog.Warn("Reboot needed, but skipping without --yes")
 		}
-	}
-
-	return nil
-}
-
-func simpleRun(cmd *exec.Cmd) error {
-	// Set up the pipes for stdout and stderr
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("Error creating stdout: %v", err)
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return fmt.Errorf("Error creating stderr: %v", err)
-	}
-
-	slog.Debug("Running command", "cmd", cmd.String())
-	err = cmd.Start()
-	if err != nil {
-		return fmt.Errorf("Error starting command: %v", err)
-	}
-
-	var ioErr error
-	go func() {
-		_, ioErr = io.Copy(os.Stdout, stdout) // Redirect stdout to terminal's stdout
-		if ioErr != nil {
-			slog.Error("Failed to configure stdout")
-		}
-	}()
-	go func() {
-		_, ioErr = io.Copy(os.Stderr, stderr) // Redirect stderr to terminal's stderr
-		if ioErr != nil {
-			slog.Error("Failed to configure stderr")
-		}
-	}()
-
-	err = cmd.Wait()
-	if err != nil {
-		return fmt.Errorf("Failed to download seed: %v", err)
-	}
-
-	if ioErr != nil {
-		return fmt.Errorf("Error copying output: %v", ioErr)
 	}
 
 	return nil

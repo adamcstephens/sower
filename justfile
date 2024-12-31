@@ -93,7 +93,7 @@ update-go-hash:
     set -eou pipefail
 
     setKV() {
-      sed -i "s|$1 = \".*\"|$1 = \"${2:-}\"|" ./nix/client-package.nix
+      sed -i "s|$1 = \".*\"|$1 = \"${2:-}\"|" ./nix/packages/client.nix
     }
 
     setKV vendorHash "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=" # Necessary to force clean build.
@@ -109,4 +109,4 @@ update-go-hash:
       exit 1
     fi
 
-    git diff ./nix/client-package.nix
+    git diff ./nix/packages/client.nix

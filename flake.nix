@@ -14,13 +14,14 @@
       {
         imports = [
           ./nix/flake-module.nix
+          ./nix/legacy-flake-module.nix
           inputs.process-compose-flake.flakeModule
         ];
 
         systems = [
           "x86_64-linux"
           "aarch64-linux"
-          "aarch64-darwin"
+          # "aarch64-darwin"
         ];
 
         perSystem =
@@ -69,6 +70,7 @@
                   pkgs.docker
                   pkgs.just
                   pkgs.mix2nix
+                  pkgs.nix-eval-jobs
                   pkgs.nvfetcher
                   pkgs.process-compose
                   config.process-compose.devServices.outputs.package

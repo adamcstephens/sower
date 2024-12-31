@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"codeberg.org/adamcstephens/sower/client"
+	"codeberg.org/adamcstephens/sower/cmd/client/builder"
 	"github.com/adrg/xdg"
 	"github.com/alexflint/go-arg"
 	"github.com/lmittmann/tint"
@@ -20,8 +21,9 @@ import (
 var version = "dev"
 
 type config struct {
-	Daemon *seedCmd `arg:"subcommand:daemon"`
-	Seed   *seedCmd `arg:"subcommand:seed"`
+	Builder *builderCmd `arg:"subcommand:builder"`
+	Daemon  *daemonCmd  `arg:"subcommand:daemon"`
+	Seed    *seedCmd    `arg:"subcommand:seed"`
 
 	ApiTokenFile string   `arg:"--api-token-file,env:SOWER_API_TOKEN_FILE" json:"api-token-file"`
 	ApiToken     string   `arg:"--api-token,env:SOWER_API_TOKEN"`
@@ -29,6 +31,22 @@ type config struct {
 	Debug        bool     `arg:"--debug"`
 	Endpoint     string   `arg:"--endpoint,-e,env:SOWER_ENDPOINT"`
 	Version      bool     `arg:"--version"`
+}
+
+type builderCmd struct {
+	Eval  *builderEvalCmd  `arg:"subcommand:eval"`
+	Build *builderBuildCmd `arg:"subcommand:build"`
+}
+
+type builderBuildCmd struct {
+	Workers int `arg:"--workers,-w"`
+}
+
+type builderEvalCmd struct {
+	Workers int `arg:"--workers,-w"`
+}
+
+type daemonCmd struct {
 }
 
 type seedCmd struct {
@@ -143,13 +161,15 @@ func main() {
 	}
 
 	switch {
+	case cfg.Builder != nil:
+		buildCommand(cfg)
+	case cfg.Daemon != nil:
+		daemonCommand(cfg)
 	case cfg.Seed != nil:
 		err := seedSubcommand(cfg)
 		if err != nil {
 			p.WriteHelp(os.Stdout)
 		}
-	case cfg.Daemon != nil:
-		daemonCommand(cfg)
 	default:
 		p.WriteHelp(os.Stdout)
 	}
@@ -177,6 +197,26 @@ func initLogger(debug bool) {
 	}))
 
 	slog.SetDefault(logger)
+}
+
+func buildCommand(cfg config) {
+	switch {
+	case cfg.Builder.Build != nil:
+		err := builder.Build(cfg.Builder.Build.Workers)
+		if err != nil {
+			slog.Error("Failed to eval", "error", err)
+			os.Exit(1)
+		}
+	case cfg.Builder.Eval != nil:
+		err := builder.Eval(cfg.Builder.Eval.Workers)
+		if err != nil {
+			slog.Error("Failed to eval", "error", err)
+			os.Exit(1)
+		}
+	default:
+		slog.Error("No subcommand specified")
+		os.Exit(1)
+	}
 }
 
 func daemonCommand(cfg config) {
