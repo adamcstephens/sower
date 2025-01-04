@@ -5,7 +5,7 @@ env:
   ATTIC_URL: ${{ vars.ATTIC_URL }}
   ATTIC_CACHE: ${{ vars.ATTIC_CACHE }}
   ATTIC_KEY: ${{ secrets.ATTIC_KEY }}
-  SOWER_URL: ${{ vars.SOWER_URL }}
+  SOWER_ENDPOINT: ${{ vars.SOWER_ENDPOINT }}
 
 jobs:
   build-and-seed-x86_64:
