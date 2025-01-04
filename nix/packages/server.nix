@@ -27,7 +27,6 @@ beamPackages.mixRelease rec {
       ../../mix.exs
       ../../mix.lock
       ../../priv
-      ../../rel
       ../../test
       ../../VERSION
     ];
