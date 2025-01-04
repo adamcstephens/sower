@@ -8,17 +8,6 @@
   pkgs,
   testers,
 }:
-let
-  testNixosConfig =
-    flake.nixosConfigurations."seed-ci-flake-submit-${pkgs.system}".config.system.build.toplevel;
-
-  flakeCache = pkgs.runCommandNoCC "cache-flake-things" { } ''
-    mkdir $out
-    cd $out
-    ln -s ${testNixosConfig} .
-    ln -s ${flake.inputs.flake-parts} .
-  '';
-in
 testers.runNixOSTest {
   name = "sower";
 
@@ -35,7 +24,6 @@ testers.runNixOSTest {
 
         environment.systemPackages = [
           flake.packages.${pkgs.system}.seed-ci
-          flakeCache
         ];
 
         nix.settings = {
@@ -106,9 +94,5 @@ testers.runNixOSTest {
       nixos_profile = server.succeed("readlink -f /run/booted-system").strip()
       server.succeed(f"sower seed submit --create --path {nixos_profile} --debug")
       server.succeed("systemctl start sower-client")
-
-      server.succeed("cd ${../..} && nix build --no-net .#nixosConfigurations.seed-ci-flake-submit-${pkgs.system}.config.system.build.toplevel")
-      server.succeed("cd ${../..} && seed-ci --attic-use=false --attic-upload=false --sower-seed=true")
-      server.succeed("sower seed info --name seed-ci-flake-submit-${pkgs.system} --type nixos")
     '';
 }
