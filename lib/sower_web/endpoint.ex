@@ -1,6 +1,9 @@
 defmodule SowerWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :sower
 
+# Force connections to use the scheme from the proxy
+  plug Plug.RewriteOn, [:x_forwarded_proto]
+
   plug SowerWeb.Plug.HealthCheck
 
   # The session will be stored in the cookie and signed,

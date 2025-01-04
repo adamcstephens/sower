@@ -15,7 +15,7 @@ in
 
       package = lib.mkOption {
         type = lib.types.package;
-        default = pkgs.callPackage ./server-package.nix { };
+        default = pkgs.callPackage ../packages/server.nix { };
       };
 
       secrets = lib.mkOption {

@@ -48,7 +48,7 @@ docker-push:
     docker manifest push $image_name:latest
 
 mix-nix-lock:
-    mix2nix mix.lock > nix/mix.nix
+    mix2nix mix.lock > ./nix/packages/mix.nix
 
 openapi-output:
     MIX_ENV=test mix openapi.spec.json --spec SowerWeb.ApiSpec --pretty=true openapi.json

@@ -7,6 +7,9 @@ import Config
 # before starting your production server.
 config :sower, SowerWeb.Endpoint, cache_static_manifest: "priv/static/cache_manifest.json"
 
+# Prod is always https
+config :sower, SowerWeb.Endpoint, scheme: "https"
+
 # Do not print debug messages in production
 config :logger, level: :info
 
