@@ -56,9 +56,8 @@ openapi-output:
 openapi-generate: openapi-output
     go generate ./client
 
-set-version version:
+set-version version: && openapi-generate
     echo -n {{ version }} > VERSION
-    cargo generate-lockfile --offline
 
 release:
     git tag -a v$(cat VERSION)
