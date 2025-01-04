@@ -112,7 +112,7 @@ func main() {
 
 		_, err := os.Stat(configFile)
 		if err != nil {
-			slog.Warn("Configuration file does not exist", "config-file", configFile)
+			slog.Debug("Skipping: configuration file does not exist", "config-file", configFile)
 			continue
 		}
 

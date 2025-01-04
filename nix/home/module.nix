@@ -27,11 +27,6 @@ in
           freeformType = jsonType;
 
           options = {
-            endpoint = lib.mkOption {
-              type = lib.types.str;
-              description = "Endpoint URL to Sower, e.g. https://mysower.org/";
-            };
-
             seed = {
               name = lib.mkOption {
                 type = lib.types.str;
@@ -59,13 +54,6 @@ in
   config = lib.mkIf cfg.enable (
     lib.mkMerge [
       {
-        assertions = [
-          {
-            assertion = cfg.config.endpoint != null;
-            message = "Sower endpoint is required";
-          }
-        ];
-
         home.packages = [ cfg.package ];
 
         xdg.configFile."sower/client.json".source = lib.mkIf (cfg.config != null) (

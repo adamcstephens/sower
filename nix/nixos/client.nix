@@ -35,11 +35,6 @@ in
           freeformType = jsonType;
 
           options = {
-            endpoint = lib.mkOption {
-              type = lib.types.str;
-              description = "Endpoint URL to Sower, e.g. https://mysower.org/";
-            };
-
             api-token-file = lib.mkOption {
               type = lib.types.str;
               description = "path to API token file. This is a secret so should not be in the nix store";

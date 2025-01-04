@@ -212,6 +212,14 @@ def main [
     }
   }
 
+  if $sower_seed {
+    let sower_endpoint = $env.SOWER_ENDPOINT?
+    if $sower_endpoint == null {
+      print "‼️ sower endpoint missing, but sower seed set to true"
+      exit 1
+    }
+  }
+
   let seeds = load-seeds | filter-configs --system $system
   let built_seeds = $seeds | build-configs --threads $threads
 
