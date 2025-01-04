@@ -11,11 +11,18 @@ let
   adminScript = pkgs.writeShellApplication {
     name = "sower-server";
 
-    text = ''
-      RELEASE_COOKIE=$(sudo cat /var/lib/sower/release-cookie)
-      export RELEASE_COOKIE
-      exec ${cfg.package}/bin/sower remote
-    '';
+    text =
+      (lib.concatStringsSep "\n" (
+        lib.mapAttrsToList (name: val: ''
+          ${name}="${val}"
+          export ${name}
+        '') cfg.environment
+      ))
+      + ''
+        RELEASE_COOKIE=$(sudo cat /var/lib/sower/release-cookie)
+        export RELEASE_COOKIE
+        exec ${cfg.package}/bin/sower remote
+      '';
   };
 in
 {
