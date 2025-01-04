@@ -7,6 +7,16 @@
 let
   cfg = config.services.sower.server;
   jsonType = (pkgs.formats.json { }).type;
+
+  adminScript = pkgs.writeShellApplication {
+    name = "sower-server";
+
+    text = ''
+      RELEASE_COOKIE=$(sudo cat /var/lib/sower/release-cookie)
+      export RELEASE_COOKIE
+      exec ${cfg.package}/bin/sower remote
+    '';
+  };
 in
 {
   options = {
@@ -63,6 +73,10 @@ in
     environment.etc."sower/server.json".source = pkgs.writeText "sower-server-config" (
       builtins.toJSON cfg.settings
     );
+
+    environment.systemPackages = [
+      adminScript
+    ];
 
     systemd.services.sower = {
       description = "Sower management platform";
