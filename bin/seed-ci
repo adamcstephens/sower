@@ -140,9 +140,9 @@ export def get-flake-inputs [] {
   }
 }
 
-export def post-sower-seeds [--sower-url: string] {
+export def post-sower-seeds [] {
   let configs = $in
-  print $"🫱 Giving seeds to sower ($sower_url)"
+  print $"🫱 Giving seeds to sower"
 
   let git_branch = get-git-branch
   let repo_url = get-repo-url
@@ -150,15 +150,7 @@ export def post-sower-seeds [--sower-url: string] {
   # sower only understands certain build outputs
   $configs | filter { |c| $c.seed_type == "home-manager" or $c.seed_type == "nix-darwin" or $c.seed_type == "nixos" } | each { |c|
     $c.targets | filter { |t| $t.build != null } | each { |t|
-      let seed = {
-        name: $t.name,
-        seed_seed_type: $c.seed_type,
-        store_path: $t.build.outputs.out.0,,
-        branch: $git_branch,
-        repo_url: $repo_url
-      }
-
-      http post --content-type application/json $"($sower_url)/api/seeds" $seed
+      sower seed submit --create --name $t.name --type $c.seed_type --path $t.build.outputs.out.0
     }
   }
 }
@@ -228,12 +220,7 @@ def main [
   }
 
   if $sower_seed {
-    let sower_url = $env.SOWER_URL?
-    if $sower_url == null {
-      print "‼️ sower url missing, but sower seed set to true"
-      exit 1
-    }
-    $built_seeds | post-sower-seeds --sower-url $sower_url
+    $built_seeds | post-sower-seeds
   }
 
   print "🎯 Built seeds"

@@ -5,22 +5,43 @@
 # >>> machine.shell_interact()
 {
   flake,
+  pkgs,
   testers,
 }:
+let
+  testNixosConfig =
+    flake.nixosConfigurations."seed-ci-flake-submit-${pkgs.system}".config.system.build.toplevel;
 
+  flakeCache = pkgs.runCommandNoCC "cache-flake-things" { } ''
+    mkdir $out
+    cd $out
+    ln -s ${testNixosConfig} .
+    ln -s ${flake.inputs.flake-parts} .
+  '';
+in
 testers.runNixOSTest {
   name = "sower";
 
   nodes.server =
-    { pkgs, ... }:
+    { lib, pkgs, ... }:
     {
-      imports = [ ./nixos/module.nix ];
+      imports = [ ../nixos/module.nix ];
 
       config = {
         # need switch-to-configuration
         system.switch.enable = true;
         # without trying to install grub
         boot.loader.grub.enable = false;
+
+        environment.systemPackages = [
+          flake.packages.${pkgs.system}.seed-ci
+          flakeCache
+        ];
+
+        nix.settings = {
+          experimental-features = "flakes nix-command";
+          substituters = lib.mkForce [ ];
+        };
 
         services.sower.client = {
           enable = true;
@@ -70,6 +91,8 @@ testers.runNixOSTest {
             CREATE DATABASE sower OWNER sower;
           '';
         };
+
+        virtualisation.diskSize = 4096;
       };
     };
 
@@ -83,5 +106,9 @@ testers.runNixOSTest {
       nixos_profile = server.succeed("readlink -f /run/booted-system").strip()
       server.succeed(f"sower seed submit --create --path {nixos_profile} --debug")
       server.succeed("systemctl start sower-client")
+
+      server.succeed("cd ${../..} && nix build --no-net .#nixosConfigurations.seed-ci-flake-submit-${pkgs.system}.config.system.build.toplevel")
+      server.succeed("cd ${../..} && seed-ci --attic-use=false --attic-upload=false --sower-seed=true")
+      server.succeed("sower seed info --name seed-ci-flake-submit-${pkgs.system} --type nixos")
     '';
 }

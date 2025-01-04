@@ -31,7 +31,7 @@ in
   };
 
   config = {
-    flake.flakeModules.seed = ./flake-module.nix;
+    flake.flakeModules.seed = ./legacy-flake-module.nix;
 
     flake.sower =
       let

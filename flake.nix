@@ -102,7 +102,7 @@
             };
 
             checks = lib.optionalAttrs pkgs.stdenv.isLinux {
-              default = pkgs.callPackage ./nix/test-end-to-end.nix {
+              default = pkgs.callPackage ./nix/tests/e2e.nix {
                 flake = self;
               };
             };

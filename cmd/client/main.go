@@ -148,6 +148,16 @@ func main() {
 		cfg.ApiToken = strings.TrimSpace(string(token))
 	}
 
+	if cfg.Endpoint == "" {
+		slog.Error("Missing Sower endpoint. Add to configuration file or environment.")
+		os.Exit(1)
+	}
+
+	if cfg.ApiToken == "" {
+		slog.Error("Missing API token. Add to configuration file or environment.")
+		os.Exit(1)
+	}
+
 	switch {
 	case cfg.Version:
 		slog.Info("Version", "version", version)

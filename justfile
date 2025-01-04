@@ -28,8 +28,8 @@ dev: dev-services && start
     mix assets.build
 
 dev-seed-from-local:
-    go run ./cmd/client seed submit --path $(readlink -f /run/booted-system) --create --name $(hostname -s) --type nixos
-    go run ./cmd/client seed submit --path $(readlink -f $HOME/.local/state/nix/profiles/home-manager) --create --name $(hostname -s) --type home-manager
+    go run ./cmd/client seed submit --create --name $(hostname -s) --type nixos --path $(readlink -f /run/booted-system)
+    go run ./cmd/client seed submit --create --name $(hostname -s) --type home-manager --path $(readlink -f $HOME/.local/state/nix/profiles/home-manager)
 
 dev-services:
     nix run .#devServices -- --detached
