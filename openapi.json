@@ -87,7 +87,7 @@
   },
   "info": {
     "title": "sower",
-    "version": "0.4.2"
+    "version": "0.4.3-dev"
   },
   "openapi": "3.0.0",
   "paths": {
@@ -464,8 +464,7 @@
   ],
   "servers": [
     {
-      "url": "http://localhost:4002",
-      "variables": {}
+      "url": "http://localhost:4002"
     }
   ],
   "tags": []

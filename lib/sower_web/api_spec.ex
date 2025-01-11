@@ -11,7 +11,8 @@ defmodule SowerWeb.ApiSpec do
       },
       paths: Paths.from_router(Router),
       servers: [
-        Server.from_endpoint(Endpoint)
+        # variables unsupported by oooapi and were empty anyway
+        Server.from_endpoint(Endpoint) |> Map.drop([:variables])
       ],
       components: %Components{
         securitySchemes: %{
