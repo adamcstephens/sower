@@ -60,7 +60,7 @@ set-version version: && openapi-generate
     echo -n {{ version }} > VERSION
 
 release:
-    git tag -a v$(cat VERSION)
+    git tag -a -m v$(cat VERSION) v$(cat VERSION)
     git push
     git push --tags
 
