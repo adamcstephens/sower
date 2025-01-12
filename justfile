@@ -21,7 +21,7 @@ check-go-lint:
 check-nix:
     nix build .#checks.x86_64-linux.default --print-build-logs
 
-dev: dev-services && start
+dev: && start
     mix deps.get
     mix deps.compile
     mix ecto.setup
@@ -32,7 +32,7 @@ dev-seed-from-local:
     go run ./cmd/client seed submit --create --name $(hostname -s) --type home-manager --path $(readlink -f $HOME/.local/state/nix/profiles/home-manager)
 
 dev-services:
-    nix run .#devServices -- --detached
+    process-compose list || process-compose up --detached
 
 docker-build:
     eval $(nix build --print-build-logs --no-link --print-out-paths --system aarch64-linux .#seed-ci-docker) | docker load
@@ -64,7 +64,7 @@ release:
     git push
     git push --tags
 
-start:
+start: dev-services
     iex -S mix phx.server
 
 start-pry:

@@ -1,5 +1,5 @@
 {
-  "public_url": "http://blank:7150",
+  "public_url": "http://localhost:7150",
   "auth": {
     "oidc_base_url": "https://id.junco.dev/oauth2/openid/sower-dev",
     "oidc_client_id": "sower-dev",
@@ -21,15 +21,9 @@
   },
   "listen_port": 7150,
   "listen_address": "::",
-  "nix_caches": [
-    {
-      "url": "https://cache.junco.dev/v3",
-      "public_key": "v3:aMXMnngJoGU8dpELPyNAhADrOgrn5GiXWP90NiB4aFY="
-    }
-  ],
   "clients": {
     "x86_64-linux": {
-      "path": "/nix/store/gxb1rq39sw4389cy5b3hcwbjbq9q1w89-sower-0.3.1"
+      "path": "/nix/store/rlajigqccbrazh2cdkgds1qs5404h3l8-sower-0.4.3-dev"
     }
   },
   "log_level": "debug",

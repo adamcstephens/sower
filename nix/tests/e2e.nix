@@ -93,6 +93,7 @@ testers.runNixOSTest {
 
       nixos_profile = server.succeed("readlink -f /run/booted-system").strip()
       server.succeed(f"sower seed submit --create --path {nixos_profile} --debug")
+      server.succeed("curl http://localhost:4000/client/bootstrap | bash -s seed info")
       server.succeed("systemctl start sower-client")
     '';
 }

@@ -24,6 +24,7 @@ let
         exec ${cfg.package}/bin/sower remote
       '';
   };
+
 in
 {
   options = {

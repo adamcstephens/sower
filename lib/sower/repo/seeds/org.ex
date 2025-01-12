@@ -51,7 +51,7 @@ defmodule Sower.Repo.Seeds.Org do
   def fake_seeds(%Sower.Accounts.User{} = user) do
     Sower.Repo.put_org_id(user.org_id)
 
-    Enum.to_list(1..20)
+    Enum.to_list(1..5)
     |> Enum.map(fn t ->
       name = ~s"test#{t}"
 

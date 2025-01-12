@@ -103,22 +103,6 @@ defmodule Sower.Config do
         "minimum" => 80,
         "maximum" => 65535
       },
-      "nix_caches" => %{
-        "type" => "array",
-        "items" => %{
-          "type" => "object",
-          "properties" => %{
-            "public_key" => %{
-              "type" => "string"
-            },
-            "url" => %{
-              "type" => "string",
-              "format" => "uri"
-            }
-          }
-        },
-        "required" => ["public_key"]
-      },
       "organization" => %{
         "type" => "object",
         "properties" => %{
@@ -290,8 +274,7 @@ defmodule Sower.Config do
 
     defaults = %{
       "listen_address" => "127.0.0.1",
-      "listen_port" => 4000,
-      "nix_caches" => []
+      "listen_port" => 4000
     }
 
     with {:ok, contents} <- File.read(config_file),

@@ -154,8 +154,7 @@ defmodule Sower.Accounts.AccessToken do
       {:error, _} = error ->
         error
 
-      show ->
-        dbg(show)
+      _->
         {:error, "Invalid token: Parse Failure"}
     end
   end

@@ -26,7 +26,10 @@ defmodule SowerWeb.Router do
 
     get "/", PageController, :home
 
-    get "/client/script", AppController, :client_script
+    scope "/client" do
+      get "/bootstrap", BootstrapController, :client_script
+      get "/bin/:system", BootstrapController, :client_bin
+    end
   end
 
   scope "/", SowerWeb do
@@ -44,6 +47,13 @@ defmodule SowerWeb.Router do
       live "/store_paths/:id", StorePathLive.Show, :show
       live "/inputs/repos", RepositoryLive.Index, :index
       live "/inputs/repos/:id", RepositoryLive.Show, :show
+
+      live "/nix_caches", CacheLive.Index, :index
+      live "/nix_caches/new", CacheLive.Index, :new
+      live "/nix_caches/:id/edit", CacheLive.Index, :edit
+
+      live "/nix_caches/:id", CacheLive.Show, :show
+      live "/nix_caches/:id/show/edit", CacheLive.Show, :edit
 
       live "/settings", Settings.IndexLive, :index
       # live "/settings/access-tokens", SettingsLive.AccessTokens, :index
@@ -72,7 +82,6 @@ defmodule SowerWeb.Router do
 
   scope "/api" do
     pipe_through [:api, :ensure_token_authenticated]
-    get "/config", SowerWeb.AppController, :config
 
     get "/seeds", SowerWeb.SeedController, :list
     get "/seeds/:id", SowerWeb.SeedController, :get

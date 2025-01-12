@@ -1,4 +1,4 @@
-defmodule SowerWeb.AppFallbackController do
+defmodule SowerWeb.BootstrapFallbackController do
   use Phoenix.Controller
 
   require Logger
