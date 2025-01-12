@@ -73,7 +73,10 @@ start-pry:
 start-client:
     watchexec --watch ./cmd/client --restart -- go run ./cmd/client daemon --debug --config ./dev-client.toml
 
-update: update-elixir update-go
+update: update-nix update-elixir update-go
+
+update-nix:
+    nix flake update --commit-lock-file
 
 update-elixir: && mix-nix-lock
     mix deps.clean --unused --unlock

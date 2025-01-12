@@ -1,6 +1,6 @@
 module codeberg.org/adamcstephens/sower
 
-go 1.23.3
+go 1.23.4
 
 require (
 	github.com/adrg/xdg v0.5.3
@@ -19,5 +19,5 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
-	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/sys v0.29.0 // indirect
 )

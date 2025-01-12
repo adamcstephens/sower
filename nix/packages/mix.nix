@@ -36,12 +36,12 @@ let
 
     bandit = buildMix rec {
       name = "bandit";
-      version = "1.6.1";
+      version = "1.6.4";
 
       src = fetchHex {
         pkg = "bandit";
         version = "${version}";
-        sha256 = "5a904bf010ea24b67979835e0507688e31ac873d4ffc8ed0e5413e8d77455031";
+        sha256 = "8e156c009a77bb100fd78d5408684d01df1526f549c42614f8f9f27f44f1f7a7";
       };
 
       beamDeps = [ hpax plug telemetry thousand_island websock ];
@@ -49,25 +49,12 @@ let
 
     castore = buildMix rec {
       name = "castore";
-      version = "1.0.10";
+      version = "1.0.11";
 
       src = fetchHex {
         pkg = "castore";
         version = "${version}";
-        sha256 = "1b0b7ea14d889d9ea21202c43a4fa015eb913021cb535e8ed91946f4b77a8848";
-      };
-
-      beamDeps = [];
-    };
-
-    certifi = buildRebar3 rec {
-      name = "certifi";
-      version = "2.12.0";
-
-      src = fetchHex {
-        pkg = "certifi";
-        version = "${version}";
-        sha256 = "ee68d85df22e554040cdb4be100f33873ac6051387baf6a8f6ce82272340ff1c";
+        sha256 = "e03990b4db988df56262852f20de0f659871c35154691427a5047f4967a16a62";
       };
 
       beamDeps = [];
@@ -205,12 +192,12 @@ let
 
     file_system = buildMix rec {
       name = "file_system";
-      version = "1.0.1";
+      version = "1.1.0";
 
       src = fetchHex {
         pkg = "file_system";
         version = "${version}";
-        sha256 = "4414d1f38863ddf9120720cd976fce5bdde8e91d8283353f0e31850fa89feb9e";
+        sha256 = "bfcf81244f416871f2a2e15c1b515287faa5db9c6bcf290222206d120b3d43f6";
       };
 
       beamDeps = [];
@@ -307,19 +294,6 @@ let
       beamDeps = [];
     };
 
-    idna = buildRebar3 rec {
-      name = "idna";
-      version = "6.1.1";
-
-      src = fetchHex {
-        pkg = "idna";
-        version = "${version}";
-        sha256 = "92376eb7894412ed19ac475e4a86f7b413c1b9fbb5bd16dccd57934157944cea";
-      };
-
-      beamDeps = [ unicode_util_compat ];
-    };
-
     jason = buildMix rec {
       name = "jason";
       version = "1.4.4";
@@ -385,19 +359,6 @@ let
       beamDeps = [ libcluster ];
     };
 
-    metrics = buildRebar3 rec {
-      name = "metrics";
-      version = "1.0.1";
-
-      src = fetchHex {
-        pkg = "metrics";
-        version = "${version}";
-        sha256 = "69b09adddc4f74a40716ae54d140f93beb0fb8978d8636eaded0c31b6f099f16";
-      };
-
-      beamDeps = [];
-    };
-
     mime = buildMix rec {
       name = "mime";
       version = "2.0.6";
@@ -406,19 +367,6 @@ let
         pkg = "mime";
         version = "${version}";
         sha256 = "c9945363a6b26d747389aac3643f8e0e09d30499a138ad64fe8fd1d13d9b153e";
-      };
-
-      beamDeps = [];
-    };
-
-    mimerl = buildRebar3 rec {
-      name = "mimerl";
-      version = "1.3.0";
-
-      src = fetchHex {
-        pkg = "mimerl";
-        version = "${version}";
-        sha256 = "a1e15a50d1887217de95f0b9b0793e32853f7c258a5cd227650889b38839fe9d";
       };
 
       beamDeps = [];
@@ -619,19 +567,6 @@ let
       beamDeps = [];
     };
 
-    parse_trans = buildRebar3 rec {
-      name = "parse_trans";
-      version = "3.4.1";
-
-      src = fetchHex {
-        pkg = "parse_trans";
-        version = "${version}";
-        sha256 = "620a406ce75dada827b82e453c19cf06776be266f5a67cff34e1ef2cbb60e49a";
-      };
-
-      beamDeps = [];
-    };
-
     permit = buildMix rec {
       name = "permit";
       version = "0.2.1";
@@ -686,12 +621,12 @@ let
 
     phoenix_html = buildMix rec {
       name = "phoenix_html";
-      version = "4.1.1";
+      version = "4.2.0";
 
       src = fetchHex {
         pkg = "phoenix_html";
         version = "${version}";
-        sha256 = "f2f2df5a72bc9a2f510b21497fd7d2b86d932ec0598f0210fed4114adc546c6f";
+        sha256 = "9713b3f238d07043583a94296cc4bbdceacd3b3a6c74667f4df13971e7866ec8";
       };
 
       beamDeps = [];
@@ -699,12 +634,12 @@ let
 
     phoenix_live_dashboard = buildMix rec {
       name = "phoenix_live_dashboard";
-      version = "0.8.5";
+      version = "0.8.6";
 
       src = fetchHex {
         pkg = "phoenix_live_dashboard";
         version = "${version}";
-        sha256 = "1d73920515554d7d6c548aee0bf10a4780568b029d042eccb336db29ea0dad70";
+        sha256 = "1681ab813ec26ca6915beb3414aa138f298e17721dc6a2bde9e6eb8a62360ff6";
       };
 
       beamDeps = [ ecto mime phoenix_live_view telemetry_metrics ];
@@ -725,12 +660,12 @@ let
 
     phoenix_live_view = buildMix rec {
       name = "phoenix_live_view";
-      version = "1.0.1";
+      version = "1.0.2";
 
       src = fetchHex {
         pkg = "phoenix_live_view";
         version = "${version}";
-        sha256 = "c0f517e6f290f10dbb94343ac22e0109437fb1fa6f0696e7c73967b789c1c285";
+        sha256 = "8a40265b0cd7d3a35f136dfa3cc048e3b198fc3718763411a78c323a44ebebee";
       };
 
       beamDeps = [ floki jason phoenix phoenix_html phoenix_template plug telemetry ];
@@ -803,12 +738,12 @@ let
 
     shortuuid = buildMix rec {
       name = "shortuuid";
-      version = "3.0.0";
+      version = "4.0.0";
 
       src = fetchHex {
         pkg = "shortuuid";
         version = "${version}";
-        sha256 = "dfd8f80f514cbb91622cb83f4ac0d6e2f06d98cc6d4aeba94444a212289d0d39";
+        sha256 = "b28297cfeae47e5d1b8f786f4de43a81969b2a18ebeef673d1880387d6b81181";
       };
 
       beamDeps = [];
@@ -907,12 +842,12 @@ let
 
     thousand_island = buildMix rec {
       name = "thousand_island";
-      version = "1.3.7";
+      version = "1.3.9";
 
       src = fetchHex {
         pkg = "thousand_island";
         version = "${version}";
-        sha256 = "0139335079953de41d381a6134d8b618d53d084f558c734f2662d1a72818dd12";
+        sha256 = "25ab4c07badadf7f87adb4ab414e0ed374e5f19e72503aa85132caa25776e54f";
       };
 
       beamDeps = [ telemetry ];
@@ -920,12 +855,12 @@ let
 
     tls_certificate_check = buildRebar3 rec {
       name = "tls_certificate_check";
-      version = "1.25.0";
+      version = "1.26.0";
 
       src = fetchHex {
         pkg = "tls_certificate_check";
         version = "${version}";
-        sha256 = "167343ccf50538cf2faf61a3f1460e749b3edf2ecef55516af2b5834362abcb1";
+        sha256 = "1bad73d88637f788b554a8e939c25db2bdaac88b10fffd5bba9d1b65f43a6b54";
       };
 
       beamDeps = [ ssl_verify_fun ];
@@ -955,19 +890,6 @@ let
       };
 
       beamDeps = [ oidcc plug ueberauth ];
-    };
-
-    unicode_util_compat = buildRebar3 rec {
-      name = "unicode_util_compat";
-      version = "0.7.0";
-
-      src = fetchHex {
-        pkg = "unicode_util_compat";
-        version = "${version}";
-        sha256 = "25eee6d67df61960cf6a794239566599b09e17e668d3700247bc498638152521";
-      };
-
-      beamDeps = [];
     };
 
     uuidv7 = buildMix rec {
