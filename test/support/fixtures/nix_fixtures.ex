@@ -12,7 +12,7 @@ defmodule Sower.NixFixtures do
       attrs
       |> Enum.into(%{
         public_key: "some public_key",
-        url: "some url",
+        url: "some url"
       })
       |> Sower.Nix.create_cache()
 
