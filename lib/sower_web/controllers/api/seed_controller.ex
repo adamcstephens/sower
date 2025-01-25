@@ -1,4 +1,4 @@
-defmodule SowerWeb.SeedController do
+defmodule SowerWeb.Api.SeedController do
   use SowerWeb, :controller
   use OpenApiSpex.ControllerSpecs
 
@@ -9,9 +9,9 @@ defmodule SowerWeb.SeedController do
   import Sower.Authorization
   require OpenTelemetry.Tracer, as: Tracer
 
-  plug(OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true)
+  plug OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true
 
-  action_fallback(SowerWeb.FallbackController)
+  action_fallback SowerWeb.Api.FallbackController
 
   operation(:new,
     operation_id: "NewSeed",

@@ -1,4 +1,4 @@
-defmodule SowerWeb.SeedJSON do
+defmodule SowerWeb.Api.JSON do
   @doc """
   Renders a list of seeds.
   """

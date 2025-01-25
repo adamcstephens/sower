@@ -1,4 +1,4 @@
-defmodule SowerWeb.FallbackController do
+defmodule SowerWeb.Api.FallbackController do
   @moduledoc """
   Translates controller action results into valid `Plug.Conn` responses.
 
@@ -10,14 +10,14 @@ defmodule SowerWeb.FallbackController do
   def call(conn, {:error, :not_found}) do
     conn
     |> put_status(:not_found)
-    |> put_view(html: SowerWeb.ErrorHTML, json: SowerWeb.ErrorJSON)
+    |> put_view(html: SowerWeb.ErrorHTML, json: SowerWeb.Api.ErrorJSON)
     |> render(:notfound)
   end
 
   def call(conn, {:error, %Ecto.Changeset{} = changeset}) do
     conn
     |> put_status(:unprocessable_entity)
-    |> put_view(json: SowerWeb.ChangesetJSON)
+    |> put_view(json: SowerWeb.Api.ChangesetJSON)
     |> render(:error, changeset: changeset)
   end
 end

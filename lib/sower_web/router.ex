@@ -80,14 +80,14 @@ defmodule SowerWeb.Router do
     get "/openapi", OpenApiSpex.Plug.RenderSpec, []
   end
 
-  scope "/api" do
+  scope "/api", SowerWeb.Api do
     pipe_through [:api, :ensure_token_authenticated]
 
-    get "/seeds", SowerWeb.SeedController, :list
-    get "/seeds/:id", SowerWeb.SeedController, :get
-    get "/seeds/:id/paths/latest", SowerWeb.SeedController, :latest
-    post "/seeds", SowerWeb.SeedController, :new
-    post "/seeds/:id/paths", SowerWeb.SeedController, :new_store_path
+    get "/seeds", SeedController, :list
+    get "/seeds/:id", SeedController, :get
+    get "/seeds/:id/paths/latest", SeedController, :latest
+    post "/seeds", SeedController, :new
+    post "/seeds/:id/paths", SeedController, :new_store_path
   end
 
   scope "/auth" do

@@ -1,4 +1,4 @@
-defmodule SowerWeb.ChangesetJSON do
+defmodule SowerWeb.Api.ChangesetJSON do
   @doc """
   Renders changeset errors.
   """

@@ -14,7 +14,7 @@ config :sower, Sower.Repo, migration_primary_key: [name: :id, type: :uuid]
 config :sower, SowerWeb.Endpoint,
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
-    formats: [html: SowerWeb.ErrorHTML, json: SowerWeb.ErrorJSON],
+    formats: [html: SowerWeb.ErrorHTML, json: SowerWeb.Api.ErrorJSON],
     layout: false
   ],
   pubsub_server: Sower.PubSub,
