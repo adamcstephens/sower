@@ -8,6 +8,6 @@ defmodule SowerWeb.BootstrapFallbackController do
     |> Plug.Conn.put_status(404)
     |> put_root_layout(false)
     |> Plug.Conn.halt()
-    |> html("echo 'Error: failure rendering client script'; exit 1")
+    |> text("echo 'Error: failure rendering client script'; exit 1")
   end
 end
