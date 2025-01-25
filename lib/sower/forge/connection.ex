@@ -1,0 +1,22 @@
+defmodule Sower.Forge.Connection do
+  use Sower.Schema
+  import Ecto.Changeset
+
+  schema "forges" do
+    field :name, :string
+    field :type, Ecto.Enum, values: [:forgejo]
+    field :url, :string
+    field :client_id, Sower.Vault.Binary
+    field :client_secret, Sower.Vault.Binary
+    field :org_id, Ecto.UUID
+
+    timestamps()
+  end
+
+  @doc false
+  def changeset(connection, attrs) do
+    connection
+    |> cast(attrs, [:name, :url, :type, :client_id, :client_secret, :org_id])
+    |> validate_required([:name, :url, :type, :client_id, :client_secret])
+  end
+end

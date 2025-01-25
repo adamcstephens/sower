@@ -1,0 +1,34 @@
+<.header>
+  Connection {@connection.id}
+  <:subtitle>This is a connection record from your database.</:subtitle>
+  <:actions>
+    <.link patch={~p"/forges/#{@connection}/show/edit"} phx-click={JS.push_focus()}>
+      <.button>Edit connection</.button>
+    </.link>
+  </:actions>
+</.header>
+
+<.list>
+  <:item title="Name">{@connection.name}</:item>
+  <:item title="Url">{@connection.url}</:item>
+  <:item title="Type">{@connection.type}</:item>
+  <:item title="Client ID">{@connection.client_id}</:item>
+</.list>
+
+<.back navigate={~p"/forges"}>Back to forges</.back>
+
+<.modal
+  :if={@live_action == :edit}
+  id="connection-modal"
+  show
+  on_cancel={JS.patch(~p"/forges/#{@connection}")}
+>
+  <.live_component
+    module={SowerWeb.Forge.ConnectionLive.FormComponent}
+    id={@connection.id}
+    title={@page_title}
+    action={@live_action}
+    connection={@connection}
+    patch={~p"/forges/#{@connection}"}
+  />
+</.modal>

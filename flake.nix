@@ -73,6 +73,7 @@
                   pkgs.nix-eval-jobs
                   pkgs.nvfetcher
                   pkgs.process-compose
+                  config.process-compose.devServices.services.postgres.postgres1.package
                   config.process-compose.devServices.outputs.package
                   pkgs.watchexec
                 ]

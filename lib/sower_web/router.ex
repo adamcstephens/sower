@@ -41,6 +41,13 @@ defmodule SowerWeb.Router do
       live "/clients/:id/edit", ClientLive.Index, :edit
       live "/clients/:id", ClientLive.Show, :show
       live "/clients/:id/show/edit", ClientLive.Show, :edit
+
+      live "/forges", Forge.ConnectionLive.Index, :index
+      live "/forges/new", Forge.ConnectionLive.Index, :new
+      live "/forges/:id/edit", Forge.ConnectionLive.Index, :edit
+      live "/forges/:id", Forge.ConnectionLive.Show, :show
+      live "/forges/:id/show/edit", Forge.ConnectionLive.Show, :edit
+
       live "/seeds", SeedLive.Index, :index
       live "/seeds/:id", SeedLive.Show, :show
       live "/store_paths", StorePathLive.Index, :index
