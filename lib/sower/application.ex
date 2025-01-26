@@ -14,6 +14,7 @@ defmodule Sower.Application do
       SowerWeb.Telemetry,
       Sower.Vault,
       Sower.Repo,
+      Sower.Forge.Oauth,
       {Phoenix.PubSub, name: Sower.PubSub},
       {Finch, name: Sower.Finch},
       SowerWeb.Endpoint,
