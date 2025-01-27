@@ -5,7 +5,9 @@
     <.link patch={~p"/forges/#{@connection}/show/edit"} phx-click={JS.push_focus()}>
       <.button>Edit connection</.button>
     </.link>
-    <.button phx-click="add_repository">Add Repository</.button>
+    <.link navigate={~p"/forges/#{@connection}/login"} phx-click={JS.push_focus()}>
+      <.button>Add Repository</.button>
+    </.link>
   </:actions>
 </.header>
 

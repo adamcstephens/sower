@@ -47,6 +47,7 @@ defmodule SowerWeb.Router do
       live "/forges/:id/edit", Forge.ConnectionLive.Index, :edit
       live "/forges/:id", Forge.ConnectionLive.Show, :show
       live "/forges/:id/show/edit", Forge.ConnectionLive.Show, :edit
+      get "/forges/:id/login", Forge.OauthController, :login
       get "/forges/oauth/callback", Forge.OauthController, :callback
 
       live "/seeds", SeedLive.Index, :index

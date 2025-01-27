@@ -1,12 +1,6 @@
 defmodule Sower.Forge.Oauth do
   use GenServer
 
-  defstruct pkce_table: nil
-
-  @type t :: %__MODULE__{
-          pkce_table: :ets.tid()
-        }
-
   @pkce_table :forge_oauth_pkce
 
   # client
@@ -15,10 +9,17 @@ defmodule Sower.Forge.Oauth do
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
   end
 
-  def start_connection(%Sower.Forge.Connection{} = forge) do
+  def start_connection(%Sower.Forge.Connection{type: :forgejo} = forge) do
     case Sower.Forge.Oauth.Supervisor.start_oidcc_worker(%{
            issuer: forge.url,
-           name: oidcc_module_name(forge)
+           name: oidcc_module_name(forge),
+           provider_configuration_opts: %{
+             quirks: %{
+               document_overrides: %{
+                 "token_endpoint_auth_methods_supported" => ["client_secret_basic"]
+               }
+             }
+           }
          }) do
       {:ok, pid} -> {:ok, pid}
       {:error, {:already_started, pid}} -> {:ok, pid}
@@ -26,7 +27,7 @@ defmodule Sower.Forge.Oauth do
     end
   end
 
-  def create_redirect_url(%Sower.Forge.Connection{} = forge, source_path) do
+  def create_redirect_url(%Sower.Forge.Connection{} = forge) do
     {:ok, _pid} = Sower.Forge.Oauth.start_connection(forge)
 
     case GenServer.call(__MODULE__, {:create_pkce_verifier, forge.id}) do
@@ -40,8 +41,7 @@ defmodule Sower.Forge.Oauth do
               redirect_uri:
                 "#{Application.fetch_env!(:sower, :public_url)}/forges/oauth/callback",
               require_pkce: true,
-              pkce_verifier: verifier,
-              url_extension: [{"source_path", source_path}]
+              pkce_verifier: verifier
             }
           )
 
@@ -55,8 +55,11 @@ defmodule Sower.Forge.Oauth do
   def retrieve_token(%Sower.Forge.Connection{} = forge, auth_code) do
     {:ok, _pid} = Sower.Forge.Oauth.start_connection(forge)
 
-    case GenServer.call(__MODULE__, {:create_pkce_verifier, forge.id}) do
-      {:ok, verifier} ->
+    case :ets.lookup(@pkce_table, forge.id) do
+      [] ->
+        {:error, :not_found}
+
+      [{_id, verifier}] ->
         Oidcc.retrieve_token(
           auth_code,
           oidcc_module_name(forge),
@@ -69,8 +72,8 @@ defmodule Sower.Forge.Oauth do
           }
         )
 
-      {:error, err} ->
-        {:error, err}
+      _ ->
+        {:error, :unknown_error}
     end
   end
 
@@ -83,45 +86,18 @@ defmodule Sower.Forge.Oauth do
   @impl GenServer
   def init(_) do
     {:ok, _pid} = Sower.Forge.Oauth.Supervisor.start_link()
+    _tid = :ets.new(@pkce_table, [:named_table, :set, :protected])
 
-    {:ok, %__MODULE__{pkce_table: :ets.new(@pkce_table, [:set, :private])}} |> dbg()
+    {:ok, []}
   end
 
   @impl GenServer
   def handle_call({:create_pkce_verifier, forge_id}, _from, state) do
-    verifier = 32 |> :crypto.strong_rand_bytes() |> Base.encode64()
+    verifier = 32 |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
 
-    :ets.insert(state.pkce_table, {forge_id, verifier})
+    :ets.insert(@pkce_table, {forge_id, verifier})
 
     {:reply, {:ok, verifier}, state}
-  end
-
-  @impl GenServer
-  def handle_call({:lookup_pkce_verifier, forge_id}, _from, state) do
-    case :ets.lookup(state.pkce_table, forge_id) do
-      [] ->
-        {:reply, {:error, :not_found}, state}
-
-      [{^forge_id, verified_for_id}] ->
-        {:reply, verified_for_id, state}
-
-      _ ->
-        {:reply, {:error, :unknown_error}, state}
-    end
-  end
-
-  @impl GenServer
-  def handle_call({:start_provider, forge_id}, _from, state) do
-    case :ets.lookup(state.pkce_table, forge_id) do
-      [] ->
-        {:reply, {:error, :not_found}, state}
-
-      [{^forge_id, verified_for_id}] ->
-        {:reply, verified_for_id, state}
-
-      _ ->
-        {:reply, {:error, :unknown_error}, state}
-    end
   end
 
   defmodule Supervisor do
