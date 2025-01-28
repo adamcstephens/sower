@@ -16,7 +16,19 @@ defmodule SowerWeb.Forge.ConnectionLive.Show do
      socket
      |> assign(:page_title, page_title(socket.assigns.live_action))
      |> assign(:connection, forge)
-     |> assign(:logged_in, Forge.Oauth.logged_in?(forge.id, socket.assigns.current_user.id))}
+     |> assign(:logged_in, Forge.Oauth.logged_in?(forge.id, socket.assigns.current_user.id))
+     |> assign_repositories()}
+  end
+
+  defp assign_repositories(conn) do
+    repositories =
+      if conn.assigns.logged_in do
+        [%{name: "a"}]
+      else
+        []
+      end
+
+    conn |> assign(:repositories, repositories)
   end
 
   defp page_title(:show), do: "Show Connection"

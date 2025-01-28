@@ -5,8 +5,12 @@
     <.link patch={~p"/forges/#{@connection}/show/edit"} phx-click={JS.push_focus()}>
       <.button>Edit connection</.button>
     </.link>
-    <.link navigate={~p"/forges/#{@connection}/login"} phx-click={JS.push_focus()}>
-      <.button>Add Repository</.button>
+    <.link
+      :if={!@logged_in}
+      navigate={~p"/forges/#{@connection}/login"}
+      phx-click={JS.push_focus()}
+    >
+      <.button>Login</.button>
     </.link>
   </:actions>
 </.header>
@@ -17,6 +21,10 @@
   <:item title="Type">{@connection.type}</:item>
   <:item title="Client ID">{@connection.client_id}</:item>
 </.list>
+
+<.table :if={@logged_in} id="repositories" rows={@repositories} row_click={false}>
+  <:col :let={repository}>{repository.name}</:col>
+</.table>
 
 <.back navigate={~p"/forges"}>Back to forges</.back>
 
