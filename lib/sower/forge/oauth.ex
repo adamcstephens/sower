@@ -2,6 +2,7 @@ defmodule Sower.Forge.Oauth do
   use GenServer
 
   @pkce_table :forge_oauth_pkce
+  @token_table :forge_tokens
 
   # client
 
@@ -52,6 +53,20 @@ defmodule Sower.Forge.Oauth do
     end
   end
 
+  def get_token(forge_id, user_id) do
+    case :ets.match(@token_table, {forge_id, user_id, :"$3"}) do
+      [[token]] -> {:ok, token}
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def logged_in?(forge_id, user_id) do
+    case get_token(forge_id, user_id) do
+      {:ok, _} -> true
+      _ -> false
+    end
+  end
+
   def retrieve_token(%Sower.Forge.Connection{} = forge, auth_code) do
     {:ok, _pid} = Sower.Forge.Oauth.start_connection(forge)
 
@@ -77,6 +92,16 @@ defmodule Sower.Forge.Oauth do
     end
   end
 
+  def set_token(%Oidcc.Token{} = token, forge_id, user_id) do
+    case GenServer.call(__MODULE__, {:store_auth_token, forge_id, user_id, token}) do
+      {:ok, _} ->
+        :ok
+
+      _ ->
+        {:error, :failed_to_store_token}
+    end
+  end
+
   defp oidcc_module_name(%Sower.Forge.Connection{} = forge) do
     String.to_atom("Sower.Forge.Oidcc#{forge.id}")
   end
@@ -87,6 +112,7 @@ defmodule Sower.Forge.Oauth do
   def init(_) do
     {:ok, _pid} = Sower.Forge.Oauth.Supervisor.start_link()
     _tid = :ets.new(@pkce_table, [:named_table, :set, :protected])
+    _tid = :ets.new(@token_table, [:named_table, :set, :protected])
 
     {:ok, []}
   end
@@ -98,6 +124,12 @@ defmodule Sower.Forge.Oauth do
     :ets.insert(@pkce_table, {forge_id, verifier})
 
     {:reply, {:ok, verifier}, state}
+  end
+
+  @impl GenServer
+  def handle_call({:store_auth_token, forge_id, user_id, token}, _from, state) do
+    :ets.insert(@token_table, {forge_id, user_id, token})
+    {:reply, {:ok, :stored}, state}
   end
 
   defmodule Supervisor do
