@@ -119,7 +119,7 @@ defmodule Sower.Forge.Oauth do
 
   @impl GenServer
   def handle_call({:create_pkce_verifier, forge_id}, _from, state) do
-    verifier = 32 |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
+    verifier = 128 |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
 
     :ets.insert(@pkce_table, {forge_id, verifier})
 
