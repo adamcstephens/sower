@@ -43,11 +43,13 @@ defmodule Sower.MixProject do
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.0.0"},
       {:postgrex, ">= 0.0.0"},
+      {:req, ">= 0.5.8"},
       {:shortuuid, "~> 4.0"},
       {:systemd, "~> 0.6"},
       {:tailwind, "~> 0.2.0", runtime: Mix.env() == :dev},
       {:telemetry_metrics, "~> 1.0.0"},
       {:telemetry_poller, "~> 1.1.0"},
+      {:typedstruct, "~> 0.5.3"},
       {:ueberauth, "~> 0.10"},
       {:ueberauth_oidcc, "~> 0.3"},
       {:uuidv7, "~> 1.0.0"}

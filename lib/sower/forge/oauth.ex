@@ -53,17 +53,55 @@ defmodule Sower.Forge.Oauth do
     end
   end
 
-  def get_token(forge_id, user_id) do
-    case :ets.match(@token_table, {forge_id, user_id, :"$3"}) do
-      [[token]] -> {:ok, token}
-      _ -> {:error, :not_found}
+  def delete_token(forge_id, user_id) do
+    case GenServer.call(__MODULE__, {:delete_auth_token, forge_id, user_id}) do
+      {:ok, _} ->
+        :ok
+
+      _ ->
+        {:error, :failed_to_delete_token}
     end
   end
 
-  def logged_in?(forge_id, user_id) do
-    case get_token(forge_id, user_id) do
+  def get_token(%Sower.Forge.Connection{} = forge, user_id) do
+    case :ets.match(@token_table, {forge.id, user_id, :"$3"}) do
+      [[token]] ->
+        if DateTime.after?(DateTime.utc_now(), token.id.claims["exp"] |> DateTime.from_unix!()) do
+          refresh_token(forge, user_id, token)
+        else
+          {:ok, token}
+        end
+
+      _ ->
+        {:error, :not_found}
+    end
+  end
+
+  def logged_in?(%Sower.Forge.Connection{} = forge, user_id) do
+    case get_token(forge, user_id) do
       {:ok, _} -> true
       _ -> false
+    end
+  end
+
+  def refresh_token(%Sower.Forge.Connection{} = forge, user_id, token) do
+    {:ok, _pid} = Sower.Forge.Oauth.start_connection(forge)
+
+    {:ok, new_token} =
+      Oidcc.refresh_token(
+        token.refresh.token,
+        oidcc_module_name(forge),
+        forge.client_id,
+        forge.client_secret,
+        %{expected_subject: token.id.claims["sub"]}
+      )
+
+    case GenServer.call(__MODULE__, {:store_auth_token, forge.id, user_id, new_token}) do
+      {:ok, token} ->
+        {:ok, token}
+
+      _ ->
+        {:error, :failed_to_store_token}
     end
   end
 
@@ -75,17 +113,23 @@ defmodule Sower.Forge.Oauth do
         {:error, :not_found}
 
       [{_id, verifier}] ->
-        Oidcc.retrieve_token(
-          auth_code,
-          oidcc_module_name(forge),
-          forge.client_id,
-          forge.client_secret,
-          %{
-            redirect_uri: "#{Application.fetch_env!(:sower, :public_url)}/forges/oauth/callback",
-            require_pkce: true,
-            pkce_verifier: verifier
-          }
-        )
+        {:ok, token} =
+          Oidcc.retrieve_token(
+            auth_code,
+            oidcc_module_name(forge),
+            forge.client_id,
+            forge.client_secret,
+            %{
+              redirect_uri:
+                "#{Application.fetch_env!(:sower, :public_url)}/forges/oauth/callback",
+              require_pkce: true,
+              pkce_verifier: verifier
+            }
+          )
+
+        GenServer.call(__MODULE__, {:delete_pkce_verifier, forge.id})
+
+        {:ok, token}
 
       _ ->
         {:error, :unknown_error}
@@ -126,7 +170,21 @@ defmodule Sower.Forge.Oauth do
     {:reply, {:ok, verifier}, state}
   end
 
-  @impl GenServer
+  def handle_call({:delete_pkce_verifier, forge_id}, _from, state) do
+    :ets.delete(@pkce_table, forge_id)
+
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:delete_auth_token, forge_id, user_id}, _from, state) do
+    case :ets.match(@token_table, {forge_id, user_id, :"$3"}) do
+      [[token]] -> :ets.delete_object(@token_table, {forge_id, user_id, token}) |> dbg()
+      _ -> :ok
+    end
+
+    {:reply, :ok, state}
+  end
+
   def handle_call({:store_auth_token, forge_id, user_id, token}, _from, state) do
     :ets.insert(@token_table, {forge_id, user_id, token})
     {:reply, {:ok, :stored}, state}

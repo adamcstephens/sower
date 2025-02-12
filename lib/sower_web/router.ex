@@ -84,6 +84,11 @@ defmodule SowerWeb.Router do
     end
   end
 
+  scope "/", SowerWeb do
+    pipe_through [:api, :ensure_token_authenticated]
+    post "/forges/:id/webhook", Forge.WebhookController, :post
+  end
+
   scope "/api" do
     pipe_through :api
     get "/openapi", OpenApiSpex.Plug.RenderSpec, []

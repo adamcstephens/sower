@@ -16,14 +16,21 @@ defmodule SowerWeb.Forge.ConnectionLive.Show do
      socket
      |> assign(:page_title, page_title(socket.assigns.live_action))
      |> assign(:connection, forge)
-     |> assign(:logged_in, Forge.Oauth.logged_in?(forge.id, socket.assigns.current_user.id))
-     |> assign_repositories()}
+     |> assign(:logged_in, Forge.Oauth.logged_in?(forge, socket.assigns.current_user.id))
+     |> assign_repositories(forge, socket.assigns.current_user.id)}
   end
 
-  defp assign_repositories(conn) do
+  defp assign_repositories(conn, %Forge.Connection{} = forge, user_id) do
     repositories =
       if conn.assigns.logged_in do
-        [%{name: "a"}]
+        with {:ok, token} <- Forge.Oauth.get_token(forge, user_id),
+             {:ok, repos} <-
+               Forgejo.Client.new(forge.url, token.access.token)
+               |> Forgejo.Client.get_user_repos() do
+          repos
+        else
+          _ -> []
+        end
       else
         []
       end
