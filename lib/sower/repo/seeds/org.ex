@@ -30,20 +30,22 @@ defmodule Sower.Repo.Seeds.Org do
     user
   end
 
-  def access_token(%Sower.Accounts.User{} = user, name \\ "token") do
+  def access_token(%Sower.Accounts.User{} = user, name \\ "token", opts \\ %{}) do
     Sower.Repo.put_org_id(user.org_id)
 
     {:ok, access_token} =
-      Sower.Accounts.AccessToken.create(%{
-        "permissions" => [
-          %{
-            "role" => "seed:write"
-          }
-        ],
-        "user_id" => user.id,
-        "org_id" => user.org_id,
-        "description" => name
-      })
+      Sower.Accounts.AccessToken.create(
+        Enum.into(opts, %{
+          "permissions" => [
+            %{
+              "role" => "seed:write"
+            }
+          ],
+          "user_id" => user.id,
+          "org_id" => user.org_id,
+          "description" => name
+        })
+      )
 
     access_token
   end
