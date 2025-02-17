@@ -21,6 +21,11 @@ defmodule SowerWeb.Router do
     plug OpenApiSpex.Plug.PutApiSpec, module: SowerWeb.ApiSpec
   end
 
+  pipeline :forge_webhook do
+    plug :accepts, ["json"]
+    plug SowerWeb.Plugs.Webhook
+  end
+
   scope "/", SowerWeb do
     pipe_through :browser
 
@@ -84,9 +89,9 @@ defmodule SowerWeb.Router do
     end
   end
 
-  scope "/", SowerWeb do
-    pipe_through [:api, :ensure_token_authenticated]
-    post "/forges/:id/webhook", Forge.WebhookController, :post
+  scope "/forges", SowerWeb.Forge do
+    pipe_through [:forge_webhook]
+    post "/:id/webhook", WebhookController, :post
   end
 
   scope "/api" do

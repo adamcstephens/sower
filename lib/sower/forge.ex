@@ -38,6 +38,22 @@ defmodule Sower.Forge do
   def get_connection!(id), do: Repo.get!(Connection, id)
 
   @doc """
+  Gets a single connection ignoring organization.
+
+  Raises `Ecto.NoResultsError` if the Connection does not exist.
+
+  ## Examples
+
+      iex> get_global_connection!(123)
+      %Connection{}
+
+      iex> get_global_connection!(456)
+      ** (Ecto.NoResultsError)
+
+  """
+  def get_global_connection!(id), do: Repo.get!(Connection, id, skip_org_id: true)
+
+  @doc """
   Creates a connection.
 
   ## Examples
