@@ -12,5 +12,7 @@ defmodule Sower.Repo.Migrations.CreateForges do
 
       timestamps()
     end
+
+    create index(:repositories, [:org_id])
   end
 end

@@ -14,7 +14,10 @@ defmodule SowerWeb.Plugs.Parsers do
   end
 
   # to validate webhooks we need the raw body, so skip parsers for webhooks
-  defp conditional_parsers(%Plug.Conn{path_info: ["forges", _id, "webhook" | _]} = conn, _opts) do
+  defp conditional_parsers(
+         %Plug.Conn{path_info: ["forges", _forge_id, "repos", _repo_id, "webhook" | _]} = conn,
+         _opts
+       ) do
     conn
   end
 

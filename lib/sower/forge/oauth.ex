@@ -178,7 +178,7 @@ defmodule Sower.Forge.Oauth do
 
   def handle_call({:delete_auth_token, forge_id, user_id}, _from, state) do
     case :ets.match(@token_table, {forge_id, user_id, :"$3"}) do
-      [[token]] -> :ets.delete_object(@token_table, {forge_id, user_id, token}) |> dbg()
+      [[token]] -> :ets.delete_object(@token_table, {forge_id, user_id, token})
       _ -> :ok
     end
 

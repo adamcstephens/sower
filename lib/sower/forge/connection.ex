@@ -10,6 +10,8 @@ defmodule Sower.Forge.Connection do
     field :client_secret, Sower.Vault.Binary
     field :org_id, Ecto.UUID
 
+    has_many :repositories, Sower.Forge.Repository, foreign_key: :forge_id
+
     timestamps()
   end
 

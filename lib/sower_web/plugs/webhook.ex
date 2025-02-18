@@ -10,10 +10,11 @@ defmodule SowerWeb.Plugs.Webhook do
     verify_webhook(conn)
   end
 
-  def verify_webhook(conn) do
-    with %{"id" => forge_id} <- conn.path_params,
-         forge <- Sower.Forge.get_global_connection!(forge_id),
-         {:ok, verified_conn} <- check_forge_signature(forge, conn) do
+  defp verify_webhook(conn) do
+    with %{"repo_id" => repo_id} <- conn.path_params,
+         repo <- Sower.Forge.get_global_repository!(repo_id),
+         repo <- Sower.Repo.preload(repo, :forge),
+         {:ok, verified_conn} <- check_webhook_signature(repo, conn) do
       verified_conn
     else
       _ ->
@@ -21,12 +22,12 @@ defmodule SowerWeb.Plugs.Webhook do
     end
   end
 
-  defp check_forge_signature(%Sower.Forge.Connection{} = forge, conn) do
-    with [signature] <- get_req_header(conn, forge_header(forge)),
+  defp check_webhook_signature(%Sower.Forge.Repository{} = repo, conn) do
+    with [signature] <- get_req_header(conn, forge_header(repo.forge)),
          {:ok, raw_body, _conn} <- read_body(conn),
-         true <- verify_payload(raw_body, "1234", signature),
+         true <- verify_payload(raw_body, repo.webhook_secret, signature),
          {:ok, body_params} <- Phoenix.json_library().decode(raw_body) do
-      Logger.debug("Verified webhook payload for forge #{forge.id}")
+      Logger.debug("Verified webhook payload for repository #{repo.id}")
 
       # mimic what Plug.Parsers does because we have the body, which can only be read once
       conn =

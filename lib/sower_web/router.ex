@@ -47,13 +47,14 @@ defmodule SowerWeb.Router do
       live "/clients/:id", ClientLive.Show, :show
       live "/clients/:id/show/edit", ClientLive.Show, :edit
 
-      live "/forges", Forge.ConnectionLive.Index, :index
-      live "/forges/new", Forge.ConnectionLive.Index, :new
-      live "/forges/:id/edit", Forge.ConnectionLive.Index, :edit
-      live "/forges/:id", Forge.ConnectionLive.Show, :show
-      live "/forges/:id/show/edit", Forge.ConnectionLive.Show, :edit
       get "/forges/:id/login", Forge.OauthController, :login
       get "/forges/oauth/callback", Forge.OauthController, :callback
+
+      live "/forges", Forge.ConnectionLive.Index, :index
+      live "/forges/:id", Forge.ConnectionLive.Show, :show
+      live "/forges/:id/edit", Forge.ConnectionLive.Index, :edit
+      live "/forges/:id/show/edit", Forge.ConnectionLive.Show, :edit
+      live "/forges/new", Forge.ConnectionLive.Index, :new
 
       live "/seeds", SeedLive.Index, :index
       live "/seeds/:id", SeedLive.Show, :show
@@ -91,7 +92,7 @@ defmodule SowerWeb.Router do
 
   scope "/forges", SowerWeb.Forge do
     pipe_through [:forge_webhook]
-    post "/:id/webhook", WebhookController, :post
+    post "/:forge_id/repos/:repo_id/webhook", WebhookController, :post
   end
 
   scope "/api" do

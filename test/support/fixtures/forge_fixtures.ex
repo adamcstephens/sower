@@ -21,4 +21,20 @@ defmodule Sower.ForgeFixtures do
 
     connection
   end
+
+  @doc """
+  Generate a repository.
+  """
+  def repository_fixture(attrs \\ %{}) do
+    {:ok, repository} =
+      attrs
+      |> Enum.into(%{
+        name: "some name",
+        url: "some url",
+        webhook_id: "some webhook_id"
+      })
+      |> Sower.Forge.create_repository()
+
+    repository
+  end
 end

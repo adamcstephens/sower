@@ -10,7 +10,7 @@ defmodule SowerWeb.Forge.ConnectionLive.Show do
 
   @impl true
   def handle_params(%{"id" => id}, _url, socket) do
-    forge = Forge.get_connection!(id)
+    forge = Forge.get_connection!(id) |> Sower.Repo.preload(:repositories)
 
     {:noreply,
      socket
@@ -20,13 +20,45 @@ defmodule SowerWeb.Forge.ConnectionLive.Show do
      |> assign_repositories(forge, socket.assigns.current_user.id)}
   end
 
+  @impl true
+  def handle_event("add_repo", client_api_repo, socket) do
+    forge = socket.assigns.connection
+
+    {:ok, %Oidcc.Token{access: %Oidcc.Token.Access{token: access_token}}} =
+      Forge.Oauth.get_token(forge, socket.assigns.current_user.id)
+
+    socket =
+      case Sower.Forge.add_forge_repository(forge, client_api_repo, access_token) do
+        {:ok, _} -> put_flash(socket, :info, "Added repository")
+        {:error, _} -> put_flash(socket, :error, "Failed to add repository")
+      end
+
+    {:noreply, socket}
+  end
+
+  def handle_event("remove_repo", %{"repo_id" => repo_id}, socket) do
+    forge = socket.assigns.connection
+    repository = Forge.get_repository!(repo_id)
+
+    {:ok, %Oidcc.Token{access: %Oidcc.Token.Access{token: access_token}}} =
+      Forge.Oauth.get_token(forge, socket.assigns.current_user.id)
+
+    socket =
+      case Sower.Forge.remove_forge_repository(forge, repository, access_token) do
+        {:ok, _} -> put_flash(socket, :info, "Remvoed repository")
+        {:error, _} -> put_flash(socket, :error, "Failed to remove repository")
+      end
+
+    {:noreply, socket}
+  end
+
   defp assign_repositories(conn, %Forge.Connection{} = forge, user_id) do
     repositories =
       if conn.assigns.logged_in do
         with {:ok, token} <- Forge.Oauth.get_token(forge, user_id),
              {:ok, repos} <-
-               Forgejo.Client.new(forge.url, token.access.token)
-               |> Forgejo.Client.get_user_repos() do
+               Forge.ClientApi.new(forge, token.access.token)
+               |> Forge.ClientApi.get_repos(forge) do
           repos
         else
           _ -> []

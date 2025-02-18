@@ -1,9 +1,8 @@
 <.header>
-  Connection {@connection.id}
-  <:subtitle>This is a connection record from your database.</:subtitle>
+  Forge {@connection.id}
   <:actions>
     <.link patch={~p"/forges/#{@connection}/show/edit"} phx-click={JS.push_focus()}>
-      <.button>Edit connection</.button>
+      <.button>Edit forge</.button>
     </.link>
     <.link
       :if={!@logged_in}
@@ -20,10 +19,26 @@
   <:item title="Url">{@connection.url}</:item>
   <:item title="Type">{@connection.type}</:item>
   <:item title="Client ID">{@connection.client_id}</:item>
+
+  <:item title="Repositories">
+    <.table id="repositories" rows={@connection.repositories}>
+      <:col :let={repository}>{repository.owner}/{repository.repo}</:col>
+      <:action :let={repository}>
+        <button phx-click={JS.push("remove_repo", value: %{repo_id: repository.id})}>
+          Remove Repository
+        </button>
+      </:action>
+    </.table>
+  </:item>
 </.list>
 
 <.table :if={@logged_in} id="repositories" rows={@repositories} row_click={false}>
   <:col :let={repository}>{repository["full_name"]}</:col>
+  <:action :let={repository}>
+    <button phx-click={JS.push("add_repo", value: repository)}>
+      Add Repository
+    </button>
+  </:action>
 </.table>
 
 <.back navigate={~p"/forges"}>Back to forges</.back>
