@@ -39,6 +39,22 @@ defmodule Sower.Forge do
   def get_connection!(id), do: Repo.get!(Connection, id)
 
   @doc """
+  Gets a single connection by sid.
+
+  Raises `Ecto.NoResultsError` if the Connection does not exist.
+
+  ## Examples
+
+      iex> get_connection_sid!(123)
+      %Connection{}
+
+      iex> get_connection_sid!(456)
+      ** (Ecto.NoResultsError)
+
+  """
+  def get_connection_sid!(sid), do: Repo.get_by!(Connection, sid: sid)
+
+  @doc """
   Gets a single connection ignoring organization.
 
   Raises `Ecto.NoResultsError` if the Connection does not exist.
@@ -53,6 +69,22 @@ defmodule Sower.Forge do
 
   """
   def get_global_connection!(id), do: Repo.get!(Connection, id, skip_org_id: true)
+
+  @doc """
+  Gets a single connection by sid ignoring organization.
+
+  Raises `Ecto.NoResultsError` if the Connection does not exist.
+
+  ## Examples
+
+      iex> get_global_connection_sid!(123)
+      %Connection{}
+
+      iex> get_global_connection_sid!(456)
+      ** (Ecto.NoResultsError)
+
+  """
+  def get_global_connection_sid!(sid), do: Repo.get_by!(Connection, [sid: sid], skip_org_id: true)
 
   @doc """
   Creates a connection.
@@ -167,6 +199,22 @@ defmodule Sower.Forge do
 
   """
   def get_global_repository!(id), do: Repo.get!(Repository, id, skip_org_id: true)
+
+  @doc """
+  Gets a single repository by sid ignoring organization.
+
+  Raises `Ecto.NoResultsError` if the Repository does not exist.
+
+  ## Examples
+
+      iex> get_global_repository_sid!(123)
+      %Repository{}
+
+      iex> get_global_repository_sid!(456)
+      ** (Ecto.NoResultsError)
+
+  """
+  def get_global_repository_sid!(sid), do: Repo.get_by!(Repository, [sid: sid], skip_org_id: true)
 
   @doc """
   Creates a repository.

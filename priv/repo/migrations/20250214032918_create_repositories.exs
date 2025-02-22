@@ -3,6 +3,7 @@ defmodule Sower.Repo.Migrations.CreateRepositories do
 
   def change do
     create table(:repositories) do
+      add :sid, :string
       add :owner, :string, null: false
       add :repo, :string, null: false
       add :url, :string, null: false

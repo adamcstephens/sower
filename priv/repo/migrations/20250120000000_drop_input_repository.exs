@@ -1,7 +1,9 @@
 defmodule Sower.Repo.Migrations.DropInputRepository do
   use Ecto.Migration
 
-  def change do
+  def up do
     drop_if_exists table(:repositories)
   end
+
+  def down, do: :ok
 end

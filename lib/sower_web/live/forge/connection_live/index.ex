@@ -14,10 +14,10 @@ defmodule SowerWeb.Forge.ConnectionLive.Index do
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
   end
 
-  defp apply_action(socket, :edit, %{"id" => id}) do
+  defp apply_action(socket, :edit, %{"sid" => sid}) do
     socket
     |> assign(:page_title, "Edit Connection")
-    |> assign(:connection, Forge.get_connection!(id))
+    |> assign(:connection, Forge.get_connection_sid!(sid))
   end
 
   defp apply_action(socket, :new, _params) do
@@ -38,8 +38,8 @@ defmodule SowerWeb.Forge.ConnectionLive.Index do
   end
 
   @impl true
-  def handle_event("delete", %{"id" => id}, socket) do
-    connection = Forge.get_connection!(id)
+  def handle_event("delete", %{"sid" => sid}, socket) do
+    connection = Forge.get_connection_sid!(sid)
     {:ok, _} = Forge.delete_connection(connection)
 
     {:noreply, stream_delete(socket, :forges, connection)}

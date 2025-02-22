@@ -3,6 +3,7 @@ defmodule Sower.Repo.Migrations.CreateForges do
 
   def change do
     create table(:forges) do
+      add :sid, :string
       add :name, :string
       add :url, :string
       add :type, :string
@@ -13,6 +14,6 @@ defmodule Sower.Repo.Migrations.CreateForges do
       timestamps()
     end
 
-    create index(:repositories, [:org_id])
+    create index(:forges, [:org_id])
   end
 end

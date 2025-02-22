@@ -9,8 +9,8 @@ defmodule SowerWeb.Forge.ConnectionLive.Show do
   end
 
   @impl true
-  def handle_params(%{"id" => id}, _url, socket) do
-    forge = Forge.get_connection!(id) |> Sower.Repo.preload(:repositories)
+  def handle_params(%{"sid" => sid}, _url, socket) do
+    forge = Forge.get_connection_sid!(sid) |> Sower.Repo.preload(:repositories)
 
     {:noreply,
      socket
@@ -45,7 +45,7 @@ defmodule SowerWeb.Forge.ConnectionLive.Show do
 
     socket =
       case Sower.Forge.remove_forge_repository(forge, repository, access_token) do
-        {:ok, _} -> put_flash(socket, :info, "Remvoed repository")
+        {:ok, _} -> put_flash(socket, :info, "Removed repository")
         {:error, _} -> put_flash(socket, :error, "Failed to remove repository")
       end
 

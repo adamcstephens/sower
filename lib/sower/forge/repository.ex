@@ -2,7 +2,10 @@ defmodule Sower.Forge.Repository do
   use Sower.Schema
   import Ecto.Changeset
 
+  @derive {Phoenix.Param, key: :sid}
+
   schema "repositories" do
+    field :sid, Sower.Schema.Sid, autogenerate: true
     field :owner, :string
     field :repo, :string
     field :url, :string

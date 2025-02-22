@@ -1,19 +1,19 @@
 defmodule SowerWeb.Forge.OauthController do
   use SowerWeb, :controller
 
-  def login(conn, %{"id" => id}) do
-    forge = Sower.Forge.get_connection!(id)
+  def login(conn, %{"sid" => sid}) do
+    forge = Sower.Forge.get_connection_sid!(sid)
 
     {:ok, url} = Sower.Forge.Oauth.create_redirect_url(forge)
 
     conn
-    |> put_session(:return_to_forge, id)
+    |> put_session(:return_to_forge, sid)
     |> redirect(external: url)
   end
 
   def callback(conn, %{"code" => code}) do
-    id = get_session(conn, :return_to_forge)
-    forge = Sower.Forge.get_connection!(id)
+    sid = get_session(conn, :return_to_forge)
+    forge = Sower.Forge.get_connection_sid!(sid)
     {:ok, token} = Sower.Forge.Oauth.retrieve_token(forge, code)
 
     conn =
@@ -24,6 +24,6 @@ defmodule SowerWeb.Forge.OauthController do
 
     conn
     |> delete_session(:return_to_forge)
-    |> redirect(to: ~p"/forges/#{forge.id}")
+    |> redirect(to: ~p"/forges/#{forge}")
   end
 end

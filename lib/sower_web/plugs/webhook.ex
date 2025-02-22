@@ -11,8 +11,8 @@ defmodule SowerWeb.Plugs.Webhook do
   end
 
   defp verify_webhook(conn) do
-    with %{"repo_id" => repo_id} <- conn.path_params,
-         repo <- Sower.Forge.get_global_repository!(repo_id),
+    with %{"repo_sid" => repo_sid} <- conn.path_params,
+         repo <- Sower.Forge.get_global_repository_sid!(repo_sid),
          repo <- Sower.Repo.preload(repo, :forge),
          {:ok, verified_conn} <- check_webhook_signature(repo, conn) do
       verified_conn

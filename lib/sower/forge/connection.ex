@@ -2,7 +2,10 @@ defmodule Sower.Forge.Connection do
   use Sower.Schema
   import Ecto.Changeset
 
+  @derive {Phoenix.Param, key: :sid}
+
   schema "forges" do
+    field :sid, Sower.Schema.Sid, autogenerate: true
     field :name, :string
     field :type, Ecto.Enum, values: [:forgejo]
     field :url, :string

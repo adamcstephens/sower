@@ -52,6 +52,6 @@ defmodule Sower.Forge.ClientApi do
   end
 
   defp repo_webhook(repo) do
-    "#{Application.fetch_env!(:sower, :public_url)}/forges/#{repo.forge.id}/repos/#{repo.id}/webhook"
+    "#{Application.fetch_env!(:sower, :public_url)}/forges/#{repo.forge.sid}/repos/#{repo.sid}/webhook"
   end
 end

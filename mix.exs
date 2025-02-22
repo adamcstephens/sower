@@ -18,6 +18,7 @@ defmodule Sower.MixProject do
       {:argon2, "~> 1.2"},
       {:bandit, "~> 1.0"},
       {:cloak_ecto, "~> 1.3.0"},
+      {:cuid2_ex, "~> 0.2.0"},
       {:ecto_sql, "~> 3.11"},
       {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
       {:ex_json_schema, "~> 0.10.2"},
