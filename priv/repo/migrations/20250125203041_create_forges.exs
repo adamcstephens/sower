@@ -3,17 +3,18 @@ defmodule Sower.Repo.Migrations.CreateForges do
 
   def change do
     create table(:forges) do
-      add :sid, :string
-      add :name, :string
-      add :url, :string
-      add :type, :string
-      add :client_id, :binary
-      add :client_secret, :binary
+      add :sid, :string, null: false
+      add :name, :string, null: false
+      add :url, :string, null: false
+      add :type, :string, null: false
+      add :client_id, :binary, null: false
+      add :client_secret, :binary, null: false
       add :org_id, references(:organizations, column: :org_id), null: false
 
       timestamps()
     end
 
     create index(:forges, [:org_id])
+    create unique_index(:forges, [:url, :org_id])
   end
 end
