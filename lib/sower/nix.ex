@@ -38,6 +38,22 @@ defmodule Sower.Nix do
   def get_cache!(id), do: Repo.get!(Cache, id)
 
   @doc """
+  Gets a single cache using sid.
+
+  Raises `Ecto.NoResultsError` if the Cache does not exist.
+
+  ## Examples
+
+      iex> get_cache_sid!(123)
+      %Cache{}
+
+      iex> get_cache_sid!(456)
+      ** (Ecto.NoResultsError)
+
+  """
+  def get_cache_sid!(sid), do: Repo.get_by!(Cache, sid: sid)
+
+  @doc """
   Creates a cache.
 
   ## Examples

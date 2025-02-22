@@ -14,10 +14,10 @@ defmodule SowerWeb.CacheLive.Index do
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
   end
 
-  defp apply_action(socket, :edit, %{"id" => id}) do
+  defp apply_action(socket, :edit, %{"sid" => sid}) do
     socket
     |> assign(:page_title, "Edit Cache")
-    |> assign(:cache, Nix.get_cache!(id))
+    |> assign(:cache, Nix.get_cache_sid!(sid))
   end
 
   defp apply_action(socket, :new, _params) do
@@ -38,8 +38,8 @@ defmodule SowerWeb.CacheLive.Index do
   end
 
   @impl true
-  def handle_event("delete", %{"id" => id}, socket) do
-    cache = Nix.get_cache!(id)
+  def handle_event("delete", %{"sid" => sid}, socket) do
+    cache = Nix.get_cache_sid!(sid)
     {:ok, _} = Nix.delete_cache(cache)
 
     {:noreply, stream_delete(socket, :nix_caches, cache)}

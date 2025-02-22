@@ -43,9 +43,9 @@ defmodule SowerWeb.Router do
     live_session :authenticated, on_mount: [{SowerWeb.UserAuth, :ensure_authenticated}] do
       live "/clients", ClientLive.Index, :index
       live "/clients/new", ClientLive.Index, :new
-      live "/clients/:id/edit", ClientLive.Index, :edit
-      live "/clients/:id", ClientLive.Show, :show
-      live "/clients/:id/show/edit", ClientLive.Show, :edit
+      live "/clients/:sid/edit", ClientLive.Index, :edit
+      live "/clients/:sid", ClientLive.Show, :show
+      live "/clients/:sid/show/edit", ClientLive.Show, :edit
 
       get "/forges/:sid/login", Forge.OauthController, :login
       get "/forges/oauth/callback", Forge.OauthController, :callback
@@ -65,10 +65,9 @@ defmodule SowerWeb.Router do
 
       live "/nix_caches", CacheLive.Index, :index
       live "/nix_caches/new", CacheLive.Index, :new
-      live "/nix_caches/:id/edit", CacheLive.Index, :edit
-
-      live "/nix_caches/:id", CacheLive.Show, :show
-      live "/nix_caches/:id/show/edit", CacheLive.Show, :edit
+      live "/nix_caches/:sid/edit", CacheLive.Index, :edit
+      live "/nix_caches/:sid", CacheLive.Show, :show
+      live "/nix_caches/:sid/show/edit", CacheLive.Show, :edit
 
       live "/settings", Settings.IndexLive, :index
       # live "/settings/access-tokens", SettingsLive.AccessTokens, :index
