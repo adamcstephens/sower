@@ -86,7 +86,7 @@ defmodule SowerWeb.Api.SeedController do
       ) do
     if can(conn.assigns.access_token)
        |> update?(%Sower.Seed{org_id: conn.assigns.access_token.org_id}) do
-      with {:ok, %Sower.StorePath{} = store_path} <-
+      with {:ok, %Sower.Nix.StorePath{} = store_path} <-
              Sower.Seed.submit(id, path),
            Logger.debug(store_path) do
         conn

@@ -1,4 +1,4 @@
-defmodule SowerWeb.CacheLive.FormComponent do
+defmodule SowerWeb.Nix.CacheLive.FormComponent do
   use SowerWeb, :live_component
 
   alias Sower.Nix

@@ -4,7 +4,7 @@ defmodule Sower.Seed do
   import Ecto.Changeset
   import Ecto.Query, only: [from: 2]
 
-  alias Sower.{Repo, Seed, SeedStorePath, StorePath}
+  alias Sower.{Nix, Repo, Seed, SeedStorePath}
 
   @derive {Jason.Encoder, only: [:id, :name, :seed_type]}
 
@@ -13,7 +13,7 @@ defmodule Sower.Seed do
     field :seed_type, :string
     field :org_id, Ecto.UUID
 
-    many_to_many :store_paths, StorePath, join_through: Sower.SeedStorePath
+    many_to_many :store_paths, Nix.StorePath, join_through: Sower.SeedStorePath
 
     timestamps()
   end
@@ -27,7 +27,7 @@ defmodule Sower.Seed do
   end
 
   def submit(%Seed{} = seed, path) do
-    store_path = StorePath.submit!(path)
+    store_path = Nix.submit_store_path!(path)
 
     SeedStorePath.submit!(seed, store_path)
 

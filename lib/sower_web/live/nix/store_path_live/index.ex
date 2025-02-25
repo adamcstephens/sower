@@ -1,11 +1,11 @@
 defmodule SowerWeb.StorePathLive.Index do
   use SowerWeb, :live_view
 
-  alias Sower.StorePath
+  alias Sower.Nix
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, stream(socket, :store_paths, StorePath.list())}
+    {:ok, stream(socket, :store_paths, Nix.list_store_paths())}
   end
 
   @impl true

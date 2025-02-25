@@ -1,4 +1,4 @@
-defmodule SowerWeb.CacheLive.Index do
+defmodule SowerWeb.Nix.CacheLive.Index do
   use SowerWeb, :live_view
 
   alias Sower.Nix

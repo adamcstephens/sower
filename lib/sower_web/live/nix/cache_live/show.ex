@@ -1,4 +1,4 @@
-defmodule SowerWeb.CacheLive.Show do
+defmodule SowerWeb.Nix.CacheLive.Show do
   use SowerWeb, :live_view
 
   alias Sower.Nix

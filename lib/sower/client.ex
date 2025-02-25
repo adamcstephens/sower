@@ -3,7 +3,7 @@ defmodule Sower.Client do
   # import Ecto.Changeset
   alias Sower.Repo
 
-  @derive {Jason.Encoder, only: [:id, :name]}
+  @derive {Jason.Encoder, only: [:sid, :name]}
   @derive {Phoenix.Param, key: :sid}
 
   schema "clients" do

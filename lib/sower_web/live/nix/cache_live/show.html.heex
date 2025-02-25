@@ -22,7 +22,7 @@
   on_cancel={JS.patch(~p"/nix_caches/#{@cache}")}
 >
   <.live_component
-    module={SowerWeb.CacheLive.FormComponent}
+    module={SowerWeb.Nix.CacheLive.FormComponent}
     id={@cache.id}
     title={@page_title}
     action={@live_action}

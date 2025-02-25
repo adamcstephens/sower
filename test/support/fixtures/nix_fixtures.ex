@@ -18,4 +18,18 @@ defmodule Sower.NixFixtures do
 
     cache
   end
+
+  @doc """
+  Generate a store_path.
+  """
+  def store_path_fixture(attrs \\ %{}) do
+    {:ok, store_path} =
+      attrs
+      |> Enum.into(%{
+        path: "some path"
+      })
+      |> Sower.Nix.create_store_path()
+
+    store_path
+  end
 end

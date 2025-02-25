@@ -1,7 +1,7 @@
 defmodule SowerWeb.StorePathLive.Show do
   use SowerWeb, :live_view
 
-  alias Sower.StorePath
+  alias Sower.Nix
 
   @impl true
   def mount(_params, _session, socket) do
@@ -9,11 +9,11 @@ defmodule SowerWeb.StorePathLive.Show do
   end
 
   @impl true
-  def handle_params(%{"id" => id}, _, socket) do
+  def handle_params(%{"digest" => digest}, _, socket) do
     {:noreply,
      socket
      |> assign(:page_title, page_title(socket.assigns.live_action))
-     |> assign(:store_path, StorePath.get!(id))}
+     |> assign(:store_path, Nix.get_store_path_digest!(digest) |> Sower.Repo.preload(:seeds))}
   end
 
   defp page_title(:show), do: "Show Store path"

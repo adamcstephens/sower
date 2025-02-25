@@ -33,7 +33,7 @@ defmodule SowerWeb.Forge.ConnectionLive.Show do
         {:error, _} -> put_flash(socket, :error, "Failed to add repository")
       end
 
-    {:noreply, socket}
+    {:noreply, refresh_forge(socket)}
   end
 
   def handle_event("remove_repo", %{"repo_id" => repo_id}, socket) do
@@ -49,7 +49,7 @@ defmodule SowerWeb.Forge.ConnectionLive.Show do
         {:error, _} -> put_flash(socket, :error, "Failed to remove repository")
       end
 
-    {:noreply, socket}
+    {:noreply, refresh_forge(socket)}
   end
 
   defp assign_repositories(conn, %Forge.Connection{} = forge, user_id) do
@@ -68,6 +68,14 @@ defmodule SowerWeb.Forge.ConnectionLive.Show do
       end
 
     conn |> assign(:repositories, repositories)
+  end
+
+  defp refresh_forge(socket) do
+    forge =
+      Sower.Forge.get_connection!(socket.assigns.connection.id)
+      |> Sower.Repo.preload(:repositories)
+
+    socket |> assign(:connection, forge)
   end
 
   defp page_title(:show), do: "Show Connection"

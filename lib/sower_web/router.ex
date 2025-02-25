@@ -58,16 +58,16 @@ defmodule SowerWeb.Router do
 
       live "/seeds", SeedLive.Index, :index
       live "/seeds/:id", SeedLive.Show, :show
-      live "/store_paths", StorePathLive.Index, :index
-      live "/store_paths/:id", StorePathLive.Show, :show
+      live "/nix/store_paths", StorePathLive.Index, :index
+      live "/nix/store_paths/:digest", StorePathLive.Show, :show
       live "/inputs/repos", RepositoryLive.Index, :index
       live "/inputs/repos/:id", RepositoryLive.Show, :show
 
-      live "/nix_caches", CacheLive.Index, :index
-      live "/nix_caches/new", CacheLive.Index, :new
-      live "/nix_caches/:sid/edit", CacheLive.Index, :edit
-      live "/nix_caches/:sid", CacheLive.Show, :show
-      live "/nix_caches/:sid/show/edit", CacheLive.Show, :edit
+      live "/nix/caches", Nix.CacheLive.Index, :index
+      live "/nix/caches/new", Nix.CacheLive.Index, :new
+      live "/nix/caches/:sid/edit", Nix.CacheLive.Index, :edit
+      live "/nix/caches/:sid", Nix.CacheLive.Show, :show
+      live "/nix/caches/:sid/show/edit", Nix.CacheLive.Show, :edit
 
       live "/settings", Settings.IndexLive, :index
       # live "/settings/access-tokens", SettingsLive.AccessTokens, :index
