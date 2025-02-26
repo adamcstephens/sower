@@ -17,7 +17,7 @@ defmodule SowerWeb.Forge.ConnectionLive.Show do
      |> assign(:page_title, page_title(socket.assigns.live_action))
      |> assign(:connection, forge)
      |> assign(:logged_in, Forge.Oauth.logged_in?(forge, socket.assigns.current_user.id))
-     |> assign_repositories(forge, socket.assigns.current_user.id)}
+     |> assign_repositories()}
   end
 
   @impl true
@@ -52,14 +52,18 @@ defmodule SowerWeb.Forge.ConnectionLive.Show do
     {:noreply, refresh_forge(socket)}
   end
 
-  defp assign_repositories(conn, %Forge.Connection{} = forge, user_id) do
+  defp assign_repositories(socket) do
     repositories =
-      if conn.assigns.logged_in do
-        with {:ok, token} <- Forge.Oauth.get_token(forge, user_id),
+      if socket.assigns.logged_in do
+        with {:ok, token} <-
+               Forge.Oauth.get_token(socket.assigns.connection, socket.assigns.current_user.id),
              {:ok, repos} <-
-               Forge.ClientApi.new(forge, token.access.token)
-               |> Forge.ClientApi.get_repos(forge) do
+               Forge.ClientApi.new(socket.assigns.connection, token.access.token)
+               |> Forge.ClientApi.get_repos(socket.assigns.connection) do
+          existing = Forge.list_forge_repositories_fullnames(socket.assigns.connection)
+
           repos
+          |> Enum.filter(&(&1["full_name"] not in existing))
         else
           _ -> []
         end
@@ -67,7 +71,7 @@ defmodule SowerWeb.Forge.ConnectionLive.Show do
         []
       end
 
-    conn |> assign(:repositories, repositories)
+    socket |> assign(:repositories, repositories)
   end
 
   defp refresh_forge(socket) do
@@ -75,7 +79,7 @@ defmodule SowerWeb.Forge.ConnectionLive.Show do
       Sower.Forge.get_connection!(socket.assigns.connection.id)
       |> Sower.Repo.preload(:repositories)
 
-    socket |> assign(:connection, forge)
+    socket |> assign(:connection, forge) |> assign_repositories()
   end
 
   defp page_title(:show), do: "Show Connection"

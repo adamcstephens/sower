@@ -15,6 +15,7 @@ defmodule Sower.Application do
       Sower.Vault,
       Sower.Repo,
       Sower.Forge.Oauth,
+      Sower.Forge.WebhookStorage,
       {Phoenix.PubSub, name: Sower.PubSub},
       {Finch, name: Sower.Finch},
       SowerWeb.Endpoint,

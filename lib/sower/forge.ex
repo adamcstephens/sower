@@ -169,6 +169,24 @@ defmodule Sower.Forge do
   end
 
   @doc """
+  Returns the list of repository fullnames (owner/.
+
+  ## Examples
+
+      iex> list_repositories()
+      [%Repository{}, ...]
+
+  """
+  def list_forge_repositories_fullnames(%Connection{} = forge) do
+    query =
+      from r in Repository,
+        select: fragment("concat(?, '/', ?)", r.owner, r.repo),
+        where: r.forge_id == ^forge.id
+
+    Repo.all(query)
+  end
+
+  @doc """
   Gets a single repository.
 
   Raises `Ecto.NoResultsError` if the Repository does not exist.
