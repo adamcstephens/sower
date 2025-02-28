@@ -64,7 +64,7 @@ func (s *SeedClient) CreateSeed(name, seedType string) (*Seed, error) {
 	}
 
 	seed := resp.JSON201
-	slog.Debug("Created seed", "seed_id", seed.Id)
+	slog.Debug("Created seed", "sid", seed.Sid)
 
 	return seed, nil
 }
@@ -99,7 +99,7 @@ func (s *SeedClient) GetSeed(name, seedType string) (*Seed, error) {
 
 	newSeed = (*resp.JSON200)[0]
 
-	slog.Debug("Found seed", "seed", newSeed)
+	slog.Debug("Found seed", "name", newSeed.Name, "type", newSeed.SeedType, "sid", *newSeed.Sid)
 
 	return &newSeed, nil
 }
@@ -130,13 +130,13 @@ func (s *SeedClient) GetSeedById(id string) (*Seed, error) {
 
 	newSeed = *resp.JSON200
 
-	slog.Debug("Found seed", "seed", newSeed)
+	slog.Debug("Found seed", "name", newSeed.Name, "type", newSeed.SeedType, "sid", *newSeed.Sid)
 
 	return &newSeed, nil
 }
 
 func (s *SeedClient) GetSeedLatestPath(seed *Seed) (*StorePath, error) {
-	resp, err := s.client.LatestStorePathBySeedWithResponse(context.TODO(), seed.Id.String())
+	resp, err := s.client.LatestStorePathBySeedWithResponse(context.TODO(), *seed.Sid)
 	if err != nil {
 		return nil, err
 	}
@@ -154,13 +154,13 @@ func (s *SeedClient) GetSeedLatestPath(seed *Seed) (*StorePath, error) {
 	}
 
 	seedPath := resp.JSON200
-	slog.Debug("Found path for seed", "path", seedPath, "seed", seed)
+	slog.Debug("Found path for seed", "path", seedPath.Path, "seed_sid", *seed.Sid)
 
 	return seedPath, nil
 }
 
 func (s *SeedClient) SubmitSeedPath(seed *Seed, path string) (*StorePath, error) {
-	resp, err := s.client.NewSeedStorePathWithResponse(context.TODO(), seed.Id.String(), StorePath{Path: path})
+	resp, err := s.client.NewSeedStorePathWithResponse(context.TODO(), *seed.Sid, StorePath{Path: path})
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +175,7 @@ func (s *SeedClient) SubmitSeedPath(seed *Seed, path string) (*StorePath, error)
 
 	storePath := resp.JSON201
 
-	slog.Debug("Created path for seed", "path", storePath, "seed_id", seed.Id)
+	slog.Debug("Created path for seed", "path", storePath, "sid", seed.Sid)
 
 	return storePath, nil
 }

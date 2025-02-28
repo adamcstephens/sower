@@ -5,19 +5,11 @@
       "Seed": {
         "description": "A seed is an installable unit",
         "example": {
-          "id": "1234-5678-1234-5678",
+          "id": "example4ser3adju75ddusbr",
           "name": "myhost",
           "seed_type": "nixos"
         },
         "properties": {
-          "id": {
-            "description": "id of the seed",
-            "format": "uuid",
-            "readOnly": true,
-            "type": "string",
-            "x-struct": null,
-            "x-validate": null
-          },
           "name": {
             "description": "Name of the seed",
             "type": "string",
@@ -31,6 +23,13 @@
               "home-manager",
               "nix-darwin"
             ],
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "sid": {
+            "description": "sid of the seed",
+            "readOnly": true,
             "type": "string",
             "x-struct": null,
             "x-validate": null
@@ -48,20 +47,19 @@
       "StorePath": {
         "description": "A store path is a Nix store path that can by installed by a client",
         "example": {
-          "id": "1234-5678-1234-5678",
-          "path": "/nix/store/..."
+          "path": "/nix/store/examplehxpf8d7x5ys5p9v0z9x587hs1-...",
+          "path_digest": "examplehxpf8d7x5ys5p9v0z9x587hs1"
         },
         "properties": {
-          "id": {
-            "description": "id of the store path",
-            "format": "uuid",
-            "readOnly": true,
+          "path": {
+            "description": "Nix store path",
             "type": "string",
             "x-struct": null,
             "x-validate": null
           },
-          "path": {
-            "description": "Nix store path",
+          "path_digest": {
+            "description": "id of the store path",
+            "readOnly": true,
             "type": "string",
             "x-struct": null,
             "x-validate": null
@@ -87,7 +85,7 @@
   },
   "info": {
     "title": "sower",
-    "version": "0.4.3"
+    "version": "0.4.4-dev"
   },
   "openapi": "3.0.0",
   "paths": {
@@ -248,16 +246,16 @@
         "tags": []
       }
     },
-    "/api/seeds/{id}": {
+    "/api/seeds/{sid}": {
       "get": {
         "callbacks": {},
         "operationId": "GetSeed",
         "parameters": [
           {
-            "description": "Seed ID",
-            "example": "1234-5678-1234-5678",
+            "description": "Seed SID",
+            "example": "example4ser3adju75ddusbr",
             "in": "path",
-            "name": "id",
+            "name": "sid",
             "required": true,
             "schema": {
               "type": "string",
@@ -320,16 +318,16 @@
         "tags": []
       }
     },
-    "/api/seeds/{id}/paths": {
+    "/api/seeds/{sid}/paths": {
       "post": {
         "callbacks": {},
         "operationId": "NewSeedStorePath",
         "parameters": [
           {
-            "description": "Seed ID",
-            "example": "1234-5678-1234-5678",
+            "description": "Seed SID",
+            "example": "example4ser3adju75ddusbr",
             "in": "path",
-            "name": "id",
+            "name": "sid",
             "required": true,
             "schema": {
               "type": "string",
@@ -384,16 +382,16 @@
         "tags": []
       }
     },
-    "/api/seeds/{id}/paths/latest": {
+    "/api/seeds/{sid}/paths/latest": {
       "get": {
         "callbacks": {},
         "operationId": "LatestStorePathBySeed",
         "parameters": [
           {
-            "description": "Seed ID",
-            "example": "1234-5678-1234-5678",
+            "description": "Seed SID",
+            "example": "example4ser3adju75ddusbr",
             "in": "path",
-            "name": "id",
+            "name": "sid",
             "required": true,
             "schema": {
               "type": "string",

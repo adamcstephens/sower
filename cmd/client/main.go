@@ -255,7 +255,7 @@ func seedSubcommand(cfg config) error {
 			os.Exit(1)
 		}
 
-		slog.Info("Created seed", "name", seed.Name, "type", seed.SeedType, "id", seed.Id)
+		slog.Info("Created seed", "name", seed.Name, "type", seed.SeedType, "sid", seed.Sid)
 
 	case cfg.Seed.Download != nil:
 		seedClient, err := client.NewSeedClient(cfg.Endpoint, cfg.ApiToken)

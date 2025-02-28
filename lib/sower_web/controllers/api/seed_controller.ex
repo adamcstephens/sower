@@ -60,11 +60,11 @@ defmodule SowerWeb.Api.SeedController do
     operation_id: "NewSeedStorePath",
     summary: "New Seed Store Path",
     parameters: [
-      id: [
+      sid: [
         in: :path,
-        description: "Seed ID",
+        description: "Seed SID",
         type: :string,
-        example: "1234-5678-1234-5678"
+        example: "example4ser3adju75ddusbr"
       ]
     ],
     request_body: {"Seed params", "application/json", Schemas.StorePath},
@@ -82,12 +82,12 @@ defmodule SowerWeb.Api.SeedController do
             path: path
           }
         } = conn,
-        %{id: id}
+        %{sid: sid}
       ) do
     if can(conn.assigns.access_token)
        |> update?(%Sower.Seed{org_id: conn.assigns.access_token.org_id}) do
       with {:ok, %Sower.Nix.StorePath{} = store_path} <-
-             Sower.Seed.submit(id, path),
+             Sower.Seed.submit(sid, path),
            Logger.debug(store_path) do
         conn
         |> put_status(:created)
@@ -102,11 +102,11 @@ defmodule SowerWeb.Api.SeedController do
     operation_id: "LatestStorePathBySeed",
     summary: "Get latest Store Path for a Seed",
     parameters: [
-      id: [
+      sid: [
         in: :path,
-        description: "Seed ID",
+        description: "Seed SID",
         type: :string,
-        example: "1234-5678-1234-5678"
+        example: "example4ser3adju75ddusbr"
       ]
     ],
     responses: %{
@@ -120,10 +120,10 @@ defmodule SowerWeb.Api.SeedController do
     }
   )
 
-  def latest(conn, %{id: id}) do
+  def latest(conn, %{sid: sid}) do
     if can(conn.assigns.access_token)
        |> read?(%Sower.Seed{org_id: conn.assigns.access_token.org_id}) do
-      case Sower.Seed.latest_store_path_by_id(id) do
+      case Sower.Seed.latest_store_path_by_sid(sid) do
         nil ->
           conn |> put_status(404) |> render(:not_found)
 
@@ -139,11 +139,11 @@ defmodule SowerWeb.Api.SeedController do
     operation_id: "GetSeed",
     summary: "Get Seed",
     parameters: [
-      id: [
+      sid: [
         in: :path,
-        description: "Seed ID",
+        description: "Seed SID",
         type: :string,
-        example: "1234-5678-1234-5678"
+        example: "example4ser3adju75ddusbr"
       ]
     ],
     responses: [
@@ -157,10 +157,10 @@ defmodule SowerWeb.Api.SeedController do
     ]
   )
 
-  def get(conn, %{id: id}) do
+  def get(conn, %{sid: sid}) do
     if can(conn.assigns.access_token)
        |> read?(%Sower.Seed{org_id: conn.assigns.access_token.org_id}) do
-      seed = Sower.Seed.get_by_id!(id)
+      seed = Sower.Seed.get_sid!(sid)
       render(conn, :show, seed: seed)
     else
       conn |> put_status(401) |> render(:error, error: "unauthorized")

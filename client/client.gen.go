@@ -14,7 +14,6 @@ import (
 	"strings"
 
 	"github.com/oapi-codegen/runtime"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 const (
@@ -30,14 +29,14 @@ const (
 
 // Seed A seed is an installable unit
 type Seed struct {
-	// Id id of the seed
-	Id *openapi_types.UUID `json:"id,omitempty"`
-
 	// Name Name of the seed
 	Name string `json:"name"`
 
 	// SeedType Type of the seed
 	SeedType SeedSeedType `json:"seed_type"`
+
+	// Sid sid of the seed
+	Sid *string `json:"sid,omitempty"`
 }
 
 // SeedSeedType Type of the seed
@@ -45,11 +44,11 @@ type SeedSeedType string
 
 // StorePath A store path is a Nix store path that can by installed by a client
 type StorePath struct {
-	// Id id of the store path
-	Id *openapi_types.UUID `json:"id,omitempty"`
-
 	// Path Nix store path
 	Path string `json:"path"`
+
+	// PathDigest id of the store path
+	PathDigest *string `json:"path_digest,omitempty"`
 }
 
 // ListSeedsParams defines parameters for ListSeeds.
@@ -149,15 +148,15 @@ type ClientInterface interface {
 	NewSeed(ctx context.Context, body NewSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetSeed request
-	GetSeed(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetSeed(ctx context.Context, sid string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// NewSeedStorePathWithBody request with any body
-	NewSeedStorePathWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	NewSeedStorePathWithBody(ctx context.Context, sid string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	NewSeedStorePath(ctx context.Context, id string, body NewSeedStorePathJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	NewSeedStorePath(ctx context.Context, sid string, body NewSeedStorePathJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// LatestStorePathBySeed request
-	LatestStorePathBySeed(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	LatestStorePathBySeed(ctx context.Context, sid string, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) ListSeeds(ctx context.Context, params *ListSeedsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -196,8 +195,8 @@ func (c *Client) NewSeed(ctx context.Context, body NewSeedJSONRequestBody, reqEd
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetSeed(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetSeedRequest(c.Server, id)
+func (c *Client) GetSeed(ctx context.Context, sid string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSeedRequest(c.Server, sid)
 	if err != nil {
 		return nil, err
 	}
@@ -208,8 +207,8 @@ func (c *Client) GetSeed(ctx context.Context, id string, reqEditors ...RequestEd
 	return c.Client.Do(req)
 }
 
-func (c *Client) NewSeedStorePathWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewNewSeedStorePathRequestWithBody(c.Server, id, contentType, body)
+func (c *Client) NewSeedStorePathWithBody(ctx context.Context, sid string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewNewSeedStorePathRequestWithBody(c.Server, sid, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -220,8 +219,8 @@ func (c *Client) NewSeedStorePathWithBody(ctx context.Context, id string, conten
 	return c.Client.Do(req)
 }
 
-func (c *Client) NewSeedStorePath(ctx context.Context, id string, body NewSeedStorePathJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewNewSeedStorePathRequest(c.Server, id, body)
+func (c *Client) NewSeedStorePath(ctx context.Context, sid string, body NewSeedStorePathJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewNewSeedStorePathRequest(c.Server, sid, body)
 	if err != nil {
 		return nil, err
 	}
@@ -232,8 +231,8 @@ func (c *Client) NewSeedStorePath(ctx context.Context, id string, body NewSeedSt
 	return c.Client.Do(req)
 }
 
-func (c *Client) LatestStorePathBySeed(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewLatestStorePathBySeedRequest(c.Server, id)
+func (c *Client) LatestStorePathBySeed(ctx context.Context, sid string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLatestStorePathBySeedRequest(c.Server, sid)
 	if err != nil {
 		return nil, err
 	}
@@ -350,12 +349,12 @@ func NewNewSeedRequestWithBody(server string, contentType string, body io.Reader
 }
 
 // NewGetSeedRequest generates requests for GetSeed
-func NewGetSeedRequest(server string, id string) (*http.Request, error) {
+func NewGetSeedRequest(server string, sid string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "sid", runtime.ParamLocationPath, sid)
 	if err != nil {
 		return nil, err
 	}
@@ -384,23 +383,23 @@ func NewGetSeedRequest(server string, id string) (*http.Request, error) {
 }
 
 // NewNewSeedStorePathRequest calls the generic NewSeedStorePath builder with application/json body
-func NewNewSeedStorePathRequest(server string, id string, body NewSeedStorePathJSONRequestBody) (*http.Request, error) {
+func NewNewSeedStorePathRequest(server string, sid string, body NewSeedStorePathJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewNewSeedStorePathRequestWithBody(server, id, "application/json", bodyReader)
+	return NewNewSeedStorePathRequestWithBody(server, sid, "application/json", bodyReader)
 }
 
 // NewNewSeedStorePathRequestWithBody generates requests for NewSeedStorePath with any type of body
-func NewNewSeedStorePathRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
+func NewNewSeedStorePathRequestWithBody(server string, sid string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "sid", runtime.ParamLocationPath, sid)
 	if err != nil {
 		return nil, err
 	}
@@ -431,12 +430,12 @@ func NewNewSeedStorePathRequestWithBody(server string, id string, contentType st
 }
 
 // NewLatestStorePathBySeedRequest generates requests for LatestStorePathBySeed
-func NewLatestStorePathBySeedRequest(server string, id string) (*http.Request, error) {
+func NewLatestStorePathBySeedRequest(server string, sid string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "sid", runtime.ParamLocationPath, sid)
 	if err != nil {
 		return nil, err
 	}
@@ -516,15 +515,15 @@ type ClientWithResponsesInterface interface {
 	NewSeedWithResponse(ctx context.Context, body NewSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*NewSeedResponse, error)
 
 	// GetSeedWithResponse request
-	GetSeedWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetSeedResponse, error)
+	GetSeedWithResponse(ctx context.Context, sid string, reqEditors ...RequestEditorFn) (*GetSeedResponse, error)
 
 	// NewSeedStorePathWithBodyWithResponse request with any body
-	NewSeedStorePathWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*NewSeedStorePathResponse, error)
+	NewSeedStorePathWithBodyWithResponse(ctx context.Context, sid string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*NewSeedStorePathResponse, error)
 
-	NewSeedStorePathWithResponse(ctx context.Context, id string, body NewSeedStorePathJSONRequestBody, reqEditors ...RequestEditorFn) (*NewSeedStorePathResponse, error)
+	NewSeedStorePathWithResponse(ctx context.Context, sid string, body NewSeedStorePathJSONRequestBody, reqEditors ...RequestEditorFn) (*NewSeedStorePathResponse, error)
 
 	// LatestStorePathBySeedWithResponse request
-	LatestStorePathBySeedWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*LatestStorePathBySeedResponse, error)
+	LatestStorePathBySeedWithResponse(ctx context.Context, sid string, reqEditors ...RequestEditorFn) (*LatestStorePathBySeedResponse, error)
 }
 
 type ListSeedsResponse struct {
@@ -691,8 +690,8 @@ func (c *ClientWithResponses) NewSeedWithResponse(ctx context.Context, body NewS
 }
 
 // GetSeedWithResponse request returning *GetSeedResponse
-func (c *ClientWithResponses) GetSeedWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetSeedResponse, error) {
-	rsp, err := c.GetSeed(ctx, id, reqEditors...)
+func (c *ClientWithResponses) GetSeedWithResponse(ctx context.Context, sid string, reqEditors ...RequestEditorFn) (*GetSeedResponse, error) {
+	rsp, err := c.GetSeed(ctx, sid, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -700,16 +699,16 @@ func (c *ClientWithResponses) GetSeedWithResponse(ctx context.Context, id string
 }
 
 // NewSeedStorePathWithBodyWithResponse request with arbitrary body returning *NewSeedStorePathResponse
-func (c *ClientWithResponses) NewSeedStorePathWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*NewSeedStorePathResponse, error) {
-	rsp, err := c.NewSeedStorePathWithBody(ctx, id, contentType, body, reqEditors...)
+func (c *ClientWithResponses) NewSeedStorePathWithBodyWithResponse(ctx context.Context, sid string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*NewSeedStorePathResponse, error) {
+	rsp, err := c.NewSeedStorePathWithBody(ctx, sid, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseNewSeedStorePathResponse(rsp)
 }
 
-func (c *ClientWithResponses) NewSeedStorePathWithResponse(ctx context.Context, id string, body NewSeedStorePathJSONRequestBody, reqEditors ...RequestEditorFn) (*NewSeedStorePathResponse, error) {
-	rsp, err := c.NewSeedStorePath(ctx, id, body, reqEditors...)
+func (c *ClientWithResponses) NewSeedStorePathWithResponse(ctx context.Context, sid string, body NewSeedStorePathJSONRequestBody, reqEditors ...RequestEditorFn) (*NewSeedStorePathResponse, error) {
+	rsp, err := c.NewSeedStorePath(ctx, sid, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -717,8 +716,8 @@ func (c *ClientWithResponses) NewSeedStorePathWithResponse(ctx context.Context, 
 }
 
 // LatestStorePathBySeedWithResponse request returning *LatestStorePathBySeedResponse
-func (c *ClientWithResponses) LatestStorePathBySeedWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*LatestStorePathBySeedResponse, error) {
-	rsp, err := c.LatestStorePathBySeed(ctx, id, reqEditors...)
+func (c *ClientWithResponses) LatestStorePathBySeedWithResponse(ctx context.Context, sid string, reqEditors ...RequestEditorFn) (*LatestStorePathBySeedResponse, error) {
+	rsp, err := c.LatestStorePathBySeed(ctx, sid, reqEditors...)
 	if err != nil {
 		return nil, err
 	}

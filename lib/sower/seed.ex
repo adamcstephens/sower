@@ -6,7 +6,7 @@ defmodule Sower.Seed do
 
   alias Sower.{Nix, Repo, Seed, SeedStorePath}
 
-  @derive {Jason.Encoder, only: [:id, :name, :seed_type]}
+  @derive {Jason.Encoder, only: [:sid, :name, :seed_type]}
 
   @derive {Phoenix.Param, key: :sid}
 
@@ -39,8 +39,8 @@ defmodule Sower.Seed do
     {:ok, store_path}
   end
 
-  def submit(seed_id, path) do
-    seed = get_by_id!(seed_id)
+  def submit(seed_sid, path) do
+    seed = get_sid!(seed_sid)
     submit(seed, path)
   end
 
@@ -82,8 +82,8 @@ defmodule Sower.Seed do
     )
   end
 
-  def latest_store_path_by_id(id) do
-    seed = Sower.Seed.get_by_id!(id)
+  def latest_store_path_by_sid(sid) do
+    seed = Sower.Seed.get_sid!(sid)
 
     query =
       from sp in Sower.SeedStorePath,

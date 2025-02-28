@@ -8,10 +8,9 @@ defmodule SowerWeb.Schemas.Seed do
     description: "A seed is an installable unit",
     type: :object,
     properties: %{
-      id: %Schema{
+      sid: %Schema{
         type: :string,
-        format: :uuid,
-        description: "id of the seed",
+        description: "sid of the seed",
         readOnly: true
       },
       name: %Schema{
@@ -26,7 +25,7 @@ defmodule SowerWeb.Schemas.Seed do
     },
     required: ~w(name seed_type)a,
     example: %{
-      "id" => "1234-5678-1234-5678",
+      "id" => "example4ser3adju75ddusbr",
       "name" => "myhost",
       "seed_type" => "nixos"
     }

@@ -35,7 +35,7 @@ type inputDrv map[string][]string
 // }
 
 func Push(workers int) error {
-	q := queue.NewPool(workers)
+	q := queue.NewPool(int64(workers))
 	defer q.Release()
 
 	err := evalJobs(workers, q, pushResult)
@@ -51,7 +51,7 @@ func Push(workers int) error {
 }
 
 func Build(workers int) error {
-	q := queue.NewPool(workers)
+	q := queue.NewPool(int64(workers))
 	defer q.Release()
 
 	err := evalJobs(workers, q, buildResult)
