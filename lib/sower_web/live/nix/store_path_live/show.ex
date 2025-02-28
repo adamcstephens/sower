@@ -1,4 +1,4 @@
-defmodule SowerWeb.StorePathLive.Show do
+defmodule SowerWeb.Nix.StorePathLive.Show do
   use SowerWeb, :live_view
 
   alias Sower.Nix

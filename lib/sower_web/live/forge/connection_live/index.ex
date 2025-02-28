@@ -38,8 +38,8 @@ defmodule SowerWeb.Forge.ConnectionLive.Index do
   end
 
   @impl true
-  def handle_event("delete", %{"sid" => sid}, socket) do
-    connection = Forge.get_connection_sid!(sid)
+  def handle_event("delete", %{"id" => id}, socket) do
+    connection = Forge.get_connection!(id)
     {:ok, _} = Forge.delete_connection(connection)
 
     {:noreply, stream_delete(socket, :forges, connection)}

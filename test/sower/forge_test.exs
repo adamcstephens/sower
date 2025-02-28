@@ -118,7 +118,12 @@ defmodule Sower.ForgeTest do
 
     test "update_repository/2 with valid data updates the repository" do
       repository = repository_fixture()
-      update_attrs = %{name: "some updated name", url: "some updated url", webhook_id: "some updated webhook_id"}
+
+      update_attrs = %{
+        name: "some updated name",
+        url: "some updated url",
+        webhook_id: "some updated webhook_id"
+      }
 
       assert {:ok, %Repository{} = repository} = Forge.update_repository(repository, update_attrs)
       assert repository.name == "some updated name"

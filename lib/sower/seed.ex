@@ -8,7 +8,10 @@ defmodule Sower.Seed do
 
   @derive {Jason.Encoder, only: [:id, :name, :seed_type]}
 
+  @derive {Phoenix.Param, key: :sid}
+
   schema "seeds" do
+    field :sid, Sower.Schema.Sid, autogenerate: true
     field :name, :string
     field :seed_type, :string
     field :org_id, Ecto.UUID
@@ -61,6 +64,10 @@ defmodule Sower.Seed do
 
   def get(name, seed_type) do
     Repo.get_by(Sower.Seed, name: name, seed_type: seed_type)
+  end
+
+  def get_sid!(sid) do
+    Repo.get_by!(Sower.Seed, sid: sid)
   end
 
   def list() do

@@ -1,4 +1,4 @@
-defmodule SowerWeb.StorePathLive.Index do
+defmodule SowerWeb.Nix.StorePathLive.Index do
   use SowerWeb, :live_view
 
   alias Sower.Nix

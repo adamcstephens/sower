@@ -1,5 +1,5 @@
 <.header>
-  Store path {@store_path.id}
+  {@store_path.path}
 </.header>
 
 <.list>
@@ -10,7 +10,7 @@
     <.table
       id="seeds"
       rows={@store_path.seeds}
-      row_click={fn seed -> JS.navigate(~p"/seeds/#{seed.id}") end}
+      row_click={fn seed -> JS.navigate(~p"/seeds/#{seed}") end}
     >
       <:col :let={seed}>{seed.name}</:col>
     </.table>

@@ -33,13 +33,13 @@ defmodule SowerWeb.Nix.CacheLive.Index do
   end
 
   @impl true
-  def handle_info({SowerWeb.CacheLive.FormComponent, {:saved, cache}}, socket) do
+  def handle_info({SowerWeb.Nix.CacheLive.FormComponent, {:saved, cache}}, socket) do
     {:noreply, stream_insert(socket, :nix_caches, cache)}
   end
 
   @impl true
-  def handle_event("delete", %{"sid" => sid}, socket) do
-    cache = Nix.get_cache_sid!(sid)
+  def handle_event("delete", %{"id" => id}, socket) do
+    cache = Nix.get_cache!(id)
     {:ok, _} = Nix.delete_cache(cache)
 
     {:noreply, stream_delete(socket, :nix_caches, cache)}

@@ -13,11 +13,15 @@ defmodule Sower.Accounts.UserToken do
   @change_email_validity_in_days 7
   @session_validity_in_days 60
 
+  @derive {Phoenix.Param, key: :sid}
+
   schema "users_tokens" do
+    field :sid, Sower.Schema.Sid, autogenerate: true
     field :token, :binary
     field :context, :string
     field :sent_to, :string
     belongs_to :user, Sower.Accounts.User
+    field :org_id, Ecto.UUID
 
     timestamps(updated_at: false)
   end
@@ -43,7 +47,7 @@ defmodule Sower.Accounts.UserToken do
   """
   def build_session_token(user) do
     token = :crypto.strong_rand_bytes(@rand_size)
-    {token, %UserToken{token: token, context: "session", user_id: user.id}}
+    {token, %UserToken{token: token, context: "session", user_id: user.id, org_id: user.org_id}}
   end
 
   @doc """

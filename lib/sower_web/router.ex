@@ -51,32 +51,28 @@ defmodule SowerWeb.Router do
       get "/forges/oauth/callback", Forge.OauthController, :callback
 
       live "/forges", Forge.ConnectionLive.Index, :index
+      live "/forges/new", Forge.ConnectionLive.Index, :new
       live "/forges/:sid", Forge.ConnectionLive.Show, :show
       live "/forges/:sid/edit", Forge.ConnectionLive.Index, :edit
       live "/forges/:sid/show/edit", Forge.ConnectionLive.Show, :edit
-      live "/forges/new", Forge.ConnectionLive.Index, :new
 
       live "/seeds", SeedLive.Index, :index
-      live "/seeds/:id", SeedLive.Show, :show
-      live "/nix/store_paths", StorePathLive.Index, :index
-      live "/nix/store_paths/:digest", StorePathLive.Show, :show
-      live "/inputs/repos", RepositoryLive.Index, :index
-      live "/inputs/repos/:id", RepositoryLive.Show, :show
+      live "/seeds/:sid", SeedLive.Show, :show
 
       live "/nix/caches", Nix.CacheLive.Index, :index
       live "/nix/caches/new", Nix.CacheLive.Index, :new
       live "/nix/caches/:sid/edit", Nix.CacheLive.Index, :edit
       live "/nix/caches/:sid", Nix.CacheLive.Show, :show
       live "/nix/caches/:sid/show/edit", Nix.CacheLive.Show, :edit
+      live "/nix/store_paths", Nix.StorePathLive.Index, :index
+      live "/nix/store_paths/:digest", Nix.StorePathLive.Show, :show
 
       live "/settings", Settings.IndexLive, :index
-      # live "/settings/access-tokens", SettingsLive.AccessTokens, :index
       live "/settings/access-tokens", Settings.AccessTokenLive.Index, :index
       live "/settings/access-tokens/new", Settings.AccessTokenLive.Index, :new
-      live "/settings/access-tokens/:id/edit", Settings.AccessTokenLive.Index, :edit
-
-      live "/settings/access-tokens/:id", Settings.AccessTokenLive.Show, :show
-      live "/settings/access-tokens/:id/show/edit", Settings.AccessTokenLive.Show, :edit
+      live "/settings/access-tokens/:sid/edit", Settings.AccessTokenLive.Index, :edit
+      live "/settings/access-tokens/:sid", Settings.AccessTokenLive.Show, :show
+      live "/settings/access-tokens/:sid/show/edit", Settings.AccessTokenLive.Show, :edit
     end
   end
 
@@ -103,10 +99,10 @@ defmodule SowerWeb.Router do
     pipe_through [:api, :ensure_token_authenticated]
 
     get "/seeds", SeedController, :list
-    get "/seeds/:id", SeedController, :get
-    get "/seeds/:id/paths/latest", SeedController, :latest
+    get "/seeds/:sid", SeedController, :get
+    get "/seeds/:sid/paths/latest", SeedController, :latest
     post "/seeds", SeedController, :new
-    post "/seeds/:id/paths", SeedController, :new_store_path
+    post "/seeds/:sid/paths", SeedController, :new_store_path
   end
 
   scope "/auth" do
