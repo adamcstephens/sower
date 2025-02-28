@@ -7,7 +7,7 @@
   rows={@streams.store_paths}
   row_click={fn {_id, store_path} -> JS.navigate(~p"/nix/store_paths/#{store_path}") end}
 >
-  <:col :let={{_id, store_path}} label="id">{store_path.id}</:col>
+  <:col :let={{_id, store_path}} label="path">{store_path.path}</:col>
   <:col :let={{_id, store_path}} label="updated">{store_path.updated_at}</:col>
   <:action :let={{_id, store_path}}>
     <div class="sr-only">
