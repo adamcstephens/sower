@@ -66,6 +66,7 @@
 
                   pkgs.attic-client
                   self'.packages.seed-ci
+                  pkgs.nushell
 
                   pkgs.docker
                   pkgs.just
