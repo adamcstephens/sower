@@ -246,9 +246,7 @@ defmodule Sower.Nix do
     )
   end
 
-  @doc """
-  Submit a full store path with only a path
-  """
+  # Submit a full store path with only a path
   def submit_store_path!(path) when is_binary(path) do
     submit_store_path!(%{path: path})
   end

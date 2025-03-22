@@ -4,7 +4,6 @@ defmodule Sower.Forge do
   """
 
   import Ecto.Query, warn: false
-  alias Sower.Accounts
   alias Sower.Repo
 
   alias Sower.Forge.Connection
@@ -339,7 +338,7 @@ defmodule Sower.Forge do
   end
 
   def remove_forge_repository(
-        %Connection{} = forge,
+        %Connection{} = _forge,
         %Repository{} = repo,
         access_token
       ) do

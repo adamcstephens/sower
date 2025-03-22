@@ -1,7 +1,7 @@
 defmodule SowerWeb.Forge.WebhookController do
   use SowerWeb, :controller
 
-  def post(conn, %{"repo_sid" => repo_sid} = params) do
+  def post(conn, %{"repo_sid" => repo_sid}) do
     repo = Sower.Forge.get_global_repository_sid!(repo_sid)
     [event_type] = get_req_header(conn, "x-forgejo-event-type")
 
