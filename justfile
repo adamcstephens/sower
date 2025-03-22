@@ -50,6 +50,9 @@ docker-push:
 mix-nix-lock:
     mix deps.nix --output nix/packages/deps.nix
 
+mix-clean:
+    mix deps.clean --unused --unlock
+
 openapi-output:
     MIX_ENV=test mix openapi.spec.json --spec SowerWeb.ApiSpec --pretty=true openapi.json
 
@@ -78,8 +81,7 @@ update: update-nix update-elixir update-go
 update-nix:
     nix flake update --commit-lock-file
 
-update-elixir: && mix-nix-lock
-    mix deps.clean --unused --unlock
+update-elixir: mix-clean && mix-nix-lock
     mix deps.update --all
     mix deps.get
     mix hex.outdated

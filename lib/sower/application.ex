@@ -5,9 +5,6 @@ defmodule Sower.Application do
 
   @impl true
   def start(_type, _args) do
-    # OpentelemetryBandit.setup()
-    # OpentelemetryPhoenix.setup(adapter: :bandit)
-
     children = [
       {Cluster.Supervisor,
        [Application.get_env(:libcluster, :topologies, []), [name: Sower.ClusterSupervisor]]},

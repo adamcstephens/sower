@@ -7,7 +7,6 @@ defmodule SowerWeb.Api.SeedController do
   alias OpenApiSpex.Schema
   alias SowerWeb.Schemas
   import Sower.Authorization
-  require OpenTelemetry.Tracer, as: Tracer
 
   plug OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true
 
@@ -205,24 +204,18 @@ defmodule SowerWeb.Api.SeedController do
   def list(conn, %{name: name, seed_type: seed_type}) do
     if can(conn.assigns.access_token)
        |> read?(%Sower.Seed{org_id: conn.assigns.access_token.org_id}) do
-      Tracer.with_span "list single seed" do
-        Tracer.set_attributes(name: name, seed_type: seed_type)
+      seed = Sower.Seed.get(name, seed_type)
 
-        seed = Sower.Seed.get(name, seed_type)
+      case seed do
+        nil ->
+          conn |> put_status(:not_found) |> render(:not_found)
 
-        case seed do
-          nil ->
-            Tracer.set_status(:error, "not found")
-            conn |> put_status(:not_found) |> render(:not_found)
-
-          seed ->
-            if can(conn.assigns.access_token) |> read?(seed) do
-              render(conn, :list, seeds: [seed])
-            else
-              Tracer.set_status(:error, "unauthorized")
-              conn |> put_status(:unauthorized) |> render(:unauthorized)
-            end
-        end
+        seed ->
+          if can(conn.assigns.access_token) |> read?(seed) do
+            render(conn, :list, seeds: [seed])
+          else
+            conn |> put_status(:unauthorized) |> render(:unauthorized)
+          end
       end
     else
       conn |> put_status(401) |> render(:error, error: "unauthorized")
