@@ -90,7 +90,8 @@ defmodule Sower.Config do
             "type" => "string"
           },
           "encryption_key_file" => %{
-            "type" => "string"
+            "type" => "string",
+            "description" => "base64 encoded secret key used for encrypted database items"
           }
         }
       },
