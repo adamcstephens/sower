@@ -43,7 +43,7 @@ defmodule Sower.MixProject do
       {:req, ">= 0.5.8"},
       {:shortuuid, "~> 4.0"},
       {:systemd, "~> 0.6"},
-      {:tailwind, "~> 0.2.0", runtime: Mix.env() == :dev},
+      {:tailwind, "~> 0.3.0", runtime: Mix.env() == :dev},
       {:telemetry_metrics, "~> 1.1.0"},
       {:telemetry_poller, "~> 1.1.0"},
       {:ueberauth, "~> 0.10"},

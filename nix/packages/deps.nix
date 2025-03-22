@@ -140,22 +140,6 @@ let
     with self;
     {
 
-      acceptor_pool =
-        let
-          version = "1.0.0";
-          drv = buildRebar3 {
-            inherit version;
-            name = "acceptor_pool";
-
-            src = fetchHex {
-              inherit version;
-              pkg = "acceptor_pool";
-              sha256 = "0cbcd83fdc8b9ad2eee2067ef8b91a14858a5883cb7cd800e6fcd5803e158788";
-            };
-          };
-        in
-        drv;
-
       argon2 =
         let
           version = "1.2.0";
@@ -174,7 +158,7 @@ let
 
       bandit =
         let
-          version = "1.6.7";
+          version = "1.6.9";
           drv = buildMix {
             inherit version;
             name = "bandit";
@@ -183,7 +167,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "bandit";
-              sha256 = "551ba8ff5e4fc908cbeb8c9f0697775fb6813a96d9de5f7fe02e34e76fd7d184";
+              sha256 = "67ab91338f308da9fb10d5afde35899e15af653adf31d682dd3a0e7c1d34db23";
             };
 
             beamDeps = [
@@ -210,26 +194,6 @@ let
               pkg = "castore";
               sha256 = "3dca286b2186055ba0c9449b4e95b97bf1b57b47c1f2644555879e659960c224";
             };
-          };
-        in
-        drv;
-
-      chatterbox =
-        let
-          version = "0.15.1";
-          drv = buildRebar3 {
-            inherit version;
-            name = "chatterbox";
-
-            src = fetchHex {
-              inherit version;
-              pkg = "ts_chatterbox";
-              sha256 = "4f75b91451338bc0da5f52f3480fa6ef6e3a2aeecfc33686d6b3d0a0948f31aa";
-            };
-
-            beamDeps = [
-              hpack
-            ];
           };
         in
         drv;
@@ -273,22 +237,6 @@ let
               cloak
               ecto
             ];
-          };
-        in
-        drv;
-
-      ctx =
-        let
-          version = "0.6.0";
-          drv = buildRebar3 {
-            inherit version;
-            name = "ctx";
-
-            src = fetchHex {
-              inherit version;
-              pkg = "ctx";
-              sha256 = "a14ed2d1b67723dbebbe423b28d7615eb0bdcba6ff28f2d1f1b0a7e1d4aa5fc2";
-            };
           };
         in
         drv;
@@ -537,61 +485,6 @@ let
         in
         drv;
 
-      gproc =
-        let
-          version = "0.9.1";
-          drv = buildRebar3 {
-            inherit version;
-            name = "gproc";
-
-            src = fetchHex {
-              inherit version;
-              pkg = "gproc";
-              sha256 = "905088e32e72127ed9466f0bac0d8e65704ca5e73ee5a62cb073c3117916d507";
-            };
-          };
-        in
-        drv;
-
-      grpcbox =
-        let
-          version = "0.17.1";
-          drv = buildRebar3 {
-            inherit version;
-            name = "grpcbox";
-
-            src = fetchHex {
-              inherit version;
-              pkg = "grpcbox";
-              sha256 = "4a3b5d7111daabc569dc9cbd9b202a3237d81c80bf97212fbc676832cb0ceb17";
-            };
-
-            beamDeps = [
-              acceptor_pool
-              chatterbox
-              ctx
-              gproc
-            ];
-          };
-        in
-        drv;
-
-      hpack =
-        let
-          version = "0.3.0";
-          drv = buildRebar3 {
-            inherit version;
-            name = "hpack";
-
-            src = fetchHex {
-              inherit version;
-              pkg = "hpack_erl";
-              sha256 = "d6137d7079169d8c485c6962dfe261af5b9ef60fbc557344511c1e65e3d95fb0";
-            };
-          };
-        in
-        drv;
-
       hpax =
         let
           version = "1.0.2";
@@ -829,196 +722,6 @@ let
         in
         drv;
 
-      opentelemetry =
-        let
-          version = "1.5.0";
-          drv = buildRebar3 {
-            inherit version;
-            name = "opentelemetry";
-
-            src = fetchHex {
-              inherit version;
-              pkg = "opentelemetry";
-              sha256 = "cdf4f51d17b592fc592b9a75f86a6f808c23044ba7cf7b9534debbcc5c23b0ee";
-            };
-
-            beamDeps = [
-              opentelemetry_api
-            ];
-          };
-        in
-        drv;
-
-      opentelemetry_api =
-        let
-          version = "1.4.0";
-          drv = buildMix {
-            inherit version;
-            name = "opentelemetry_api";
-            appConfigPath = ../../config;
-
-            src = fetchHex {
-              inherit version;
-              pkg = "opentelemetry_api";
-              sha256 = "3dfbbfaa2c2ed3121c5c483162836c4f9027def469c41578af5ef32589fcfc58";
-            };
-          };
-        in
-        drv;
-
-      opentelemetry_bandit =
-        let
-          version = "0.2.0";
-          drv = buildMix {
-            inherit version;
-            name = "opentelemetry_bandit";
-            appConfigPath = ../../config;
-
-            src = fetchHex {
-              inherit version;
-              pkg = "opentelemetry_bandit";
-              sha256 = "57e31355a860250c9203ae34f0bf0290a14b72ab02b154535e1b2512a0767bca";
-            };
-
-            beamDeps = [
-              nimble_options
-              opentelemetry_api
-              opentelemetry_semantic_conventions
-              otel_http
-              plug
-              telemetry
-            ];
-          };
-        in
-        drv;
-
-      opentelemetry_exporter =
-        let
-          version = "1.8.0";
-          drv = buildRebar3 {
-            inherit version;
-            name = "opentelemetry_exporter";
-
-            src = fetchHex {
-              inherit version;
-              pkg = "opentelemetry_exporter";
-              sha256 = "a1f9f271f8d3b02b81462a6bfef7075fd8457fdb06adff5d2537df5e2264d9af";
-            };
-
-            beamDeps = [
-              grpcbox
-              opentelemetry
-              opentelemetry_api
-              tls_certificate_check
-            ];
-          };
-        in
-        drv;
-
-      opentelemetry_phoenix =
-        let
-          version = "2.0.1";
-          drv = buildMix {
-            inherit version;
-            name = "opentelemetry_phoenix";
-            appConfigPath = ../../config;
-
-            src = fetchHex {
-              inherit version;
-              pkg = "opentelemetry_phoenix";
-              sha256 = "a24fdccdfa6b890c8892c6366beab4a15a27ec0c692b0f77ec2a862e7b235f6e";
-            };
-
-            beamDeps = [
-              nimble_options
-              opentelemetry_api
-              opentelemetry_process_propagator
-              opentelemetry_semantic_conventions
-              opentelemetry_telemetry
-              otel_http
-              plug
-              telemetry
-            ];
-          };
-        in
-        drv;
-
-      opentelemetry_process_propagator =
-        let
-          version = "0.3.0";
-          drv = buildMix {
-            inherit version;
-            name = "opentelemetry_process_propagator";
-            appConfigPath = ../../config;
-
-            src = fetchHex {
-              inherit version;
-              pkg = "opentelemetry_process_propagator";
-              sha256 = "7243cb6de1523c473cba5b1aefa3f85e1ff8cc75d08f367104c1e11919c8c029";
-            };
-
-            beamDeps = [
-              opentelemetry_api
-            ];
-          };
-        in
-        drv;
-
-      opentelemetry_semantic_conventions =
-        let
-          version = "1.27.0";
-          drv = buildMix {
-            inherit version;
-            name = "opentelemetry_semantic_conventions";
-            appConfigPath = ../../config;
-
-            src = fetchHex {
-              inherit version;
-              pkg = "opentelemetry_semantic_conventions";
-              sha256 = "9681ccaa24fd3d810b4461581717661fd85ff7019b082c2dff89c7d5b1fc2864";
-            };
-          };
-        in
-        drv;
-
-      opentelemetry_telemetry =
-        let
-          version = "1.1.2";
-          drv = buildMix {
-            inherit version;
-            name = "opentelemetry_telemetry";
-            appConfigPath = ../../config;
-
-            src = fetchHex {
-              inherit version;
-              pkg = "opentelemetry_telemetry";
-              sha256 = "641ab469deb181957ac6d59bce6e1321d5fe2a56df444fc9c19afcad623ab253";
-            };
-
-            beamDeps = [
-              opentelemetry_api
-              telemetry
-            ];
-          };
-        in
-        drv;
-
-      otel_http =
-        let
-          version = "0.2.0";
-          drv = buildRebar3 {
-            inherit version;
-            name = "otel_http";
-
-            src = fetchHex {
-              inherit version;
-              pkg = "otel_http";
-              sha256 = "f2beadf922c8cfeb0965488dd736c95cc6ea8b9efce89466b3904d317d7cc717";
-            };
-          };
-        in
-        drv;
-
       permit =
         let
           version = "0.2.1";
@@ -1154,7 +857,7 @@ let
 
       phoenix_live_view =
         let
-          version = "1.0.4";
+          version = "1.0.7";
           drv = buildMix {
             inherit version;
             name = "phoenix_live_view";
@@ -1163,7 +866,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "phoenix_live_view";
-              sha256 = "a9865316ddf8d78f382d63af278d20436b52d262b60239956817a61279514366";
+              sha256 = "a1758c5816f65c83af38dfeef35a6d491363e32c707c2e3bb6b8f6339e8f2cbf";
             };
 
             beamDeps = [
@@ -1218,7 +921,7 @@ let
 
       plug =
         let
-          version = "1.16.1";
+          version = "1.17.0";
           drv = buildMix {
             inherit version;
             name = "plug";
@@ -1227,7 +930,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "plug";
-              sha256 = "a13ff6b9006b03d7e33874945b2755253841b238c34071ed85b0e86057f8cddc";
+              sha256 = "f6692046652a69a00a5a21d0b7e11fcf401064839d59d6b8787f23af55b1e6bc";
             };
 
             beamDeps = [
@@ -1281,7 +984,7 @@ let
 
       req =
         let
-          version = "0.5.8";
+          version = "0.5.10";
           drv = buildMix {
             inherit version;
             name = "req";
@@ -1290,7 +993,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "req";
-              sha256 = "d7fc5898a566477e174f26887821a3c5082b243885520ee4b45555f5d53f40ef";
+              sha256 = "8a604815743f8a2d3b5de0659fa3137fa4b1cffd636ecb69b30b2b9b2c2559be";
             };
 
             beamDeps = [
@@ -1320,23 +1023,6 @@ let
         in
         drv;
 
-      ssl_verify_fun =
-        let
-          version = "1.1.7";
-          drv = buildMix {
-            inherit version;
-            name = "ssl_verify_fun";
-            appConfigPath = ../../config;
-
-            src = fetchHex {
-              inherit version;
-              pkg = "ssl_verify_fun";
-              sha256 = "fe4c190e8f37401d30167c8c405eda19469f34577987c76dde613e838bbc67f8";
-            };
-          };
-        in
-        drv;
-
       systemd =
         let
           version = "0.6.2";
@@ -1359,7 +1045,7 @@ let
 
       tailwind =
         let
-          version = "0.2.4";
+          version = "0.3.1";
           drv = buildMix {
             inherit version;
             name = "tailwind";
@@ -1368,12 +1054,8 @@ let
             src = fetchHex {
               inherit version;
               pkg = "tailwind";
-              sha256 = "c6e4a82b8727bab593700c998a4d98cf3d8025678bfde059aed71d0000c3e463";
+              sha256 = "98a45febdf4a87bc26682e1171acdedd6317d0919953c353fcd1b4f9f4b676a2";
             };
-
-            beamDeps = [
-              castore
-            ];
           };
         in
         drv;
@@ -1458,7 +1140,7 @@ let
 
       thousand_island =
         let
-          version = "1.3.11";
+          version = "1.3.12";
           drv = buildMix {
             inherit version;
             name = "thousand_island";
@@ -1467,31 +1149,11 @@ let
             src = fetchHex {
               inherit version;
               pkg = "thousand_island";
-              sha256 = "555c18c62027f45d9c80df389c3d01d86ba11014652c00be26e33b1b64e98d29";
+              sha256 = "55d0b1c868b513a7225892b8a8af0234d7c8981a51b0740369f3125f7c99a549";
             };
 
             beamDeps = [
               telemetry
-            ];
-          };
-        in
-        drv;
-
-      tls_certificate_check =
-        let
-          version = "1.27.0";
-          drv = buildRebar3 {
-            inherit version;
-            name = "tls_certificate_check";
-
-            src = fetchHex {
-              inherit version;
-              pkg = "tls_certificate_check";
-              sha256 = "51a5ad3dbd72d4694848965f3b5076e8b55d70eb8d5057fcddd536029ab8a23c";
-            };
-
-            beamDeps = [
-              ssl_verify_fun
             ];
           };
         in
