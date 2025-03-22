@@ -118,7 +118,7 @@ defmodule SowerWeb.Settings.AccessTokenLive.FormComponent do
         {:noreply,
          socket
          |> put_flash(:token, access_token.token)
-         |> push_navigate(to: ~p"/settings/access-tokens/#{access_token.id}")}
+         |> push_navigate(to: ~p"/settings/access-tokens/#{access_token}")}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         {:noreply, assign(socket, form: to_form(changeset))}
