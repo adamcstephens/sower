@@ -2,6 +2,8 @@ defmodule Sower.Nix.Cache do
   use Sower.Schema
   import Ecto.Changeset
 
+  @derive {Jason.Encoder, only: [:sid, :url, :public_key]}
+
   @derive {Phoenix.Param, key: :sid}
 
   schema "nix_caches" do

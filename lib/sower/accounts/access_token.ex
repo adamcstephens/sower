@@ -23,7 +23,7 @@ defmodule Sower.Accounts.AccessToken do
     belongs_to :user, Sower.Accounts.User
 
     embeds_many :permissions, Permission, on_replace: :delete do
-      field :role, Ecto.Enum, values: [:"seed:read", :"seed:write"]
+      field :role, Ecto.Enum, values: [:"seed:read", :"seed:write", :"nix-cache:read"]
     end
 
     timestamps()

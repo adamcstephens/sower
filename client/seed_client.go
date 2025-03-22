@@ -192,3 +192,24 @@ func stringToSeedSeedType(s string) (SeedSeedType, error) {
 		return "", fmt.Errorf("unknown seed type: %s", s)
 	}
 }
+
+func (s *SeedClient) GetNixCaches() (*[]NixCache, error) {
+	resp, err := s.client.ListNixCachesWithResponse(context.TODO())
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode() == http.StatusUnauthorized {
+		return nil, fmt.Errorf("%s", *(*resp.JSON401).Error)
+	}
+
+	if resp.StatusCode() != http.StatusOK {
+		return nil, fmt.Errorf("unknown error")
+	}
+
+	caches := (*resp.JSON200)
+
+	slog.Debug("Found nix caches", "count", len(caches))
+
+	return &caches, nil
+}

@@ -278,7 +278,13 @@ func seedSubcommand(cfg config) error {
 			os.Exit(1)
 		}
 
-		if err := realize(storePath.Path, cfg.Seed.Download.Initrd); err != nil {
+		caches, err := seedClient.GetNixCaches()
+		if err != nil {
+			slog.Error("Failed to get nix caches", "error", err)
+			os.Exit(1)
+		}
+
+		if err := realize(storePath.Path, caches, cfg.Seed.Download.Initrd); err != nil {
 			slog.Error("Failed realizing seed", "error", err)
 			os.Exit(1)
 		}
@@ -377,7 +383,13 @@ func seedSubcommand(cfg config) error {
 			os.Exit(1)
 		}
 
-		if err := realize(storePath.Path, false); err != nil {
+		caches, err := seedClient.GetNixCaches()
+		if err != nil {
+			slog.Error("Failed to get nix caches", "error", err)
+			os.Exit(1)
+		}
+
+		if err := realize(storePath.Path, caches, false); err != nil {
 			slog.Error("Failed realizing seed", "error", err)
 			os.Exit(1)
 		}

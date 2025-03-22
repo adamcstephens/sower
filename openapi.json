@@ -2,6 +2,43 @@
   "components": {
     "responses": {},
     "schemas": {
+      "Nix Cache": {
+        "description": "A Nix binary cache",
+        "example": {
+          "public_key": "my.cache.org:1111111111111111",
+          "sid": "example4ser3adju75ddusbr",
+          "url": "https://my.cache.org"
+        },
+        "properties": {
+          "public_key": {
+            "description": "Trusted public key for signed NARs",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "sid": {
+            "description": "sid of the nix cache",
+            "readOnly": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "url": {
+            "description": "URL to binary cache",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          }
+        },
+        "required": [
+          "name",
+          "seed_type"
+        ],
+        "title": "Nix Cache",
+        "type": "object",
+        "x-struct": "Elixir.SowerWeb.Schemas.Nix.Cache",
+        "x-validate": null
+      },
       "Seed": {
         "description": "A seed is an installable unit",
         "example": {
@@ -89,6 +126,51 @@
   },
   "openapi": "3.0.0",
   "paths": {
+    "/api/nix/caches": {
+      "get": {
+        "callbacks": {},
+        "operationId": "ListNixCaches",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Nix Cache"
+                  },
+                  "type": "array",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Nix Cache response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "List Nix Caches",
+        "tags": []
+      }
+    },
     "/api/seeds": {
       "get": {
         "callbacks": {},

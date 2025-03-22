@@ -30,6 +30,6 @@ defmodule Sower.SeedFixtures do
   def store_path_fixture(attrs \\ %{}) do
     attrs
     |> Enum.into(%{path: random_store_path()})
-    |> Sower.StorePath.submit!()
+    |> Sower.Nix.submit_store_path!()
   end
 end

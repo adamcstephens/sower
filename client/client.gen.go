@@ -27,6 +27,18 @@ const (
 	Nixos       SeedSeedType = "nixos"
 )
 
+// NixCache A Nix binary cache
+type NixCache struct {
+	// PublicKey Trusted public key for signed NARs
+	PublicKey *string `json:"public_key,omitempty"`
+
+	// Sid sid of the nix cache
+	Sid *string `json:"sid,omitempty"`
+
+	// Url URL to binary cache
+	Url *string `json:"url,omitempty"`
+}
+
 // Seed A seed is an installable unit
 type Seed struct {
 	// Name Name of the seed
@@ -139,6 +151,9 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+	// ListNixCaches request
+	ListNixCaches(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListSeeds request
 	ListSeeds(ctx context.Context, params *ListSeedsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -157,6 +172,18 @@ type ClientInterface interface {
 
 	// LatestStorePathBySeed request
 	LatestStorePathBySeed(ctx context.Context, sid string, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+func (c *Client) ListNixCaches(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListNixCachesRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 func (c *Client) ListSeeds(ctx context.Context, params *ListSeedsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -241,6 +268,33 @@ func (c *Client) LatestStorePathBySeed(ctx context.Context, sid string, reqEdito
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewListNixCachesRequest generates requests for ListNixCaches
+func NewListNixCachesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/nix/caches")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
 }
 
 // NewListSeedsRequest generates requests for ListSeeds
@@ -506,6 +560,9 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
+	// ListNixCachesWithResponse request
+	ListNixCachesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListNixCachesResponse, error)
+
 	// ListSeedsWithResponse request
 	ListSeedsWithResponse(ctx context.Context, params *ListSeedsParams, reqEditors ...RequestEditorFn) (*ListSeedsResponse, error)
 
@@ -524,6 +581,31 @@ type ClientWithResponsesInterface interface {
 
 	// LatestStorePathBySeedWithResponse request
 	LatestStorePathBySeedWithResponse(ctx context.Context, sid string, reqEditors ...RequestEditorFn) (*LatestStorePathBySeedResponse, error)
+}
+
+type ListNixCachesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]NixCache
+	JSON401      *struct {
+		Error *string `json:"error,omitempty"`
+	}
+}
+
+// Status returns HTTPResponse.Status
+func (r ListNixCachesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListNixCachesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
 }
 
 type ListSeedsResponse struct {
@@ -663,6 +745,15 @@ func (r LatestStorePathBySeedResponse) StatusCode() int {
 	return 0
 }
 
+// ListNixCachesWithResponse request returning *ListNixCachesResponse
+func (c *ClientWithResponses) ListNixCachesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListNixCachesResponse, error) {
+	rsp, err := c.ListNixCaches(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListNixCachesResponse(rsp)
+}
+
 // ListSeedsWithResponse request returning *ListSeedsResponse
 func (c *ClientWithResponses) ListSeedsWithResponse(ctx context.Context, params *ListSeedsParams, reqEditors ...RequestEditorFn) (*ListSeedsResponse, error) {
 	rsp, err := c.ListSeeds(ctx, params, reqEditors...)
@@ -722,6 +813,41 @@ func (c *ClientWithResponses) LatestStorePathBySeedWithResponse(ctx context.Cont
 		return nil, err
 	}
 	return ParseLatestStorePathBySeedResponse(rsp)
+}
+
+// ParseListNixCachesResponse parses an HTTP response from a ListNixCachesWithResponse call
+func ParseListNixCachesResponse(rsp *http.Response) (*ListNixCachesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListNixCachesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []NixCache
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest struct {
+			Error *string `json:"error,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseListSeedsResponse parses an HTTP response from a ListSeedsWithResponse call
