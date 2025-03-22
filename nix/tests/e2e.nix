@@ -59,6 +59,7 @@ testers.runNixOSTest {
                 socket = "/run/postgresql/.s.PGSQL.5432";
                 username = "sower";
                 database = "sower";
+                encryption_key_file = "${pkgs.writeText "database-encryption-key" "b2s="}"; # ok in b64
               };
 
               auth = {
