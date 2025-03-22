@@ -54,18 +54,26 @@ mix-clean:
     mix deps.clean --unused --unlock
 
 openapi-output:
+    # remove old sower test app to force correct version
+    rm -rf _build/test/lib/sower
     MIX_ENV=test mix openapi.spec.json --spec SowerWeb.ApiSpec --pretty=true openapi.json
 
 openapi-generate: openapi-output
     go generate ./client
 
-set-version version: && openapi-generate
-    echo -n {{ version }} > VERSION
+set-version: && openapi-generate
+    @echo "Current version: $(cat VERSION)"
+    @read -p "New version? " new_version; [ -n "$new_version" ] && echo -n $new_version > VERSION
 
-release:
+release: set-version
+    git add VERSION openapi.json
+    git commit -m "release: version $(cat VERSION)"
+
+release-push:
     git tag -a -m v$(cat VERSION) v$(cat VERSION)
     git push
     git push --tags
+    just release
 
 start: dev-services
     iex -S mix phx.server
