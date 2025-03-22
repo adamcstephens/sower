@@ -35,6 +35,7 @@ defmodule Sower.Authorization.Permissions do
        ) do
     permit
     |> read(Sower.Seed, org_id: org_id)
+    |> read(Sower.Nix.Cache, org_id: org_id)
   end
 
   defp check_role_perm(
@@ -44,5 +45,6 @@ defmodule Sower.Authorization.Permissions do
        ) do
     permit
     |> all(Sower.Seed, org_id: org_id)
+    |> read(Sower.Nix.Cache, org_id: org_id)
   end
 end
