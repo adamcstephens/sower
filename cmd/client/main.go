@@ -63,7 +63,9 @@ type seedCmd struct {
 
 type seedCreateCmd struct{}
 
-type seedDownloadCmd struct{}
+type seedDownloadCmd struct {
+	Initrd bool `arg:"--initrd"`
+}
 
 type seedInfoCmd struct{}
 
@@ -276,7 +278,7 @@ func seedSubcommand(cfg config) error {
 			os.Exit(1)
 		}
 
-		if err := realize(storePath.Path); err != nil {
+		if err := realize(storePath.Path, cfg.Seed.Download.Initrd); err != nil {
 			slog.Error("Failed realizing seed", "error", err)
 			os.Exit(1)
 		}
@@ -375,7 +377,7 @@ func seedSubcommand(cfg config) error {
 			os.Exit(1)
 		}
 
-		if err := realize(storePath.Path); err != nil {
+		if err := realize(storePath.Path, false); err != nil {
 			slog.Error("Failed realizing seed", "error", err)
 			os.Exit(1)
 		}

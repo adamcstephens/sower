@@ -42,14 +42,20 @@ func activate(seedType client.SeedSeedType, storePath string, mode string) error
 	return nil
 }
 
-func realize(storePath string) error {
+func realize(storePath string, initrd bool) error {
 	slog.Debug("Realizing path", "path", storePath)
+
+	var cmd *exec.Cmd
 
 	if storePath == "" {
 		return fmt.Errorf("Cannot download without seed out_path")
 	}
 
-	cmd := exec.Command("nix-store", "--realize", storePath)
+	if initrd {
+		cmd = exec.Command("nix-store", "--realize", "--store", "/sysroot", storePath)
+	} else {
+		cmd = exec.Command("nix-store", "--realize", storePath)
+	}
 
 	err := commands.SimpleRun(cmd)
 
