@@ -81,15 +81,21 @@ update: update-nix update-elixir update-go
 update-nix:
     nix flake update --commit-lock-file
 
-update-elixir: mix-clean && mix-nix-lock
+update-elixir: mix-clean
     mix deps.update --all
     mix deps.get
     mix hex.outdated
+    just mix-nix-lock
+    git add mix.exs mix.lock nix/packages/deps.nix
+    git commit -m 'server(chore): update elixir deps' -- mix.exs mix.lock nix/packages/deps.nix
 
-update-go: && update-go-hash
+update-go:
     go get -u ./...
     go mod edit -go=$(go version | awk '{print $3}' | sed 's/go//')
     go mod tidy
+    just update-go-hash
+    git add go.mod go.sum nix/packages/client.nix
+    git commit -m 'server(chore): update go deps' -- go.mod go.sum nix/packages/client.nix
 
 update-go-hash:
     #!/usr/bin/env bash
