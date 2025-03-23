@@ -189,19 +189,19 @@ func main() {
 
 func initLogger(debug bool) {
 	logLevel := slog.LevelInfo
-	stdout := os.Stdout
+	stderr := os.Stderr
 
 	if debug {
 		logLevel = slog.LevelDebug
 	}
 
-	logger := slog.New(tint.NewHandler(stdout, &tint.Options{
+	logger := slog.New(tint.NewHandler(stderr, &tint.Options{
 		Level:      logLevel,
 		TimeFormat: time.DateTime,
-		NoColor:    !isatty.IsTerminal(stdout.Fd()),
+		NoColor:    !isatty.IsTerminal(stderr.Fd()),
 		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
 			// if not a tty, strip the time
-			if a.Key == slog.TimeKey && len(groups) == 0 && !isatty.IsTerminal(stdout.Fd()) {
+			if a.Key == slog.TimeKey && len(groups) == 0 && !isatty.IsTerminal(stderr.Fd()) {
 				return slog.Attr{}
 			}
 			return a
