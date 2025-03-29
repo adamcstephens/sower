@@ -65,7 +65,8 @@ in
         systemd.user.services.sower-client = {
           Service = {
             Environment = [
-              "PATH=${lib.makeBinPath [ config.nix.package ]}"
+              # prefer nix from the system
+              "PATH=/run/current-system/sw/bin:${lib.makeBinPath [ config.nix.package ]}"
               "SOWER_CONFIG_FILE=%E/sower/client.json"
             ];
             ExecStart = "${lib.getExe cfg.package} seed upgrade";
