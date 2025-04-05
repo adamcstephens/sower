@@ -85,10 +85,10 @@ defmodule Sower.NixTest do
     end
 
     test "create_store_path/1 with valid data creates a store_path" do
-      valid_attrs = %{path: "some path"}
+      valid_attrs = %{path: random_store_path()}
 
       assert {:ok, %StorePath{} = store_path} = Nix.create_store_path(valid_attrs)
-      assert store_path.path == "some path"
+      assert store_path.path == valid_attrs.path
     end
 
     test "create_store_path/1 with invalid data returns error changeset" do
@@ -97,10 +97,10 @@ defmodule Sower.NixTest do
 
     test "update_store_path/2 with valid data updates the store_path" do
       store_path = store_path_fixture()
-      update_attrs = %{path: "some updated path"}
+      update_attrs = %{path: random_store_path()}
 
       assert {:ok, %StorePath{} = store_path} = Nix.update_store_path(store_path, update_attrs)
-      assert store_path.path == "some updated path"
+      assert store_path.path == update_attrs.path
     end
 
     test "update_store_path/2 with invalid data returns error changeset" do

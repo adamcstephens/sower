@@ -13,7 +13,7 @@ defmodule Sower.ForgeFixtures do
       |> Enum.into(%{
         client_id: "some client_id",
         client_secret: "some client_secret",
-        name: "some name",
+        name: Faker.Company.bullshit(),
         type: :forgejo,
         url: "some url"
       })
@@ -29,9 +29,11 @@ defmodule Sower.ForgeFixtures do
     {:ok, repository} =
       attrs
       |> Enum.into(%{
-        name: "some name",
+        owner: "some owner",
+        repo: "some repo",
         url: "some url",
-        webhook_id: "some webhook_id"
+        webhook_id: "some webhook_id",
+        forge_id: connection_fixture().id
       })
       |> Sower.Forge.create_repository()
 

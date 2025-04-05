@@ -34,6 +34,10 @@ defmodule Sower.Accounts.User do
     Repo.get!(User, id, skip_org_id: true)
   end
 
+  def get_by_sid!(sid) do
+    Repo.get_by!(User, [sid: sid], skip_org_id: true)
+  end
+
   def new(attrs) do
     %User{}
     |> changeset(attrs)

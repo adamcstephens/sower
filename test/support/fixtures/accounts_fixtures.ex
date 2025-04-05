@@ -21,6 +21,8 @@ defmodule Sower.AccountsFixtures do
       |> valid_user_attributes()
       |> Sower.Accounts.User.new()
 
+    Sower.Repo.put_org_id(user.org_id)
+
     user
   end
 

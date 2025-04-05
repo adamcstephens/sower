@@ -179,7 +179,9 @@ defmodule Sower.Nix do
 
   """
   def create_store_path(attrs \\ %{}) do
-    %StorePath{}
+    %StorePath{
+      org_id: Sower.Repo.get_org_id()
+    }
     |> StorePath.changeset(attrs)
     |> Repo.insert()
   end

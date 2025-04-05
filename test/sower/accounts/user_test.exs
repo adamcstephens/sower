@@ -13,7 +13,7 @@ defmodule Sower.AccountsTest do
   describe "get_by_id!/1" do
     test "raises if id is invalid" do
       assert_raise Ecto.NoResultsError, fn ->
-        User.get_by_id!(Ecto.UUID.generate())
+        User.get_by_sid!(Sower.Schema.Sid.generate())
       end
     end
 
@@ -55,7 +55,7 @@ defmodule Sower.AccountsTest do
       %{user: user_fixture()}
     end
 
-    test "generates a token", %{user: user, organization: _org} do
+    test "generates a token", %{user: user, organization: org} do
       token = User.generate_session_token(user)
       assert user_token = Repo.get_by(UserToken, [token: token], skip_org_id: true)
       assert user_token.context == "session"
@@ -65,7 +65,8 @@ defmodule Sower.AccountsTest do
         Repo.insert!(%UserToken{
           token: user_token.token,
           user_id: user_fixture().id,
-          context: "session"
+          context: "session",
+          org_id: org.org_id
         })
       end
     end

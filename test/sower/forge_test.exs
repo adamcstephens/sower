@@ -16,7 +16,13 @@ defmodule Sower.ForgeTest do
 
     import Sower.ForgeFixtures
 
-    @invalid_attrs %{name: nil, type: nil, url: nil, client_id: nil, client_secret: nil}
+    @invalid_attrs %{
+      name: nil,
+      type: nil,
+      url: nil,
+      client_id: nil,
+      client_secret: nil
+    }
 
     test "list_forges/0 returns all forges" do
       connection = connection_fixture()
@@ -91,7 +97,7 @@ defmodule Sower.ForgeTest do
 
     import Sower.ForgeFixtures
 
-    @invalid_attrs %{name: nil, url: nil, webhook_id: nil}
+    @invalid_attrs %{owner: nil, url: nil, webhook_id: nil}
 
     test "list_repositories/0 returns all repositories" do
       repository = repository_fixture()
@@ -104,10 +110,16 @@ defmodule Sower.ForgeTest do
     end
 
     test "create_repository/1 with valid data creates a repository" do
-      valid_attrs = %{name: "some name", url: "some url", webhook_id: "some webhook_id"}
+      valid_attrs = %{
+        owner: "some owner",
+        repo: "some repo",
+        url: "some url",
+        webhook_id: "some webhook_id",
+        forge_id: connection_fixture().id
+      }
 
       assert {:ok, %Repository{} = repository} = Forge.create_repository(valid_attrs)
-      assert repository.name == "some name"
+      assert repository.owner == "some owner"
       assert repository.url == "some url"
       assert repository.webhook_id == "some webhook_id"
     end
@@ -120,13 +132,15 @@ defmodule Sower.ForgeTest do
       repository = repository_fixture()
 
       update_attrs = %{
-        name: "some updated name",
+        owner: "some updated owner",
+        repo: "some updated repo",
         url: "some updated url",
         webhook_id: "some updated webhook_id"
       }
 
       assert {:ok, %Repository{} = repository} = Forge.update_repository(repository, update_attrs)
-      assert repository.name == "some updated name"
+      assert repository.owner == "some updated owner"
+      assert repository.repo == "some updated repo"
       assert repository.url == "some updated url"
       assert repository.webhook_id == "some updated webhook_id"
     end

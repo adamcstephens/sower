@@ -26,10 +26,17 @@ defmodule Sower.NixFixtures do
     {:ok, store_path} =
       attrs
       |> Enum.into(%{
-        path: "some path"
+        path: random_store_path()
       })
       |> Sower.Nix.create_store_path()
 
     store_path
+  end
+
+  def random_store_path(name \\ "apath-0.1") do
+    digest =
+      for _ <- 1..32, into: "", do: <<Enum.random(~c"0123456789abcdefghijklmnopqrstuvwxyz")>>
+
+    "/nix/store/#{digest}-#{name}"
   end
 end
