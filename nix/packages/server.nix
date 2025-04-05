@@ -79,8 +79,12 @@ beamPackages.mixRelease rec {
     mix assets.deploy --no-deps-check
   '';
 
-  # disabled because requires a db to work
-  # doCheck = false;
+  # disabled because requires test deps to work
+  # doCheck = true;
+  # nativeCheckInputs = [
+  #   postgresql
+  #   postgresqlTestHook
+  # ];
   # checkPhase = ''
   #   runHook preCheck
   #
