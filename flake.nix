@@ -88,15 +88,8 @@
 
                 mkdir -vp _build
 
-                if [ ! -h _build/tailwind-${os}-${arch} ]; then
-                  rm -f _build/tailwind-${os}-${arch}
-                  ln -sf ${lib.getExe pkgs.tailwindcss} _build/tailwind-${os}-${arch}
-                fi
-
-                if [ ! -h _build/esbuild-${os}-${arch} ]; then
-                  rm -f _build/esbuild-${os}-${arch}
-                  ln -sf ${lib.getExe pkgs.esbuild} _build/esbuild-${os}-${arch}
-                fi
+                ln -sf ${lib.getExe pkgs.tailwindcss_3} _build/tailwind-${os}-${arch}
+                ln -sf ${lib.getExe pkgs.esbuild} _build/esbuild-${os}-${arch}
               '';
 
               # go delve fix
