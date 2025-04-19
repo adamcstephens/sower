@@ -22,7 +22,7 @@ export def attic-upload [cache: string] {
     print "‼️ No targets to push to attic. Skipping push"
   } else {
     print $"📤 Pushing to attic cache ($cache)"
-    $paths | str join "\n" | xargs attic push --ignore-upstream-cache-filter --jobs 30 $"main:($cache)"
+    $paths | str join "\n" | xargs attic push --ignore-upstream-cache-filter --jobs 30 $"main:($cache)" | ignore
   }
 }
 
