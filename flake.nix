@@ -100,6 +100,9 @@
               default = pkgs.callPackage ./nix/tests/e2e.nix {
                 flake = self;
               };
+              services = pkgs.callPackage ./nix/tests/services.nix {
+                flake = self;
+              };
             };
 
             packages = {
@@ -108,7 +111,14 @@
                 buildGoModule = pkgs.buildGo123Module;
                 inherit version;
               };
-              server = pkgs.callPackage ./nix/packages/server.nix { inherit beamPackages elixir version; };
+              server = pkgs.callPackage ./nix/packages/server.nix {
+                inherit
+                  beamPackages
+                  elixir
+                  inputs
+                  version
+                  ;
+              };
             };
 
             process-compose.devServices =
