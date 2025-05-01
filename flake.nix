@@ -13,6 +13,7 @@
       { ... }:
       {
         imports = [
+          ./nix/lib.nix
           ./nix/flake-module.nix
           ./nix/legacy-flake-module.nix
           inputs.process-compose-flake.flakeModule
@@ -105,20 +106,26 @@
               };
             };
 
-            packages = {
+            packages = rec {
               seed-ci = pkgs.callPackage ./nix/packages/seed-ci.nix { };
+
               client = pkgs.callPackage ./nix/packages/client.nix {
                 buildGoModule = pkgs.buildGo123Module;
                 inherit version;
               };
+
               server = pkgs.callPackage ./nix/packages/server.nix {
                 inherit
                   beamPackages
                   elixir
-                  inputs
                   version
+                  sowerServicesHook
                   ;
+
+                sowerLib = self.lib;
               };
+
+              sowerServicesHook = pkgs.callPackage ./nix/packages/services-hook.nix { };
             };
 
             process-compose.devServices =
