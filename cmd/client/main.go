@@ -409,7 +409,7 @@ func seedSubcommand(cfg config) error {
 			}
 		}
 	default:
-		return fmt.Errorf("No seed subcommand selected")
+		return fmt.Errorf("no seed subcommand selected")
 	}
 
 	return nil
@@ -424,7 +424,7 @@ func default_config_path() (string, error) {
 	case "root":
 		return "/etc/sower/client.json", nil
 	case "":
-		return "", fmt.Errorf("Failed to detect user, not loading default config file")
+		return "", fmt.Errorf("failed to detect user, not loading default config file")
 	default:
 		return fmt.Sprintf("%s/sower/client.json", xdg.ConfigHome), nil
 	}

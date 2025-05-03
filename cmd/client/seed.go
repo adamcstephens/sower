@@ -15,15 +15,15 @@ import (
 func activate(seedType client.SeedSeedType, storePath string, mode string) error {
 	var err error
 
-	switch {
-	case seedType == client.HomeManager:
+	switch seedType {
+	case client.HomeManager:
 		cmd := exec.Command(fmt.Sprintf("%s/activate", storePath))
 		err = commands.SimpleRun(cmd)
 		if err != nil {
 			return fmt.Errorf("Failed to activate home-manager generation: %v", err)
 		}
 
-	case seedType == client.Nixos:
+	case client.Nixos:
 		profileCmd := exec.Command("nix-env", "--set", "--profile", "/nix/var/nix/profiles/system", storePath)
 		err = commands.SimpleRun(profileCmd)
 		if err != nil {

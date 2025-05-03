@@ -22,7 +22,7 @@ func (c *channelClient) connect() error {
 
 	endpoint, err := url.Parse(fmt.Sprintf("%s/client", c.config.Endpoint))
 	if err != nil {
-		return fmt.Errorf("Failed to parse endpoint: %v", err)
+		return fmt.Errorf("failed to parse endpoint: %v", err)
 	}
 	endpoint.RawQuery = fmt.Sprintf("token=%s", url.QueryEscape(c.config.ApiToken))
 
