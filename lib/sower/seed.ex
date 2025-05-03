@@ -10,6 +10,8 @@ defmodule Sower.Seed do
 
   @derive {Phoenix.Param, key: :sid}
 
+  @seed_types ["nixos", "home-manager", "nix-darwin", "service"]
+
   schema "seeds" do
     field :sid, Sower.Schema.Sid, autogenerate: true
     field :name, :string
@@ -100,10 +102,14 @@ defmodule Sower.Seed do
     end
   end
 
+  def seed_types() do
+    @seed_types
+  end
+
   defp changeset(seed, attrs) do
     seed
     |> cast(attrs, [:name, :seed_type, :org_id])
-    |> validate_inclusion(:seed_type, ["nixos", "home-manager", "nix-darwin"])
+    |> validate_inclusion(:seed_type, @seed_types)
     |> validate_required([:name, :seed_type, :org_id])
     |> unique_constraint([:name, :seed_type, :org_id], error_key: :unique_seed)
   end

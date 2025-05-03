@@ -20,7 +20,7 @@ defmodule SowerWeb.Schemas.Seed do
       seed_type: %Schema{
         type: :string,
         description: "Type of the seed",
-        enum: ["nixos", "home-manager", "nix-darwin"]
+        enum: Sower.Seed.seed_types()
       }
     },
     required: ~w(name seed_type)a,

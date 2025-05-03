@@ -25,6 +25,7 @@ const (
 	HomeManager SeedSeedType = "home-manager"
 	NixDarwin   SeedSeedType = "nix-darwin"
 	Nixos       SeedSeedType = "nixos"
+	Service     SeedSeedType = "service"
 )
 
 // NixCache A Nix binary cache
@@ -68,7 +69,7 @@ type ListSeedsParams struct {
 	// Name Seed name
 	Name *string `form:"name,omitempty" json:"name,omitempty"`
 
-	// SeedType Seed type (nixos, home-manager, etc.)
+	// SeedType Seed type, one of [nixos, home-manager, nix-darwin, service]
 	SeedType *string `form:"seed_type,omitempty" json:"seed_type,omitempty"`
 }
 
