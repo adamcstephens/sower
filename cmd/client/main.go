@@ -21,9 +21,10 @@ import (
 var version = "dev"
 
 type config struct {
-	Builder *builderCmd `arg:"subcommand:builder"`
-	Daemon  *daemonCmd  `arg:"subcommand:daemon"`
-	Seed    *seedCmd    `arg:"subcommand:seed"`
+	Builder  *builderCmd  `arg:"subcommand:builder"`
+	Daemon   *daemonCmd   `arg:"subcommand:daemon"`
+	Seed     *seedCmd     `arg:"subcommand:seed"`
+	Services *servicesCmd `arg:"subcommand:services"`
 
 	ApiTokenFile string   `arg:"--api-token-file,env:SOWER_API_TOKEN_FILE" json:"api-token-file"`
 	ApiToken     string   `arg:"--api-token,env:SOWER_API_TOKEN"`
@@ -83,17 +84,30 @@ type seedUpgradeCmd struct {
 	Yes  bool   `arg:"--yes,-y"`
 }
 
+type Service string
+
+type servicesCmd struct {
+	List     *servicesListCmd    `arg:"subcommand:list"`
+	Upgrade  *servicesUpgradeCmd `arg:"subcommand:upgrade"`
+	Services []Service
+}
+
+type servicesListCmd struct{}
+type servicesUpgradeCmd struct{}
+
 func main() {
 	var cfg config
-	var parseResult error
-	p, err := arg.NewParser(arg.Config{}, &cfg)
+
+	parsedConfig, err := arg.NewParser(arg.Config{}, &cfg)
 	if err != nil {
 		log.Fatalf("Fatal error in argument specification")
 		os.Exit(1)
 	}
 
 	// read args for finding config files
-	_ = p.Parse(os.Args[1:])
+	_ = parsedConfig.Parse(os.Args[1:])
+
+	args := cfg
 
 	initLogger(cfg.Debug)
 
@@ -124,19 +138,21 @@ func main() {
 			os.Exit(1)
 		}
 
+		// merge into config
 		if err := json.Unmarshal(j, &cfg); err != nil {
 			slog.Error("Failed to parse configuration file", "config-file", configFile)
 			os.Exit(1)
 		}
 	}
 
-	// reparse flags on top of config
-	parseResult = p.Parse(os.Args[1:])
+	// reparse args on top of config
+	parseResult := parsedConfig.Parse(os.Args[1:])
+
+	slog.Debug("CLI args", "args", args)
+	slog.Debug("Final merged config", "config", cfg)
 
 	// re-initialize logging in case level is only set in config
 	initLogger(cfg.Debug)
-
-	slog.Debug("Loaded args", "args", cfg)
 
 	if cfg.ApiToken == "" && cfg.ApiTokenFile != "" {
 		slog.Debug("Reading api-token file", "file", cfg.ApiTokenFile)
@@ -165,25 +181,38 @@ func main() {
 		slog.Info("Version", "version", version)
 		os.Exit(0)
 	case parseResult == arg.ErrHelp: // found "--help" on command line
-		p.WriteHelp(os.Stdout)
+		parsedConfig.WriteHelp(os.Stdout)
 		os.Exit(0)
 	case parseResult != nil:
 		slog.Error("Unknown error", "error", parseResult)
 		os.Exit(1)
-	}
-
-	switch {
-	case cfg.Builder != nil:
+	case args.Builder != nil:
 		buildCommand(cfg)
-	case cfg.Daemon != nil:
+	case args.Daemon != nil:
 		daemonCommand(cfg)
-	case cfg.Seed != nil:
+	case args.Seed != nil:
 		err := seedSubcommand(cfg)
 		if err != nil {
-			p.WriteHelp(os.Stdout)
+			parsedConfig.WriteHelp(os.Stdout)
 		}
+	case cfg.Services != nil:
+		servicesCommand(cfg)
 	default:
-		p.WriteHelp(os.Stdout)
+		parsedConfig.WriteHelp(os.Stdout)
+	}
+}
+
+func servicesCommand(cfg config) {
+	switch {
+	case cfg.Services.List != nil:
+		if len(cfg.Services.Services) == 0 {
+			slog.Warn("No services configured")
+			os.Exit(0)
+		}
+
+		for _, service := range cfg.Services.Services {
+			slog.Info("Found service", "service", service)
+		}
 	}
 }
 
