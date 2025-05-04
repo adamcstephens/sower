@@ -22,7 +22,7 @@ func NewSeedClient(endpoint, token string) (*SeedClient, error) {
 
 	bearerAuth, err := securityprovider.NewSecurityProviderBearerToken(token)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to load API token, %s", err)
+		return nil, fmt.Errorf("failed to load API token, %s", err)
 	}
 
 	newClient, err := NewClientWithResponses(endpoint, WithRequestEditorFn(bearerAuth.Intercept), WithHTTPClient(&hc))
@@ -77,7 +77,7 @@ func (s *SeedClient) GetSeed(name, seedType string) (*Seed, error) {
 	newSeed := Seed{}
 
 	if name == "" && seedType == "" {
-		return nil, fmt.Errorf("Must specify both name and type")
+		return nil, fmt.Errorf("must specify both name and type")
 	}
 
 	resp, err := s.client.ListSeedsWithResponse(context.TODO(), &ListSeedsParams{Name: &name, SeedType: &seedType})
@@ -188,6 +188,8 @@ func stringToSeedSeedType(s string) (SeedSeedType, error) {
 		return NixDarwin, nil
 	case "nixos":
 		return Nixos, nil
+	case "service":
+		return Service, nil
 	default:
 		return "", fmt.Errorf("unknown seed type: %s", s)
 	}

@@ -135,6 +135,8 @@ func preCheckSeed(storePath, seedType string) error {
 		versionFile = fmt.Sprintf("%v/hm-version", storePath)
 	case string(client.Nixos):
 		versionFile = fmt.Sprintf("%v/nixos-version", storePath)
+	case string(client.Service):
+		versionFile = fmt.Sprintf("%v/.sower/systemd", storePath)
 	default:
 		return fmt.Errorf("Unsupported seed type %s", seedType)
 	}
