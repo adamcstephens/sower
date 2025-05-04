@@ -203,15 +203,33 @@ func main() {
 }
 
 func servicesCommand(cfg config) {
+	if len(cfg.Services.Services) == 0 {
+		slog.Warn("No services configured")
+		os.Exit(0)
+	}
+
 	switch {
 	case cfg.Services.List != nil:
-		if len(cfg.Services.Services) == 0 {
-			slog.Warn("No services configured")
-			os.Exit(0)
+		seedClient, err := client.NewSeedClient(cfg.Endpoint, cfg.ApiToken)
+		if err != nil {
+			slog.Error("Failed to initialize seed client")
+			os.Exit(1)
 		}
 
 		for _, service := range cfg.Services.Services {
-			slog.Info("Found service", "service", service)
+			seed, err := seedClient.GetSeed(string(service), string(client.Service))
+			if err != nil {
+				slog.Error("Failed to get seed", "error", err, "name", string(service), "type", client.Service)
+				continue
+			}
+
+			storePath, err := seedClient.GetSeedLatestPath(seed)
+			if err != nil {
+				slog.Error("Failed to get seed store path", "error", err)
+				continue
+			}
+
+			slog.Info("Found service", "service", service, "store_path", storePath.Path)
 		}
 	}
 }
