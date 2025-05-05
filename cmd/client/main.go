@@ -84,12 +84,10 @@ type seedUpgradeCmd struct {
 	Yes  bool   `arg:"--yes,-y"`
 }
 
-type Service string
-
 type servicesCmd struct {
 	List     *servicesListCmd    `arg:"subcommand:list"`
 	Upgrade  *servicesUpgradeCmd `arg:"subcommand:upgrade"`
-	Services []Service
+	Services []client.SeedSeedType
 }
 
 type servicesListCmd struct{}
@@ -199,38 +197,6 @@ func main() {
 		servicesCommand(cfg)
 	default:
 		parsedConfig.WriteHelp(os.Stdout)
-	}
-}
-
-func servicesCommand(cfg config) {
-	if len(cfg.Services.Services) == 0 {
-		slog.Warn("No services configured")
-		os.Exit(0)
-	}
-
-	switch {
-	case cfg.Services.List != nil:
-		seedClient, err := client.NewSeedClient(cfg.Endpoint, cfg.ApiToken)
-		if err != nil {
-			slog.Error("Failed to initialize seed client")
-			os.Exit(1)
-		}
-
-		for _, service := range cfg.Services.Services {
-			seed, err := seedClient.GetSeed(string(service), string(client.Service))
-			if err != nil {
-				slog.Error("Failed to get seed", "error", err, "name", string(service), "type", client.Service)
-				continue
-			}
-
-			storePath, err := seedClient.GetSeedLatestPath(seed)
-			if err != nil {
-				slog.Error("Failed to get seed store path", "error", err)
-				continue
-			}
-
-			slog.Info("Found service", "service", service, "store_path", storePath.Path)
-		}
 	}
 }
 
@@ -460,6 +426,83 @@ func seedSubcommand(cfg config) error {
 	}
 
 	return nil
+}
+
+func servicesCommand(cfg config) {
+	if len(cfg.Services.Services) == 0 {
+		slog.Warn("No services configured")
+		os.Exit(0)
+	}
+
+	switch {
+	case cfg.Services.List != nil:
+		seedClient, err := client.NewSeedClient(cfg.Endpoint, cfg.ApiToken)
+		if err != nil {
+			slog.Error("Failed to initialize seed client")
+			os.Exit(1)
+		}
+
+		for _, service := range cfg.Services.Services {
+			seed, err := seedClient.GetSeed(string(service), string(client.Service))
+			if err != nil {
+				slog.Error("Failed to get seed", "error", err, "name", string(service), "type", client.Service)
+				continue
+			}
+
+			storePath, err := seedClient.GetSeedLatestPath(seed)
+			if err != nil {
+				slog.Error("Failed to get seed store path", "error", err)
+				continue
+			}
+
+			slog.Info("Found service", "service", service, "store_path", storePath.Path)
+		}
+	case cfg.Services.Upgrade != nil:
+		seedClient, err := client.NewSeedClient(cfg.Endpoint, cfg.ApiToken)
+		if err != nil {
+			slog.Error("Failed to initialize seed client")
+			os.Exit(1)
+		}
+
+		paths := []client.StorePath{}
+
+		for _, service := range cfg.Services.Services {
+			seed, err := seedClient.GetSeed(string(service), string(client.Service))
+			if err != nil {
+				slog.Error("Failed to get seed", "error", err, "name", string(service), "type", client.Service)
+				continue
+			}
+
+			storePath, err := seedClient.GetSeedLatestPath(seed)
+			if err != nil {
+				slog.Error("Failed to get seed store path", "error", err)
+				continue
+			}
+
+			slog.Info("Found service", "service", service, "store_path", storePath.Path)
+
+			caches, err := seedClient.GetNixCaches()
+			if err != nil {
+				slog.Error("Failed to get nix caches", "error", err)
+				os.Exit(1)
+			}
+
+			if err := realize(storePath.Path, caches, false); err != nil {
+				slog.Error("Failed realizing seed", "error", err)
+				os.Exit(1)
+			}
+
+			slog.Info("Downloaded seed", "name", seed.Name, "type", seed.SeedType, "path", storePath.Path)
+
+			paths = append(paths, *storePath)
+		}
+
+		err = buildServicesEnv(paths)
+		if err != nil {
+			slog.Error("Failed to build services environment", "error", err)
+			os.Exit(1)
+		}
+	}
 }
 
 func default_config_path() (string, error) {

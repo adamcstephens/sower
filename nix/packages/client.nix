@@ -3,6 +3,10 @@
   buildGoModule,
   version,
 }:
+let
+  nixpkgsref = lib.elemAt (lib.splitString "." lib.version) 3;
+in
+
 buildGoModule rec {
   pname = "sower";
   inherit version;
@@ -22,7 +26,10 @@ buildGoModule rec {
 
   env.CGO_ENABLED = 0;
 
-  ldflags = [ "-X main.version=${version}" ];
+  ldflags = [
+    "-X main.version=${version}"
+    "-X main.nixpkgsref=${nixpkgsref}"
+  ];
 
   postInstall = ''
     mv $out/bin/client $out/bin/sower
