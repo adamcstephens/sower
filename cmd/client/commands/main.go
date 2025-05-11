@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 func SimpleRun(cmd *exec.Cmd) error {
@@ -41,7 +42,7 @@ func SimpleRun(cmd *exec.Cmd) error {
 
 	err = cmd.Wait()
 	if err != nil {
-		return fmt.Errorf("failed to download seed: %v", err)
+		return fmt.Errorf("failed to run command: %v", err)
 	}
 
 	if ioErr != nil {
@@ -49,4 +50,33 @@ func SimpleRun(cmd *exec.Cmd) error {
 	}
 
 	return nil
+}
+
+func Run(cmd *exec.Cmd) (string, error) {
+	// Set up the pipes for stderr
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", fmt.Errorf("error creating stderr: %v", err)
+	}
+
+	slog.Debug("Running command", "cmd", cmd.String())
+
+	var ioErr error
+	go func() {
+		_, ioErr = io.Copy(os.Stderr, stderr) // Redirect stderr to terminal's stderr
+		if ioErr != nil {
+			slog.Error("failed to configure stderr")
+		}
+	}()
+
+	stdout, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to run command: %v", err)
+	}
+
+	if ioErr != nil {
+		return "", fmt.Errorf("error copying output: %v", ioErr)
+	}
+
+	return strings.TrimSpace(string(stdout)), nil
 }

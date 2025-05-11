@@ -497,9 +497,15 @@ func servicesCommand(cfg config) {
 			paths = append(paths, *storePath)
 		}
 
-		err = buildServicesEnv(paths)
+		servicesPath, err := buildServicesEnv(paths)
 		if err != nil {
 			slog.Error("Failed to build services environment", "error", err)
+			os.Exit(1)
+		}
+
+		err = activateServices(servicesPath)
+		if err != nil {
+			slog.Error("Failed to activate services environment", "error", err)
 			os.Exit(1)
 		}
 	}

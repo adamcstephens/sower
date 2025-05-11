@@ -24,8 +24,7 @@ func activate(seedType client.SeedSeedType, storePath string, mode string) error
 		}
 
 	case client.Nixos:
-		profileCmd := exec.Command("nix-env", "--set", "--profile", "/nix/var/nix/profiles/system", storePath)
-		err = commands.SimpleRun(profileCmd)
+		err = setProfile("/nix/var/nix/profiles/system", storePath)
 		if err != nil {
 			return fmt.Errorf("failed to set nixos profile: %v", err)
 		}
@@ -122,6 +121,16 @@ func reboot(yes bool) error {
 		} else {
 			slog.Warn("Reboot needed, but skipping without --yes")
 		}
+	}
+
+	return nil
+}
+
+func setProfile(profile, storePath string) error {
+	profileCmd := exec.Command("nix-env", "--set", "--profile", profile, storePath)
+	err := commands.SimpleRun(profileCmd)
+	if err != nil {
+		return fmt.Errorf("failed to set profile: %v", err)
 	}
 
 	return nil
