@@ -65,6 +65,10 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    boot.extraSystemdUnitPaths = [
+      "/etc/sower/systemd"
+    ];
+
     environment.etc."sower/client.json".source = lib.mkIf (cfg.settings != null) (
       json.generate "sower-client.json" (
         cfg.settings // (lib.optionalAttrs cfg.autoreboot { reboot = true; })

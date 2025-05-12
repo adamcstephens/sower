@@ -42,14 +42,20 @@ func activate(seedType client.SeedSeedType, storePath string, mode string) error
 	return nil
 }
 
-func realize(storePath string, caches *[]client.NixCache, initrd bool) error {
+func realize(storePath string, caches *[]client.NixCache, initrd bool, profile string) error {
 	slog.Debug("Realizing path", "path", storePath)
 
 	if storePath == "" {
 		return fmt.Errorf("cannot download without seed out_path")
 	}
 
-	cmd := []string{"--realize", storePath}
+	_, err := os.Stat(storePath)
+	if err == nil {
+		slog.Debug("Already downloaded seed", "path", storePath)
+		return nil
+	}
+
+	cmd := []string{"build", storePath}
 
 	if initrd {
 		cmd = append(cmd, "--store", "/sysroot")
@@ -67,7 +73,11 @@ func realize(storePath string, caches *[]client.NixCache, initrd bool) error {
 		cmd = append(cmd, "--extra-trusted-public-keys", strings.Join(publicKeys, ","))
 	}
 
-	err := commands.SimpleRun(exec.Command("nix-store", cmd...))
+	if profile != "" {
+		cmd = append(cmd, "--profile", profile)
+	}
+
+	err = commands.SimpleRun(exec.Command("nix", cmd...))
 
 	return err
 }

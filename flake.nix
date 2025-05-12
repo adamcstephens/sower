@@ -77,6 +77,7 @@
                   pkgs.process-compose
                   config.process-compose.devServices.services.postgres.postgres1.package
                   config.process-compose.devServices.outputs.package
+                  pkgs.sd-switch
                   pkgs.watchexec
                 ]
                 ++ lib.optionals pkgs.stdenv.isLinux [
@@ -126,6 +127,11 @@
               };
 
               sowerServicesHook = pkgs.callPackage ./nix/packages/services-hook.nix { };
+
+              tests-simple-service = pkgs.callPackage ./nix/tests/simple-service.nix {
+                inherit sowerServicesHook;
+                sowerLib = self.lib;
+              };
             };
 
             process-compose.devServices =

@@ -7,6 +7,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -297,7 +298,7 @@ func seedSubcommand(cfg config) error {
 			os.Exit(1)
 		}
 
-		if err := realize(storePath.Path, caches, cfg.Seed.Download.Initrd); err != nil {
+		if err := realize(storePath.Path, caches, cfg.Seed.Download.Initrd, ""); err != nil {
 			slog.Error("Failed realizing seed", "error", err)
 			os.Exit(1)
 		}
@@ -402,7 +403,7 @@ func seedSubcommand(cfg config) error {
 			os.Exit(1)
 		}
 
-		if err := realize(storePath.Path, caches, false); err != nil {
+		if err := realize(storePath.Path, caches, false, ""); err != nil {
 			slog.Error("Failed realizing seed", "error", err)
 			os.Exit(1)
 		}
@@ -466,6 +467,22 @@ func servicesCommand(cfg config) {
 
 		paths := []client.StorePath{}
 
+		if len(cfg.Services.Services) == 0 {
+			slog.Error("No services configured")
+			os.Exit(1)
+		}
+
+		servicesProfileDir := filepath.Join(profileParentDir(), "services")
+		_, err = os.Stat(servicesProfileDir)
+		if err != nil {
+			slog.Debug("Creating profile directory for services", "path", servicesProfileDir)
+			err = os.MkdirAll(servicesProfileDir, 0755)
+			if err != nil {
+				slog.Error("Failed to create profile directory for services", "error", err)
+				os.Exit(1)
+			}
+		}
+
 		for _, service := range cfg.Services.Services {
 			seed, err := seedClient.GetSeed(string(service), string(client.Service))
 			if err != nil {
@@ -487,7 +504,7 @@ func servicesCommand(cfg config) {
 				os.Exit(1)
 			}
 
-			if err := realize(storePath.Path, caches, false); err != nil {
+			if err := realize(storePath.Path, caches, false, filepath.Join(servicesProfileDir, string(service))); err != nil {
 				slog.Error("Failed realizing seed", "error", err)
 				os.Exit(1)
 			}
@@ -497,7 +514,7 @@ func servicesCommand(cfg config) {
 			paths = append(paths, *storePath)
 		}
 
-		servicesPath, err := buildServicesEnv(paths)
+		servicesPath, err := buildServicesUnits(paths)
 		if err != nil {
 			slog.Error("Failed to build services environment", "error", err)
 			os.Exit(1)
@@ -522,6 +539,6 @@ func default_config_path() (string, error) {
 	case "":
 		return "", fmt.Errorf("failed to detect user, not loading default config file")
 	default:
-		return fmt.Sprintf("%s/sower/client.json", xdg.ConfigHome), nil
+		return filepath.Join(xdg.ConfigHome, "sower", "client.json"), nil
 	}
 }
