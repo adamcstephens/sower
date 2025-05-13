@@ -3,6 +3,9 @@
   ...
 }:
 {
+  # generateUnitFiles creates a derivatioon with systemd units
+  # using the nixos module structure, but intended for using in
+  # a sower service along with sowerServicesHook
   flake.lib.generateUnitFiles =
     {
       pkgs,
@@ -56,6 +59,8 @@
                   # TODO type this
                 };
 
+                # copy the options structure out of nixpkgs, or a subset anyway
+                # unfortunately this isn't exposed in a consumable way in nixpkgs
                 systemd = {
                   package = mkPackageOption pkgs "systemd" { };
 
@@ -169,6 +174,8 @@
               };
 
               config = {
+                # the bare minimum to init the necessary config, and merge all the units together
+                # for consumption by generateUnits
                 systemd = {
                   package = pkgs.systemd;
                   defaultUnit = "default.target";
@@ -217,11 +224,16 @@
             in
             {
               config = {
+                # build the combined units into a package, and expose
+                # then in a module option for consumption
                 service-units = pkgs.runCommand "service-units" { } ''
-                  cp -R ${system-units} $out
+                  cp --recursive ${system-units} $out
                   chmod +w -R $out
+                  # delete any broken links
                   find $out -xtype l -delete
+                  # delete empty directories
                   find $out -type d -empty -delete
+                  # remove the upstream targets
                   for unit in ${builtins.toString upstreamUnits}; do
                     rm $out/$unit
                   done
@@ -230,6 +242,7 @@
             }
           )
           {
+            # pass on the config from generateUnitFiles
             systemd = config;
           }
         ];
@@ -237,5 +250,6 @@
       };
 
     in
+    # return back the units, aka the package with them
     moduler.config.service-units;
 }
