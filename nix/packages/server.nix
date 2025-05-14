@@ -17,7 +17,7 @@ let
   os = if stdenv.isDarwin then "darwin" else "linux";
 in
 beamPackages.mixRelease rec {
-  pname = "sower";
+  pname = "sower-server";
   inherit version;
 
   inherit elixir;

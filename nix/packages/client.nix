@@ -1,6 +1,8 @@
 {
   lib,
   buildGoModule,
+  makeWrapper,
+  sd-switch,
   version,
 }:
 let
@@ -8,7 +10,7 @@ let
 in
 
 buildGoModule rec {
-  pname = "sower";
+  pname = "sower-client";
   inherit version;
 
   src =
@@ -24,6 +26,10 @@ buildGoModule rec {
       ];
     };
 
+  nativeBuildInputs = [
+    makeWrapper
+  ];
+
   env.CGO_ENABLED = 0;
 
   ldflags = [
@@ -33,6 +39,8 @@ buildGoModule rec {
 
   postInstall = ''
     mv $out/bin/client $out/bin/sower
+
+    wrapProgram $out/bin/sower --prefix PATH : ${lib.makeBinPath [ sd-switch ]}
   '';
 
   # disable checks for now until better fleshed out

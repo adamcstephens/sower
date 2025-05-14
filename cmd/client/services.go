@@ -104,7 +104,7 @@ func activateServices(storePath string) error {
 		if err != nil {
 			return fmt.Errorf("unable to create fake old profile: %v", err)
 		}
-		err = os.Mkdir(filepath.Join(oldProfile, "systemd"), 0700)
+		err = os.MkdirAll(filepath.Join(oldProfile, "systemd", "system"), 0755)
 		if err != nil {
 			return fmt.Errorf("failed to create fake systemd dir: %v", err)
 		}
@@ -120,17 +120,17 @@ func activateServices(storePath string) error {
 		return nil
 	}
 
-	oldUnits := filepath.Join(oldProfile, "systemd")
-	newUnits := filepath.Join(storePath, "systemd")
-
-	err = commands.SimpleRun(exec.Command("sd-switch", "--verbose", "--system", "--old-units", oldUnits, "--new-units", newUnits))
-	if err != nil {
-		return fmt.Errorf("failed to run sd-switch: %v", err)
-	}
+	oldUnits := filepath.Join(oldProfile, "systemd", "system")
+	newUnits := filepath.Join(storePath, "systemd", "system")
 
 	err = setProfile(profile, storePath)
 	if err != nil {
 		return fmt.Errorf("failed to set services profile: %v", err)
+	}
+
+	err = commands.SimpleRun(exec.Command("sd-switch", "--verbose", "--system", "--old-units", oldUnits, "--new-units", newUnits))
+	if err != nil {
+		return fmt.Errorf("failed to run sd-switch: %v", err)
 	}
 
 	return nil

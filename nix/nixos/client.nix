@@ -56,6 +56,12 @@ in
                 default = "nixos";
               };
             };
+
+            services.services = lib.mkOption {
+              type = lib.types.listOf lib.types.str;
+              description = "services to be managed by client";
+              default = [ ];
+            };
           };
         };
         description = "Sower configuration file";
@@ -65,8 +71,8 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    boot.extraSystemdUnitPaths = [
-      "/etc/sower/systemd"
+    boot.extraSystemdUnitPaths = lib.optionals (cfg.settings.services.services != [ ]) [
+      "/etc/sower/systemd/system"
     ];
 
     environment.etc."sower/client.json".source = lib.mkIf (cfg.settings != null) (
@@ -104,5 +110,10 @@ in
         Persistent = true;
       };
     };
+
+    systemd.tmpfiles.rules = lib.optionals (cfg.settings.services.services != [ ]) [
+      "d /etc/sower 0755 root root"
+      "L /etc/sower/systemd - - - - /nix/var/nix/profiles/sower/services-units/systemd"
+    ];
   };
 }
