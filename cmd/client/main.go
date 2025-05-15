@@ -173,8 +173,7 @@ func main() {
 	}
 
 	if cfg.ApiToken == "" {
-		slog.Error("Missing API token. Add to configuration file or environment.")
-		os.Exit(1)
+		slog.Warn("Missing API token. Add to configuration file or environment.")
 	}
 
 	switch {
