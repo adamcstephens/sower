@@ -38,7 +38,7 @@ func Push(workers int) error {
 	q := queue.NewPool(int64(workers))
 	defer q.Release()
 
-	err := evalJobs(workers, q, pushResult)
+	err := evalJobs(workers, "", q, pushResult)
 	if err != nil {
 		return err
 	}
@@ -50,11 +50,11 @@ func Push(workers int) error {
 	return nil
 }
 
-func Build(workers int) error {
+func Build(workers int, system string) error {
 	q := queue.NewPool(int64(workers))
 	defer q.Release()
 
-	err := evalJobs(workers, q, buildResult)
+	err := evalJobs(workers, system, q, buildResult)
 	if err != nil {
 		return err
 	}
@@ -66,11 +66,11 @@ func Build(workers int) error {
 	return nil
 }
 
-func Eval(workers int) error {
+func Eval(workers int, system string) error {
 	q := queue.NewPool(1)
 	defer q.Release()
 
-	err := evalJobs(workers, q, printResult)
+	err := evalJobs(workers, system, q, printResult)
 	if err != nil {
 		return err
 	}
@@ -78,12 +78,17 @@ func Eval(workers int) error {
 	return nil
 }
 
-func evalJobs(workers int, resultQueue *queue.Queue, resultFunc func(evalResult) error) error {
+func evalJobs(workers int, system string, resultQueue *queue.Queue, resultFunc func(evalResult) error) error {
 	if workers == 0 {
 		return fmt.Errorf("no workers specified")
 	}
 
-	cmd := exec.Command("nix-eval-jobs", "--flake", ".#sowerJobs", "--force-recurse", "--workers", fmt.Sprint(workers))
+	target := ".#sowerJobs"
+	if system != "" {
+		target = fmt.Sprintf(".#sowerJobs.%s", system)
+	}
+
+	cmd := exec.Command("nix-eval-jobs", "--flake", target, "--force-recurse", "--workers", fmt.Sprint(workers))
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

@@ -41,11 +41,13 @@ type builderCmd struct {
 }
 
 type builderBuildCmd struct {
-	Workers int `arg:"--workers,-w"`
+	Workers int    `arg:"--workers,-w"`
+	System  string `arg:"--system"`
 }
 
 type builderEvalCmd struct {
-	Workers int `arg:"--workers,-w"`
+	Workers int    `arg:"--workers,-w"`
+	System  string `arg:"--system"`
 }
 
 type daemonCmd struct {
@@ -228,13 +230,13 @@ func initLogger(debug bool) {
 func buildCommand(cfg config) {
 	switch {
 	case cfg.Builder.Build != nil:
-		err := builder.Build(cfg.Builder.Build.Workers)
+		err := builder.Build(cfg.Builder.Build.Workers, cfg.Builder.Build.System)
 		if err != nil {
 			slog.Error("Failed to eval", "error", err)
 			os.Exit(1)
 		}
 	case cfg.Builder.Eval != nil:
-		err := builder.Eval(cfg.Builder.Eval.Workers)
+		err := builder.Eval(cfg.Builder.Eval.Workers, cfg.Builder.Eval.System)
 		if err != nil {
 			slog.Error("Failed to eval", "error", err)
 			os.Exit(1)

@@ -14,9 +14,7 @@ mkTransposedPerSystemModule {
     type = types.lazyAttrsOf types.package;
     default = { };
     description = ''
-      An attribute set of sowerJobs to be built by [`nix build`](https://nixos.org/manual/nix/stable/command-ref/new-cli/nix3-build.html).
-
-      `nix build .#<name>` will build `sowerJobs.<name>`.
+      An attribute set of sowerJobs, similar to packages
     '';
   };
   file = ./sowerjobs.nix;
