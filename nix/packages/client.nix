@@ -2,6 +2,7 @@
   lib,
   buildGoModule,
   makeWrapper,
+  nix-eval-jobs,
   sd-switch,
   version,
 }:
@@ -40,7 +41,12 @@ buildGoModule rec {
   postInstall = ''
     mv $out/bin/client $out/bin/sower
 
-    wrapProgram $out/bin/sower --prefix PATH : ${lib.makeBinPath [ sd-switch ]}
+    wrapProgram $out/bin/sower --prefix PATH : ${
+      lib.makeBinPath [
+        nix-eval-jobs
+        sd-switch
+      ]
+    }
   '';
 
   # disable checks for now until better fleshed out
