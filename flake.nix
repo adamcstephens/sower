@@ -62,14 +62,10 @@
                   pkgs.gopls
                   pkgs.oapi-codegen
 
-                  # rust
-                  pkgs.cargo
-
                   pkgs.attic-client
                   self'.packages.seed-ci
                   pkgs.nushell
 
-                  pkgs.docker
                   pkgs.just
                   pkgs.mix2nix
                   pkgs.nix-eval-jobs

@@ -1,9 +1,0 @@
-[nix-x86_64-linux]
-src.github_tag = "nixos/nix"
-fetch.docker = "docker.io/nixos/nix"
-docker.arch = "amd64"
-
-[nix-aarch64-linux]
-src.github_tag = "nixos/nix"
-fetch.docker = "docker.io/nixos/nix"
-docker.arch = "arm64"

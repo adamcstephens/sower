@@ -34,19 +34,6 @@ dev-seed-from-local:
 dev-services:
     process-compose list || process-compose up --detached
 
-docker-build:
-    eval $(nix build --print-build-logs --no-link --print-out-paths --system aarch64-linux .#seed-ci-docker) | docker load
-    eval $(nix build --print-build-logs --no-link --print-out-paths --system x86_64-linux .#seed-ci-docker) | docker load
-
-docker-push:
-    #!/usr/bin/env bash
-    image_name=$(nix eval .#seed-ci-docker.imageName --raw)
-    docker manifest rm $image_name:latest || true
-    docker push $image_name:latest-aarch64-linux
-    docker push $image_name:latest-x86_64-linux
-    docker manifest create --amend $image_name:latest $image_name:latest-aarch64-linux $image_name:latest-x86_64-linux
-    docker manifest push $image_name:latest
-
 mix-nix-lock:
     mix deps.nix --output nix/packages/deps.nix
 
