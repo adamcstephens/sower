@@ -1,12 +1,13 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"text/template"
 
 	"codeberg.org/adamcstephens/sower/client"
 	"codeberg.org/adamcstephens/sower/cmd/client/commands"
@@ -22,84 +23,56 @@ type EnvTemplate struct {
 
 // https://github.com/NixOS/nixpkgs/archive/refs/heads/master.zip
 func buildServicesUnits(paths []client.StorePath) (string, error) {
-	slog.Debug("Collecting services units", "nixpkgs", nixpkgsref)
-
-	unitsTemplate := `{
-  pkgs ?
-		import <nixpkgs>
-	# import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/{{ .Nixpkgsref }}.tar.gz")
-      { },
-}:
-pkgs.runCommand "sower-services"
-  {
-    nativeBuildInputs = [{{ range .Paths }}
-    {{ .Path }}
-{{ end }}  ];
-  }
-  ''
-    mkdir -p $out/nix-support
-
-    for path in $nativeBuildInputs; do
-      echo "Copying $path"
-      cp --recursive --no-clobber $path/.sower $out/
-      chmod --recursive +w $out/
-    done
-
-    if [  ! -e $out/.sower/systemd ]; then
-      echo "No services found"
-      exit 1
-    fi
-
-    mv $out/.sower/* $out/
-    rmdir $out/.sower
-  ''
-`
-
-	unitsFileNix, err := os.CreateTemp("", "services-units-*.nix")
-	if err != nil {
-		return "", fmt.Errorf("failed to create tempfile: %v", err)
-	}
-	slog.Debug("Created temp file", "units-file", unitsFileNix.Name())
-	// defer os.Remove(unitsFileNix.Name())
-
-	templateParser, err := template.New("services-units").Parse(unitsTemplate)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse template: %v", err)
+	if len(paths) == 0 {
+		return "", fmt.Errorf("no paths specified")
 	}
 
-	err = templateParser.Execute(unitsFileNix, &EnvTemplate{Paths: paths, Nixpkgsref: nixpkgsref})
+	profileDir := filepath.Join(profileParentDir(), "services", servicesHash(paths))
+	slog.Debug("Collecting services units", "profile", profileDir)
+
+	_, err := os.Stat(profileDir)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse template: %v", err)
-	}
-
-	cmd := exec.Command("nix-build", "--no-out-link", unitsFileNix.Name())
-	stdout, err := commands.Run(cmd)
-	if err != nil {
-		return "", fmt.Errorf("failed to build services units file: %v", err)
-	}
-
-	slog.Debug("Successfully built services units output", "nixpkgs", nixpkgsref, "path", stdout)
-
-	return stdout, nil
-}
-
-func activateServices(storePath string) error {
-	parentDir := profileParentDir()
-	_, err := os.Stat(parentDir)
-	if err != nil {
-		slog.Debug("Creating profile directory", "dir", parentDir)
-		err = os.MkdirAll(parentDir, 0755)
+		slog.Debug("Creating profile directory", "dir", profileDir)
+		err = os.MkdirAll(profileDir, 0755)
 		if err != nil {
-			return fmt.Errorf("failed to create sower profile directory: %v", err)
+			return "", fmt.Errorf("failed to create sower profile directory: %v", err)
 		}
 	}
 
-	profile := filepath.Join(parentDir, "services-units")
+	for _, path := range paths {
+		sourceDir := filepath.Join(path.Path, ".sower", "systemd")
+
+		// revisit in 1.24 to see if the CopyFS behavior changes, but currently fails on symlinks
+		// err = os.CopyFS(profileDir, os.DirFS(sourceDir))
+
+		cmd := exec.Command("cp", "--recursive", "--no-clobber", sourceDir, profileDir)
+		err = cmd.Run()
+		if err != nil {
+			return "", fmt.Errorf("failed to copy path %s to profile %s: %v", path.Path, profileDir, err)
+		}
+	}
+
+	slog.Debug("Successfully built services units output", "nixpkgs", nixpkgsref, "path", profileDir)
+
+	return profileDir, nil
+}
+
+func servicesHash(paths []client.StorePath) string {
+	hash := sha256.New()
+	for _, path := range paths {
+		hash.Write([]byte(path.Path))
+	}
+
+	return hex.EncodeToString(hash.Sum(nil))
+}
+
+func activateServices(profilePath string) error {
 	var oldProfile string
 
-	_, err = os.Stat(profile)
+	_, err := os.Stat(profilePath)
 	if err != nil {
-		slog.Warn("No old profile", "profile", profile)
+		// If no previous profile, we'll create a fake one
+		slog.Warn("No old profile", "profile", profilePath)
 		oldProfile, err = os.MkdirTemp("", "fake-old-units")
 		if err != nil {
 			return fmt.Errorf("unable to create fake old profile: %v", err)
@@ -109,24 +82,19 @@ func activateServices(storePath string) error {
 			return fmt.Errorf("failed to create fake systemd dir: %v", err)
 		}
 	} else {
-		oldProfile, err = filepath.EvalSymlinks(profile)
+		oldProfile, err = filepath.EvalSymlinks(profilePath)
 		if err != nil {
 			return fmt.Errorf("unable to read old profile: %v", err)
 		}
 	}
 
-	if oldProfile == storePath {
+	if oldProfile == profilePath {
 		slog.Debug("Services already activated")
 		return nil
 	}
 
-	oldUnits := filepath.Join(oldProfile, "systemd", "system")
-	newUnits := filepath.Join(storePath, "systemd", "system")
-
-	err = setProfile(profile, storePath)
-	if err != nil {
-		return fmt.Errorf("failed to set services profile: %v", err)
-	}
+	oldUnits := filepath.Join(profilePath, "systemd", "system")
+	newUnits := filepath.Join(profilePath, "systemd", "system")
 
 	err = commands.SimpleRun(exec.Command("sd-switch", "--verbose", "--system", "--old-units", oldUnits, "--new-units", newUnits))
 	if err != nil {
@@ -137,9 +105,11 @@ func activateServices(storePath string) error {
 }
 
 func profileParentDir() string {
+	root := "/var/lib/sower"
+
 	if user, exists := os.LookupEnv("USER"); user != "root" && exists {
-		return filepath.Join(xdg.StateHome, "nix", "profiles", "sower")
+		root = filepath.Join(xdg.StateHome, "sower")
 	}
 
-	return "/nix/var/nix/profiles/sower"
+	return filepath.Join(root, "profiles")
 }

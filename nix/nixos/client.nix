@@ -8,6 +8,9 @@ let
   cfg = config.services.sower.client;
   json = pkgs.formats.json { };
   jsonType = json.type;
+  jsonConfig = json.generate "sower-client.json" (
+    cfg.settings // (lib.optionalAttrs cfg.autoreboot { reboot = true; })
+  );
 in
 {
   options = {
@@ -35,11 +38,6 @@ in
           freeformType = jsonType;
 
           options = {
-            api-token-file = lib.mkOption {
-              type = lib.types.str;
-              description = "path to API token file. This is a secret so should not be in the nix store";
-            };
-
             seed = {
               name = lib.mkOption {
                 type = lib.types.str;
@@ -75,11 +73,7 @@ in
       "/etc/sower/systemd/system"
     ];
 
-    environment.etc."sower/client.json".source = lib.mkIf (cfg.settings != null) (
-      json.generate "sower-client.json" (
-        cfg.settings // (lib.optionalAttrs cfg.autoreboot { reboot = true; })
-      )
-    );
+    environment.etc."sower/client.json".source = lib.mkIf (cfg.settings != null) jsonConfig;
 
     environment.systemPackages = [ cfg.package ];
 
@@ -96,7 +90,13 @@ in
       restartIfChanged = false;
 
       serviceConfig = {
-        ExecStart = "${lib.getExe cfg.package} seed upgrade ${lib.optionalString cfg.autoreboot "--yes"}";
+        ExecStart =
+          [
+            "${lib.getExe cfg.package} seed upgrade ${lib.optionalString cfg.autoreboot "--yes"}"
+          ]
+          ++ lib.optionals (cfg.settings.services.services != [ ]) [
+            "${lib.getExe cfg.package} services upgrade"
+          ];
         Type = "oneshot";
         LoadCredential = cfg.credentials;
       };
