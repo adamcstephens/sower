@@ -43,7 +43,7 @@ func buildServicesUnits(paths []client.StorePath) (string, error) {
 	for _, path := range paths {
 		sourceDir := filepath.Join(path.Path, ".sower", "systemd")
 
-		// revisit in 1.24 to see if the CopyFS behavior changes, but currently fails on symlinks
+		// revisit in 1.25 to see if the CopyFS behavior changes, but currently fails on symlinks
 		// err = os.CopyFS(profileDir, os.DirFS(sourceDir))
 
 		cmd := exec.Command("cp", "--recursive", "--no-clobber", sourceDir, profileDir)
