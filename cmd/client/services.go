@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -16,9 +17,8 @@ import (
 
 var nixpkgsref = "refs/heads/nixos-unstable"
 
-type EnvTemplate struct {
-	Nixpkgsref string
-	Paths      []client.StorePath
+type ServicesManifest struct {
+	Paths []string `json:"paths"`
 }
 
 // https://github.com/NixOS/nixpkgs/archive/refs/heads/master.zip
@@ -28,6 +28,7 @@ func buildServicesUnits(paths []client.StorePath) (string, error) {
 	}
 
 	profileDir := filepath.Join(profileParentDir(), "services", servicesHash(paths))
+	manifest := &ServicesManifest{}
 	slog.Debug("Collecting services units", "profile", profileDir)
 
 	_, err := os.Stat(profileDir)
@@ -50,6 +51,17 @@ func buildServicesUnits(paths []client.StorePath) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to copy path %s to profile %s: %v", path.Path, profileDir, err)
 		}
+
+		manifest.Paths = append(manifest.Paths, path.Path)
+	}
+
+	data, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	err = os.WriteFile(filepath.Join(profileDir, "manifest.json"), data, 0644)
+	if err != nil {
+		return "", err
 	}
 
 	slog.Debug("Successfully built services units output", "nixpkgs", nixpkgsref, "path", profileDir)
