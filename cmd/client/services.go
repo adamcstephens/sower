@@ -18,7 +18,7 @@ import (
 var nixpkgsref = "refs/heads/nixos-unstable"
 
 type ServicesManifest struct {
-	Paths []string `json:"paths"`
+	Inputs []client.StorePath `json:"inputs"`
 }
 
 // https://github.com/NixOS/nixpkgs/archive/refs/heads/master.zip
@@ -52,7 +52,7 @@ func buildServicesUnits(paths []client.StorePath) (string, error) {
 			return "", fmt.Errorf("failed to copy path %s to profile %s: %v", path.Path, profileDir, err)
 		}
 
-		manifest.Paths = append(manifest.Paths, path.Path)
+		manifest.Inputs = append(manifest.Inputs, path)
 	}
 
 	data, err := json.MarshalIndent(manifest, "", "  ")

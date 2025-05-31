@@ -14,6 +14,9 @@ defmodule Sower.Nix.StorePath do
 
     many_to_many :seeds, Sower.Seed, join_through: Sower.SeedStorePath
 
+    many_to_many :deployments, Sower.Distribution.Deployment,
+      join_through: Sower.Distribution.StorePathDeployment
+
     timestamps()
   end
 
