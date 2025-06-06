@@ -25,7 +25,13 @@ defmodule SowerWeb.ClientSocket do
     end
   end
 
+  def connect(%{}, socket, _connect_info) do
+    Logger.debug(msg: "TODO authorized connection")
+    {:ok, assign(socket, :sid, Sower.Schema.Sid.generate()) |> dbg()}
+  end
+
   def connect(%{}, _socket, _connect_info) do
+    Logger.debug(msg: "unauthorized connection")
     {:error, "unauthorized. authentication token required"}
   end
 

@@ -1,10 +1,11 @@
 defmodule SowerWeb.ClientChannel do
-  require Logger
   use Phoenix.Channel
 
-  def join("client:all", _message, socket) do
-    send(self(), :push_tree_id_to_client)
-    # Logger.debug(~s"client:all joined by #{socket.assigns.tree_id}")
+  require Logger
+
+  def join("client:lobby", _message, socket) do
+    # send(self(), :push_tree_id_to_client)
+    Logger.debug(msg: "Channel topic joined", topic: "client:all", sid: socket.assigns.sid)
     {:ok, socket}
   end
 
