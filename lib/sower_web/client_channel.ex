@@ -3,14 +3,15 @@ defmodule SowerWeb.ClientChannel do
 
   require Logger
 
-  def join("client:lobby", _message, socket) do
-    # send(self(), :push_tree_id_to_client)
-    Logger.debug(msg: "Channel topic joined", topic: "client:all", sid: socket.assigns.sid)
-    {:ok, socket}
+  def join("client:lobby", _message, socket = %{assigns: %{sid: sid}}) do
+    Logger.debug(msg: "Channel topic joined", topic: "client:all", sid: sid)
+    {:ok, %{sid: sid}, socket}
   end
 
-  def join("client:" <> client_name, _params, socket = %{assigns: %{tree_id: tree_id}}) do
-    if tree_id == client_name do
+  def join("client:" <> topic_sid = topic, _params, socket = %{assigns: %{sid: sid}}) do
+    Logger.debug(msg: "Channel topic joined", topic: topic, sid: sid)
+
+    if sid == topic_sid do
       {:ok, socket}
     else
       {:error, %{reason: "unauthorized"}}
@@ -38,9 +39,4 @@ defmodule SowerWeb.ClientChannel do
   #       {:reply, {:error, "failed to submit"}, socket}
   #   end
   # end
-
-  def handle_info(:push_tree_id_to_client, socket) do
-    # push(socket, "tree:id", %{tree_id: socket.assigns.tree_id})
-    {:noreply, socket}
-  end
 end

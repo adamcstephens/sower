@@ -33,4 +33,19 @@ defmodule SowerClient.SocketClient do
     Logger.debug(msg: "Connected")
     {:ok, join(socket, @topic)}
   end
+
+  @impl Slipstream
+  def handle_join(@topic, %{"sid" => sid}, socket) do
+    Logger.debug(msg: "Joined channel topic", topic: @topic)
+
+    socket = socket |> assign(:sid, sid) |> join("client:#{sid}")
+
+    {:ok, socket}
+  end
+
+  @impl Slipstream
+  def handle_join("client:" <> _sid = topic, _response, socket) do
+    Logger.debug(msg: "Joined channel topic", topic: topic)
+    {:ok, socket}
+  end
 end
