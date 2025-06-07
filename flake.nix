@@ -109,7 +109,7 @@
             packages = rec {
               seed-ci = pkgs.callPackage ./nix/packages/seed-ci.nix { };
 
-              client = pkgs.callPackage ./nix/packages/client.nix {
+              cli = pkgs.callPackage ./nix/packages/cli.nix {
                 inherit version;
               };
 

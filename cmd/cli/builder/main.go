@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"os/exec"
 
-	"codeberg.org/adamcstephens/sower/cmd/client/commands"
+	"codeberg.org/adamcstephens/sower/cmd/cli/commands"
 	"github.com/golang-queue/queue"
 )
 

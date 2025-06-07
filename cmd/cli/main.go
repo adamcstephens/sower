@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"codeberg.org/adamcstephens/sower/client"
-	"codeberg.org/adamcstephens/sower/cmd/client/builder"
+	"codeberg.org/adamcstephens/sower/cmd/cli/builder"
 	"github.com/adrg/xdg"
 	"github.com/alexflint/go-arg"
 	"github.com/lmittmann/tint"

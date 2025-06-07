@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"codeberg.org/adamcstephens/sower/client"
-	"codeberg.org/adamcstephens/sower/cmd/client/commands"
+	"codeberg.org/adamcstephens/sower/cmd/cli/commands"
 )
 
 func activate(seedType client.SeedSeedType, storePath string, mode string) error {

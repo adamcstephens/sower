@@ -28,8 +28,8 @@ dev: && start
     mix assets.build
 
 dev-seed-from-local:
-    go run ./cmd/client seed submit --create --name $(hostname -s) --type nixos --path $(readlink -f /run/booted-system)
-    go run ./cmd/client seed submit --create --name $(hostname -s) --type home-manager --path $(readlink -f $HOME/.local/state/nix/profiles/home-manager)
+    go run ./cmd/cli seed submit --create --name $(hostname -s) --type nixos --path $(readlink -f /run/booted-system)
+    go run ./cmd/cli seed submit --create --name $(hostname -s) --type home-manager --path $(readlink -f $HOME/.local/state/nix/profiles/home-manager)
 
 dev-services:
     process-compose list || process-compose up --detached
@@ -90,8 +90,8 @@ update-go:
     go mod edit -go=$(go version | awk '{print $3}' | sed 's/go//')
     go mod tidy
     just update-go-hash
-    git add go.mod go.sum nix/packages/client.nix
-    git commit -m 'server(chore): update go deps' -- go.mod go.sum nix/packages/client.nix
+    git add go.mod go.sum nix/packages/cli.nix
+    git commit -m 'server(chore): update go deps' -- go.mod go.sum nix/packages/cli.nix
 
 update-go-hash:
     #!/usr/bin/env bash
@@ -99,13 +99,13 @@ update-go-hash:
     set -eou pipefail
 
     setKV() {
-      sed -i "s|$1 = \".*\"|$1 = \"${2:-}\"|" ./nix/packages/client.nix
+      sed -i "s|$1 = \".*\"|$1 = \"${2:-}\"|" ./nix/packages/cli.nix
     }
 
     setKV vendorHash "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=" # Necessary to force clean build.
 
     set +e
-    VENDOR_HASH=$(nix build --no-link .#client 2>&1 >/dev/null | grep "got:" | cut -d':' -f2 | sed 's| ||g')
+    VENDOR_HASH=$(nix build --no-link .#cli 2>&1 >/dev/null | grep "got:" | cut -d':' -f2 | sed 's| ||g')
     set -e
 
     if [ -n "${VENDOR_HASH:-}" ]; then
@@ -115,4 +115,4 @@ update-go-hash:
       exit 1
     fi
 
-    git diff ./nix/packages/client.nix
+    git diff ./nix/packages/cli.nix

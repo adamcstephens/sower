@@ -52,7 +52,7 @@ testers.runNixOSTest {
 
           services.sower.client = {
             enable = true;
-            package = flake.packages.${pkgs.system}.client;
+            package = flake.packages.${pkgs.system}.cli;
 
             settings = {
               api-token-file = "/run/sower/test_token";
@@ -90,7 +90,7 @@ testers.runNixOSTest {
 
               log_level = "debug";
 
-              clients."${pkgs.system}".path = builtins.toString flake.packages.${pkgs.system}.client;
+              clients."${pkgs.system}".path = builtins.toString flake.packages.${pkgs.system}.cli;
             };
           };
           # if server fails to start, fail immediately
@@ -117,7 +117,7 @@ testers.runNixOSTest {
 
       services.sower.client = {
         enable = true;
-        package = flake.packages.${pkgs.system}.client;
+        package = flake.packages.${pkgs.system}.cli;
 
         settings = {
           api-token-file = "/run/sower/test_token";

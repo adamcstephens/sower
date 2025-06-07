@@ -11,7 +11,7 @@ let
 in
 
 buildGoModule rec {
-  pname = "sower-client";
+  pname = "sower-cli";
   inherit version;
 
   src =
@@ -20,7 +20,7 @@ buildGoModule rec {
       root = ../..;
       fileset = unions [
         ../../client
-        ../../cmd/client
+        ../../cmd/cli
         ../../go.mod
         ../../go.sum
         ../../openapi.json
@@ -39,7 +39,7 @@ buildGoModule rec {
   ];
 
   postInstall = ''
-    mv $out/bin/client $out/bin/sower
+    mv $out/bin/cli $out/bin/sower
 
     wrapProgram $out/bin/sower --prefix PATH : ${
       lib.makeBinPath [
