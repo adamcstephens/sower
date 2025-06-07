@@ -4,7 +4,6 @@
   pkgs,
   callPackages,
   beamPackages,
-  elixir,
   esbuild,
   rustPlatform,
   tailwindcss,
@@ -19,8 +18,6 @@ in
 beamPackages.mixRelease rec {
   pname = "sower-server";
   inherit version;
-
-  inherit elixir;
 
   src = lib.fileset.toSource {
     root = ../..;
