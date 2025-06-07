@@ -65,11 +65,12 @@ release-push:
 start: dev-services
     iex -S mix phx.server
 
+[working-directory('client-elixir')]
+start-client:
+    iex -S mix
+
 start-pry:
     iex --dbg pry -S mix phx.server
-
-start-client:
-    watchexec --watch ./cmd/client --restart -- go run ./cmd/client daemon --debug --config ./dev-client.toml
 
 update: update-nix update-elixir update-go
 

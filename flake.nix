@@ -36,8 +36,11 @@
           let
             version = builtins.readFile ./VERSION;
 
-            beamPackages = pkgs.beam_minimal.packages.erlang_27;
-            elixir = beamPackages.elixir_1_18;
+            beamPackages = pkgs.beamMinimal27Packages.extend (
+              _: prev: {
+                elixir = prev.elixir_1_18;
+              }
+            );
 
             arch = if pkgs.stdenv.isAarch64 then "arm64" else "x64";
             os = if pkgs.stdenv.isDarwin then "darwin" else "linux";
@@ -50,8 +53,8 @@
                 [
                   # elixir
                   beamPackages.erlang
-                  elixir
-                  (beamPackages.elixir-ls.override { inherit elixir; })
+                  beamPackages.elixir
+                  beamPackages.elixir-ls
                   pkgs.next-ls
 
                   # go
@@ -114,7 +117,6 @@
               server = pkgs.callPackage ./nix/packages/server.nix {
                 inherit
                   beamPackages
-                  elixir
                   version
                   sowerServicesHook
                   ;
