@@ -58,7 +58,7 @@
                   pkgs.next-ls
 
                   # go
-                  pkgs.go_1_24
+                  pkgs.go
                   pkgs.delve
                   pkgs.gci
                   pkgs.golangci-lint
@@ -110,7 +110,6 @@
               seed-ci = pkgs.callPackage ./nix/packages/seed-ci.nix { };
 
               client = pkgs.callPackage ./nix/packages/client.nix {
-                buildGoModule = pkgs.buildGo124Module;
                 inherit version;
               };
 
