@@ -26,4 +26,4 @@ jobs:
 
       - run: |
           export HOME=$PWD
-          nix run .#client -- builder build --workers 4 --system x86_64-linux --debug
+          nix run .#cli -- builder build --workers 4 --system x86_64-linux --debug
