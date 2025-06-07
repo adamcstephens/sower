@@ -36,6 +36,7 @@ dev-services:
 
 mix-nix-lock:
     mix deps.nix --output nix/packages/deps.nix
+    cd client-elixir; mix deps.nix
 
 mix-clean:
     mix deps.clean --unused --unlock

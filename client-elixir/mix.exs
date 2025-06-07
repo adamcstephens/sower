@@ -22,6 +22,7 @@ defmodule SowerClient.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:deps_nix, "~> 2.0", only: [:dev]},
       {:slipstream, "~> 1.0"},
       {:igniter, "~> 0.6", only: [:dev, :test]}
     ]
