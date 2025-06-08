@@ -27,6 +27,17 @@ defmodule SowerWeb.ClientChannel do
     {:reply, {:ok, :pong}, socket}
   end
 
+  def handle_in("pong", %{"ref" => _ref}, %{assigns: %{sid: _sid}} = socket) do
+    {:reply, :ok, socket}
+  end
+
+  def handle_info(:ping, %Phoenix.Socket{assigns: %{sid: sid}} = socket) do
+    ref = Sower.Schema.Sid.generate()
+    Logger.debug(msg: "Sending ping", sid: sid, ref: ref)
+    push(socket, "ping", %{ref: ref})
+    {:noreply, socket}
+  end
+
   # def handle_in(
   #       "seed:submit",
   #       %{

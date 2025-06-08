@@ -79,4 +79,10 @@ defmodule SowerClient.SocketClient do
     Logger.debug(msg: "Joined channel topic", topic: topic)
     {:ok, socket}
   end
+
+  @impl Slipstream
+  def handle_message(topic, "ping", %{"ref" => ref}, socket) do
+    {:ok, _ref} = push(socket, topic, "pong", %{ref: ref})
+    {:noreply, socket}
+  end
 end
