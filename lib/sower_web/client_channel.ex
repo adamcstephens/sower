@@ -3,12 +3,12 @@ defmodule SowerWeb.ClientChannel do
 
   require Logger
 
-  def join("client:lobby", _message, socket = %{assigns: %{sid: sid}}) do
+  def join("client:lobby", _message, %{assigns: %{sid: sid}} = socket) do
     Logger.debug(msg: "Channel topic joined", topic: "client:all", sid: sid)
     {:ok, %{sid: sid}, socket}
   end
 
-  def join("client:" <> topic_sid = topic, _params, socket = %{assigns: %{sid: sid}}) do
+  def join("client:" <> topic_sid = topic, _params, %{assigns: %{sid: sid}} = socket) do
     Logger.debug(msg: "Channel topic joined", topic: topic, sid: sid)
 
     if sid == topic_sid do
@@ -20,6 +20,11 @@ defmodule SowerWeb.ClientChannel do
 
   def join(_topic, _params, _socket) do
     {:error, %{reason: "unauthorized"}}
+  end
+
+  def handle_in("ping", _, %{assigns: %{sid: sid}} = socket) do
+    Logger.debug(msg: "Received ping, ponging", sid: sid)
+    {:reply, {:ok, :pong}, socket}
   end
 
   # def handle_in(

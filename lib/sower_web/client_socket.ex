@@ -26,8 +26,8 @@ defmodule SowerWeb.ClientSocket do
   end
 
   def connect(%{}, socket, _connect_info) do
-    Logger.debug(msg: "TODO authorized connection")
-    {:ok, assign(socket, :sid, Sower.Schema.Sid.generate()) |> dbg()}
+    Logger.error(msg: "TODO non-authorized connection")
+    {:ok, assign(socket, :sid, Sower.Schema.Sid.generate())}
   end
 
   def connect(%{}, _socket, _connect_info) do
