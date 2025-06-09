@@ -6,7 +6,7 @@ require (
 	github.com/adrg/xdg v0.5.3
 	github.com/alexflint/go-arg v1.5.1
 	github.com/golang-queue/queue v0.4.0
-	github.com/lmittmann/tint v1.1.1
+	github.com/lmittmann/tint v1.1.2
 	github.com/mattn/go-isatty v0.0.20
 	github.com/nshafer/phx v0.2.5
 	github.com/oapi-codegen/oapi-codegen/v2 v2.4.1
