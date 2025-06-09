@@ -57,6 +57,9 @@
                   beamPackages.elixir-ls
                   pkgs.next-ls
 
+                  # elixir deps build deps
+                  pkgs.cargo
+
                   # go
                   pkgs.go
                   pkgs.delve

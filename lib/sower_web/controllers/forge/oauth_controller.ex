@@ -4,11 +4,17 @@ defmodule SowerWeb.Forge.OauthController do
   def login(conn, %{"sid" => sid}) do
     forge = Sower.Forge.get_connection_sid!(sid)
 
-    {:ok, url} = Sower.Forge.Oauth.create_redirect_url(forge)
+    case Sower.Forge.Oauth.create_redirect_url(forge) do
+      {:ok, url} ->
+        conn
+        |> put_session(:return_to_forge, sid)
+        |> redirect(external: url)
 
-    conn
-    |> put_session(:return_to_forge, sid)
-    |> redirect(external: url)
+      {:error, error} ->
+        conn
+        |> put_flash(:error, "Failed to create redirect url: #{error}")
+        |> redirect(to: ~p"/forges/#{forge}")
+    end
   end
 
   def callback(conn, %{"code" => code}) do
