@@ -36,7 +36,7 @@ dev-services:
 
 mix-nix-lock:
     mix deps.nix --output nix/packages/deps.nix
-    cd client-elixir; mix deps.nix
+    cd agent; mix deps.nix
 
 mix-clean:
     mix deps.clean --unused --unlock
@@ -47,7 +47,7 @@ openapi-output:
     MIX_ENV=test mix openapi.spec.json --spec SowerWeb.ApiSpec --pretty=true openapi.json
 
 openapi-generate: openapi-output
-    go generate ./client
+    go generate ./client-go
 
 set-version: && openapi-generate
     @echo "Current version: $(cat VERSION)"
@@ -66,8 +66,8 @@ release-push:
 start: dev-services
     iex -S mix phx.server
 
-[working-directory('client-elixir')]
-start-client:
+[working-directory('agent')]
+start-agent:
     iex -S mix
 
 start-pry:

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"codeberg.org/adamcstephens/sower/client"
+	"codeberg.org/adamcstephens/sower/client-go"
 )
 
 // custom HTTP client

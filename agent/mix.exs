@@ -1,9 +1,9 @@
-defmodule SowerClient.MixProject do
+defmodule SowerAgent.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :sower_client,
+      app: :sower_agent,
       version: "0.1.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
@@ -15,7 +15,7 @@ defmodule SowerClient.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {SowerClient.Application, []}
+      mod: {SowerAgent.Application, []}
     ]
   end
 

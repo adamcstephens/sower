@@ -6,23 +6,26 @@
 }:
 
 beamPackages.mixRelease {
-  pname = "sower-client";
+  pname = "sower-agent";
   inherit version;
 
   src = lib.fileset.toSource {
-    root = ../../client-elixir;
+    root = ../../agent;
     fileset = lib.fileset.unions [
-      ../../client-elixir
+      ../../agent
     ];
   };
 
-  mixNixDeps = callPackages ../../client-elixir/deps.nix {
+  mixNixDeps = callPackages ../../agent/deps.nix {
     inherit lib beamPackages;
   };
+
+  postInstall = ''
+    mv $out/bin/sower_agent $out/bin/sower-agent
+  '';
 
   # Disable checks for now
   doCheck = false;
 
-  meta.mainProgram = "sower_client";
+  meta.mainProgram = "sower-agent";
 }
-

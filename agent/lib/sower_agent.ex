@@ -1,6 +1,6 @@
-defmodule SowerClient do
+defmodule SowerAgent do
   @moduledoc """
-  Documentation for `SowerClient`.
+  Documentation for `SowerAgent`.
   """
 
   @doc """
@@ -8,7 +8,7 @@ defmodule SowerClient do
 
   ## Examples
 
-      iex> SowerClient.hello()
+      iex> SowerAgent.hello()
       :world
 
   """

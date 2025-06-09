@@ -113,7 +113,7 @@
                 inherit version;
               };
 
-              client = pkgs.callPackage ./nix/packages/client.nix {
+              agent = pkgs.callPackage ./nix/packages/agent.nix {
                 inherit beamPackages version;
               };
 

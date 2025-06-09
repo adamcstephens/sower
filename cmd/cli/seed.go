@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeberg.org/adamcstephens/sower/client"
+	"codeberg.org/adamcstephens/sower/client-go"
 	"codeberg.org/adamcstephens/sower/cmd/cli/commands"
 )
 

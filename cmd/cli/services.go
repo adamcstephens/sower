@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"codeberg.org/adamcstephens/sower/client"
+	"codeberg.org/adamcstephens/sower/client-go"
 	"codeberg.org/adamcstephens/sower/cmd/cli/commands"
 	"github.com/adrg/xdg"
 )

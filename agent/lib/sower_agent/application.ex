@@ -1,4 +1,4 @@
-defmodule SowerClient.Application do
+defmodule SowerAgent.Application do
   # See https://hexdocs.pm/elixir/Application.html
   # for more information on OTP Applications
   @moduledoc false
@@ -8,13 +8,13 @@ defmodule SowerClient.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      # Starts a worker by calling: SowerClient.Worker.start_link(arg)
-      {SowerClient.SocketClient, []}
+      # Starts a worker by calling: SowerAgent.Worker.start_link(arg)
+      {SowerAgent.SocketClient, []}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
-    opts = [strategy: :one_for_one, name: SowerClient.Supervisor]
+    opts = [strategy: :one_for_one, name: SowerAgent.Supervisor]
     Supervisor.start_link(children, opts)
   end
 end

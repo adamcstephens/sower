@@ -19,7 +19,7 @@ buildGoModule rec {
     toSource {
       root = ../..;
       fileset = unions [
-        ../../client
+        ../../client-go
         ../../cmd/cli
         ../../go.mod
         ../../go.sum

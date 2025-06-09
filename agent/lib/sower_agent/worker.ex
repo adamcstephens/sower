@@ -1,4 +1,4 @@
-defmodule SowerClient.SocketClient do
+defmodule SowerAgent.SocketClient do
   use Slipstream
 
   require Logger
@@ -36,7 +36,7 @@ defmodule SowerClient.SocketClient do
 
   @impl Slipstream
   def init(_args) do
-    config = Application.fetch_env!(:sower_client, __MODULE__)
+    config = Application.fetch_env!(:sower_agent, __MODULE__)
 
     case connect(config) do
       {:ok, socket} ->

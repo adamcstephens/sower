@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"codeberg.org/adamcstephens/sower/client"
+	"codeberg.org/adamcstephens/sower/client-go"
 	"codeberg.org/adamcstephens/sower/cmd/cli/builder"
 	"github.com/adrg/xdg"
 	"github.com/alexflint/go-arg"
