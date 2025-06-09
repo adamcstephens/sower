@@ -1,9 +1,9 @@
-defmodule SowerAgent.MixProject do
+defmodule SowerClient.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :sower_agent,
+      app: :sower_client,
       version: "0.1.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
@@ -14,18 +14,15 @@ defmodule SowerAgent.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger],
-      mod: {SowerAgent.Application, []}
+      extra_applications: [:logger]
     ]
   end
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:deps_nix, "~> 2.0", only: [:dev]},
-      {:slipstream, "~> 1.0"},
-      {:sower_client, path: "../client-elixir"},
-      {:igniter, "~> 0.6", only: [:dev, :test]}
+      # {:dep_from_hexpm, "~> 0.3.0"},
+      # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
     ]
   end
 end
