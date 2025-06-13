@@ -13,11 +13,23 @@ defmodule SowerAgent.SocketClient do
     GenServer.call(__MODULE__, message)
   end
 
+  def send(event, params) do
+    GenServer.call(__MODULE__, {event, params})
+  end
+
   @impl Slipstream
   def handle_call(:ping, _, %{assigns: %{sid: sid}} = socket) do
     {:ok, ref} = push(socket, "client:#{sid}", "ping", %{})
     {:ok, "pong"} = await_reply(ref)
     {:reply, {:ok, :pong}, socket}
+  end
+
+  @impl Slipstream
+  def handle_call({event, params}, _from, %{assigns: %{sid: sid}} = socket) do
+    {:ok, ref} = push(socket, "client:#{sid}", event, params)
+    {:ok, response} = await_reply(ref)
+    {:reply, {:error, :unsupported_request}, socket}
+    {:reply, {:ok, response}, socket}
   end
 
   @impl Slipstream

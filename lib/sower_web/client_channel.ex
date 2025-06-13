@@ -31,6 +31,11 @@ defmodule SowerWeb.ClientChannel do
     {:reply, :ok, socket}
   end
 
+  def handle_in("agent:hello", payload, socket) do
+    SowerClient.Agent.new(payload) |> dbg()
+    {:reply, {:ok, "got it"}, socket}
+  end
+
   def handle_info(:ping, %Phoenix.Socket{assigns: %{sid: sid}} = socket) do
     ref = Sower.Schema.Sid.generate()
     Logger.debug(msg: "Sending ping", sid: sid, ref: ref)
