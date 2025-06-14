@@ -1,8 +1,8 @@
-defmodule SowerWeb.ClientSocket do
+defmodule SowerWeb.AgentSocket do
   require Logger
   use Phoenix.Socket
 
-  channel("client:*", SowerWeb.ClientChannel)
+  channel("agent:*", SowerWeb.AgentChannel)
 
   @impl true
   def connect(%{"token" => token}, socket, _connect_info) do
@@ -20,7 +20,7 @@ defmodule SowerWeb.ClientSocket do
         {:ok, socket |> assign(:claims, claims)}
 
       _ ->
-        Logger.error("failed to verify client token")
+        Logger.error("failed to verify agent token")
         {:error, "unauthorized"}
     end
   end

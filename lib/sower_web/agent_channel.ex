@@ -1,14 +1,14 @@
-defmodule SowerWeb.ClientChannel do
+defmodule SowerWeb.AgentChannel do
   use Phoenix.Channel
 
   require Logger
 
-  def join("client:lobby", _message, %{assigns: %{sid: sid}} = socket) do
-    Logger.debug(msg: "Channel topic joined", topic: "client:all", sid: sid)
+  def join("agent:lobby", _message, %{assigns: %{sid: sid}} = socket) do
+    Logger.debug(msg: "Channel topic joined", topic: "agent:all", sid: sid)
     {:ok, %{sid: sid}, socket}
   end
 
-  def join("client:" <> topic_sid = topic, _params, %{assigns: %{sid: sid}} = socket) do
+  def join("agent:" <> topic_sid = topic, _params, %{assigns: %{sid: sid}} = socket) do
     Logger.debug(msg: "Channel topic joined", topic: topic, sid: sid)
 
     if sid == topic_sid do

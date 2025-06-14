@@ -18,7 +18,7 @@ defmodule SowerWeb.Endpoint do
 
   socket "/live", Phoenix.LiveView.Socket, websocket: [connect_info: [session: @session_options]]
 
-  socket "/client", SowerWeb.ClientSocket, websocket: true, longpoll: true
+  socket "/agent", SowerWeb.AgentSocket, websocket: true, longpoll: true
 
   # Serve at "/" the static files from "priv/static" directory.
   #
