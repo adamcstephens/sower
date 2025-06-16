@@ -1,0 +1,33 @@
+<.header>
+  Agent {@agent.id}
+  <:subtitle>This is a agent record from your database.</:subtitle>
+  <:actions>
+    <.link patch={~p"/agents/#{@agent}/show/edit"} phx-click={JS.push_focus()}>
+      <.button>Edit agent</.button>
+    </.link>
+  </:actions>
+</.header>
+
+<.list>
+  <:item title="Name">{@agent.name}</:item>
+  <:item title="sid" readonly: tru>{@agent.sid}</:item>
+  <:item title="Remote sid">{@agent.remote_sid}</:item>
+</.list>
+
+<.back navigate={~p"/agents"}>Back to agents</.back>
+
+<.modal
+  :if={@live_action == :edit}
+  id="agent-modal"
+  show
+  on_cancel={JS.patch(~p"/agents/#{@agent}")}
+>
+  <.live_component
+    module={SowerWeb.AgentLive.FormComponent}
+    id={@agent.id}
+    title={@page_title}
+    action={@live_action}
+    agent={@agent}
+    patch={~p"/agents/#{@agent}"}
+  />
+</.modal>

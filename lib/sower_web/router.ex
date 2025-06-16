@@ -41,11 +41,11 @@ defmodule SowerWeb.Router do
     pipe_through [:browser, :require_authenticated_user]
 
     live_session :authenticated, on_mount: [{SowerWeb.UserAuth, :ensure_authenticated}] do
-      live "/clients", ClientLive.Index, :index
-      live "/clients/new", ClientLive.Index, :new
-      live "/clients/:sid/edit", ClientLive.Index, :edit
-      live "/clients/:sid", ClientLive.Show, :show
-      live "/clients/:sid/show/edit", ClientLive.Show, :edit
+      live "/agents", AgentLive.Index, :index
+      live "/agents/new", AgentLive.Index, :new
+      live "/agents/:sid/edit", AgentLive.Index, :edit
+      live "/agents/:sid", AgentLive.Show, :show
+      live "/agents/:sid/show/edit", AgentLive.Show, :edit
 
       get "/forges/:sid/login", Forge.OauthController, :login
       get "/forges/oauth/callback", Forge.OauthController, :callback
