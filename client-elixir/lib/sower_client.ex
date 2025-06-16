@@ -3,16 +3,16 @@ defmodule SowerClient do
 
   """
 
-  defmodule Agent do
+  defmodule AgentHello do
     use TypedStruct
 
-    @derive {Jason.Encoder, only: [:sid, :name]}
+    @derive {Jason.Encoder, only: [:local_sid, :name]}
 
     typedstruct do
       plugin(TypedStructEctoChangeset)
       plugin(TypedStructCtor, required: false)
 
-      field :sid, String.t()
+      field :local_sid, String.t()
       field :name, String.t(), enforce: true
     end
   end
