@@ -22,10 +22,14 @@ defmodule SowerAgent.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:cuid2_ex, "~> 0.2"},
       {:deps_nix, "~> 2.0", only: [:dev]},
+      {:igniter, "~> 0.6", only: [:dev, :test]},
+      {:jason, "~> 1.0"},
       {:slipstream, "~> 1.0"},
       {:sower_client, path: "../client-elixir"},
-      {:igniter, "~> 0.6", only: [:dev, :test]}
+      {:typed_struct_ctor, "~> 0.1"},
+      {:typedstruct, "~> 0.5"}
     ]
   end
 end

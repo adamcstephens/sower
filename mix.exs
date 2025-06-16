@@ -19,6 +19,7 @@ defmodule Sower.MixProject do
       {:bandit, "~> 1.0"},
       {:cloak_ecto, "~> 1.3.0"},
       {:cuid2_ex, "~> 0.2.0"},
+      {:deps_nix, "~> 2.0", only: [:dev]},
       {:ecto_sql, "~> 3.11"},
       {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
       {:ex_json_schema, "~> 0.11.1"},
@@ -50,8 +51,7 @@ defmodule Sower.MixProject do
       {:telemetry_poller, "~> 1.1"},
       {:ueberauth, "~> 0.10"},
       {:ueberauth_oidcc, "~> 0.3"},
-      {:uuidv7, "~> 1.0.0"},
-      {:deps_nix, "~> 2.2"}
+      {:uuidv7, "~> 1.0.0"}
     ]
   end
 

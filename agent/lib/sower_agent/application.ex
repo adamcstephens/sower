@@ -9,7 +9,8 @@ defmodule SowerAgent.Application do
   def start(_type, _args) do
     children = [
       # Starts a worker by calling: SowerAgent.Worker.start_link(arg)
-      {SowerAgent.SocketClient, []}
+      {SowerAgent.SocketClient, []},
+      {SowerAgent.Storage, []}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
