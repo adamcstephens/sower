@@ -54,6 +54,38 @@ defmodule Sower.Orchestration do
   def get_agent_sid!(sid), do: Repo.get_by!(Agent, sid: sid)
 
   @doc """
+  Gets a single agent by remote_sid.
+
+  Raises `Ecto.NoResultsError` if the Agent does not exist.
+
+  ## Examples
+
+      iex> get_agent_remote_sid!("123")
+      %Agent{}
+
+      iex> get_agent_remote_sid!("456")
+      nil
+
+  """
+  def get_agent_remote_sid(remote_sid), do: Repo.get_by(Agent, remote_sid: remote_sid)
+
+  @doc """
+  Gets a single agent by remote_sid.
+
+  Raises `Ecto.NoResultsError` if the Agent does not exist.
+
+  ## Examples
+
+      iex> get_agent_remote_sid!("123")
+      %Agent{}
+
+      iex> get_agent_remote_sid!("456")
+      ** (Ecto.NoResultsError)
+
+  """
+  def get_agent_remote_sid!(remote_sid), do: Repo.get_by!(Agent, remote_sid: remote_sid)
+
+  @doc """
   Creates a agent.
 
   ## Examples

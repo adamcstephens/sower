@@ -17,7 +17,7 @@ defmodule Sower.Orchestration.Agent do
   @doc false
   def changeset(agent, attrs) do
     agent
-    |> cast(attrs, [:name])
+    |> cast(attrs, [:name, :org_id, :remote_sid])
     |> validate_required([:name])
   end
 end

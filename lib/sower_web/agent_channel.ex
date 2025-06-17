@@ -1,11 +1,17 @@
 defmodule SowerWeb.AgentChannel do
   use Phoenix.Channel
 
+  alias Sower.Orchestration
   require Logger
 
-  def join("agent:lobby", _message, %{assigns: %{sid: sid}} = socket) do
-    Logger.debug(msg: "Channel topic joined", topic: "agent:all", sid: sid)
-    {:ok, %{sid: sid}, socket}
+  def join("agent:lobby", _message, %{assigns: %{conn_sid: conn_sid}} = socket) do
+    Sower.Accounts.Organization.list()
+    |> List.first()
+    |> Map.get(:org_id)
+    |> Sower.Repo.put_org_id()
+
+    Logger.debug(msg: "Channel topic joined", topic: "agent:all", conn_sid: conn_sid)
+    {:ok, %{conn_sid: conn_sid}, socket}
   end
 
   def join("agent:" <> topic_sid = topic, _params, %{assigns: %{sid: sid}} = socket) do
@@ -32,8 +38,13 @@ defmodule SowerWeb.AgentChannel do
   end
 
   def handle_in("agent:hello", payload, socket) do
-    SowerClient.Agent.new(payload) |> dbg()
-    {:reply, {:ok, "got it"}, socket}
+    agent =
+      payload
+      |> SowerClient.AgentHello.new!()
+      |> get_agent()
+      |> dbg()
+
+    {:reply, agent, socket}
   end
 
   def handle_info(:ping, %Phoenix.Socket{assigns: %{sid: sid}} = socket) do
@@ -41,6 +52,20 @@ defmodule SowerWeb.AgentChannel do
     Logger.debug(msg: "Sending ping", sid: sid, ref: ref)
     push(socket, "ping", %{ref: ref})
     {:noreply, socket}
+  end
+
+  defp get_agent(%SowerClient.AgentHello{agent_sid: nil, name: name, local_sid: remote_sid}) do
+    case Orchestration.get_agent_remote_sid(remote_sid) do
+      nil ->
+        Orchestration.create_agent(%{name: name, remote_sid: remote_sid})
+
+      agent ->
+        if is_nil(agent.remote_sid) do
+          Orchestration.update_agent(agent, %{remote_sid: remote_sid})
+        end
+
+        {:ok, agent}
+    end
   end
 
   # def handle_in(

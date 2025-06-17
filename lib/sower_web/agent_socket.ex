@@ -27,7 +27,7 @@ defmodule SowerWeb.AgentSocket do
 
   def connect(%{}, socket, _connect_info) do
     Logger.error(msg: "TODO non-authorized connection")
-    {:ok, assign(socket, :sid, Sower.Schema.Sid.generate())}
+    {:ok, assign(socket, :conn_sid, "conn_#{Sower.Schema.Sid.generate()}")}
   end
 
   def connect(%{}, _socket, _connect_info) do

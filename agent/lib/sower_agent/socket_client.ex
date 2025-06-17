@@ -18,15 +18,15 @@ defmodule SowerAgent.SocketClient do
   end
 
   @impl Slipstream
-  def handle_call(:ping, _, %{assigns: %{sid: sid}} = socket) do
-    {:ok, ref} = push(socket, "agent:#{sid}", "ping", %{})
+  def handle_call(:ping, _, %{assigns: %{conn_sid: conn_sid}} = socket) do
+    {:ok, ref} = push(socket, "agent:#{conn_sid}", "ping", %{})
     {:ok, "pong"} = await_reply(ref)
     {:reply, {:ok, :pong}, socket}
   end
 
   @impl Slipstream
-  def handle_call({event, params}, _from, %{assigns: %{sid: sid}} = socket) do
-    {:ok, ref} = push(socket, "agent:#{sid}", event, params)
+  def handle_call({event, params}, _from, %{assigns: %{conn_sid: conn_sid}} = socket) do
+    {:ok, ref} = push(socket, "agent:#{conn_sid}", event, params)
     {:ok, response} = await_reply(ref)
     {:reply, {:error, :unsupported_request}, socket}
     {:reply, {:ok, response}, socket}
@@ -72,18 +72,17 @@ defmodule SowerAgent.SocketClient do
   end
 
   @impl Slipstream
-  def handle_reply(ref, message, %{assigns: %{sid: sid}} = socket) do
-    Logger.debug(msg: "Received reply", ref: ref, message: message, sid: sid)
-    {:noreply, socket}
-  end
+  def handle_join(@lobby_topic, %{"conn_sid" => conn__sid}, socket) do
+    Logger.debug(msg: "Joined channel topic", topic: @lobby_topic, conn__sid: conn__sid)
 
-  @impl Slipstream
-  def handle_join(@lobby_topic, %{"sid" => sid}, socket) do
-    Logger.debug(msg: "Joined channel topic", topic: @lobby_topic)
+    {:ok, hello_ref} =
+      push(socket, @lobby_topic, "agent:hello", %SowerClient.AgentHello{
+        name: "TODO",
+        local_sid: SowerAgent.Storage.read().local_sid,
+        agent_sid: SowerAgent.Storage.read().agent_sid
+      })
 
-    socket = socket |> assign(:sid, sid) |> join("agent:#{sid}")
-
-    {:ok, socket}
+    {:ok, assign(socket, :hello_ref, hello_ref)}
   end
 
   @impl Slipstream
@@ -95,6 +94,28 @@ defmodule SowerAgent.SocketClient do
   @impl Slipstream
   def handle_message(topic, "ping", %{"ref" => ref}, socket) do
     {:ok, _ref} = push(socket, topic, "pong", %{ref: ref})
+    {:noreply, socket}
+  end
+
+  @impl Slipstream
+  def handle_reply(
+        ref,
+        {:ok, %{"sid" => agent_sid}},
+        %{assigns: %{hello_ref: hello_ref}} = socket
+      )
+      when ref == hello_ref do
+    storage = SowerAgent.Storage.read()
+
+    if is_nil(storage.agent_sid) do
+      storage |> Map.put(:agent_sid, agent_sid) |> SowerAgent.Storage.write()
+    end
+
+    {:ok, socket}
+  end
+
+  @impl Slipstream
+  def handle_reply(ref, message, %{assigns: %{conn_sid: conn_sid}} = socket) do
+    Logger.debug(msg: "Received unknown reply", ref: ref, message: message, conn_sid: conn_sid)
     {:noreply, socket}
   end
 end

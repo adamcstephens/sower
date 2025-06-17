@@ -10,10 +10,11 @@ defmodule SowerClient do
 
     typedstruct do
       plugin(TypedStructEctoChangeset)
-      plugin(TypedStructCtor, required: false)
+      plugin(TypedStructCtor)
 
+      field :agent_sid, String.t(), required: false
       field :local_sid, String.t()
-      field :name, String.t(), enforce: true
+      field :name, String.t()
     end
   end
 end

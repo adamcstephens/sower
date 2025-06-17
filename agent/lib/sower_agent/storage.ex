@@ -8,7 +8,7 @@ defmodule SowerAgent.Storage do
 
   typedstruct do
     field :local_sid, String.t()
-    field :remote_sid, String.t()
+    field :agent_sid, String.t()
   end
 
   # client
