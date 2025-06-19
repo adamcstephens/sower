@@ -140,6 +140,63 @@ let
     with self;
     {
 
+      cuid2_ex =
+        let
+          version = "0.2.0";
+          drv = buildMix {
+            inherit version;
+            name = "cuid2_ex";
+            appConfigPath = ./config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "cuid2_ex";
+              sha256 = "49c3b81c1864f146e1cc3674ad3984ec16583c253e08d4d71d69b808e0054ea1";
+            };
+          };
+        in
+        drv;
+
+      decimal =
+        let
+          version = "2.3.0";
+          drv = buildMix {
+            inherit version;
+            name = "decimal";
+            appConfigPath = ./config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "decimal";
+              sha256 = "a4d66355cb29cb47c3cf30e71329e58361cfcb37c34235ef3bf1d7bf3773aeac";
+            };
+          };
+        in
+        drv;
+
+      ecto =
+        let
+          version = "3.12.6";
+          drv = buildMix {
+            inherit version;
+            name = "ecto";
+            appConfigPath = ./config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "ecto";
+              sha256 = "4c0cba01795463eebbcd9e4b5ef53c1ee8e68b9c482baef2a80de5a61e7a57fe";
+            };
+
+            beamDeps = [
+              decimal
+              jason
+              telemetry
+            ];
+          };
+        in
+        drv;
+
       hpax =
         let
           version = "1.0.3";
@@ -153,6 +210,27 @@ let
               pkg = "hpax";
               sha256 = "8eab6e1cfa8d5918c2ce4ba43588e894af35dbd8e91e6e55c817bca5847df34a";
             };
+          };
+        in
+        drv;
+
+      jason =
+        let
+          version = "1.4.4";
+          drv = buildMix {
+            inherit version;
+            name = "jason";
+            appConfigPath = ./config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "jason";
+              sha256 = "c5eb0cab91f094599f94d55bc63409236a8ec69a21a67814529e8d5f6cc90b3b";
+            };
+
+            beamDeps = [
+              decimal
+            ];
           };
         in
         drv;
@@ -231,6 +309,7 @@ let
             };
 
             beamDeps = [
+              jason
               mint_web_socket
               nimble_options
               telemetry
@@ -250,6 +329,63 @@ let
               inherit version;
               pkg = "telemetry";
               sha256 = "7015fc8919dbe63764f4b4b87a95b7c0996bd539e0d499be6ec9d7f3875b79e6";
+            };
+          };
+        in
+        drv;
+
+      typed_struct_ctor =
+        let
+          version = "0.1.2";
+          drv = buildMix {
+            inherit version;
+            name = "typed_struct_ctor";
+            appConfigPath = ./config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "typed_struct_ctor";
+              sha256 = "79695303f7402f1a5b92e5914446014020b234bbfa1fccc664bacdf47101567f";
+            };
+
+            beamDeps = [
+              ecto
+              typed_struct_ecto_changeset
+              typedstruct
+            ];
+          };
+        in
+        drv;
+
+      typed_struct_ecto_changeset =
+        let
+          version = "1.0.0";
+          drv = buildMix {
+            inherit version;
+            name = "typed_struct_ecto_changeset";
+            appConfigPath = ./config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "typed_struct_ecto_changeset";
+              sha256 = "9dccc15467402a75749907b7d07441638e92f45a2460cb068f0269d82bbc7a4e";
+            };
+          };
+        in
+        drv;
+
+      typedstruct =
+        let
+          version = "0.5.3";
+          drv = buildMix {
+            inherit version;
+            name = "typedstruct";
+            appConfigPath = ./config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "typedstruct";
+              sha256 = "b53b8186701417c0b2782bf02a2db5524f879b8488f91d1d83b97d84c2943432";
             };
           };
         in

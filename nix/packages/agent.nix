@@ -10,11 +10,16 @@ beamPackages.mixRelease {
   inherit version;
 
   src = lib.fileset.toSource {
-    root = ../../agent;
+    root = ../..;
     fileset = lib.fileset.unions [
       ../../agent
+      ../../client-elixir
     ];
   };
+
+  preConfigure = ''
+    cd agent
+  '';
 
   mixNixDeps = callPackages ../../agent/deps.nix {
     inherit lib beamPackages;
