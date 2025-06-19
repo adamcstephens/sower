@@ -25,14 +25,9 @@ defmodule SowerAgent.SocketClient do
 
   @impl Slipstream
   def handle_call(:ping, _, socket) do
-    {:ok, ref} = push(socket, "agent:lobby", "ping", %{})
+    {:ok, ref} = push(socket, "agent:#{}", "ping", %{})
     {:ok, "pong"} = await_reply(ref)
     {:reply, {:ok, :pong}, socket}
-  end
-
-  @impl Slipstream
-  def handle_call(:reconnect, _, socket) do
-    reconnect(socket)
   end
 
   @impl Slipstream
@@ -97,7 +92,7 @@ defmodule SowerAgent.SocketClient do
         })
       )
 
-    {:ok, Map.put(socket, :hello_ref, hello_ref)}
+    {:ok, assign(socket, :hello_ref, hello_ref)}
   end
 
   @impl Slipstream
@@ -116,9 +111,9 @@ defmodule SowerAgent.SocketClient do
   def handle_reply(
         ref,
         {:ok, %{"sid" => agent_sid} = agent},
-        %{hello_ref: hello_ref} = socket
+        socket
       )
-      when ref == hello_ref do
+      when ref == socket.assigns.hello_ref do
     Logger.debug(msg: "Received hello reply", agent: agent)
     storage = SowerAgent.Storage.read()
 
@@ -129,7 +124,7 @@ defmodule SowerAgent.SocketClient do
     socket =
       socket
       |> join("agent:#{agent_sid}", %{local_sid: storage.local_sid})
-      |> Map.delete(:hello_ref)
+      |> Map.put(:assigns, Map.delete(socket.assigns, :hello_ref))
 
     {:ok, socket}
   end
