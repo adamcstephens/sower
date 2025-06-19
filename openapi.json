@@ -122,7 +122,7 @@
   },
   "info": {
     "title": "sower",
-    "version": "0.5.1-dev"
+    "version": "0.4.5"
   },
   "openapi": "3.0.0",
   "paths": {
