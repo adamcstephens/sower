@@ -1,4 +1,5 @@
 defmodule SowerWeb.AgentSocket do
+  import Sower.Authorization
   require Logger
   use Phoenix.Socket
 
@@ -8,12 +9,21 @@ defmodule SowerWeb.AgentSocket do
   def connect(%{"token" => token}, socket, _connect_info) do
     case token |> Base.decode64!() |> Sower.Accounts.AccessToken.authenticate() do
       {:ok, access_token} ->
-        socket =
-          socket
-          |> assign(:access_token, access_token)
-          |> assign(:conn_sid, Sower.Schema.Sid.generate("conn"))
+        if access_token |> can() |> read?(Sower.Orchestration.Agent) do
+          socket =
+            socket
+            |> assign(:access_token, access_token)
+            |> assign(:conn_sid, Sower.Schema.Sid.generate("conn"))
 
-        {:ok, socket}
+          {:ok, socket}
+        else
+          Logger.error(
+            msg: "Access token is not authorized to be an agent",
+            access_token_sid: access_token.sid
+          )
+
+          {:error, :unauthorized}
+        end
 
       {:error, error} ->
         Logger.error(msg: "Invalid authentication", error: error)

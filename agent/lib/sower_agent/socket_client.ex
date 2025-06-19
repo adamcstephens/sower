@@ -135,7 +135,7 @@ defmodule SowerAgent.SocketClient do
     Logger.debug(msg: "Received hello reply", agent: agent)
     storage = SowerAgent.Storage.read()
 
-    if is_nil(storage.agent_sid) do
+    if storage.agent_sid != agent_sid do
       storage |> Map.put(:agent_sid, agent_sid) |> SowerAgent.Storage.write()
     end
 

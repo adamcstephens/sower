@@ -1,4 +1,5 @@
 defmodule SowerWeb.AgentChannel do
+  import Sower.Authorization
   use Phoenix.Channel
 
   alias Sower.Orchestration
@@ -59,7 +60,7 @@ defmodule SowerWeb.AgentChannel do
   def handle_in("agent:hello", payload, socket) do
     case payload
          |> SowerClient.AgentHello.new!()
-         |> get_agent() do
+         |> get_agent(socket) do
       {:ok, agent} ->
         Logger.debug(msg: "Replying to hello", agent: agent)
         {:reply, {:ok, agent}, assign(socket, :agent_sid, agent.sid)}
@@ -84,7 +85,10 @@ defmodule SowerWeb.AgentChannel do
     {:noreply, socket}
   end
 
-  defp get_agent(%SowerClient.AgentHello{agent_sid: nil, name: name, local_sid: local_sid}) do
+  defp get_agent(
+         %SowerClient.AgentHello{agent_sid: nil, name: name, local_sid: local_sid},
+         socket
+       ) do
     case Orchestration.get_agent_local_sid(local_sid) do
       nil ->
         Logger.debug(
@@ -93,7 +97,11 @@ defmodule SowerWeb.AgentChannel do
           local_sid: local_sid
         )
 
-        Orchestration.create_agent(%{name: name, local_sid: local_sid})
+        if socket.assigns.access_token |> can() |> create?(Sower.Orchestration.Agent) do
+          Orchestration.create_agent(%{name: name, local_sid: local_sid})
+        else
+          {:error, :unauthorized}
+        end
 
       %Orchestration.Agent{} = agent ->
         Logger.error(
@@ -107,17 +115,24 @@ defmodule SowerWeb.AgentChannel do
     end
   end
 
-  defp get_agent(%SowerClient.AgentHello{agent_sid: agent_sid, name: name, local_sid: local_sid}) do
+  defp get_agent(
+         %SowerClient.AgentHello{agent_sid: agent_sid, name: name, local_sid: local_sid},
+         socket
+       ) do
     case Orchestration.get_agent_sid(agent_sid) do
       nil ->
-        Logger.error(
+        Logger.debug(
           msg: "Local agent requested a missing agent",
           name: name,
           local_sid: local_sid,
           requested_agent_sid: agent_sid
         )
 
-        {:error, :unauthorized_agent_hello}
+        if socket.assigns.access_token |> can() |> create?(Sower.Orchestration.Agent) do
+          Orchestration.create_agent(%{name: name, local_sid: local_sid})
+        else
+          {:error, :unauthorized}
+        end
 
       %Orchestration.Agent{local_sid: nil} = agent when agent.name == name ->
         Logger.debug(
@@ -127,9 +142,13 @@ defmodule SowerWeb.AgentChannel do
           agent_sid: agent.sid
         )
 
-        Orchestration.update_agent(agent, %{local_sid: local_sid})
+        if socket.assigns.access_token |> can() |> create?(Sower.Orchestration.Agent) do
+          Orchestration.update_agent(agent, %{local_sid: local_sid})
 
-        {:ok, agent}
+          {:ok, agent}
+        else
+          {:error, :unauthorized_agent_hello}
+        end
 
       %Orchestration.Agent{} = agent
       when agent.sid == agent_sid and
@@ -154,22 +173,4 @@ defmodule SowerWeb.AgentChannel do
         {:error, :unauthorized_agent_hello}
     end
   end
-
-  # def handle_in(
-  #       "seed:submit",
-  #       %{
-  #         "name" => name,
-  #         "seed_type" => seed_type,
-  #         "out_path" => out_path
-  #       } = _seed,
-  #       socket
-  #     ) do
-  #   case Sower.Seed.submit(%{name: name, seed_type: seed_type, out_path: out_path}) do
-  #     {:ok, %Sower.Seed{} = seed} ->
-  #       {:reply, {:ok, %{seed_id: seed.id}}, socket}
-  #
-  #     {:error, _err} ->
-  #       {:reply, {:error, "failed to submit"}, socket}
-  #   end
-  # end
 end
