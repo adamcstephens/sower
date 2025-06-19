@@ -3,6 +3,7 @@ defmodule SowerWeb.AgentChannel do
   use Phoenix.Channel
 
   alias Sower.Orchestration
+  alias SowerWeb.Presence
   require Logger
 
   def join("agent:lobby", _message, %{assigns: %{conn_sid: conn_sid}} = socket) do
@@ -31,18 +32,15 @@ defmodule SowerWeb.AgentChannel do
       nil ->
         {:error, %{reason: "unauthorized"}}
 
-      agent ->
-        if is_nil(agent.local_sid) do
-          {:error, %{reason: "unauthorized"}}
-        end
+      agent when is_nil(agent.local_sid) ->
+        {:error, %{reason: "unauthorized"}}
 
-        case agent.local_sid do
-          ^local_sid ->
-            {:ok, %{conn_sid: conn_sid}, socket}
+      agent when agent.local_sid == local_sid ->
+        send(self(), :track_presence)
+        {:ok, %{conn_sid: conn_sid}, assign(socket, :agent, agent)}
 
-          _ ->
-            {:error, %{reason: "unauthorized"}}
-        end
+      _ ->
+        {:error, %{reason: "unauthorized"}}
     end
   end
 
@@ -78,6 +76,17 @@ defmodule SowerWeb.AgentChannel do
         Logger.error(msg: "Error returning hello", error: error)
         {:reply, {:error, error}, socket}
     end
+  end
+
+  def handle_info(:track_presence, %Phoenix.Socket{assigns: %{agent: agent}} = socket) do
+    Logger.debug(msg: "Tracking agent presence", agent_sid: agent.sid)
+
+    {:ok, _} =
+      Presence.track(self(), "agents", socket.assigns.agent.sid, %{
+        online_at: DateTime.utc_now()
+      })
+
+    {:noreply, socket}
   end
 
   def handle_info(:ping, %Phoenix.Socket{assigns: %{sid: sid}} = socket) do

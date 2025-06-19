@@ -13,8 +13,9 @@ defmodule Sower.Application do
       Sower.Repo,
       Sower.Forge.Oauth,
       Sower.Forge.WebhookStorage,
-      {Phoenix.PubSub, name: Sower.PubSub},
       {Finch, name: Sower.Finch},
+      {Phoenix.PubSub, name: Sower.PubSub},
+      SowerWeb.Presence,
       SowerWeb.Endpoint,
       :systemd.ready()
     ]
