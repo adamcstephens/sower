@@ -2,13 +2,13 @@ defmodule Sower.Orchestration.Agent do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @derive {Jason.Encoder, only: [:sid, :remote_sid]}
+  @derive {Jason.Encoder, only: [:sid, :local_sid]}
   @derive {Phoenix.Param, key: :sid}
 
   schema "agents" do
     field :sid, Sower.Schema.Sid, autogenerate: true
     field :name, :string
-    field :remote_sid, :string
+    field :local_sid, :string
     field :org_id, Ecto.UUID
 
     timestamps()
@@ -17,7 +17,7 @@ defmodule Sower.Orchestration.Agent do
   @doc false
   def changeset(agent, attrs) do
     agent
-    |> cast(attrs, [:name, :org_id, :remote_sid])
+    |> cast(attrs, [:name, :org_id, :local_sid])
     |> validate_required([:name])
   end
 end

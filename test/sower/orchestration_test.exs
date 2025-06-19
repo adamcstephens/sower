@@ -8,7 +8,7 @@ defmodule Sower.OrchestrationTest do
 
     import Sower.OrchestrationFixtures
 
-    @invalid_attrs %{sid: nil, remote_sid: nil}
+    @invalid_attrs %{sid: nil, local_sid: nil}
 
     test "list_agents/0 returns all agents" do
       agent = agent_fixture()
@@ -21,11 +21,11 @@ defmodule Sower.OrchestrationTest do
     end
 
     test "create_agent/1 with valid data creates a agent" do
-      valid_attrs = %{sid: "some sid", remote_sid: "some remote_sid"}
+      valid_attrs = %{sid: "some sid", local_sid: "some local_sid"}
 
       assert {:ok, %Agent{} = agent} = Orchestration.create_agent(valid_attrs)
       assert agent.sid == "some sid"
-      assert agent.remote_sid == "some remote_sid"
+      assert agent.local_sid == "some local_sid"
     end
 
     test "create_agent/1 with invalid data returns error changeset" do
@@ -34,11 +34,11 @@ defmodule Sower.OrchestrationTest do
 
     test "update_agent/2 with valid data updates the agent" do
       agent = agent_fixture()
-      update_attrs = %{sid: "some updated sid", remote_sid: "some updated remote_sid"}
+      update_attrs = %{sid: "some updated sid", local_sid: "some updated local_sid"}
 
       assert {:ok, %Agent{} = agent} = Orchestration.update_agent(agent, update_attrs)
       assert agent.sid == "some updated sid"
-      assert agent.remote_sid == "some updated remote_sid"
+      assert agent.local_sid == "some updated local_sid"
     end
 
     test "update_agent/2 with invalid data returns error changeset" do

@@ -5,7 +5,7 @@ defmodule Sower.Repo.Migrations.CreateAgents do
     create table(:agents) do
       add :sid, :string, null: false
       add :name, :string, null: false
-      add :remote_sid, :string
+      add :local_sid, :string
       add :org_id, references(:organizations, column: :org_id, type: :uuid), null: false
 
       timestamps()

@@ -6,7 +6,7 @@ defmodule SowerClient do
   defmodule AgentHello do
     use TypedStruct
 
-    @derive {Jason.Encoder, only: [:local_sid, :name]}
+    @derive {Jason.Encoder, only: [:agent_sid, :local_sid, :name]}
 
     typedstruct do
       plugin(TypedStructEctoChangeset)

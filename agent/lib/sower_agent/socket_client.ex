@@ -39,7 +39,7 @@ defmodule SowerAgent.SocketClient do
 
   @impl Slipstream
   def handle_call(request, from, socket) do
-    Logger.debug(msg: "Unsupported call", request: request, from: from)
+    Logger.error(msg: "Unsupported call", request: request, from: from)
     {:reply, {:error, :unsupported_request}, socket}
   end
 
@@ -72,7 +72,12 @@ defmodule SowerAgent.SocketClient do
 
   @impl Slipstream
   def handle_connect(socket) do
-    Logger.debug(msg: "Connected")
+    Logger.info(
+      msg: "Connected to websocket",
+      authority: socket.channel_config.uri.authority,
+      path: socket.channel_config.uri.path
+    )
+
     {:ok, join(socket, @lobby_topic)}
   end
 
@@ -131,7 +136,7 @@ defmodule SowerAgent.SocketClient do
 
   @impl Slipstream
   def handle_reply(ref, message, socket) do
-    Logger.debug(msg: "Received unknown reply", ref: ref, message: message)
+    Logger.error(msg: "Received unknown reply", ref: ref, message: message)
     {:noreply, socket}
   end
 end

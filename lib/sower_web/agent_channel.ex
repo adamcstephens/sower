@@ -12,7 +12,7 @@ defmodule SowerWeb.AgentChannel do
     |> Sower.Repo.put_org_id()
 
     Logger.debug(msg: "Channel topic joined", topic: "agent:all", conn_sid: conn_sid)
-    {:ok, %{conn_sid: conn_sid}, dbg(socket)}
+    {:ok, %{conn_sid: conn_sid}, socket}
   end
 
   def join("agent:" <> topic_sid = topic, %{"local_sid" => local_sid}, socket) do
@@ -29,13 +29,13 @@ defmodule SowerWeb.AgentChannel do
         {:error, %{reason: "unauthorized"}}
 
       agent ->
-        if is_nil(agent.remote_sid) do
+        if is_nil(agent.local_sid) do
           {:error, %{reason: "unauthorized"}}
         end
 
-        case agent.remote_sid do
+        case agent.local_sid do
           ^local_sid ->
-            {:ok, dbg(socket)}
+            {:ok, socket}
 
           _ ->
             {:error, %{reason: "unauthorized"}}
@@ -56,11 +56,11 @@ defmodule SowerWeb.AgentChannel do
 
   def handle_in("ping", _, socket) do
     Logger.debug(msg: "Received ping, ponging")
-    {:reply, {:ok, :pong}, dbg(socket)}
+    {:reply, {:ok, :pong}, socket}
   end
 
   def handle_in("pong", %{"ref" => _ref}, socket) do
-    {:reply, :ok, dbg(socket)}
+    {:reply, :ok, socket}
   end
 
   def handle_in("agent:hello", payload, socket) do
@@ -91,31 +91,74 @@ defmodule SowerWeb.AgentChannel do
     {:noreply, socket}
   end
 
-  defp get_agent(%SowerClient.AgentHello{agent_sid: nil, name: name, local_sid: remote_sid}) do
-    case Orchestration.get_agent_remote_sid(remote_sid) do
+  defp get_agent(%SowerClient.AgentHello{agent_sid: nil, name: name, local_sid: local_sid}) do
+    case Orchestration.get_agent_local_sid(local_sid) do
       nil ->
-        Orchestration.create_agent(%{name: name, remote_sid: remote_sid})
+        Logger.debug(
+          msg: "Registering new agent",
+          name: name,
+          local_sid: local_sid
+        )
 
-      agent ->
-        if is_nil(agent.remote_sid) do
-          Orchestration.update_agent(agent, %{remote_sid: remote_sid})
-        end
+        Orchestration.create_agent(%{name: name, local_sid: local_sid})
 
-        {:ok, agent}
+      %Orchestration.Agent{} = agent ->
+        Logger.error(
+          msg: "Local agent attempted to re-register existing agent",
+          name: agent.name,
+          local_sid: local_sid,
+          existing_agent_sid: agent.sid
+        )
+
+        {:error, :unauthorized_agent_hello}
     end
   end
 
-  defp get_agent(%SowerClient.AgentHello{agent_sid: agent_sid, name: name, local_sid: remote_sid}) do
+  defp get_agent(%SowerClient.AgentHello{agent_sid: agent_sid, name: name, local_sid: local_sid}) do
     case Orchestration.get_agent_sid(agent_sid) do
       nil ->
-        {:error, :agent_sid_not_found}
+        Logger.error(
+          msg: "Local agent requested a missing agent",
+          name: name,
+          local_sid: local_sid,
+          requested_agent_sid: agent_sid
+        )
 
-      agent ->
-        if is_nil(agent.remote_sid) do
-          Orchestration.update_agent(agent, %{remote_sid: remote_sid})
-        end
+        {:error, :unauthorized_agent_hello}
+
+      %Orchestration.Agent{local_sid: nil} = agent when agent.name == name ->
+        Logger.debug(
+          msg: "Registering local sid to existing agent",
+          name: agent.name,
+          local_sid: local_sid,
+          agent_sid: agent.sid
+        )
+
+        Orchestration.update_agent(agent, %{local_sid: local_sid})
 
         {:ok, agent}
+
+      %Orchestration.Agent{} = agent
+      when agent.sid == agent_sid and
+             agent.name == name and
+             agent.local_sid == local_sid ->
+        Logger.debug(
+          msg: "Found matching agent",
+          name: agent.name,
+          local_sid: local_sid,
+          agent_sid: agent.sid
+        )
+
+        {:ok, agent}
+
+      %Orchestration.Agent{} = agent ->
+        Logger.error(
+          msg: "Invalid agent request",
+          local_sid: local_sid,
+          agent_sid: agent.sid
+        )
+
+        {:error, :unauthorized_agent_hello}
     end
   end
 

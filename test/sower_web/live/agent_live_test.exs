@@ -4,9 +4,9 @@ defmodule SowerWeb.AgentLiveTest do
   import Phoenix.LiveViewTest
   import Sower.OrchestrationFixtures
 
-  @create_attrs %{sid: "some sid", remote_sid: "some remote_sid"}
-  @update_attrs %{sid: "some updated sid", remote_sid: "some updated remote_sid"}
-  @invalid_attrs %{sid: nil, remote_sid: nil}
+  @create_attrs %{sid: "some sid", local_sid: "some local_sid"}
+  @update_attrs %{sid: "some updated sid", local_sid: "some updated local_sid"}
+  @invalid_attrs %{sid: nil, local_sid: nil}
 
   defp create_agent(_) do
     agent = agent_fixture()
