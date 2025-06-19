@@ -1,0 +1,72 @@
+defmodule SowerAgent.Storage do
+  use GenServer
+  use TypedStruct
+
+  require Logger
+
+  @derive {Jason.Encoder, only: [:local_sid, :agent_sid]}
+
+  typedstruct do
+    field :local_sid, String.t()
+    field :agent_sid, String.t()
+  end
+
+  # client
+
+  def write(struct) do
+    GenServer.call(__MODULE__, {:write, struct})
+  end
+
+  def read() do
+    GenServer.call(__MODULE__, :read)
+  end
+
+  # server
+
+  def start_link(opts) do
+    GenServer.start_link(__MODULE__, opts, name: Keyword.get(opts, :name, __MODULE__))
+  end
+
+  @impl GenServer
+  def init(opts) do
+    opts = Application.get_env(:sower_agent, __MODULE__, opts)
+    file = Keyword.fetch!(opts, :file) |> Path.absname()
+
+    if not File.exists?(file) do
+      parent_dir = file |> Path.dirname()
+
+      if not File.dir?(parent_dir) do
+        File.mkdir_p!(parent_dir)
+        Logger.debug(msg: "Creating storage parent directory", dir: parent_dir)
+      end
+
+      File.write!(file, :erlang.term_to_binary(default()))
+      Logger.debug(msg: "Wrote initial storage", file: file)
+    end
+
+    Logger.debug(msg: "Reading storage", file: file)
+    {:ok, bin} = File.read(file)
+
+    data = :erlang.binary_to_term(bin)
+
+    {:ok, %{file: file, data: data}}
+  end
+
+  @impl GenServer
+  def handle_call({:write, struct}, _from, %{file: file} = state) do
+    File.write!(file, :erlang.term_to_binary(struct))
+    Logger.debug(msg: "Wrote storage", file: file)
+    {:reply, :ok, %{state | data: struct}}
+  end
+
+  @impl GenServer
+  def handle_call(:read, _from, %{data: data} = state) do
+    {:reply, data, state}
+  end
+
+  defp default() do
+    %__MODULE__{
+      local_sid: "lsid_#{Cuid2Ex.create()}"
+    }
+  end
+end

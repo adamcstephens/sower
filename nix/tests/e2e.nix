@@ -1,6 +1,5 @@
 # Debug like this:
-# $ nix build .\#checks.x86_64-linux.nixos-test.driverInteractive
-# $ ./result/bin/nixos-test-driver
+# $ nix run .#checks.x86_64-linux.nixos-test.driverInteractive
 # >>> start_all()
 # >>> machine.shell_interact()
 {
@@ -8,14 +7,23 @@
   pkgs,
   testers,
 }:
+let
+  simple-service = flake.packages.${pkgs.system}.tests-simple-service;
+in
 testers.runNixOSTest {
   name = "sower";
 
   nodes = {
     server =
-      { lib, pkgs, ... }:
       {
-        imports = [ ../nixos/module.nix ];
+        lib,
+        pkgs,
+        ...
+      }:
+      {
+        imports = [
+          ../nixos/module.nix
+        ];
 
         config = {
           # need switch-to-configuration
@@ -23,8 +31,14 @@ testers.runNixOSTest {
           # without trying to install grub
           boot.loader.grub.enable = false;
 
+          # expose more paths to test vm
+          virtualisation.additionalPaths = [
+            simple-service
+          ];
+
           environment.systemPackages = [
             flake.packages.${pkgs.system}.seed-ci
+
           ];
 
           networking.firewall.allowedTCPPorts = [ 4000 ];
@@ -32,16 +46,22 @@ testers.runNixOSTest {
           nix.settings = {
             experimental-features = "flakes nix-command";
             substituters = lib.mkForce [ ];
+            hashed-mirrors = null;
+            connect-timeout = 1;
           };
 
           services.sower.client = {
             enable = true;
-            package = flake.packages.${pkgs.system}.client;
+            package = flake.packages.${pkgs.system}.cli;
 
             settings = {
               api-token-file = "/run/sower/test_token";
               debug = true;
               endpoint = "http://localhost:4000";
+
+              services.services = [
+                "simple-service"
+              ];
             };
           };
 
@@ -70,7 +90,7 @@ testers.runNixOSTest {
 
               log_level = "debug";
 
-              clients."${pkgs.system}".path = builtins.toString flake.packages.${pkgs.system}.client;
+              clients."${pkgs.system}".path = builtins.toString flake.packages.${pkgs.system}.cli;
             };
           };
           # if server fails to start, fail immediately
@@ -89,7 +109,26 @@ testers.runNixOSTest {
         };
 
       };
-    client = { };
+
+    client = {
+      imports = [
+        ../nixos/module.nix
+      ];
+
+      services.sower.client = {
+        enable = true;
+        package = flake.packages.${pkgs.system}.cli;
+
+        settings = {
+          api-token-file = "/run/sower/test_token";
+          debug = true;
+        };
+      };
+
+      virtualisation.additionalPaths = [
+        simple-service
+      ];
+    };
   };
 
   testScript = # python
@@ -99,16 +138,27 @@ testers.runNixOSTest {
       server.wait_for_unit("sower.service")
       server.wait_for_open_port(4000)
 
-      with subtest("basic submission and activation"):
-          nixos_profile = server.succeed("readlink -f /run/booted-system").strip()
-          server.succeed(f"sower seed submit --create --path {nixos_profile} --debug")
-          server.succeed("curl http://server:4000/client/bootstrap | bash -s seed info")
-          server.succeed("systemctl start sower-client")
+      with subtest("basic submission"):
+          server_profile = server.succeed("readlink -f /run/booted-system").strip()
+          server.succeed(f"sower seed submit --create --path {server_profile} --debug")
 
-      with subtest("client can bootstrap"):
           client_profile = client.succeed("readlink -f /run/booted-system").strip()
           server.succeed(f"sower seed submit --create --name client --type nixos --path {client_profile} --debug")
+
+          server.succeed("sower seed submit --create --name simple-service --type service --path ${simple-service} --debug")
+
+      with subtest("activate seed and services"):
+          server.succeed("sower seed upgrade --debug")
+          server.succeed("sower services upgrade --debug")
+          server.wait_for_unit("simple-oneshot.service")
+          server.wait_for_unit("simple-sleep.service")
+
+      with subtest("check bootstrap"):
           token = server.succeed("cat /run/sower/test_token")
-          client.succeed(f"curl http://server:4000/client/bootstrap | bash -s seed info --api-token {token} --name client --type nixos")
+          client.succeed("mkdir /run/sower")
+          client.succeed(f"echo -n {token} > /run/sower/test_token")
+
+          client.succeed("curl http://server:4000/client/bootstrap | bash -s seed info --name client --type nixos")
+          client.succeed("systemctl start sower-client")
     '';
 }

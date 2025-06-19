@@ -13,7 +13,8 @@
       { ... }:
       {
         imports = [
-          ./nix/flake-module.nix
+          ./nix/lib.nix
+          ./nix/flake/module.nix
           ./nix/legacy-flake-module.nix
           inputs.process-compose-flake.flakeModule
         ];
@@ -35,8 +36,11 @@
           let
             version = builtins.readFile ./VERSION;
 
-            beamPackages = pkgs.beam_minimal.packages.erlang_27;
-            elixir = beamPackages.elixir_1_18;
+            beamPackages = pkgs.beamMinimal27Packages.extend (
+              _: prev: {
+                elixir = prev.elixir_1_18;
+              }
+            );
 
             arch = if pkgs.stdenv.isAarch64 then "arm64" else "x64";
             os = if pkgs.stdenv.isDarwin then "darwin" else "linux";
@@ -49,26 +53,25 @@
                 [
                   # elixir
                   beamPackages.erlang
-                  elixir
-                  (beamPackages.elixir-ls.override { inherit elixir; })
+                  beamPackages.elixir
+                  beamPackages.elixir-ls
                   pkgs.next-ls
 
+                  # elixir deps build deps
+                  pkgs.cargo
+
                   # go
-                  pkgs.go_1_23
+                  pkgs.go
                   pkgs.delve
                   pkgs.gci
                   pkgs.golangci-lint
                   pkgs.gopls
                   pkgs.oapi-codegen
 
-                  # rust
-                  pkgs.cargo
-
                   pkgs.attic-client
                   self'.packages.seed-ci
                   pkgs.nushell
 
-                  pkgs.docker
                   pkgs.just
                   pkgs.mix2nix
                   pkgs.nix-eval-jobs
@@ -76,7 +79,8 @@
                   pkgs.process-compose
                   config.process-compose.devServices.services.postgres.postgres1.package
                   config.process-compose.devServices.outputs.package
-                  pkgs.watchexec
+                  pkgs.sd-switch
+                  pkgs.entr
                 ]
                 ++ lib.optionals pkgs.stdenv.isLinux [
                   # elixir
@@ -100,15 +104,38 @@
               default = pkgs.callPackage ./nix/tests/e2e.nix {
                 flake = self;
               };
+              services = pkgs.callPackage ./nix/tests/services.nix {
+                flake = self;
+              };
             };
 
-            packages = {
+            packages = rec {
               seed-ci = pkgs.callPackage ./nix/packages/seed-ci.nix { };
-              client = pkgs.callPackage ./nix/packages/client.nix {
-                buildGoModule = pkgs.buildGo123Module;
+
+              cli = pkgs.callPackage ./nix/packages/cli.nix {
                 inherit version;
               };
-              server = pkgs.callPackage ./nix/packages/server.nix { inherit beamPackages elixir version; };
+
+              agent = pkgs.callPackage ./nix/packages/agent.nix {
+                inherit beamPackages version;
+              };
+
+              server = pkgs.callPackage ./nix/packages/server.nix {
+                inherit
+                  beamPackages
+                  version
+                  sowerServicesHook
+                  ;
+
+                sowerLib = self.lib;
+              };
+
+              sowerServicesHook = pkgs.callPackage ./nix/packages/services-hook.nix { };
+
+              tests-simple-service = pkgs.callPackage ./nix/tests/simple-service.nix {
+                inherit sowerServicesHook;
+                sowerLib = self.lib;
+              };
             };
 
             process-compose.devServices =

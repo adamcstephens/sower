@@ -4,11 +4,13 @@ defmodule Sower.Seed do
   import Ecto.Changeset
   import Ecto.Query, only: [from: 2]
 
-  alias Sower.{Nix, Repo, Seed, SeedStorePath}
+  alias Sower.{Distribution, Nix, Repo, Seed, SeedStorePath}
 
   @derive {Jason.Encoder, only: [:sid, :name, :seed_type]}
 
   @derive {Phoenix.Param, key: :sid}
+
+  @seed_types ["nixos", "home-manager", "nix-darwin", "service"]
 
   schema "seeds" do
     field :sid, Sower.Schema.Sid, autogenerate: true
@@ -17,6 +19,7 @@ defmodule Sower.Seed do
     field :org_id, Ecto.UUID
 
     many_to_many :store_paths, Nix.StorePath, join_through: Sower.SeedStorePath
+    many_to_many :deployments, Distribution.Deployments, join_through: Distribution.SeedDeployment
 
     timestamps()
   end
@@ -100,10 +103,14 @@ defmodule Sower.Seed do
     end
   end
 
+  def seed_types() do
+    @seed_types
+  end
+
   defp changeset(seed, attrs) do
     seed
     |> cast(attrs, [:name, :seed_type, :org_id])
-    |> validate_inclusion(:seed_type, ["nixos", "home-manager", "nix-darwin"])
+    |> validate_inclusion(:seed_type, @seed_types)
     |> validate_required([:name, :seed_type, :org_id])
     |> unique_constraint([:name, :seed_type, :org_id], error_key: :unique_seed)
   end

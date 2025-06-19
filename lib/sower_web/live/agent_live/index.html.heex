@@ -1,0 +1,48 @@
+<.header>
+  Listing Agents
+  <:actions>
+    <.link patch={~p"/agents/new"}>
+      <.button>New Agent</.button>
+    </.link>
+  </:actions>
+</.header>
+
+<.table
+  id="agents"
+  rows={@streams.agents}
+  row_click={fn {_id, agent} -> JS.navigate(~p"/agents/#{agent}") end}
+>
+  <:col :let={{_id, agent}} label="Name">{agent.name}</:col>
+  <:col :let={{_id, agent}} label="sid">{agent.sid}</:col>
+  <:col :let={{_id, agent}} label="Local sid">{agent.local_sid}</:col>
+  <:action :let={{_id, agent}}>
+    <div class="sr-only">
+      <.link navigate={~p"/agents/#{agent}"}>Show</.link>
+    </div>
+    <.link patch={~p"/agents/#{agent}/edit"}>Edit</.link>
+  </:action>
+  <:action :let={{id, agent}}>
+    <.link
+      phx-click={JS.push("delete", value: %{id: agent.id}) |> hide("##{id}")}
+      data-confirm="Are you sure?"
+    >
+      Delete
+    </.link>
+  </:action>
+</.table>
+
+<.modal
+  :if={@live_action in [:new, :edit]}
+  id="agent-modal"
+  show
+  on_cancel={JS.patch(~p"/agents")}
+>
+  <.live_component
+    module={SowerWeb.AgentLive.FormComponent}
+    id={@agent.id || :new}
+    title={@page_title}
+    action={@live_action}
+    agent={@agent}
+    patch={~p"/agents"}
+  />
+</.modal>

@@ -185,7 +185,7 @@ defmodule SowerWeb.Api.SeedController do
         example: "host1"
       ],
       seed_type: [
-        description: "Seed type (nixos, home-manager, etc.)",
+        description: "Seed type, one of [#{Sower.Seed.seed_types() |> Enum.join(", ")}]",
         type: :string,
         example: "nixos"
       ]

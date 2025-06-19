@@ -17,3 +17,13 @@ jobs:
       - run: |
           export HOME=$PWD
           nix develop .# --command seed-ci --attic-upload=true --nom=false --sower-seed=true --system x86_64-linux --cache-build-deps=true
+
+  sower:
+    runs-on: local/x86_64-linux
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: |
+          export HOME=$PWD
+          nix run .#cli -- builder build --workers 4 --system x86_64-linux --debug

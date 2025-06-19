@@ -1,4 +1,7 @@
 {
   "endpoint": "http://localhost:7150",
-  "api-token-file": ".dev-api-token"
+  "api-token-file": ".dev-api-token",
+  "services": {
+    "services": ["sower-server"]
+  }
 }

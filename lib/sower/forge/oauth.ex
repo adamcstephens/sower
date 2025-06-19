@@ -31,25 +31,33 @@ defmodule Sower.Forge.Oauth do
   def create_redirect_url(%Sower.Forge.Connection{} = forge) do
     {:ok, _pid} = Sower.Forge.Oauth.start_connection(forge)
 
-    case GenServer.call(__MODULE__, {:create_pkce_verifier, forge.id}) do
-      {:ok, verifier} ->
-        {:ok, url_parts} =
-          Oidcc.create_redirect_url(
-            oidcc_module_name(forge),
-            forge.client_id,
-            forge.client_secret,
-            %{
-              redirect_uri:
-                "#{Application.fetch_env!(:sower, :public_url)}/forges/oauth/callback",
-              require_pkce: true,
-              pkce_verifier: verifier
-            }
-          )
+    try do
+      case GenServer.call(__MODULE__, {:create_pkce_verifier, forge.id}) do
+        {:ok, verifier} ->
+          case Oidcc.create_redirect_url(
+                 oidcc_module_name(forge),
+                 forge.client_id,
+                 forge.client_secret,
+                 %{
+                   redirect_uri:
+                     "#{Application.fetch_env!(:sower, :public_url)}/forges/oauth/callback",
+                   require_pkce: true,
+                   pkce_verifier: verifier
+                 }
+               ) do
+            {:ok, url_parts} ->
+              {:ok, url_parts |> Enum.join("")}
 
-        {:ok, url_parts |> Enum.join("")}
+            {:error, err} ->
+              {:error, err}
+          end
 
-      {:error, err} ->
-        {:error, err}
+        {:error, err} ->
+          {:error, err}
+      end
+    catch
+      :exit, {{:configuration_load_failed, {:issuer_mismatch, provider_url}}, _} ->
+        {:error, "Forge URL #{forge.url} does not match Provider URL #{provider_url}"}
     end
   end
 

@@ -1,0 +1,13 @@
+mix-clean:
+    mix deps.clean --unused --unlock
+
+mix-nix-lock:
+    mix deps.nix
+
+update-elixir: mix-clean
+    mix deps.update --all
+    mix deps.get
+    mix hex.outdated
+    just mix-nix-lock
+    git add mix.exs mix.lock deps.nix
+    git commit -m 'agent(chore): update elixir deps' -- mix.exs mix.lock deps.nix

@@ -19,9 +19,10 @@ defmodule Sower.MixProject do
       {:bandit, "~> 1.0"},
       {:cloak_ecto, "~> 1.3.0"},
       {:cuid2_ex, "~> 0.2.0"},
+      {:deps_nix, "~> 2.0", only: [:dev]},
       {:ecto_sql, "~> 3.11"},
       {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
-      {:ex_json_schema, "~> 0.10.2"},
+      {:ex_json_schema, "~> 0.11.1"},
       {:faker, "~> 0.18", only: :test},
       {:finch, "~> 0.13"},
       {:floki, ">= 0.30.0", only: :test},
@@ -32,7 +33,7 @@ defmodule Sower.MixProject do
       {:mime, "~> 2.0.6"},
       {:mix_test_watch, "~> 1.0", only: [:dev, :test], runtime: false},
       {:open_api_spex, "~> 3.20"},
-      {:permit, "~> 0.2.1"},
+      {:permit, "~> 0.3.0"},
       {:permit_ecto, "~> 0.2.3"},
       {:phoenix, "~> 1.7.7"},
       {:phoenix_ecto, "~> 4.4"},
@@ -43,14 +44,14 @@ defmodule Sower.MixProject do
       {:postgrex, ">= 0.0.0"},
       {:req, ">= 0.5.8"},
       {:shortuuid, "~> 4.0"},
+      {:sower_client, path: "./client-elixir"},
       {:systemd, "~> 0.6"},
       {:tailwind, "~> 0.3.0", runtime: Mix.env() == :dev},
       {:telemetry_metrics, "~> 1.1.0"},
-      {:telemetry_poller, "~> 1.1.0"},
+      {:telemetry_poller, "~> 1.1"},
       {:ueberauth, "~> 0.10"},
       {:ueberauth_oidcc, "~> 0.3"},
-      {:uuidv7, "~> 1.0.0"},
-      {:deps_nix, "~> 2.2"}
+      {:uuidv7, "~> 1.0.0"}
     ]
   end
 

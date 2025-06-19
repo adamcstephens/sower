@@ -58,7 +58,8 @@
             "enum": [
               "nixos",
               "home-manager",
-              "nix-darwin"
+              "nix-darwin",
+              "service"
             ],
             "type": "string",
             "x-struct": null,
@@ -189,7 +190,7 @@
             }
           },
           {
-            "description": "Seed type (nixos, home-manager, etc.)",
+            "description": "Seed type, one of [nixos, home-manager, nix-darwin, service]",
             "example": "nixos",
             "in": "query",
             "name": "seed_type",

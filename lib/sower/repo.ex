@@ -7,7 +7,7 @@ defmodule Sower.Repo do
 
   @tenant_key {__MODULE__, :org_id}
 
-  @impl true
+  @impl Ecto.Repo
   def init(_context, config) do
     {:ok, Keyword.merge(config, Application.get_env(:sower, :database, []))}
   end
@@ -15,7 +15,7 @@ defmodule Sower.Repo do
   @doc """
   Enable foreign key multitenancy and require :org_id unless :skip_org_id is passed
   """
-  @impl true
+  @impl Ecto.Repo
   def prepare_query(_operation, query, opts) do
     cond do
       opts[:skip_org_id] || opts[:ecto_query] in [:schema_migration, :preload] ||
@@ -41,7 +41,7 @@ defmodule Sower.Repo do
   @doc """
   Read the org id by default on operations
   """
-  @impl true
+  @impl Ecto.Repo
   def default_options(_operation) do
     [org_id: get_org_id()]
   end

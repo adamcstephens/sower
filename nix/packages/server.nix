@@ -1,23 +1,23 @@
 {
   lib,
+  sowerLib,
+  pkgs,
   callPackages,
   beamPackages,
-  elixir,
   esbuild,
   rustPlatform,
   tailwindcss,
   stdenv,
   version,
+  sowerServicesHook,
 }:
 let
   arch = if stdenv.isAarch64 then "arm64" else "x64";
   os = if stdenv.isDarwin then "darwin" else "linux";
 in
 beamPackages.mixRelease rec {
-  pname = "sower";
+  pname = "sower-server";
   inherit version;
-
-  inherit elixir;
 
   src = lib.fileset.toSource {
     root = ../..;
@@ -31,6 +31,25 @@ beamPackages.mixRelease rec {
       ../../test
       ../../VERSION
     ];
+  };
+
+  nativeBuildInputs = [ sowerServicesHook ];
+
+  sowerServices = sowerLib.generateUnitFiles {
+    inherit pkgs;
+    config = {
+      services.sower = {
+        wantedBy = [
+          "multi-user.target"
+        ];
+
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = "PLACEHOLDER_OUT/bin/sower start";
+          ExecStop = "PLACEHOLDER_OUT/bin/sower stop";
+        };
+      };
+    };
   };
 
   mixNixDeps = callPackages ./deps.nix {
@@ -78,6 +97,8 @@ beamPackages.mixRelease rec {
 
     mix assets.deploy --no-deps-check
   '';
+
+  preInstall = '''';
 
   # disabled because requires test deps to work
   # doCheck = true;
