@@ -28,9 +28,9 @@ defmodule SowerAgent.MixProject do
       {:igniter, "~> 0.6", only: [:dev, :test]},
       {:jason, "~> 1.0"},
       {:slipstream, "~> 1.0"},
-      {:sower_client, path: "../client-elixir"},
-      {:typed_struct_ctor, "~> 0.1"},
-      {:typedstruct, "~> 0.5"}
+      # load typedstruct before typed_struct_ecto_changeset
+      {:typedstruct, "~> 0.5"},
+      {:sower_client, path: "../client-elixir"}
     ]
   end
 end

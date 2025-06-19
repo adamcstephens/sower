@@ -19,10 +19,12 @@ defmodule SowerClient.MixProject do
 
   defp deps do
     [
-      {:typed_struct_ctor, "~> 0.1"},
+      {:igniter, "~> 0.6", only: [:dev, :test]},
       {:jason, "~> 1.0"},
+      # load typedstruct before typed_struct_ecto_changeset
       {:typedstruct, "~> 0.5"},
-      {:igniter, "~> 0.6", only: [:dev, :test]}
+      {:typed_struct_ecto_changeset, "~> 1.1", override: true},
+      {:typed_struct_ctor, "~> 0.1"}
     ]
   end
 end

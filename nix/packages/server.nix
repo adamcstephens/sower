@@ -23,6 +23,7 @@ beamPackages.mixRelease rec {
     root = ../..;
     fileset = lib.fileset.unions [
       ../../assets
+      ../../client-elixir
       ../../config
       ../../lib
       ../../mix.exs
@@ -54,7 +55,7 @@ beamPackages.mixRelease rec {
 
   mixNixDeps = callPackages ./deps.nix {
     inherit lib beamPackages;
-    overrides = _: prev: {
+    overrides = self: prev: {
       argon2 = prev.argon2.override (
         old:
         let
@@ -82,6 +83,22 @@ beamPackages.mixRelease rec {
 
       esbuild = prev.esbuild.override (old: {
         patches = [ ./esbuild-loadpaths.patch ];
+      });
+
+      typedstruct = prev.typedstruct.override (old: {
+        preConfigure = ''
+          substituteInPlace mix.exs --replace-fail 'version = vsn()' 'version = "${old.version}"'
+        '';
+      });
+
+      typed_struct_ecto_changeset = prev.typed_struct_ecto_changeset.override (old: {
+        beamDeps = [ self.typedstruct ];
+
+        preConfigure = ''
+          substituteInPlace mix.exs --replace-fail \
+            '{:typed_struct, "~> 0.3.0", only: [:dev, :test], runtime: false}' \
+            '{:typedstruct, "${self.typedstruct.version}"}'
+        '';
       });
 
       tailwind = prev.tailwind.override (old: {

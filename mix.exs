@@ -44,6 +44,8 @@ defmodule Sower.MixProject do
       {:postgrex, ">= 0.0.0"},
       {:req, ">= 0.5.8"},
       {:shortuuid, "~> 4.0"},
+      # load typedstruct before typed_struct_ecto_changeset
+      {:typedstruct, "~> 0.5"},
       {:sower_client, path: "./client-elixir"},
       {:systemd, "~> 0.6"},
       {:tailwind, "~> 0.3.0", runtime: Mix.env() == :dev},

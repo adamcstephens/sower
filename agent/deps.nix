@@ -359,7 +359,7 @@ let
 
       typed_struct_ecto_changeset =
         let
-          version = "1.0.0";
+          version = "1.1.0";
           drv = buildMix {
             inherit version;
             name = "typed_struct_ecto_changeset";
@@ -368,7 +368,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "typed_struct_ecto_changeset";
-              sha256 = "9dccc15467402a75749907b7d07441638e92f45a2460cb068f0269d82bbc7a4e";
+              sha256 = "10f56689b7ca7c5e96aceb49b08a30712a36b35f987ebc4d20be47177d53fa73";
             };
           };
         in
