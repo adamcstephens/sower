@@ -44,6 +44,7 @@ mix-clean:
 openapi-output:
     # remove old sower test app to force correct version
     rm -rf _build/test/lib/sower
+    MIX_ENV=test mix deps.get
     MIX_ENV=test mix openapi.spec.json --spec SowerWeb.ApiSpec --pretty=true openapi.json
 
 openapi-generate: openapi-output
