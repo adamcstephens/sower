@@ -4,6 +4,9 @@ mix-clean:
 mix-nix-lock:
     mix deps.nix
 
+start:
+    iex -S mix
+
 update-elixir: mix-clean
     mix deps.update --all
     mix deps.get

@@ -296,30 +296,9 @@ let
         in
         drv;
 
-      deps_nix =
-        let
-          version = "2.2.0";
-          drv = buildMix {
-            inherit version;
-            name = "deps_nix";
-            appConfigPath = ../../config;
-
-            src = fetchHex {
-              inherit version;
-              pkg = "deps_nix";
-              sha256 = "cc302e2b3edc51dc658b32552f3bbef276f722f78936ac923b38fa60f899f645";
-            };
-
-            beamDeps = [
-              mint
-            ];
-          };
-        in
-        drv;
-
       ecto =
         let
-          version = "3.12.5";
+          version = "3.13.1";
           drv = buildMix {
             inherit version;
             name = "ecto";
@@ -328,7 +307,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "ecto";
-              sha256 = "6eb18e80bef8bb57e17f5a7f068a1719fbda384d40fc37acb8eb8aeca493b6ea";
+              sha256 = "d9ea5075a6f3af9cd2cdbabe8a0759eb73b485e981fd7c03014f79479ac85340";
             };
 
             beamDeps = [
@@ -342,7 +321,7 @@ let
 
       ecto_sql =
         let
-          version = "3.12.1";
+          version = "3.13.0";
           drv = buildMix {
             inherit version;
             name = "ecto_sql";
@@ -351,7 +330,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "ecto_sql";
-              sha256 = "aff5b958a899762c5f09028c847569f7dfb9cc9d63bdb8133bff8a5546de6bf5";
+              sha256 = "5ce13085122a0871d93ea9ba1a886447d89c07f3b563e19e0b3dcdf201ed9fe9";
             };
 
             beamDeps = [
@@ -1155,6 +1134,63 @@ let
             beamDeps = [
               telemetry
             ];
+          };
+        in
+        drv;
+
+      typed_struct_ctor =
+        let
+          version = "0.1.2";
+          drv = buildMix {
+            inherit version;
+            name = "typed_struct_ctor";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "typed_struct_ctor";
+              sha256 = "79695303f7402f1a5b92e5914446014020b234bbfa1fccc664bacdf47101567f";
+            };
+
+            beamDeps = [
+              ecto
+              typed_struct_ecto_changeset
+              typedstruct
+            ];
+          };
+        in
+        drv;
+
+      typed_struct_ecto_changeset =
+        let
+          version = "1.0.0";
+          drv = buildMix {
+            inherit version;
+            name = "typed_struct_ecto_changeset";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "typed_struct_ecto_changeset";
+              sha256 = "9dccc15467402a75749907b7d07441638e92f45a2460cb068f0269d82bbc7a4e";
+            };
+          };
+        in
+        drv;
+
+      typedstruct =
+        let
+          version = "0.5.3";
+          drv = buildMix {
+            inherit version;
+            name = "typedstruct";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "typedstruct";
+              sha256 = "b53b8186701417c0b2782bf02a2db5524f879b8488f91d1d83b97d84c2943432";
+            };
           };
         in
         drv;

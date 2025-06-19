@@ -69,7 +69,7 @@ start: dev-services
 
 [working-directory('agent')]
 start-agent:
-    iex -S mix
+    just start
 
 start-pry:
     iex --dbg pry -S mix phx.server
