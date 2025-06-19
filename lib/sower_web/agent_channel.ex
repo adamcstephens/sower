@@ -13,10 +13,19 @@ defmodule SowerWeb.AgentChannel do
     {:ok, %{conn_sid: conn_sid}, socket}
   end
 
-  def join("agent:" <> topic_sid = topic, %{"local_sid" => local_sid}, socket) do
+  def join(
+        "agent:" <> topic_sid = topic,
+        %{"local_sid" => local_sid},
+        %{assigns: %{conn_sid: conn_sid}} = socket
+      ) do
     Sower.Repo.put_org_id(socket.assigns.access_token.org_id)
 
-    Logger.debug(msg: "Channel topic joined", topic: topic, local_sid: local_sid)
+    Logger.debug(
+      msg: "Channel topic joined",
+      topic: topic,
+      local_sid: local_sid,
+      conn_sid: conn_sid
+    )
 
     case Orchestration.get_agent_sid(topic_sid) do
       nil ->
@@ -29,7 +38,7 @@ defmodule SowerWeb.AgentChannel do
 
         case agent.local_sid do
           ^local_sid ->
-            {:ok, socket}
+            {:ok, %{conn_sid: conn_sid}, socket}
 
           _ ->
             {:error, %{reason: "unauthorized"}}

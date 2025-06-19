@@ -95,8 +95,8 @@ defmodule SowerAgent.SocketClient do
   end
 
   @impl Slipstream
-  def handle_join(@lobby_topic, %{"conn_sid" => conn__sid}, socket) do
-    Logger.debug(msg: "Joined channel topic", topic: @lobby_topic, conn__sid: conn__sid)
+  def handle_join(@lobby_topic, %{"conn_sid" => conn_sid}, socket) do
+    Logger.info(msg: "Joined channel topic", topic: @lobby_topic, conn_sid: conn_sid)
 
     {:ok, hello_ref} =
       push(
@@ -110,13 +110,18 @@ defmodule SowerAgent.SocketClient do
         })
       )
 
-    {:ok, assign(socket, :hello_ref, hello_ref)}
+    socket =
+      socket
+      |> assign(:hello_ref, hello_ref)
+      |> assign(:conn_sid, conn_sid)
+
+    {:ok, socket}
   end
 
   @impl Slipstream
-  def handle_join("agent:" <> _sid = topic, _response, socket) do
-    Logger.debug(msg: "Joined channel topic", topic: topic)
-    {:ok, socket}
+  def handle_join("agent:" <> _sid = topic, %{"conn_sid" => conn_sid}, socket) do
+    Logger.info(msg: "Joined channel topic", topic: topic, conn_sid: conn_sid)
+    {:ok, assign(socket, :conn_sid, conn_sid)}
   end
 
   @impl Slipstream
