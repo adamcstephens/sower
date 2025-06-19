@@ -1,5 +1,6 @@
 {
   lib,
+  callPackages,
   beamPackages,
   elixir,
   esbuild,
@@ -32,7 +33,7 @@ beamPackages.mixRelease rec {
     ];
   };
 
-  mixNixDeps = import ./mix.nix {
+  mixNixDeps = callPackages ./deps.nix {
     inherit lib beamPackages;
     overrides = _: prev: {
       argon2 = prev.argon2.override (
@@ -42,7 +43,8 @@ beamPackages.mixRelease rec {
             pname = "argon2";
             version = old.version;
             src = "${old.src}/native";
-            cargoHash = "sha256-vlWLcEvqQVvc4ksdSYLzjrL7nJxux+Kz4LrrhK/ph9c=";
+            cargoHash = "sha256-D7mONUH6f/RmFwfx51sLr6XWlIELNTFPvFm9TrbEMl4=";
+            useFetchCargoVendor = true;
           };
         in
         {
@@ -77,8 +79,12 @@ beamPackages.mixRelease rec {
     mix assets.deploy --no-deps-check
   '';
 
-  # disabled because requires a db to work
-  # doCheck = false;
+  # disabled because requires test deps to work
+  # doCheck = true;
+  # nativeCheckInputs = [
+  #   postgresql
+  #   postgresqlTestHook
+  # ];
   # checkPhase = ''
   #   runHook preCheck
   #

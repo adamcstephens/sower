@@ -25,3 +25,6 @@ config :logger, level: :warning
 
 # Initialize plugs at runtime for faster test compilation
 config :phoenix, :plug_init_mode, :runtime
+
+config :sower, :database,
+  encryption_key: "UIFQeYN5EBgkXgK502I8mosh3vbEj3AE1rRwWJDysBk=" |> Base.decode64!()

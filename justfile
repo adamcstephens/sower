@@ -48,21 +48,32 @@ docker-push:
     docker manifest push $image_name:latest
 
 mix-nix-lock:
-    mix2nix mix.lock > ./nix/packages/mix.nix
+    mix deps.nix --output nix/packages/deps.nix
+
+mix-clean:
+    mix deps.clean --unused --unlock
 
 openapi-output:
+    # remove old sower test app to force correct version
+    rm -rf _build/test/lib/sower
     MIX_ENV=test mix openapi.spec.json --spec SowerWeb.ApiSpec --pretty=true openapi.json
 
 openapi-generate: openapi-output
     go generate ./client
 
-set-version version: && openapi-generate
-    echo -n {{ version }} > VERSION
+set-version: && openapi-generate
+    @echo "Current version: $(cat VERSION)"
+    @read -p "New version? " new_version; [ -n "$new_version" ] && echo -n $new_version > VERSION
 
-release:
+release: set-version
+    git add VERSION openapi.json
+    git commit -m "release: version $(cat VERSION)"
+
+release-push:
     git tag -a -m v$(cat VERSION) v$(cat VERSION)
     git push
     git push --tags
+    just release
 
 start: dev-services
     iex -S mix phx.server
@@ -78,16 +89,21 @@ update: update-nix update-elixir update-go
 update-nix:
     nix flake update --commit-lock-file
 
-update-elixir: && mix-nix-lock
-    mix deps.clean --unused --unlock
+update-elixir: mix-clean
     mix deps.update --all
     mix deps.get
     mix hex.outdated
+    just mix-nix-lock
+    git add mix.exs mix.lock nix/packages/deps.nix
+    git commit -m 'server(chore): update elixir deps' -- mix.exs mix.lock nix/packages/deps.nix
 
-update-go: && update-go-hash
+update-go:
     go get -u ./...
     go mod edit -go=$(go version | awk '{print $3}' | sed 's/go//')
     go mod tidy
+    just update-go-hash
+    git add go.mod go.sum nix/packages/client.nix
+    git commit -m 'server(chore): update go deps' -- go.mod go.sum nix/packages/client.nix
 
 update-go-hash:
     #!/usr/bin/env bash

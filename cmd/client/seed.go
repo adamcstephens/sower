@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"codeberg.org/adamcstephens/sower/client"
 	"codeberg.org/adamcstephens/sower/cmd/client/commands"
@@ -42,16 +43,32 @@ func activate(seedType client.SeedSeedType, storePath string, mode string) error
 	return nil
 }
 
-func realize(storePath string) error {
+func realize(storePath string, caches *[]client.NixCache, initrd bool) error {
 	slog.Debug("Realizing path", "path", storePath)
 
 	if storePath == "" {
 		return fmt.Errorf("Cannot download without seed out_path")
 	}
 
-	cmd := exec.Command("nix-store", "--realize", storePath)
+	cmd := []string{"--realize", storePath}
 
-	err := commands.SimpleRun(cmd)
+	if initrd {
+		cmd = append(cmd, "--store", "/sysroot")
+	}
+
+	if len(*caches) > 0 {
+		var substituters, publicKeys []string
+
+		for _, cache := range *caches {
+			substituters = append(substituters, *cache.Url)
+			publicKeys = append(publicKeys, *cache.PublicKey)
+		}
+
+		cmd = append(cmd, "--extra-substituters", strings.Join(substituters, ","))
+		cmd = append(cmd, "--extra-trusted-public-keys", strings.Join(publicKeys, ","))
+	}
+
+	err := commands.SimpleRun(exec.Command("nix-store", cmd...))
 
 	return err
 }

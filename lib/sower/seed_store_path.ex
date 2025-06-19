@@ -9,7 +9,7 @@ defmodule Sower.SeedStorePath do
   schema "seeds_store_paths" do
     field :org_id, Ecto.UUID
     belongs_to :seed, Sower.Seed
-    belongs_to :store_path, Sower.StorePath
+    belongs_to :store_path, Sower.Nix.StorePath
     timestamps()
   end
 

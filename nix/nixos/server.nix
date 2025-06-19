@@ -19,12 +19,13 @@ let
         '') cfg.environment
       ))
       + ''
-        RELEASE_COOKIE=$(sudo cat /var/lib/sower/release-cookie)
+        RELEASE_COOKIE=$(cat ${cfg.environment.RELEASE_COOKIE_FILE})
         export RELEASE_COOKIE
-        exec ${cfg.package}/bin/sower remote
+        exec ${cfg.package}/bin/sower "$@"
       '';
   };
 
+  config-file = pkgs.writeText "sower-server-config" (builtins.toJSON cfg.settings);
 in
 {
   options = {
@@ -34,15 +35,6 @@ in
       package = lib.mkOption {
         type = lib.types.package;
         default = pkgs.callPackage ../packages/server.nix { };
-      };
-
-      secrets = lib.mkOption {
-        type = lib.types.attrsOf lib.types.str;
-        description = "systemd credentials wrapper";
-        example = {
-          database_password_file = "/path/to/pass/file";
-        };
-        default = { };
       };
 
       settings = lib.mkOption {
@@ -70,17 +62,21 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = builtins.hasAttr "RELEASE_COOKIE_FILE" cfg.environment;
+        message = ''
+          No RELEASE_COOKIE_FILE found. Either enable `services.sower.server.initSecrets`
+            or set `services.sower.server.environment.RELEASE_COOKIE_FILE` to a path.
+        '';
+      }
+    ];
     services.sower.server = lib.mkIf cfg.initSecrets {
-      secrets = {
-        release_cookie_file = "/var/lib/sower/release-cookie";
-      };
-
+      environment.RELEASE_COOKIE_FILE = "/var/lib/sower/release-cookie";
       settings.secret_key_base_file = "/var/lib/sower/secret-key-base";
     };
 
-    environment.etc."sower/server.json".source = pkgs.writeText "sower-server-config" (
-      builtins.toJSON cfg.settings
-    );
+    environment.etc."sower/server.json".source = config-file;
 
     environment.systemPackages = [
       adminScript
@@ -107,23 +103,20 @@ in
         WorkingDirectory = "%S/sower";
 
         ExecStart = pkgs.writeShellScript "sower-start" ''
-          ${lib.optionalString cfg.initSecrets ''
-            export RELEASE_COOKIE=$(cat $CREDENTIALS_DIRECTORY/SOWER_RELEASE_COOKIE_FILE)
-          ''}
+          RELEASE_COOKIE=$(cat ${cfg.environment.RELEASE_COOKIE_FILE})
+          export RELEASE_COOKIE
 
           ${cfg.package}/bin/sower eval Sower.Release.migrate
           ${lib.optionalString cfg.e2eTest "${cfg.package}/bin/sower eval Sower.Repo.Seeds.Preseed.for_e2e"}
           exec ${cfg.package}/bin/sower start
         '';
         ExecStop = "${cfg.package}/bin/sower stop";
-
-        LoadCredential = lib.mapAttrsToList (k: v: "SOWER_${lib.toUpper k}:${v}") cfg.secrets;
       };
 
       environment = {
         HOME = "%S/sower";
         PHX_SERVER = "true";
-        SOWER_SERVER_CONFIG_FILE = "/etc/sower/server.json";
+        SOWER_SERVER_CONFIG_FILE = config-file;
       } // cfg.environment;
     };
 

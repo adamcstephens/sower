@@ -8,13 +8,13 @@
 import Config
 
 config :sower, ecto_repos: [Sower.Repo]
-config :sower, Sower.Repo, migration_primary_key: [name: :id, type: :uuid]
+config :sower, Sower.Repo, migration_primary_key: [type: :identity]
 
 # Configures the endpoint
 config :sower, SowerWeb.Endpoint,
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
-    formats: [html: SowerWeb.ErrorHTML, json: SowerWeb.ErrorJSON],
+    formats: [html: SowerWeb.ErrorHTML, json: SowerWeb.Api.ErrorJSON],
     layout: false
   ],
   pubsub_server: Sower.PubSub,
@@ -50,16 +50,6 @@ config :logger, :console,
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
-
-# config :opentelemetry, :resource, service: %{name: "sower"}
-#
-# config :opentelemetry,
-#   span_processor: :batch,
-#   traces_exporter: :otlp
-#
-# config :opentelemetry_exporter,
-#   otlp_protocol: :http_protobuf,
-#   otlp_endpoint: "http://127.0.0.1:4318"
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

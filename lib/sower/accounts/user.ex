@@ -8,9 +8,10 @@ defmodule Sower.Accounts.User do
   alias Sower.Accounts.UserToken
   alias Sower.Repo
 
-  @primary_key {:id, UUIDv7, autogenerate: true}
+  @derive {Phoenix.Param, key: :sid}
 
   schema "users" do
+    field :sid, Sower.Schema.Sid, autogenerate: true
     field :email, :string
     field :name, :string
     field :oidc_id, Ecto.UUID
@@ -31,6 +32,10 @@ defmodule Sower.Accounts.User do
 
   def get_by_id!(id) do
     Repo.get!(User, id, skip_org_id: true)
+  end
+
+  def get_by_sid!(sid) do
+    Repo.get_by!(User, [sid: sid], skip_org_id: true)
   end
 
   def new(attrs) do

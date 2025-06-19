@@ -19,10 +19,10 @@ defmodule SowerWeb.Settings.AccessTokenLive.Index do
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
   end
 
-  defp apply_action(socket, :edit, %{"id" => id}) do
+  defp apply_action(socket, :edit, %{"sid" => sid}) do
     socket
     |> assign(:page_title, "Edit Access token")
-    |> assign(:access_token, Accounts.AccessToken.get!(id))
+    |> assign(:access_token, Accounts.AccessToken.get_sid!(sid))
   end
 
   defp apply_action(socket, :new, _params) do

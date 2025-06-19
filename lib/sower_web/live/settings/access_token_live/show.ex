@@ -9,11 +9,11 @@ defmodule SowerWeb.Settings.AccessTokenLive.Show do
   end
 
   @impl true
-  def handle_params(%{"id" => id}, _, socket) do
+  def handle_params(%{"sid" => sid}, _, socket) do
     {:noreply,
      socket
      |> assign(:page_title, page_title(socket.assigns.live_action))
-     |> assign(:access_token, Accounts.AccessToken.get!(id))}
+     |> assign(:access_token, Accounts.AccessToken.get_sid!(sid))}
   end
 
   defp page_title(:show), do: "Show Access token"

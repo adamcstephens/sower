@@ -21,11 +21,21 @@ defmodule Sower.Authorization.Permissions do
 
   defp check_role_perm(
          %Permit.Permissions{} = permit,
+         %Sower.Accounts.AccessToken.Permission{role: :"nix-cache:read"},
+         org_id
+       ) do
+    permit
+    |> read(Sower.Nix.Cache, org_id: org_id)
+  end
+
+  defp check_role_perm(
+         %Permit.Permissions{} = permit,
          %Sower.Accounts.AccessToken.Permission{role: :"seed:read"},
          org_id
        ) do
     permit
     |> read(Sower.Seed, org_id: org_id)
+    |> read(Sower.Nix.Cache, org_id: org_id)
   end
 
   defp check_role_perm(
@@ -35,5 +45,6 @@ defmodule Sower.Authorization.Permissions do
        ) do
     permit
     |> all(Sower.Seed, org_id: org_id)
+    |> read(Sower.Nix.Cache, org_id: org_id)
   end
 end

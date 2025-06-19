@@ -4,16 +4,19 @@ defmodule Sower.Seed do
   import Ecto.Changeset
   import Ecto.Query, only: [from: 2]
 
-  alias Sower.{Repo, Seed, SeedStorePath, StorePath}
+  alias Sower.{Nix, Repo, Seed, SeedStorePath}
 
-  @derive {Jason.Encoder, only: [:id, :name, :seed_type]}
+  @derive {Jason.Encoder, only: [:sid, :name, :seed_type]}
+
+  @derive {Phoenix.Param, key: :sid}
 
   schema "seeds" do
+    field :sid, Sower.Schema.Sid, autogenerate: true
     field :name, :string
     field :seed_type, :string
     field :org_id, Ecto.UUID
 
-    many_to_many :store_paths, StorePath, join_through: Sower.SeedStorePath
+    many_to_many :store_paths, Nix.StorePath, join_through: Sower.SeedStorePath
 
     timestamps()
   end
@@ -27,7 +30,7 @@ defmodule Sower.Seed do
   end
 
   def submit(%Seed{} = seed, path) do
-    store_path = StorePath.submit!(path)
+    store_path = Nix.submit_store_path!(path)
 
     SeedStorePath.submit!(seed, store_path)
 
@@ -36,8 +39,8 @@ defmodule Sower.Seed do
     {:ok, store_path}
   end
 
-  def submit(seed_id, path) do
-    seed = get_by_id!(seed_id)
+  def submit(seed_sid, path) do
+    seed = get_sid!(seed_sid)
     submit(seed, path)
   end
 
@@ -63,6 +66,10 @@ defmodule Sower.Seed do
     Repo.get_by(Sower.Seed, name: name, seed_type: seed_type)
   end
 
+  def get_sid!(sid) do
+    Repo.get_by!(Sower.Seed, sid: sid)
+  end
+
   def list() do
     Repo.all(Sower.Seed)
   end
@@ -75,8 +82,8 @@ defmodule Sower.Seed do
     )
   end
 
-  def latest_store_path_by_id(id) do
-    seed = Sower.Seed.get_by_id!(id)
+  def latest_store_path_by_sid(sid) do
+    seed = Sower.Seed.get_sid!(sid)
 
     query =
       from sp in Sower.SeedStorePath,

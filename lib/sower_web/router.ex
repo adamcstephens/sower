@@ -21,6 +21,11 @@ defmodule SowerWeb.Router do
     plug OpenApiSpex.Plug.PutApiSpec, module: SowerWeb.ApiSpec
   end
 
+  pipeline :forge_webhook do
+    plug :accepts, ["json"]
+    plug SowerWeb.Plugs.Webhook
+  end
+
   scope "/", SowerWeb do
     pipe_through :browser
 
@@ -38,31 +43,36 @@ defmodule SowerWeb.Router do
     live_session :authenticated, on_mount: [{SowerWeb.UserAuth, :ensure_authenticated}] do
       live "/clients", ClientLive.Index, :index
       live "/clients/new", ClientLive.Index, :new
-      live "/clients/:id/edit", ClientLive.Index, :edit
-      live "/clients/:id", ClientLive.Show, :show
-      live "/clients/:id/show/edit", ClientLive.Show, :edit
+      live "/clients/:sid/edit", ClientLive.Index, :edit
+      live "/clients/:sid", ClientLive.Show, :show
+      live "/clients/:sid/show/edit", ClientLive.Show, :edit
+
+      get "/forges/:sid/login", Forge.OauthController, :login
+      get "/forges/oauth/callback", Forge.OauthController, :callback
+
+      live "/forges", Forge.ConnectionLive.Index, :index
+      live "/forges/new", Forge.ConnectionLive.Index, :new
+      live "/forges/:sid", Forge.ConnectionLive.Show, :show
+      live "/forges/:sid/edit", Forge.ConnectionLive.Index, :edit
+      live "/forges/:sid/show/edit", Forge.ConnectionLive.Show, :edit
+
       live "/seeds", SeedLive.Index, :index
-      live "/seeds/:id", SeedLive.Show, :show
-      live "/store_paths", StorePathLive.Index, :index
-      live "/store_paths/:id", StorePathLive.Show, :show
-      live "/inputs/repos", RepositoryLive.Index, :index
-      live "/inputs/repos/:id", RepositoryLive.Show, :show
+      live "/seeds/:sid", SeedLive.Show, :show
 
-      live "/nix_caches", CacheLive.Index, :index
-      live "/nix_caches/new", CacheLive.Index, :new
-      live "/nix_caches/:id/edit", CacheLive.Index, :edit
-
-      live "/nix_caches/:id", CacheLive.Show, :show
-      live "/nix_caches/:id/show/edit", CacheLive.Show, :edit
+      live "/nix/caches", Nix.CacheLive.Index, :index
+      live "/nix/caches/new", Nix.CacheLive.Index, :new
+      live "/nix/caches/:sid/edit", Nix.CacheLive.Index, :edit
+      live "/nix/caches/:sid", Nix.CacheLive.Show, :show
+      live "/nix/caches/:sid/show/edit", Nix.CacheLive.Show, :edit
+      live "/nix/store_paths", Nix.StorePathLive.Index, :index
+      live "/nix/store_paths/:digest", Nix.StorePathLive.Show, :show
 
       live "/settings", Settings.IndexLive, :index
-      # live "/settings/access-tokens", SettingsLive.AccessTokens, :index
       live "/settings/access-tokens", Settings.AccessTokenLive.Index, :index
       live "/settings/access-tokens/new", Settings.AccessTokenLive.Index, :new
-      live "/settings/access-tokens/:id/edit", Settings.AccessTokenLive.Index, :edit
-
-      live "/settings/access-tokens/:id", Settings.AccessTokenLive.Show, :show
-      live "/settings/access-tokens/:id/show/edit", Settings.AccessTokenLive.Show, :edit
+      live "/settings/access-tokens/:sid/edit", Settings.AccessTokenLive.Index, :edit
+      live "/settings/access-tokens/:sid", Settings.AccessTokenLive.Show, :show
+      live "/settings/access-tokens/:sid/show/edit", Settings.AccessTokenLive.Show, :edit
     end
   end
 
@@ -75,19 +85,25 @@ defmodule SowerWeb.Router do
     end
   end
 
+  scope "/forges", SowerWeb.Forge do
+    pipe_through [:forge_webhook]
+    post "/:forge_sid/repos/:repo_sid/webhook", WebhookController, :post
+  end
+
   scope "/api" do
     pipe_through :api
     get "/openapi", OpenApiSpex.Plug.RenderSpec, []
   end
 
-  scope "/api" do
+  scope "/api", SowerWeb.Api do
     pipe_through [:api, :ensure_token_authenticated]
 
-    get "/seeds", SowerWeb.SeedController, :list
-    get "/seeds/:id", SowerWeb.SeedController, :get
-    get "/seeds/:id/paths/latest", SowerWeb.SeedController, :latest
-    post "/seeds", SowerWeb.SeedController, :new
-    post "/seeds/:id/paths", SowerWeb.SeedController, :new_store_path
+    get "/nix/caches", Nix.CacheController, :list
+    get "/seeds", SeedController, :list
+    get "/seeds/:sid", SeedController, :get
+    get "/seeds/:sid/paths/latest", SeedController, :latest
+    post "/seeds", SeedController, :new
+    post "/seeds/:sid/paths", SeedController, :new_store_path
   end
 
   scope "/auth" do

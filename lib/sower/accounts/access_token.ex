@@ -9,20 +9,21 @@ defmodule Sower.Accounts.AccessToken do
   import Ecto.Query
 
   require Logger
+  @derive {Phoenix.Param, key: :sid}
 
   schema "access_tokens" do
+    field :sid, Sower.Schema.Sid, autogenerate: true
     field :expires_at, :date
     field :description, :string
     field :regenerate, :boolean, virtual: true
     field :token, :string, virtual: true
-    field :token_preview, :string, virtual: true
     field :token_hash, :string
     field :org_id, Ecto.UUID
 
     belongs_to :user, Sower.Accounts.User
 
     embeds_many :permissions, Permission, on_replace: :delete do
-      field :role, Ecto.Enum, values: [:"seed:read", :"seed:write"]
+      field :role, Ecto.Enum, values: [:"seed:read", :"seed:write", :"nix-cache:read"]
     end
 
     timestamps()
@@ -62,22 +63,12 @@ defmodule Sower.Accounts.AccessToken do
     end)
   end
 
-  defp put_preview(%AccessToken{} = access_token) do
-    preview = "sower_" <> String.slice(ShortUUID.encode!(access_token.id), 0, 8)
-    access_token |> Map.put(:token_preview, preview)
-  end
-
-  defp put_preview({:ok, %AccessToken{} = access_token}) do
-    {:ok, put_preview(access_token)}
-  end
-
   def create(%AccessToken{} = access_token, %{"expires_at" => _} = attrs) do
     access_token
     |> changeset(attrs)
     |> put_change(:regenerate, true)
     |> generate_token()
     |> Repo.insert()
-    |> put_preview()
   end
 
   def create(%{"expires_at" => _} = attrs) do
@@ -100,23 +91,22 @@ defmodule Sower.Accounts.AccessToken do
         changeset
 
       _ ->
-        id =
-          case get_field(changeset, :id) do
+        sid =
+          case get_field(changeset, :sid) do
             nil ->
-              UUIDv7.generate()
+              Sower.Schema.Sid.generate()
 
-            id ->
-              id
+            sid ->
+              sid
           end
 
-        short_id = ShortUUID.encode!(id)
         rand = :crypto.strong_rand_bytes(48) |> Base.encode64()
         {:ok, hash} = :argon2.hash(rand)
 
-        token = "sower_" <> short_id <> "_" <> rand
+        token = "sower_" <> sid <> "_" <> rand
 
         changeset
-        |> put_change(:id, id)
+        |> put_change(:sid, sid)
         |> put_change(:token, token)
         |> put_change(:token_hash, hash)
     end
@@ -137,13 +127,11 @@ defmodule Sower.Accounts.AccessToken do
     |> changeset(attrs)
     |> generate_token()
     |> Repo.update()
-    |> put_preview()
   end
 
   def authenticate(token) do
-    with {:ok, short_id, rand} <- split_token(token),
-         {:ok, id} <- ShortUUID.decode(short_id),
-         access_token when not is_nil(access_token) <- get(id),
+    with {:ok, sid, rand} <- split_token(token),
+         access_token when not is_nil(access_token) <- get_sid(sid),
          true <- verify_not_expired(access_token),
          {:ok, true} <- :argon2.verify(rand, access_token.token_hash) do
       {:ok, access_token |> Sower.Repo.preload(:user)}
@@ -186,21 +174,25 @@ defmodule Sower.Accounts.AccessToken do
   def get(id) do
     query = from at in AccessToken, where: at.id == ^id
 
-    case Sower.Repo.one(query, skip_org_id: true) do
-      nil ->
-        nil
-
-      token ->
-        token
-        |> put_preview()
-    end
+    Sower.Repo.one(query, skip_org_id: true)
   end
 
   def get!(id) do
     query = from at in AccessToken, where: at.id == ^id
 
     Sower.Repo.one!(query, skip_org_id: true)
-    |> put_preview()
+  end
+
+  def get_sid(sid) do
+    query = from at in AccessToken, where: at.sid == ^sid
+
+    Sower.Repo.one(query, skip_org_id: true)
+  end
+
+  def get_sid!(sid) do
+    query = from at in AccessToken, where: at.sid == ^sid
+
+    Sower.Repo.one!(query, skip_org_id: true)
   end
 
   def list() do

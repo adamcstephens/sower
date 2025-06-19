@@ -30,20 +30,22 @@ defmodule Sower.Repo.Seeds.Org do
     user
   end
 
-  def access_token(%Sower.Accounts.User{} = user, name \\ "token") do
+  def access_token(%Sower.Accounts.User{} = user, name \\ "token", opts \\ %{}) do
     Sower.Repo.put_org_id(user.org_id)
 
     {:ok, access_token} =
-      Sower.Accounts.AccessToken.create(%{
-        "permissions" => [
-          %{
-            "role" => "seed:write"
-          }
-        ],
-        "user_id" => user.id,
-        "org_id" => user.org_id,
-        "description" => name
-      })
+      Sower.Accounts.AccessToken.create(
+        Enum.into(opts, %{
+          "permissions" => [
+            %{
+              "role" => "seed:write"
+            }
+          ],
+          "user_id" => user.id,
+          "org_id" => user.org_id,
+          "description" => name
+        })
+      )
 
     access_token
   end
@@ -70,7 +72,7 @@ defmodule Sower.Repo.Seeds.Org do
 
       Sower.Seed.submit(
         seed,
-        ~s"/nix/store/fqf9pp2pbcv64j0bz3mwv5grj60jkvzv-nixos-system-#{name}-24.11.20240703.9f4128e"
+        ~s"/nix/store/#{Cuid2Ex.create(length: 32) |> String.downcase()}-nixos-system-#{name}-24.11.20240703.9f4128e"
       )
     end)
   end

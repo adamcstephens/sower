@@ -39,12 +39,12 @@ defmodule Sower.SeedTest do
       seed = seed_fixture()
 
       {:ok, _} =
-        Seed.submit(seed.id, random_store_path())
+        Seed.submit(seed.sid, random_store_path())
 
       assert Enum.count(seed |> Sower.Repo.preload(:store_paths) |> Map.get(:store_paths)) == 1
 
       {:ok, _} =
-        Seed.submit(seed.id, random_store_path())
+        Seed.submit(seed.sid, random_store_path())
 
       assert Enum.count(seed |> Sower.Repo.preload(:store_paths) |> Map.get(:store_paths)) == 2
     end
@@ -53,12 +53,12 @@ defmodule Sower.SeedTest do
       store_path = store_path_fixture()
       seed = seed_fixture()
 
-      {:ok, _} = Seed.submit(seed.id, store_path.path)
+      {:ok, _} = Seed.submit(seed.sid, store_path.path)
 
       seed = seed |> Sower.Repo.preload(:store_paths)
 
       assert Enum.count(seed.store_paths) == 1
-      assert Repo.all(Sower.StorePath) |> Enum.count() == 1
+      assert Repo.all(Sower.Nix.StorePath) |> Enum.count() == 1
     end
   end
 end

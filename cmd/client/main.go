@@ -63,7 +63,9 @@ type seedCmd struct {
 
 type seedCreateCmd struct{}
 
-type seedDownloadCmd struct{}
+type seedDownloadCmd struct {
+	Initrd bool `arg:"--initrd"`
+}
 
 type seedInfoCmd struct{}
 
@@ -187,19 +189,19 @@ func main() {
 
 func initLogger(debug bool) {
 	logLevel := slog.LevelInfo
-	stdout := os.Stdout
+	stderr := os.Stderr
 
 	if debug {
 		logLevel = slog.LevelDebug
 	}
 
-	logger := slog.New(tint.NewHandler(stdout, &tint.Options{
+	logger := slog.New(tint.NewHandler(stderr, &tint.Options{
 		Level:      logLevel,
 		TimeFormat: time.DateTime,
-		NoColor:    !isatty.IsTerminal(stdout.Fd()),
+		NoColor:    !isatty.IsTerminal(stderr.Fd()),
 		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
 			// if not a tty, strip the time
-			if a.Key == slog.TimeKey && len(groups) == 0 && !isatty.IsTerminal(stdout.Fd()) {
+			if a.Key == slog.TimeKey && len(groups) == 0 && !isatty.IsTerminal(stderr.Fd()) {
 				return slog.Attr{}
 			}
 			return a
@@ -255,7 +257,7 @@ func seedSubcommand(cfg config) error {
 			os.Exit(1)
 		}
 
-		slog.Info("Created seed", "name", seed.Name, "type", seed.SeedType, "id", seed.Id)
+		slog.Info("Created seed", "name", seed.Name, "type", seed.SeedType, "sid", seed.Sid)
 
 	case cfg.Seed.Download != nil:
 		seedClient, err := client.NewSeedClient(cfg.Endpoint, cfg.ApiToken)
@@ -276,7 +278,13 @@ func seedSubcommand(cfg config) error {
 			os.Exit(1)
 		}
 
-		if err := realize(storePath.Path); err != nil {
+		caches, err := seedClient.GetNixCaches()
+		if err != nil {
+			slog.Error("Failed to get nix caches", "error", err)
+			os.Exit(1)
+		}
+
+		if err := realize(storePath.Path, caches, cfg.Seed.Download.Initrd); err != nil {
 			slog.Error("Failed realizing seed", "error", err)
 			os.Exit(1)
 		}
@@ -375,7 +383,13 @@ func seedSubcommand(cfg config) error {
 			os.Exit(1)
 		}
 
-		if err := realize(storePath.Path); err != nil {
+		caches, err := seedClient.GetNixCaches()
+		if err != nil {
+			slog.Error("Failed to get nix caches", "error", err)
+			os.Exit(1)
+		}
+
+		if err := realize(storePath.Path, caches, false); err != nil {
 			slog.Error("Failed realizing seed", "error", err)
 			os.Exit(1)
 		}

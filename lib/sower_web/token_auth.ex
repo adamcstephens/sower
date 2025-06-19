@@ -15,7 +15,7 @@ defmodule SowerWeb.TokenAuth do
            |> String.split(" ")
            |> Enum.at(1),
          {:ok, access_token} <- Sower.Accounts.AccessToken.authenticate(token) do
-      Sower.Repo.put_org_id(access_token.user.org_id)
+      Sower.Repo.put_org_id(access_token.org_id)
 
       conn
       |> assign(:access_token, access_token)
@@ -33,6 +33,7 @@ defmodule SowerWeb.TokenAuth do
     conn
     |> put_resp_header("content-type", "application/json")
     |> resp(:unauthorized, %{error: "unauthorized"} |> Jason.encode!())
+    |> put_status(401)
     |> send_resp()
     |> halt()
   end

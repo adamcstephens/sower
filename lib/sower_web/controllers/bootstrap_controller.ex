@@ -27,19 +27,21 @@ defmodule SowerWeb.BootstrapController do
 
     export SOWER_ENDPOINT="<%= sower_url %>"
 
+    tmpfile=$(mktemp)
+
     echo ":: Downloading sower client"
-    if ! curl --fail --output /tmp/sower --silent $SOWER_ENDPOINT/client/bin/$system; then
+    if ! curl --fail --output "${tmpfile}" --silent $SOWER_ENDPOINT/client/bin/$system; then
       echo ":: Failed to download"
-      cat /tmp/sower
-      rm /tmp/sower
+      cat "${tmpfile}"
+      rm -f "${tmpfile}"
       exit 1
     fi
 
     echo ":: Running sower client"
-    chmod +x /tmp/sower
-    /tmp/sower $@
+    chmod +x "${tmpfile}"
+    eval "${tmpfile}" $@
 
-    rm -f /tmp/sower
+    rm -f "${tmpfile}"
 
     echo ":: Done!"
     """

@@ -3,9 +3,11 @@ defmodule Sower.Client do
   # import Ecto.Changeset
   alias Sower.Repo
 
-  @derive {Jason.Encoder, only: [:id, :name]}
+  @derive {Jason.Encoder, only: [:sid, :name]}
+  @derive {Phoenix.Param, key: :sid}
 
   schema "clients" do
+    field :sid, Sower.Schema.Sid, autogenerate: true
     field :name, :string
     field :org_id, Ecto.UUID
 
@@ -18,6 +20,10 @@ defmodule Sower.Client do
 
   def get!(id) do
     Repo.get!(Sower.Client, id)
+  end
+
+  def get_sid!(sid) do
+    Repo.get_by!(Sower.Client, sid: sid)
   end
 
   # defp changeset(seed, attrs) do

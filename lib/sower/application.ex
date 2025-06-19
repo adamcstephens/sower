@@ -5,14 +5,14 @@ defmodule Sower.Application do
 
   @impl true
   def start(_type, _args) do
-    # OpentelemetryBandit.setup()
-    # OpentelemetryPhoenix.setup(adapter: :bandit)
-
     children = [
       {Cluster.Supervisor,
        [Application.get_env(:libcluster, :topologies, []), [name: Sower.ClusterSupervisor]]},
       SowerWeb.Telemetry,
+      Sower.Vault,
       Sower.Repo,
+      Sower.Forge.Oauth,
+      Sower.Forge.WebhookStorage,
       {Phoenix.PubSub, name: Sower.PubSub},
       {Finch, name: Sower.Finch},
       SowerWeb.Endpoint,
