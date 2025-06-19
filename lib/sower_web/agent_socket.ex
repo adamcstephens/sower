@@ -6,33 +6,24 @@ defmodule SowerWeb.AgentSocket do
 
   @impl true
   def connect(%{"token" => token}, socket, _connect_info) do
-    # TODO replace with access token
-    bootstrap_token =
-      case Application.fetch_env(:sower, :bootstrap_token) do
-        {:ok, token} -> token
-        :error -> Kernel.exit(:config_no_bootstrap_token)
-      end
+    case token |> Base.decode64!() |> Sower.Accounts.AccessToken.authenticate() do
+      {:ok, access_token} ->
+        socket =
+          socket
+          |> assign(:access_token, access_token)
+          |> assign(:conn_sid, Sower.Schema.Sid.generate("conn"))
 
-    signer = Joken.Signer.create("HS256", bootstrap_token)
+        {:ok, socket}
 
-    case Joken.Signer.verify(token, signer) do
-      {:ok, claims} ->
-        {:ok, socket |> assign(:claims, claims)}
-
-      _ ->
-        Logger.error("failed to verify agent token")
-        {:error, "unauthorized"}
+      {:error, error} ->
+        Logger.error(msg: "Invalid authentication", error: error)
+        {:error, :unauthorized}
     end
   end
 
-  def connect(%{}, socket, _connect_info) do
-    Logger.error(msg: "TODO non-authorized connection")
-    {:ok, assign(socket, :conn_sid, "conn_#{Sower.Schema.Sid.generate()}")}
-  end
-
-  def connect(%{}, _socket, _connect_info) do
-    Logger.debug(msg: "unauthorized connection")
-    {:error, "unauthorized. authentication token required"}
+  def connect(_, _socket, _connect_info) do
+    Logger.error(msg: "unauthorized connection")
+    {:error, :unauthorized}
   end
 
   @impl true

@@ -5,22 +5,15 @@ defmodule SowerWeb.AgentChannel do
   require Logger
 
   def join("agent:lobby", _message, %{assigns: %{conn_sid: conn_sid}} = socket) do
-    # TODO move to access token checking
-    Sower.Accounts.Organization.list()
-    |> List.first()
-    |> Map.get(:org_id)
-    |> Sower.Repo.put_org_id()
+    Sower.Repo.put_org_id(socket.assigns.access_token.org_id)
 
-    Logger.debug(msg: "Channel topic joined", topic: "agent:all", conn_sid: conn_sid)
+    Logger.debug(msg: "Channel topic joined", topic: "agent:lobby", conn_sid: conn_sid)
+
     {:ok, %{conn_sid: conn_sid}, socket}
   end
 
   def join("agent:" <> topic_sid = topic, %{"local_sid" => local_sid}, socket) do
-    # TODO move to access token checking
-    Sower.Accounts.Organization.list()
-    |> List.first()
-    |> Map.get(:org_id)
-    |> Sower.Repo.put_org_id()
+    Sower.Repo.put_org_id(socket.assigns.access_token.org_id)
 
     Logger.debug(msg: "Channel topic joined", topic: topic, local_sid: local_sid)
 

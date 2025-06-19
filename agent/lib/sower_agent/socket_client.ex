@@ -53,7 +53,20 @@ defmodule SowerAgent.SocketClient do
 
   @impl Slipstream
   def init(_args) do
-    config = Application.fetch_env!(:sower_agent, __MODULE__)
+    config =
+      Application.fetch_env!(:sower_agent, __MODULE__)
+
+    uri =
+      config
+      |> Keyword.get(:uri)
+      |> URI.parse()
+      |> Map.put(
+        :query,
+        "token=#{Base.encode64(Application.get_env(:sower_agent, :config).access_token)}"
+      )
+      |> URI.to_string()
+
+    config = Keyword.put(config, :uri, uri)
 
     case connect(config) do
       {:ok, socket} ->

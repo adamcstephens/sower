@@ -22,6 +22,7 @@ defmodule Sower.Schema do
     def autogenerate, do: generate()
 
     def generate, do: Cuid2Ex.create()
+    def generate(prefix), do: "#{prefix}_#{generate()}"
   end
 
   defmodule Nix.StorePathDigest do
