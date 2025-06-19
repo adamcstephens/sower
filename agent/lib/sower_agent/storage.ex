@@ -4,7 +4,7 @@ defmodule SowerAgent.Storage do
 
   require Logger
 
-  @derive {Jason.Encoder, only: []}
+  @derive {Jason.Encoder, only: [:local_sid, :agent_sid]}
 
   typedstruct do
     field :local_sid, String.t()

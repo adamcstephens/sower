@@ -19,6 +19,10 @@ defmodule SowerAgent.SocketClient do
     GenServer.call(__MODULE__, {event, params})
   end
 
+  def restart() do
+    GenServer.stop(__MODULE__, :shutdown)
+  end
+
   @impl Slipstream
   def handle_call(:ping, _, socket) do
     {:ok, ref} = push(socket, "agent:lobby", "ping", %{})
