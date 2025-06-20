@@ -82,7 +82,7 @@ defmodule SowerWeb.AgentChannel do
     Logger.debug(msg: "Tracking agent presence", agent_sid: agent.sid)
 
     {:ok, _} =
-      Presence.track(self(), "agents", socket.assigns.agent.sid, %{
+      Presence.track(self(), "agent:presence", socket.assigns.agent.sid, %{
         online_at: DateTime.utc_now()
       })
 
