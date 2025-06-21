@@ -33,8 +33,7 @@ defmodule SowerAgent.SocketClient do
   @impl Slipstream
   def handle_call({event, params}, _from, socket) do
     {:ok, ref} = push(socket, "agent:#{Storage.read().agent_sid}", event, params)
-    {:ok, response} = await_reply(ref)
-    {:reply, {:ok, response}, socket}
+    {:reply, await_reply(ref), socket}
   end
 
   @impl Slipstream
