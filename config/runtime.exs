@@ -362,3 +362,5 @@ end
 if config_env() != :test do
   Sower.Config.load()
 end
+
+config :sower_agent, :config, SowerAgent.Config.load()

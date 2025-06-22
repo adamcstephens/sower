@@ -621,6 +621,27 @@ let
         in
         drv;
 
+      mint_web_socket =
+        let
+          version = "1.0.4";
+          drv = buildMix {
+            inherit version;
+            name = "mint_web_socket";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "mint_web_socket";
+              sha256 = "027d4c5529c45a4ba0ce27a01c0f35f284a5468519c045ca15f43decb360a991";
+            };
+
+            beamDeps = [
+              mint
+            ];
+          };
+        in
+        drv;
+
       nimble_options =
         let
           version = "1.1.1";
@@ -998,6 +1019,30 @@ let
               pkg = "shortuuid";
               sha256 = "7336719118b3cca1ac73e95810199b0b9b7d00f9d71bd2c2d27fed4c4f74388e";
             };
+          };
+        in
+        drv;
+
+      slipstream =
+        let
+          version = "1.2.0";
+          drv = buildMix {
+            inherit version;
+            name = "slipstream";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "slipstream";
+              sha256 = "f2fceddbb3c97331d348586e77c6425f4d150242dfaf392d22e8bd22f93d1f1e";
+            };
+
+            beamDeps = [
+              jason
+              mint_web_socket
+              nimble_options
+              telemetry
+            ];
           };
         in
         drv;

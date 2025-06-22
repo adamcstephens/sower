@@ -5,7 +5,6 @@
   callPackages,
   beamPackages,
   esbuild,
-  rustPlatform,
   tailwindcss,
   stdenv,
   version,
@@ -22,17 +21,16 @@ beamPackages.mixRelease rec {
   src = lib.fileset.toSource {
     root = ../..;
     fileset = lib.fileset.unions [
-      ../../assets
-      ../../client-elixir
+      ../../apps/sower
+      ../../apps/sower_client
       ../../config
-      ../../lib
       ../../mix.exs
       ../../mix.lock
-      ../../priv
-      ../../test
       ../../VERSION
     ];
   };
+
+  mixReleaseName = "server";
 
   nativeBuildInputs = [ sowerServicesHook ];
 
@@ -53,69 +51,15 @@ beamPackages.mixRelease rec {
     };
   };
 
-  mixNixDeps = callPackages ./deps.nix {
-    inherit lib beamPackages;
-    overrides = self: prev: {
-      argon2 = prev.argon2.override (
-        old:
-        let
-          native = rustPlatform.buildRustPackage {
-            pname = "argon2";
-            version = old.version;
-            src = "${old.src}/native";
-            cargoHash = "sha256-D7mONUH6f/RmFwfx51sLr6XWlIELNTFPvFm9TrbEMl4=";
-            useFetchCargoVendor = true;
-          };
-        in
-        {
-          # pre-build the make target
-          preBuild = ''
-            mkdir -p priv/
-            cp ${native}/lib/libargon2.so priv/argon2_${old.version}.so
-          '';
-
-          # move native into expected location
-          postInstall = ''
-            mv $out/lib/erlang/lib/argon2-${old.version}/priv/argon2_${old.version}.so $out/lib/erlang/lib/argon2-${old.version}/priv/argon2.so
-          '';
-        }
-      );
-
-      esbuild = prev.esbuild.override (old: {
-        patches = [ ./esbuild-loadpaths.patch ];
-      });
-
-      typedstruct = prev.typedstruct.override (old: {
-        preConfigure = ''
-          substituteInPlace mix.exs --replace-fail 'version = vsn()' 'version = "${old.version}"'
-        '';
-      });
-
-      typed_struct_ecto_changeset = prev.typed_struct_ecto_changeset.override (old: {
-        beamDeps = [ self.typedstruct ];
-
-        preConfigure = ''
-          substituteInPlace mix.exs --replace-fail \
-            '{:typed_struct, "~> 0.3.0", only: [:dev, :test], runtime: false}' \
-            '{:typedstruct, "${self.typedstruct.version}"}'
-        '';
-      });
-
-      tailwind = prev.tailwind.override (old: {
-        patches = [ ./tailwind-loadpaths.patch ];
-      });
-    };
-  };
+  mixNixDeps = callPackages ./umbrella-deps.nix { inherit beamPackages; };
 
   postBuild = ''
     # prevent mix from trying to download binaries
     ln -sfv ${lib.getExe esbuild} _build/esbuild-${os}-${arch}
     ln -sfv ${lib.getExe tailwindcss} _build/tailwind-${os}-${arch}
 
-    mix assets.deploy --no-deps-check
+    mix do deps.loadpaths --no-deps-check, assets.deploy --no-deps-check
   '';
-
-  preInstall = '''';
 
   # disabled because requires test deps to work
   # doCheck = true;
