@@ -106,11 +106,11 @@ in
           RELEASE_COOKIE=$(cat ${cfg.environment.RELEASE_COOKIE_FILE})
           export RELEASE_COOKIE
 
-          ${cfg.package}/bin/sower eval Sower.Release.migrate
-          ${lib.optionalString cfg.e2eTest "${cfg.package}/bin/sower eval Sower.Repo.Seeds.Preseed.for_e2e"}
-          exec ${cfg.package}/bin/sower start
+          ${lib.getExe cfg.package} eval Sower.Release.migrate
+          ${lib.optionalString cfg.e2eTest "${lib.getExe cfg.package} eval Sower.Repo.Seeds.Preseed.for_e2e"}
+          exec ${lib.getExe cfg.package} start
         '';
-        ExecStop = "${cfg.package}/bin/sower stop";
+        ExecStop = "${lib.getExe cfg.package} stop";
       };
 
       environment = {

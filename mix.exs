@@ -11,12 +11,14 @@ defmodule SowerUmbrella.MixProject do
         agent: [
           version: version,
           applications: [sower_agent: :permanent],
-          runtime_config_path: "config/runtime_agent.exs"
+          runtime_config_path: "config/runtime_agent.exs",
+          include_executables_for: [:unix]
         ],
         server: [
           version: version,
           applications: [sower: :permanent],
-          runtime_config_path: "config/runtime.exs"
+          runtime_config_path: "config/runtime_server.exs",
+          include_executables_for: [:unix]
         ]
       ],
       start_permanent: Mix.env() == :prod,

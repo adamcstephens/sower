@@ -61,6 +61,10 @@ beamPackages.mixRelease rec {
     mix do deps.loadpaths --no-deps-check, assets.deploy --no-deps-check
   '';
 
+  postInstall = ''
+    mv $out/bin/server $out/bin/sower-server
+  '';
+
   # disabled because requires test deps to work
   # doCheck = true;
   # nativeCheckInputs = [
@@ -83,5 +87,5 @@ beamPackages.mixRelease rec {
     inherit mixNixDeps;
   };
 
-  meta.mainProgram = "sower";
+  meta.mainProgram = "sower-server";
 }
