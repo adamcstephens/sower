@@ -1,4 +1,4 @@
-defmodule SowerWeb.Schemas.StorePath do
+defmodule SowerClient.Schemas.StorePath do
   require OpenApiSpex
 
   alias OpenApiSpex.Schema

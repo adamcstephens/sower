@@ -5,7 +5,7 @@ defmodule SowerWeb.Api.SeedController do
   require Logger
 
   alias OpenApiSpex.Schema
-  alias SowerWeb.Schemas
+  alias SowerClient.Schemas
   import Sower.Authorization
 
   plug OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true
@@ -185,7 +185,7 @@ defmodule SowerWeb.Api.SeedController do
         example: "host1"
       ],
       seed_type: [
-        description: "Seed type, one of [#{Sower.Seed.seed_types() |> Enum.join(", ")}]",
+        description: "Seed type, one of [#{Schemas.Seed.seed_types() |> Enum.join(", ")}]",
         type: :string,
         example: "nixos"
       ]

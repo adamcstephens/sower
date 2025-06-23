@@ -10,7 +10,7 @@ defmodule Sower.Seed do
 
   @derive {Phoenix.Param, key: :sid}
 
-  @seed_types ["nixos", "home-manager", "nix-darwin", "service"]
+  @seed_types SowerClient.Schemas.Seed.seed_types()
 
   schema "seeds" do
     field :sid, Sower.Schema.Sid, autogenerate: true
@@ -101,10 +101,6 @@ defmodule Sower.Seed do
       store_path ->
         store_path |> Repo.preload(:store_path) |> Map.get(:store_path)
     end
-  end
-
-  def seed_types() do
-    @seed_types
   end
 
   defp changeset(seed, attrs) do

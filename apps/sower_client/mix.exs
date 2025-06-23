@@ -28,6 +28,7 @@ defmodule SowerClient.MixProject do
       {:igniter, "~> 0.6", only: [:dev, :test]},
       {:jason, "~> 1.0"},
       # load typedstruct before typed_struct_ecto_changeset
+      {:open_api_spex, "~> 3.20"},
       {:typedstruct, "~> 0.5"},
       {:typed_struct_ecto_changeset, "~> 1.1", override: true},
       {:typed_struct_ctor, "~> 0.1"}

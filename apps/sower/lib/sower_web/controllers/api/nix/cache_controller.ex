@@ -5,7 +5,7 @@ defmodule SowerWeb.Api.Nix.CacheController do
   require Logger
 
   alias OpenApiSpex.Schema
-  alias SowerWeb.Schemas
+  alias SowerClient.Schemas
   import Sower.Authorization
 
   plug OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true

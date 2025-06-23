@@ -1,7 +1,9 @@
-defmodule SowerWeb.Schemas.Seed do
+defmodule SowerClient.Schemas.Seed do
   require OpenApiSpex
 
   alias OpenApiSpex.Schema
+
+  @seed_types ["nixos", "home-manager", "nix-darwin", "service"]
 
   OpenApiSpex.schema(%{
     title: "Seed",
@@ -20,7 +22,7 @@ defmodule SowerWeb.Schemas.Seed do
       seed_type: %Schema{
         type: :string,
         description: "Type of the seed",
-        enum: Sower.Seed.seed_types()
+        enum: @seed_types
       }
     },
     required: ~w(name seed_type)a,
@@ -30,4 +32,8 @@ defmodule SowerWeb.Schemas.Seed do
       "seed_type" => "nixos"
     }
   })
+
+  def seed_types() do
+    @seed_types
+  end
 end

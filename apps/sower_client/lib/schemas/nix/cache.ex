@@ -1,4 +1,4 @@
-defmodule SowerWeb.Schemas.Nix.Cache do
+defmodule SowerClient.Schemas.Nix.Cache do
   require OpenApiSpex
 
   alias OpenApiSpex.Schema
