@@ -19,7 +19,7 @@ defmodule Sower.Seed do
     field :org_id, Ecto.UUID
 
     many_to_many :store_paths, Nix.StorePath, join_through: Sower.SeedStorePath
-    many_to_many :deployments, Distribution.Deployments, join_through: Distribution.SeedDeployment
+    many_to_many :deployments, Distribution.Deployment, join_through: Distribution.SeedDeployment
 
     timestamps()
   end
