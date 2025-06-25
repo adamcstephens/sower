@@ -2,7 +2,7 @@ defmodule SowerUmbrella.MixProject do
   use Mix.Project
 
   def project do
-    version = String.trim(File.read!(Path.join(Path.dirname(__ENV__.file), "VERSION")))
+    version = String.trim(File.read!(Path.expand("VERSION", __DIR__)))
 
     [
       apps_path: "apps",

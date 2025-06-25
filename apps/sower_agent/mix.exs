@@ -11,7 +11,7 @@ defmodule SowerAgent.MixProject do
       elixir: "~> 1.18",
       lockfile: "../../mix.lock",
       start_permanent: Mix.env() == :prod,
-      version: SowerUmbrella.MixProject.project()[:version]
+      version: String.trim(File.read!(Path.expand("../../VERSION", __DIR__)))
     ]
   end
 
