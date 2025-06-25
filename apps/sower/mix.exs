@@ -76,13 +76,13 @@ defmodule Sower.MixProject do
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": [
-        # "tailwind sower",
-        # "esbuild sower"
+        "tailwind sower",
+        "esbuild sower"
       ],
       "assets.deploy": [
-        "tailwind sower --minify"
-        # "esbuild sower --minify",
-        # "phx.digest"
+        "tailwind sower --minify",
+        "esbuild sower --minify",
+        "phx.digest"
       ]
     ]
   end
