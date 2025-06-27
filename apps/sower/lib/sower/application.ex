@@ -20,6 +20,19 @@ defmodule Sower.Application do
       :systemd.ready()
     ]
 
+    children =
+      if Mix.env() == :dev do
+        [
+          %{
+            id: :erl_boot_server,
+            start: {:erl_boot_server, :start_link, [[]]}
+          }
+          | children
+        ]
+      else
+        children
+      end
+
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Sower.Supervisor]

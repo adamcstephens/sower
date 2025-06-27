@@ -31,7 +31,7 @@ defmodule Sower.Repo.Seeds.Preseed do
         user = Org.new_org_and_user(org)
 
         access_token =
-          Org.access_token(user, "dev token", %{"expires_at" => Date.add(Date.utc_today(), 7)})
+          Org.access_token(user, "dev token", %{"expires_at" => Date.add(Date.utc_today(), 30)})
 
         File.write!(token_file, access_token.token)
         Logger.info("Wrote #{token_file}")
