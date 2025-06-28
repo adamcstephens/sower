@@ -984,7 +984,7 @@ let
 
       req =
         let
-          version = "0.5.10";
+          version = "0.5.12";
           drv = buildMix {
             inherit version;
             name = "req";
@@ -993,7 +993,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "req";
-              sha256 = "8a604815743f8a2d3b5de0659fa3137fa4b1cffd636ecb69b30b2b9b2c2559be";
+              sha256 = "d65f3d0e7032eb245706554cb5240dbe7a07493154e2dd34e7bb65001aa6ef32";
             };
 
             beamDeps = [

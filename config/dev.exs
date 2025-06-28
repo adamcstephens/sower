@@ -80,6 +80,3 @@ config :sower_agent, SowerAgent.SocketClient,
 
 config :sower_agent, SowerAgent.Storage, file: Path.expand("./data/storage.etf", __DIR__)
 config :sower_agent, access_token_file: Path.expand("../.dev-api-token", __DIR__)
-
-config :exsync,
-  reload_callback: {SowerAgent.SocketClient, :restart, []}

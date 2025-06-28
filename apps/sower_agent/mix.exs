@@ -26,7 +26,6 @@ defmodule SowerAgent.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:exsync, "~> 0.4", only: [:dev]},
       {:cuid2_ex, "~> 0.2"},
       {:deps_nix, "~> 2.0", only: [:dev]},
       {:igniter, "~> 0.6", only: [:dev, :test]},
