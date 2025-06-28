@@ -23,6 +23,12 @@ defmodule SowerAgent.Config do
     }
   end
 
+  def reload() do
+    Application.put_env(:sower_agent, :config, load(Mix.env()))
+    Application.stop(:sower_agent)
+    Application.start(:sower_agent)
+  end
+
   defp fetch_env!(name) do
     (@env_prefix <> name) |> String.upcase()
   end

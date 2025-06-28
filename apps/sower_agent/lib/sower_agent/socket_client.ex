@@ -129,7 +129,6 @@ defmodule SowerAgent.SocketClient do
     {:noreply, socket}
   end
 
-  @impl Slipstream
   def handle_message(topic, message, _params, socket) do
     Logger.debug(msg: "Received unknown message", topic: topic, message: message)
     {:noreply, socket}
@@ -158,6 +157,10 @@ defmodule SowerAgent.SocketClient do
   end
 
   @impl Slipstream
+  def handle_reply(ref, :ok, socket) do
+    {:noreply, socket}
+  end
+
   def handle_reply(ref, message, socket) do
     Logger.debug(msg: "Received unknown reply", ref: ref, message: message)
     {:noreply, socket}

@@ -89,17 +89,10 @@ defmodule SowerWeb.AgentChannel do
     {:noreply, socket}
   end
 
-  def handle_info(:ping, %Phoenix.Socket{assigns: %{sid: sid}} = socket) do
-    ref = Sower.Schema.Sid.generate()
-    Logger.debug(msg: "Sending ping", sid: sid, ref: ref)
-    push(socket, "ping", %{ref: ref})
-    {:noreply, socket}
-  end
-
-  def handle_info(:ping_all, socket) do
+  def handle_info(:ping, socket) do
     ref = Sower.Schema.Sid.generate()
     Logger.debug(msg: "Sending ping", ref: ref)
-    broadcast(socket, "agent:lobby", :ping)
+    push(socket, "ping", %{ref: ref})
     {:noreply, socket}
   end
 
