@@ -156,8 +156,7 @@ defmodule SowerAgent.SocketClient do
     {:ok, socket}
   end
 
-  @impl Slipstream
-  def handle_reply(ref, :ok, socket) do
+  def handle_reply(_ref, :ok, socket) do
     {:noreply, socket}
   end
 

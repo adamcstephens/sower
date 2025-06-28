@@ -12,13 +12,13 @@ defmodule SowerAgent.PeerNode do
 
     allow_boot(instance_ip)
 
-    # {:ok, slave} = :slave.start(to_char_list(host), :slave, inet_loader_args())
+    # {:ok, slave} = :slave.start(to_charlist(host), :slave, inet_loader_args())
     {_, peer_pid, peer_name} =
       :peer.start_link(%{
         exec: exec(instance),
         connection: :standard_io,
-        name: to_char_list(instance),
-        host: to_char_list(instance_ip),
+        name: to_charlist(instance),
+        host: to_charlist(instance_ip),
         args:
           Enum.map(
             [
@@ -29,7 +29,7 @@ defmodule SowerAgent.PeerNode do
               "-loader",
               "inet"
             ],
-            &to_char_list/1
+            &to_charlist/1
           )
       })
 
@@ -105,12 +105,12 @@ defmodule SowerAgent.PeerNode do
          instance,
          "/root/.nix-profile/bin/erl"
        ],
-       &to_char_list/1
+       &to_charlist/1
      )}
   end
 
   # defp inet_loader_args do
-  #   "-loader inet -hosts #{central_node_ip()} -setcookie #{:erlang.get_cookie()}" |> to_char_list
+  #   "-loader inet -hosts #{central_node_ip()} -setcookie #{:erlang.get_cookie()}" |> to_charlist
   # end
   #
   def instance_ip(instance) do
@@ -124,7 +124,7 @@ defmodule SowerAgent.PeerNode do
 
   defp allow_boot(host) do
     host
-    |> to_char_list()
+    |> to_charlist()
     |> :inet.parse_ipv4_address()
     |> then(fn {:ok, ipv4} -> ipv4 end)
     |> :erl_boot_server.add_slave()
@@ -139,7 +139,7 @@ defmodule SowerAgent.PeerNode do
     |> to_string
     |> String.split("@")
     |> Enum.at(1)
-    |> to_char_list
+    |> to_charlist
   end
 end
 
