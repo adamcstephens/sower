@@ -21,8 +21,8 @@ config :sower, SowerWeb.Endpoint,
   debug_errors: true,
   secret_key_base: "AOSlLb08t2FYrLoZFv034r6d+8aI/sTv2RX028p5lP6jVm7npZFt4qDakFGDuZdl",
   watchers: [
-    esbuild: {Esbuild, :install_and_run, [:default, ~w(--sourcemap=inline --watch)]},
-    tailwind: {Tailwind, :install_and_run, [:default, ~w(--watch)]}
+    esbuild: {Esbuild, :install_and_run, [:sower, ~w(--sourcemap=inline --watch)]},
+    tailwind: {Tailwind, :install_and_run, [:sower, ~w(--watch)]}
   ]
 
 # ## SSL Support
