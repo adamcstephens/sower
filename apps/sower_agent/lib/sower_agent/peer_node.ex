@@ -11,8 +11,8 @@ defmodule SowerAgent.PeerNode do
     instance_ip = instance_ip(instance)
 
     allow_boot(instance_ip)
+    setup_erl(instance)
 
-    # {:ok, slave} = :slave.start(to_charlist(host), :slave, inet_loader_args())
     {_, peer_pid, peer_name} =
       :peer.start_link(%{
         exec: exec(instance),
@@ -109,10 +109,6 @@ defmodule SowerAgent.PeerNode do
      )}
   end
 
-  # defp inet_loader_args do
-  #   "-loader inet -hosts #{central_node_ip()} -setcookie #{:erlang.get_cookie()}" |> to_charlist
-  # end
-  #
   def instance_ip(instance) do
     System.shell("incus list -f json #{instance}")
     |> then(fn {result, 0} -> result |> Jason.decode!() end)
@@ -135,14 +131,31 @@ defmodule SowerAgent.PeerNode do
   end
 
   def central_node_ip() do
+    # alternative using interface
+    # ipaddr =
+    #   :inet.getifaddrs()
+    #   |> elem(1)
+    #   |> Enum.find(fn {name, _} -> name == ~c"incusbr0" end)
+    #   |> elem(1)
+    #   |> Keyword.get(:addr)
+
     node()
     |> to_string
     |> String.split("@")
     |> Enum.at(1)
     |> to_charlist
   end
+
+  def setup_erl(instance) do
+    {_, 0} =
+      System.shell(
+        ~s{incus exec #{instance} --  bash -i -c "which erl || nix --extra-experimental-features 'flakes nix-command' profile install nixpkgs#erlang"}
+      )
+
+    # TODO, gcroot this?
+    {erl_path, 0} =
+      System.shell(~s{incus exec #{instance} --  bash -i -c 'readlink -f $(which erl)'}) |> dbg()
+
+    {_, 0} = System.shell("nix-store --realize #{erl_path}")
+  end
 end
-
-# {_, peer, peer_name} = :peer.start_link(%{exec: {:os.find_executable(~c"incus"), [~c"exec", ~c"--", ~c"stirring-grubworm", ~c"/root/.nix-profile/bin/erl"]}, connection: :standard_io, name: ~c"stirring-grubworm", host: ~c"10.143.96.58", args: [~c"-hosts", ~c"10.143.96.1", ~c"-setcookie", ~c"#{:erlang.get_cookie()}", ~c"-loader", ~c"inet"]})
-
-# ipaddr = :inet.getifaddrs |> elem(1) |> Enum.find(fn {name, _} -> name == ~c"incusbr0" end) |> elem(1) |> Keyword.get(:addr
