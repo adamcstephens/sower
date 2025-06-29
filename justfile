@@ -38,7 +38,7 @@ dev-services:
     process-compose list || process-compose up --detached
 
 get-incus-openapi:
-    curl https://converter.swagger.io/api/convert?url=https://raw.githubusercontent.com/lxc/incus/refs/heads/main/doc/rest-api.yaml > apps/incus_client/priv/incus-rest-api.json
+    curl https://converter.swagger.io/api/convert?url=https://raw.githubusercontent.com/lxc/incus/refs/heads/main/doc/rest-api.yaml | jq . > apps/incus_client/priv/incus-rest-api.json
 
 mix-nix-lock:
     mix deps.nix --output nix/packages/deps.nix
