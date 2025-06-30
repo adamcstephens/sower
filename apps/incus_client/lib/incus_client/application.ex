@@ -8,7 +8,7 @@ defmodule IncusClient.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      IncusClient.ApiClient
+      {Task, &IncusClient.ApiClient.init/0}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
