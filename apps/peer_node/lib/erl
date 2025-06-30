@@ -1,0 +1,5 @@
+#!/run/current-system/sw/bin/bash
+
+export PATH=/run/current-system/sw/bin:/root/.nix-profile/bin
+
+exec systemd-run --scope --unit="peer-node" --setenv=PATH="$PATH" /root/.nix-profile/bin/erl $@

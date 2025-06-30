@@ -44,23 +44,58 @@ defmodule IncusClient.ApiClient do
     end
   end
 
-  def get(path) do
-    response = Req.get!("#{config().url}#{path}", unix_socket: config().unix_socket)
+  def get(path, params) do
+    path_merged =
+      Path.split(path)
+      |> Enum.map(fn p ->
+        case Regex.run(~r"{([[:alpha:]]*)}", p) do
+          nil -> p
+          [_, param] -> params[:"#{param}"]
+        end
+      end)
+      |> Path.join()
 
-    OpenApiSpex.cast_value(
-      response.body,
-      spec().paths[path].get.responses["#{response.status}"].content["application/json"].schema,
-      spec()
-    )
+    case Req.get("#{config().url}#{path_merged}",
+           unix_socket: config().unix_socket,
+           params: params
+         ) do
+      {:ok, response} ->
+        status_code =
+          case response.body do
+            %{"type" => "error", "error_code" => code} -> code
+            body -> body["status_code"]
+          end
+          |> to_string()
+
+        schema = resolve_response_schema(path, :get, status_code)
+
+        case OpenApiSpex.cast_value(
+               response.body,
+               schema,
+               spec()
+             ) do
+          {_, %{:type => "error"} = err} -> {:error, err}
+          valid -> valid
+        end
+
+      {:error, _} = err ->
+        err
+    end
   end
 
-  def post(path, request) do
-    req_schema = spec().paths[path].post.requestBody.content["application/json"].schema
+  def post(path, request, params \\ []) do
+    req_schema =
+      spec().paths[path].post.requestBody.content["application/json"].schema
+      |> dbg()
 
     case OpenApiSpex.cast_value(request, req_schema, spec()) do
       {:ok, valid} ->
         req_response =
-          Req.post!("#{config().url}#{path}", json: valid, unix_socket: config().unix_socket)
+          Req.post!("#{config().url}#{path}",
+            json: valid,
+            unix_socket: config().unix_socket,
+            params: params
+          )
 
         case req_response do
           %{body: %{"type" => "async"}} ->
@@ -75,11 +110,7 @@ defmodule IncusClient.ApiClient do
               end
               |> to_string()
 
-            schema =
-              resolve_ref(
-                spec().paths[path].post.responses[status_code]."$ref",
-                spec()
-              )
+            schema = resolve_response_schema(path, :post, status_code)
 
             case OpenApiSpex.cast_value(
                    req_response.body,
@@ -130,7 +161,7 @@ defmodule IncusClient.ApiClient do
     Logger.debug(msg: "Incus Client init complete")
   end
 
-  defp resolve_ref(ref, spec) do
+  defp resolve_ref(ref, spec \\ spec()) do
     [top, type, key] = ref |> String.split("/") |> Enum.reject(&(&1 == "#"))
 
     spec
@@ -143,11 +174,36 @@ defmodule IncusClient.ApiClient do
   end
 
   defp handle_path_vars(path) do
-    case path |> String.split("/") do
-      ["", ver, type, _object] -> Enum.join(["", ver, type, "{name}"], "/")
-      ["", _ver, _type] -> path
+    case path |> Path.split() do
+      ["/", ver, type, _object] -> Path.join(["/", ver, type, "{name}"])
+      ["/", _ver, _type] -> path
     end
   end
+
+  def resolve_response_schema(path, method, status_code, spec \\ spec())
+
+  def resolve_response_schema(_, _, status_code, spec)
+      when status_code == 404 or status_code == "404" do
+    resolve_ref("#/components/responses/NotFound", spec)
+  end
+
+  def resolve_response_schema(path, method, status_code, spec) do
+    case spec
+         |> Map.get(:paths)
+         |> Map.get(path)
+         |> Map.get(method)
+         |> Map.get(:responses)
+         |> Map.get(to_string(status_code)) do
+      %OpenApiSpex.Response{content: %{"application/json" => %{schema: schema}}} -> schema
+      %OpenApiSpex.Reference{"$ref": ref} -> resolve_ref(ref)
+    end
+  end
+
+  # schema =
+  #   resolve_ref(
+  #     spec().paths[path].post.responses[status_code]."$ref",
+  #     spec()
+  #   )
 
   defp spec() do
     :persistent_term.get(:incus_openapi_spec)

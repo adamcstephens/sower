@@ -1,0 +1,2 @@
+defmodule Nix do
+end

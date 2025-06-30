@@ -1,53 +1,76 @@
-defmodule SowerAgent.PeerNode do
+defmodule PeerNode do
   require Logger
   use TypedStruct
 
   typedstruct do
     field :name, String.t()
     field :pid, String.t()
+    field :instance, String.t()
   end
 
   def start(instance) do
     instance_ip = instance_ip(instance)
 
     allow_boot(instance_ip)
-    setup_erl(instance)
+    # setup_erl(instance)
 
     {_, peer_pid, peer_name} =
       :peer.start_link(%{
-        exec: exec(instance),
-        connection: :standard_io,
+        exec:
+          {:os.find_executable(~c"incus"),
+           Enum.map(
+             [
+               "exec",
+               instance,
+               "--",
+               "/root/erl"
+             ]
+             |> dbg(),
+             &to_charlist/1
+           )},
+        connection: {central_node_ip(), 16000},
         name: to_charlist(instance),
         host: to_charlist(instance_ip),
         args:
           Enum.map(
             [
               "-hosts",
-              central_node_ip(),
+              :inet.ntoa(central_node_ip()),
+              # TODO move cookie to a file
               "-setcookie",
               "#{:erlang.get_cookie()}",
               "-loader",
               "inet"
-            ],
+            ]
+            |> dbg(),
             &to_charlist/1
           )
       })
 
-    node = %__MODULE__{pid: peer_pid, name: peer_name}
+    node = %__MODULE__{
+      pid: peer_pid,
+      name: peer_name,
+      instance: instance
+    }
 
     load_paths(node)
 
     node
   end
 
+  def stop(%__MODULE__{} = node) do
+    :peer.stop(node.pid)
+  end
+
+  def restart(node) do
+    stop(node)
+    start(node.instance)
+  end
+
   def start_agent(%__MODULE__{} = node) do
     set_config(node)
 
-    SowerAgent.PeerNode.call(node, Application, :ensure_all_started, [:sower_agent])
-  end
-
-  def stop(%__MODULE__{} = node) do
-    :peer.stop(node.pid)
+    call(node, Application, :ensure_all_started, [:sower_agent])
   end
 
   def get_env(%__MODULE__{} = node, name) do
@@ -76,7 +99,7 @@ defmodule SowerAgent.PeerNode do
 
     storage_dir = "/tmp/#{node.name}"
 
-    SowerAgent.PeerNode.call(node, File, :mkdir_p, [storage_dir])
+    call(node, File, :mkdir_p, [storage_dir])
 
     put_env(
       node,
@@ -87,7 +110,7 @@ defmodule SowerAgent.PeerNode do
     put_env(
       node,
       SowerAgent.SocketClient,
-      uri: "ws://#{central_node_ip()}:7150/agent/websocket",
+      uri: "ws://#{:inet.ntoa(central_node_ip())}:7150/agent/websocket",
       reconnect_after_msec: [200, 500, 1000, 2000]
     )
   end
@@ -96,26 +119,21 @@ defmodule SowerAgent.PeerNode do
     :rpc.block_call(node.name, module, method, args)
   end
 
-  def exec(instance) do
-    {:os.find_executable(~c"incus"),
-     Enum.map(
-       [
-         "exec",
-         "--",
-         instance,
-         "/root/.nix-profile/bin/erl"
-       ],
-       &to_charlist/1
-     )}
-  end
-
   def instance_ip(instance) do
-    System.shell("incus list -f json #{instance}")
-    |> then(fn {result, 0} -> result |> Jason.decode!() end)
+    {:ok, state} =
+      IncusClient.ApiClient.get("/1.0/instances/{name}/state",
+        name: instance,
+        project: "sowerdev"
+      )
+
+    state.metadata.network
+    |> Enum.reject(fn {n, _} -> String.starts_with?(n, "lo") end)
     |> List.first()
-    |> get_in(["state", "network", "eth0", "addresses"])
-    |> Enum.find(fn a -> a["family"] == "inet" end)
-    |> Map.get("address")
+    |> elem(1)
+    |> Map.get(:addresses)
+    # grab the first ipv4
+    |> Enum.find(fn a -> a.family == "inet" end)
+    |> Map.get(:address)
   end
 
   defp allow_boot(host) do
@@ -132,18 +150,17 @@ defmodule SowerAgent.PeerNode do
 
   def central_node_ip() do
     # alternative using interface
-    # ipaddr =
-    #   :inet.getifaddrs()
-    #   |> elem(1)
-    #   |> Enum.find(fn {name, _} -> name == ~c"incusbr0" end)
-    #   |> elem(1)
-    #   |> Keyword.get(:addr)
+    :inet.getifaddrs()
+    |> elem(1)
+    |> Enum.find(fn {name, _} -> name == ~c"incusbr0" end)
+    |> elem(1)
+    |> Keyword.get(:addr)
 
-    node()
-    |> to_string
-    |> String.split("@")
-    |> Enum.at(1)
-    |> to_charlist
+    # node()
+    # |> to_string
+    # |> String.split("@")
+    # |> Enum.at(1)
+    # |> to_charlist
   end
 
   def setup_erl(instance) do
@@ -156,6 +173,6 @@ defmodule SowerAgent.PeerNode do
     {erl_path, 0} =
       System.shell(~s{incus exec #{instance} --  bash -i -c 'readlink -f $(which erl)'}) |> dbg()
 
-    {_, 0} = System.shell("nix-store --realize #{erl_path}")
+    Nix.Store.realize(erl_path)
   end
 end
