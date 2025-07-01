@@ -12,7 +12,7 @@ defmodule PeerNode do
     instance_ip = instance_ip(instance)
 
     allow_boot(instance_ip)
-    # setup_erl(instance)
+    setup_erl(instance)
 
     {_, peer_pid, peer_name} =
       :peer.start_link(%{
@@ -28,7 +28,7 @@ defmodule PeerNode do
              |> dbg(),
              &to_charlist/1
            )},
-        connection: {central_node_ip(), 16000},
+        connection: :standardio,
         name: to_charlist(instance),
         host: to_charlist(instance_ip),
         args:
@@ -146,6 +146,11 @@ defmodule PeerNode do
 
   defp load_paths(node) do
     call(node, :code, :add_paths, [:code.get_path()])
+  end
+
+  def reload_paths(node) do
+    call(node, :code, :del_paths, [:code.get_path()])
+    load_paths(node)
   end
 
   def central_node_ip() do

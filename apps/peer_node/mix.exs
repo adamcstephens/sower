@@ -25,6 +25,7 @@ defmodule PeerNode.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:nix, in_umbrella: true},
       {:typedstruct, "~> 0.5"}
     ]
   end
