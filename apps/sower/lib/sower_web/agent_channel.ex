@@ -6,6 +6,11 @@ defmodule SowerWeb.AgentChannel do
   alias SowerWeb.Presence
   require Logger
 
+  def get_assigns(agent_sid) do
+    Phoenix.PubSub.broadcast(Sower.PubSub, "agent:#{agent_sid}", :ping)
+  end
+
+  @impl Phoenix.Channel
   def join("agent:lobby", _message, %{assigns: %{conn_sid: conn_sid}} = socket) do
     Sower.Repo.put_org_id(socket.assigns.access_token.org_id)
 
@@ -55,6 +60,7 @@ defmodule SowerWeb.AgentChannel do
     {:error, %{reason: "unauthorized"}}
   end
 
+  @impl Phoenix.Channel
   def handle_in("ping", _, socket) do
     Logger.debug(msg: "Received ping, ponging")
     {:reply, {:ok, :pong}, socket}
@@ -78,6 +84,27 @@ defmodule SowerWeb.AgentChannel do
     end
   end
 
+  def handle_in("agent:current_generation", payload, socket) do
+    payload = to_struct(Nix.Profile.Generation, payload)
+
+    socket =
+      assign(socket, :current_generation, payload)
+
+    Phoenix.PubSub.broadcast(Sower.PubSub, "agent:view:#{socket.assigns.agent.sid}", payload)
+
+    {:noreply, socket}
+  end
+
+  defp to_struct(new_struct, new_map) do
+    new_map =
+      for {key, val} <- new_map, into: %{} do
+        {String.to_atom(key), val}
+      end
+
+    struct(new_struct, new_map)
+  end
+
+  @impl Phoenix.Channel
   def handle_info(:track_presence, %Phoenix.Socket{assigns: %{agent: agent}} = socket) do
     Logger.debug(msg: "Tracking agent presence", agent_sid: agent.sid)
 

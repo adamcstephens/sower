@@ -12,6 +12,7 @@ beamPackages.mixRelease {
   src = lib.fileset.toSource {
     root = ../..;
     fileset = lib.fileset.unions [
+      ../../apps/nix
       ../../apps/sower_agent
       ../../apps/sower_client
       ../../config

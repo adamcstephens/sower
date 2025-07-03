@@ -1,6 +1,8 @@
 defmodule Nix.Profile do
   import TypedStruct
 
+  @derive Jason.Encoder
+
   typedstruct enforce: true do
     field :type, atom()
     field :current, __MODULE__.Generation.t()
@@ -8,7 +10,7 @@ defmodule Nix.Profile do
     field :previous, list(String.t())
   end
 
-  @doc "Calculate path to the profile"
+  @doc "Path to the currently running version of the profile"
   @callback current_path() :: String.t()
 
   @doc "Calculate path to the profile"
@@ -29,13 +31,17 @@ defmodule Nix.Profile do
           {:ok,
            %Nix.Profile{
              type: unquote(type),
-             current: path_to_generation!(current_path()),
+             current: current_generation!(),
              latest: latest_generation,
              previous: profile_generations()
            }}
         else
           {:error, _} = err -> err
         end
+      end
+
+      def current_generation!() do
+        current_path() |> path_to_generation!()
       end
 
       def path_to_generation(profile \\ __MODULE__.profile_path()) do
@@ -95,6 +101,8 @@ defmodule Nix.Profile do
 
   defmodule Generation do
     import TypedStruct
+
+    @derive Jason.Encoder
 
     typedstruct enforce: true do
       field :created, DateTime.t()

@@ -25,6 +25,7 @@ defmodule Nix.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:jason, "~> 1.0"},
       {:typedstruct, "~> 0.5", runtime: false},
       {:timex, "~> 3.7"}
     ]

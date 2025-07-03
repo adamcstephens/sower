@@ -30,9 +30,10 @@ defmodule SowerAgent.MixProject do
       {:deps_nix, "~> 2.0", only: [:dev]},
       {:igniter, "~> 0.6", only: [:dev, :test]},
       {:jason, "~> 1.0"},
+      {:nix, in_umbrella: true},
       {:slipstream, "~> 1.0"},
       # load typedstruct before typed_struct_ecto_changeset
-      {:typedstruct, "~> 0.5"},
+      {:typedstruct, "~> 0.5", runtime: false},
       {:sower_client, in_umbrella: true}
     ]
   end

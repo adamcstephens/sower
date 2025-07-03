@@ -43,6 +43,7 @@ defmodule Sower.MixProject do
       {:libcluster_consul, "~> 1.3"},
       {:mime, "~> 2.0.6"},
       {:mix_test_watch, "~> 1.0", only: [:dev, :test], runtime: false},
+      {:nix, in_umbrella: true},
       {:open_api_spex, "~> 3.20"},
       {:permit, "~> 0.3.0"},
       {:permit_ecto, "~> 0.2.3"},
@@ -56,7 +57,7 @@ defmodule Sower.MixProject do
       {:req, ">= 0.5.8"},
       {:shortuuid, "~> 4.0"},
       # load typedstruct before typed_struct_ecto_changeset
-      {:typedstruct, "~> 0.5"},
+      {:typedstruct, "~> 0.5", runtime: false},
       {:sower_client, in_umbrella: true},
       {:systemd, "~> 0.6"},
       {:tailwind, "~> 0.3.0", runtime: Mix.env() == :dev},

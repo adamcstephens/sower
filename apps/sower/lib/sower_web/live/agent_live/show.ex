@@ -21,14 +21,32 @@ defmodule SowerWeb.AgentLive.Show do
       |> assign(:page_title, page_title(socket.assigns.live_action))
       |> assign(:agent, Orchestration.get_agent_sid!(sid))
       |> add_online_status()
+      |> assign(:current_generation, %{})
+
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Sower.PubSub, "agent:view:#{sid}")
+    end
 
     {:noreply, socket}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_info(%Broadcast{topic: "agent:presence", event: "presence_diff"}, socket) do
     {:noreply, add_online_status(socket)}
   end
+
+  def handle_info(
+        %Nix.Profile.Generation{} = generation,
+        socket
+      ) do
+    dbg(generation)
+    {:noreply, assign(socket, :current_generation, generation)}
+  end
+
+  # def handle_info(broadcast, socket) do
+  #   dbg(broadcast)
+  #   {:noreply, socket}
+  # end
 
   defp add_online_status(%{assigns: %{agent: agent}} = socket) do
     online_agents = Presence.list("agent:presence") |> Map.keys()

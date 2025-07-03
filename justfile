@@ -32,6 +32,7 @@ dev-add-user email:
 
 dev-seed-from-local:
     go run ./cmd/cli seed submit --create --name $(hostname -s) --type nixos --path $(readlink -f /run/booted-system)
+    go run ./cmd/cli seed submit --create --name $(hostname -s) --type nixos --path $(readlink -f /run/current-system)
     go run ./cmd/cli seed submit --create --name $(hostname -s) --type home-manager --path $(readlink -f $HOME/.local/state/nix/profiles/home-manager)
 
 dev-services:

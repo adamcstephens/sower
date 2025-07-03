@@ -19,6 +19,10 @@ defmodule SowerAgent.SocketClient do
     GenServer.call(__MODULE__, {event, params})
   end
 
+  def cast(event, params) do
+    GenServer.cast(__MODULE__, {event, params})
+  end
+
   def restart() do
     GenServer.stop(__MODULE__, :shutdown)
   end
@@ -30,16 +34,20 @@ defmodule SowerAgent.SocketClient do
     {:reply, {:ok, :pong}, socket}
   end
 
-  @impl Slipstream
   def handle_call({event, params}, _from, socket) do
     {:ok, ref} = push(socket, "agent:#{Storage.read().agent_sid}", event, params)
     {:reply, await_reply(ref), socket}
   end
 
-  @impl Slipstream
   def handle_call(request, from, socket) do
     Logger.error(msg: "Unsupported call", request: request, from: from)
     {:reply, {:error, :unsupported_request}, socket}
+  end
+
+  @impl Slipstream
+  def handle_cast({event, params}, socket) do
+    {:ok, _} = push(socket, "agent:#{Storage.read().agent_sid}", event, params)
+    {:noreply, socket}
   end
 
   #
