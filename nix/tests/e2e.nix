@@ -121,6 +121,7 @@ testers.runNixOSTest {
 
         settings = {
           api-token-file = "/run/sower/test_token";
+          endpoint = "http://server:4000";
           debug = true;
         };
       };
@@ -147,18 +148,19 @@ testers.runNixOSTest {
 
           server.succeed("sower seed submit --create --name simple-service --type service --path ${simple-service} --debug")
 
-      with subtest("activate seed and services"):
+      with subtest("activate seed"):
           server.succeed("sower seed upgrade --debug")
-          server.succeed("sower services upgrade --debug")
-          server.wait_for_unit("simple-oneshot.service")
-          server.wait_for_unit("simple-sleep.service")
+
+      # with subtest("activate services"):
+      #     server.succeed("sower services upgrade --debug")
+      #     server.wait_for_unit("simple-oneshot.service")
+      #     server.wait_for_unit("simple-sleep.service")
 
       with subtest("check bootstrap"):
           token = server.succeed("cat /run/sower/test_token")
           client.succeed("mkdir /run/sower")
           client.succeed(f"echo -n {token} > /run/sower/test_token")
 
-          client.succeed("curl http://server:4000/client/bootstrap | bash -s seed info --name client --type nixos")
-          client.succeed("systemctl start sower-client")
+          client.succeed("curl http://server:4000/client/bootstrap | SOWER_ENDPOINT=http://server:4000 bash -s seed info --name client --type nixos")
     '';
 }

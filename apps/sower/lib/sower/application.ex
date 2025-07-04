@@ -17,7 +17,7 @@ defmodule Sower.Application do
       {Phoenix.PubSub, name: Sower.PubSub},
       SowerWeb.Presence,
       SowerWeb.Endpoint,
-      {Task, &:systemd.ready/0}
+      :systemd.ready()
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

@@ -1194,15 +1194,16 @@ let
 
       systemd =
         let
-          version = "0.6.2";
+          version = "62723b2a99afca491cc5c8f15c7f72d108e84f4b";
           drv = buildRebar3 {
             inherit version;
             name = "systemd";
 
-            src = fetchHex {
-              inherit version;
-              pkg = "systemd";
-              sha256 = "5062b911800c1ab05157c7bf9a9fbe23dd24c58891c87fd12d2e3ed8fc1708b8";
+            src = pkgs.fetchFromGitHub {
+              owner = "hauleth";
+              repo = "erlang-systemd";
+              rev = "62723b2a99afca491cc5c8f15c7f72d108e84f4b";
+              hash = "sha256-OfUNTPhDGMQHYjoKTgKhxRa2eejwykx2D6V15J5jPO8=";
             };
 
             beamDeps = [
