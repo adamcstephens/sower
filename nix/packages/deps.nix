@@ -142,15 +142,17 @@ let
 
       argon2 =
         let
-          version = "1.2.0";
-          drv = buildRebar3 {
+          version = "699ff303d6866b0b61b73c11859fcab898a8badf";
+          drv = buildMix {
             inherit version;
             name = "argon2";
+            appConfigPath = ../../config;
 
-            src = fetchHex {
-              inherit version;
-              pkg = "argon2";
-              sha256 = "76ae94bee3eee9a34079e92993c9fb3f49fbd9976680452cc84d0335244911a3";
+            src = pkgs.fetchFromGitHub {
+              owner = "adamcstephens";
+              repo = "erl_argon2";
+              rev = "699ff303d6866b0b61b73c11859fcab898a8badf";
+              hash = "sha256-1aY0VjkP6BwE9HhyaQT0CDj470D6AlaOBZQkbAaqs64=";
             };
           };
         in

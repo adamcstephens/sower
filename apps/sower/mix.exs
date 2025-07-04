@@ -26,7 +26,8 @@ defmodule Sower.MixProject do
 
   defp deps do
     [
-      {:argon2, "~> 1.2"},
+      # {:argon2, "~> 1.2"},
+      {:argon2, github: "adamcstephens/erl_argon2", branch: "fix-dialyzer"},
       {:bandit, "~> 1.0"},
       {:cloak_ecto, "~> 1.3.0"},
       {:cuid2_ex, "~> 0.2.0"},

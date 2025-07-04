@@ -46,6 +46,7 @@ mix-nix-lock:
 
 mix-clean:
     mix deps.clean --unused --unlock
+    just mix-nix-lock
 
 openapi-output:
     # remove old sower test app to force correct version

@@ -130,18 +130,14 @@ defmodule Sower.Accounts.AccessToken do
     |> Repo.update()
   end
 
-  @spec authenticate(String.t()) :: {:ok, map()} | {:error, String.t()}
   def authenticate(token) do
     with {:ok, sid, rand} <- split_token(token),
          access_token <- get_sid(sid),
          false <- is_nil(access_token),
          true <- verify_not_expired(access_token),
-         {:ok, true} <- :argon2.verify(rand, access_token.token_hash) do
+         :ok <- verify_token(rand, access_token) do
       {:ok, access_token |> Sower.Repo.preload(:user)}
     else
-      {:ok, false} ->
-        {:error, "Invalid token: Verification failed"}
-
       {:error, err} ->
         {:error, IO.inspect(err)}
 
@@ -161,6 +157,17 @@ defmodule Sower.Accounts.AccessToken do
         else
           changeset
         end
+    end
+  end
+
+  # @dialyzer {:no_return, {:verify_token, 2}}
+  defp verify_token(rand, access_token) do
+    case :argon2.verify(rand, access_token.token_hash) do
+      {:ok, true} ->
+        :ok
+
+      _ ->
+        {:error, "Invalid token: Hash Verify Failure"}
     end
   end
 
