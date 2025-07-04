@@ -11,9 +11,11 @@ callPackages ./deps.nix {
     argon2 = prev.argon2.override (
       old:
       let
+        version = "1.2.0"; # or old.version
+
         native = rustPlatform.buildRustPackage {
           pname = "argon2";
-          version = old.version;
+          version = version;
           src = "${old.src}/native";
           cargoHash = "sha256-D7mONUH6f/RmFwfx51sLr6XWlIELNTFPvFm9TrbEMl4=";
           useFetchCargoVendor = true;
@@ -23,13 +25,14 @@ callPackages ./deps.nix {
         # pre-build the make target
         preBuild = ''
           mkdir -p priv/
-          cp ${native}/lib/libargon2.so priv/argon2_${old.version}.so
+          substituteInPlace native/Makefile --replace-fail '$(PROJECT)' 'argon2'
+          cp ${native}/lib/libargon2.so priv/argon2.so
         '';
 
         # move native into expected location
-        postInstall = ''
-          mv $out/lib/erlang/lib/argon2-${old.version}/priv/argon2_${old.version}.so $out/lib/erlang/lib/argon2-${old.version}/priv/argon2.so
-        '';
+        # postInstall = ''
+        #   mv $out/lib/erlang/lib/argon2/priv/argon2.so $out/lib/erlang/lib/argon2/priv/argon2.so
+        # '';
       }
     );
 

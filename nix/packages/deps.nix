@@ -330,27 +330,6 @@ let
         in
         drv;
 
-      dialyxir =
-        let
-          version = "1.4.5";
-          drv = buildMix {
-            inherit version;
-            name = "dialyxir";
-            appConfigPath = ../../config;
-
-            src = fetchHex {
-              inherit version;
-              pkg = "dialyxir";
-              sha256 = "b0fb08bb8107c750db5c0b324fa2df5ceaa0f9307690ee3c1f6ba5b9eb5d35c3";
-            };
-
-            beamDeps = [
-              erlex
-            ];
-          };
-        in
-        drv;
-
       ecto =
         let
           version = "3.13.2";
@@ -409,23 +388,6 @@ let
               inherit version;
               pkg = "enough";
               sha256 = "0460c7abda5f5e0ea592b12bc6976b8a5c4b96e42f332059cd396525374bf9a1";
-            };
-          };
-        in
-        drv;
-
-      erlex =
-        let
-          version = "0.2.7";
-          drv = buildMix {
-            inherit version;
-            name = "erlex";
-            appConfigPath = ../../config;
-
-            src = fetchHex {
-              inherit version;
-              pkg = "erlex";
-              sha256 = "3ed95f79d1a844c3f6bf0cea61e0d5612a42ce56da9c03f01df538685365efb0";
             };
           };
         in
