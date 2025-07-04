@@ -17,21 +17,8 @@ defmodule Sower.Application do
       {Phoenix.PubSub, name: Sower.PubSub},
       SowerWeb.Presence,
       SowerWeb.Endpoint,
-      :systemd.ready()
+      {Task, &:systemd.ready/0}
     ]
-
-    children =
-      if Mix.env() == :dev do
-        [
-          %{
-            id: :erl_boot_server,
-            start: {:erl_boot_server, :start_link, [[]]}
-          }
-          | children
-        ]
-      else
-        children
-      end
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options

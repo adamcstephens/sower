@@ -130,15 +130,9 @@ defmodule Sower.Config do
   }
 
   def load() do
-    json_config =
-      case load_config_file() do
-        {:ok, json_config} ->
-          json_config |> set_logger_config()
+    {:ok, json_config} = load_config_file()
 
-        {:error, err} ->
-          Logger.error("Failed to load configuration: #{inspect(err)}")
-          Kernel.exit(1)
-      end
+    json_config = json_config |> set_logger_config()
 
     Logger.debug("Loaded configuration")
     Logger.debug(json_config)
@@ -279,16 +273,14 @@ defmodule Sower.Config do
       "listen_port" => 4000
     }
 
-    with {:ok, contents} <- File.read(config_file),
-         {:ok, json} <- Jason.decode(contents),
-         :ok <- ExJsonSchema.Validator.validate(ExJsonSchema.Schema.resolve(@schema), json) do
-      {:ok, defaults |> Map.merge(json) |> atomize()}
-    else
-      {:error, err} ->
-        Logger.error(~s"Failed to read configuration file #{config_file}")
-        Logger.error(err)
-        Kernel.exit(1)
-    end
+    json =
+      config_file
+      |> File.read!()
+      |> Jason.decode!()
+
+    :ok = ExJsonSchema.Validator.validate(ExJsonSchema.Schema.resolve(@schema), json)
+
+    {:ok, defaults |> Map.merge(json) |> atomize()}
   end
 
   def set_logger_config(json_config) do

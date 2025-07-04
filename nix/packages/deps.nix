@@ -1048,7 +1048,7 @@ let
 
       plug =
         let
-          version = "1.18.0";
+          version = "1.18.1";
           drv = buildMix {
             inherit version;
             name = "plug";
@@ -1057,7 +1057,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "plug";
-              sha256 = "819f9e176d51e44dc38132e132fe0accaf6767eab7f0303431e404da8476cfa2";
+              sha256 = "57a57db70df2b422b564437d2d33cf8d33cd16339c1edb190cd11b1a3a546cc2";
             };
 
             beamDeps = [
@@ -1111,7 +1111,7 @@ let
 
       req =
         let
-          version = "0.5.12";
+          version = "0.5.14";
           drv = buildMix {
             inherit version;
             name = "req";
@@ -1120,7 +1120,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "req";
-              sha256 = "d65f3d0e7032eb245706554cb5240dbe7a07493154e2dd34e7bb65001aa6ef32";
+              sha256 = "b7b15692071d556c73432c7797aa7e96b51d1a2db76f746b976edef95c930021";
             };
 
             beamDeps = [

@@ -5,26 +5,15 @@ defmodule SowerWeb.TokenAuth do
   require Logger
 
   def ensure_token_authenticated(conn, _opts) do
-    with true <-
-           conn.req_headers
-           |> Enum.any?(fn {key, _value} -> key == "authorization" end),
-         token <-
-           conn.req_headers
-           |> Enum.find(fn {key, _value} -> key == "authorization" end)
-           |> Kernel.elem(1)
-           |> String.split(" ")
-           |> Enum.at(1),
-         {:ok, access_token} <- Sower.Accounts.AccessToken.authenticate(token) do
-      Sower.Repo.put_org_id(access_token.org_id)
+    ["Bearer " <> access_token] = get_req_header(conn, "authorization")
 
-      conn
-      |> assign(:access_token, access_token)
-    else
+    case Sower.Accounts.AccessToken.authenticate(access_token) do
+      {:ok, access_token} ->
+        Sower.Repo.put_org_id(access_token.org_id)
+        assign(conn, :access_token, access_token)
+
       {:error, err} ->
-        Logger.error(~s"Unauthorized token received: #{err}")
-        conn |> send_unauthorized()
-
-      _ ->
+        Logger.error(msg: "Unauthorized token received", error: err)
         conn |> send_unauthorized()
     end
   end

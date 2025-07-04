@@ -14,48 +14,56 @@ defmodule PeerNode do
     allow_boot(instance_ip)
     setup_erl(instance)
 
-    {_, peer_pid, peer_name} =
-      :peer.start_link(%{
-        exec:
-          {:os.find_executable(~c"incus"),
-           Enum.map(
-             [
-               "exec",
-               instance,
-               "--",
-               "/root/erl"
-             ]
-             |> dbg(),
-             &to_charlist/1
-           )},
-        connection: :standardio,
-        name: to_charlist(instance),
-        host: to_charlist(instance_ip),
-        args:
-          Enum.map(
-            [
-              "-hosts",
-              :inet.ntoa(central_node_ip()),
-              # TODO move cookie to a file
-              "-setcookie",
-              "#{:erlang.get_cookie()}",
-              "-loader",
-              "inet"
-            ]
-            |> dbg(),
-            &to_charlist/1
-          )
-      })
+    case :peer.start_link(
+           %{
+             exec:
+               {:os.find_executable(~c"incus"),
+                Enum.map(
+                  [
+                    "exec",
+                    instance,
+                    "--",
+                    "/root/erl"
+                  ],
+                  &to_charlist/1
+                )},
+             connection: :standardio,
+             name: to_charlist(instance),
+             host: to_charlist(instance_ip),
+             args:
+               Enum.map(
+                 [
+                   "-hosts",
+                   :inet.ntoa(central_node_ip()),
+                   # TODO move cookie to a file
+                   "-setcookie",
+                   "#{:erlang.get_cookie()}",
+                   "-loader",
+                   "inet"
+                 ],
+                 &to_charlist/1
+               )
+           }
+           # this dbg silences dialyzer...
+           |> dbg()
+         ) do
+      {_, peer_pid, peer_name} ->
+        node = %__MODULE__{
+          pid: peer_pid,
+          name: peer_name,
+          instance: instance
+        }
 
-    node = %__MODULE__{
-      pid: peer_pid,
-      name: peer_name,
-      instance: instance
-    }
+        load_paths(node)
 
-    load_paths(node)
+        node
 
-    node
+      {:ok, _} ->
+        nil
+
+      {:error, _} = err ->
+        err
+    end
   end
 
   def stop(%__MODULE__{} = node) do

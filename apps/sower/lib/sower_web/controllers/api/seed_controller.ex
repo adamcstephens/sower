@@ -37,6 +37,8 @@ defmodule SowerWeb.Api.SeedController do
         } = conn,
         _params
       ) do
+    conn = Map.put(conn, :body_params, %{})
+
     if can(conn.assigns.access_token)
        |> create?(%Sower.Seed{org_id: conn.assigns.access_token.org_id}) do
       with {:ok, %Sower.Seed{} = seed} <-
@@ -83,14 +85,16 @@ defmodule SowerWeb.Api.SeedController do
         } = conn,
         %{sid: sid}
       ) do
-    if can(conn.assigns.access_token)
+    conn = Map.put(conn, :body_params, %{})
+
+    if conn.assigns.access_token
+       |> can()
        |> update?(%Sower.Seed{org_id: conn.assigns.access_token.org_id}) do
-      with {:ok, %Sower.Nix.StorePath{} = store_path} <-
-             Sower.Seed.submit(sid, path),
-           Logger.debug(store_path) do
-        conn
-        |> put_status(:created)
-        |> render(:show, store_path: store_path)
+      case Sower.Seed.submit(sid, path) do
+        {:ok, %Sower.Nix.StorePath{} = store_path} ->
+          conn
+          |> put_status(:created)
+          |> render(:show, store_path: store_path)
       end
     else
       conn |> put_status(401) |> render(:error, error: "unauthorized")
@@ -157,10 +161,10 @@ defmodule SowerWeb.Api.SeedController do
   )
 
   def get(conn, %{sid: sid}) do
-    if can(conn.assigns.access_token)
+    if conn.assigns.access_token
+       |> can()
        |> read?(%Sower.Seed{org_id: conn.assigns.access_token.org_id}) do
-      seed = Sower.Seed.get_sid!(sid)
-      render(conn, :show, seed: seed)
+      render(conn, :show, seed: Sower.Seed.get_sid!(sid))
     else
       conn |> put_status(401) |> render(:error, error: "unauthorized")
     end

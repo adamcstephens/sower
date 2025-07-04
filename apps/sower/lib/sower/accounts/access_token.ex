@@ -130,9 +130,11 @@ defmodule Sower.Accounts.AccessToken do
     |> Repo.update()
   end
 
+  @spec authenticate(String.t()) :: {:ok, map()} | {:error, String.t()}
   def authenticate(token) do
     with {:ok, sid, rand} <- split_token(token),
-         access_token when not is_nil(access_token) <- get_sid(sid),
+         access_token <- get_sid(sid),
+         false <- is_nil(access_token),
          true <- verify_not_expired(access_token),
          {:ok, true} <- :argon2.verify(rand, access_token.token_hash) do
       {:ok, access_token |> Sower.Repo.preload(:user)}
@@ -140,8 +142,8 @@ defmodule Sower.Accounts.AccessToken do
       {:ok, false} ->
         {:error, "Invalid token: Verification failed"}
 
-      {:error, _} = error ->
-        error
+      {:error, err} ->
+        {:error, IO.inspect(err)}
 
       _ ->
         {:error, "Invalid token: Parse Failure"}
