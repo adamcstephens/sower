@@ -87,8 +87,11 @@ defmodule SowerWeb.AgentChannel do
   def handle_in("agent:current_generation", payload, socket) do
     payload = to_struct(Nix.Profile.Generation, payload)
 
-    socket =
-      assign(socket, :current_generation, payload)
+    created = payload.created |> DateTime.from_iso8601() |> elem(1)
+
+    store_path = Sower.Nix.submit_store_path!(payload.path)
+
+    Sower.Distribution.create_deployment(%{deployed_at: created, store_paths: [store_path]})
 
     Phoenix.PubSub.broadcast(Sower.PubSub, "agent:view:#{socket.assigns.agent.sid}", payload)
 

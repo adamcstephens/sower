@@ -22,7 +22,8 @@ defmodule Sower.Distribution.Deployment do
   @doc false
   def changeset(deployment, attrs) do
     deployment
-    |> cast(attrs, [])
+    |> cast(attrs, [:deployed_at])
+    |> put_assoc(:store_paths, attrs.store_paths)
     |> validate_required([])
   end
 end

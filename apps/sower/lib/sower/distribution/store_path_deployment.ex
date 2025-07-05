@@ -5,7 +5,6 @@ defmodule Sower.Distribution.StorePathDeployment do
   schema "store_paths_deployments" do
     field :store_path_id, :id
     field :deployment_id, :id
-    field :org_id, Ecto.UUID
 
     timestamps()
   end
