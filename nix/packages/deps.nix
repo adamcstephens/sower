@@ -275,6 +275,23 @@ let
         in
         drv;
 
+      conv_case =
+        let
+          version = "0.2.3";
+          drv = buildMix {
+            inherit version;
+            name = "conv_case";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "conv_case";
+              sha256 = "88f29a3d97d1742f9865f7e394ed3da011abb7c5e8cc104e676fdef6270d4b4a";
+            };
+          };
+        in
+        drv;
+
       cuid2_ex =
         let
           version = "0.2.0";
@@ -447,6 +464,44 @@ let
               inherit version;
               pkg = "expo";
               sha256 = "fbadf93f4700fb44c331362177bdca9eeb8097e8b0ef525c9cc501cb9917c960";
+            };
+          };
+        in
+        drv;
+
+      exsync =
+        let
+          version = "0.4.1";
+          drv = buildMix {
+            inherit version;
+            name = "exsync";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "exsync";
+              sha256 = "cefb22aa805ec97ffc5b75a4e1dc54bcaf781e8b32564bf74abbe5803d1b5178";
+            };
+
+            beamDeps = [
+              file_system
+            ];
+          };
+        in
+        drv;
+
+      file_system =
+        let
+          version = "1.1.0";
+          drv = buildMix {
+            inherit version;
+            name = "file_system";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "file_system";
+              sha256 = "bfcf81244f416871f2a2e15c1b515287faa5db9c6bcf290222206d120b3d43f6";
             };
           };
         in
@@ -1352,46 +1407,6 @@ let
         in
         drv;
 
-      typed_struct_ctor =
-        let
-          version = "0.1.2";
-          drv = buildMix {
-            inherit version;
-            name = "typed_struct_ctor";
-            appConfigPath = ../../config;
-
-            src = fetchHex {
-              inherit version;
-              pkg = "typed_struct_ctor";
-              sha256 = "79695303f7402f1a5b92e5914446014020b234bbfa1fccc664bacdf47101567f";
-            };
-
-            beamDeps = [
-              ecto
-              typed_struct_ecto_changeset
-              typedstruct
-            ];
-          };
-        in
-        drv;
-
-      typed_struct_ecto_changeset =
-        let
-          version = "1.1.0";
-          drv = buildMix {
-            inherit version;
-            name = "typed_struct_ecto_changeset";
-            appConfigPath = ../../config;
-
-            src = fetchHex {
-              inherit version;
-              pkg = "typed_struct_ecto_changeset";
-              sha256 = "10f56689b7ca7c5e96aceb49b08a30712a36b35f987ebc4d20be47177d53fa73";
-            };
-          };
-        in
-        drv;
-
       typedstruct =
         let
           version = "0.5.3";
@@ -1546,6 +1561,28 @@ let
               bandit
               plug
               websock
+            ];
+          };
+        in
+        drv;
+
+      xema =
+        let
+          version = "0.17.5";
+          drv = buildMix {
+            inherit version;
+            name = "xema";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "xema";
+              sha256 = "b49bffe49a565ceeb6dcecbbed7044ccdea934d0716c77206e7f055f41d550b4";
+            };
+
+            beamDeps = [
+              conv_case
+              decimal
             ];
           };
         in

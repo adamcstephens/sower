@@ -11,6 +11,7 @@ defmodule Nix.MixProject do
       lockfile: "../../mix.lock",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
+      consolidate_protocols: Mix.env() != :dev,
       deps: deps()
     ]
   end
@@ -25,9 +26,10 @@ defmodule Nix.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:igniter, "~> 0.5", only: [:dev, :test]},
       {:jason, "~> 1.0"},
-      {:typedstruct, "~> 0.5", runtime: false},
-      {:timex, "~> 3.7"}
+      {:timex, "~> 3.7"},
+      {:xema, "~> 0.17"}
     ]
   end
 end

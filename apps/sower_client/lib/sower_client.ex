@@ -4,17 +4,16 @@ defmodule SowerClient do
   """
 
   defmodule AgentHello do
-    use TypedStruct
+    use Xema
 
     @derive {Jason.Encoder, only: [:agent_sid, :local_sid, :name]}
 
-    typedstruct do
-      plugin(TypedStructEctoChangeset)
-      plugin(TypedStructCtor)
+    xema_struct do
+      field :agent_sid, :string
+      field :local_sid, :string
+      field :name, :string
 
-      field :agent_sid, String.t(), required: false
-      field :local_sid, String.t()
-      field :name, String.t()
+      required [:local_sid, :name]
     end
   end
 end

@@ -72,7 +72,7 @@ defmodule SowerWeb.AgentChannel do
 
   def handle_in("agent:hello", payload, socket) do
     case payload
-         |> SowerClient.AgentHello.new!()
+         |> SowerClient.AgentHello.cast!()
          |> get_agent(socket) do
       {:ok, agent} ->
         Logger.debug(msg: "Replying to hello", agent: agent)
@@ -85,26 +85,18 @@ defmodule SowerWeb.AgentChannel do
   end
 
   def handle_in("agent:current_generation", payload, socket) do
-    payload = to_struct(Nix.Profile.Generation, payload)
-
-    created = payload.created |> DateTime.from_iso8601() |> elem(1)
+    payload = Nix.Profile.Generation.cast!(payload)
 
     store_path = Sower.Nix.submit_store_path!(payload.path)
 
-    Sower.Distribution.create_deployment(%{deployed_at: created, store_paths: [store_path]})
+    Sower.Distribution.create_deployment(%{
+      deployed_at: payload.created,
+      store_paths: [store_path]
+    })
 
     Phoenix.PubSub.broadcast(Sower.PubSub, "agent:view:#{socket.assigns.agent.sid}", payload)
 
     {:noreply, socket}
-  end
-
-  defp to_struct(new_struct, new_map) do
-    new_map =
-      for {key, val} <- new_map, into: %{} do
-        {String.to_atom(key), val}
-      end
-
-    struct(new_struct, new_map)
   end
 
   @impl Phoenix.Channel

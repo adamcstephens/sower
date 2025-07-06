@@ -1,42 +1,45 @@
 defmodule Nix.Profile do
-  import TypedStruct
+  use Xema
 
   @derive Jason.Encoder
 
-  typedstruct enforce: true do
+  xema_struct do
     field :type, atom()
-    field :current, __MODULE__.Generation.t()
-    field :latest, __MODULE__.Generation.t()
-    field :previous, list(String.t())
+    field :current, __MODULE__.Generation
+    field :latest, __MODULE__.Generation
+    field :previous, :list, items: __MODULE__.Generation
+
+    required [:type, :current]
   end
 
   @doc "Path to the currently running version of the profile"
-  @callback current_path() :: String.t()
+  @callback current_path() :: :string
 
   @doc "Calculate path to the profile"
-  @callback profile_path() :: String.t()
+  @callback profile_path() :: :string
 
   @doc "read the type's state"
-  @callback get_state() :: {:ok, __MODULE__} | {:error, String.t() | atom()}
+  @callback get_state() :: {:ok, __MODULE__} | {:error, :string | atom()}
 
   defmacro __using__(opts) do
     type = Keyword.fetch!(opts, :type)
 
     quote do
-      @behaviour Nix.Profile
+      @behaviour unquote(__MODULE__)
 
-      @impl Nix.Profile
+      @impl unquote(__MODULE__)
       def get_state() do
-        with {:ok, latest_generation} <- path_to_generation() do
-          {:ok,
-           %Nix.Profile{
-             type: unquote(type),
-             current: current_generation!(),
-             latest: latest_generation,
-             previous: profile_generations()
-           }}
-        else
-          {:error, _} = err -> err
+        case path_to_generation() do
+          {:ok, latest_generation} ->
+            unquote(__MODULE__).cast(%{
+              type: unquote(type),
+              current: current_generation!(),
+              latest: latest_generation,
+              previous: profile_generations()
+            })
+
+          {:error, _} = err ->
+            err
         end
       end
 
@@ -49,12 +52,11 @@ defmodule Nix.Profile do
              {:ok, %File.Stat{ctime: ctime}} <- File.lstat(profile),
              {:ok, ctime} <- NaiveDateTime.from_erl(ctime),
              {:ok, ctime} <- DateTime.from_naive(ctime, Timex.Timezone.Local.lookup()) do
-          {:ok,
-           %Nix.Profile.Generation{
-             created: ctime,
-             path: latest,
-             link: profile
-           }}
+          unquote(__MODULE__).Generation.cast(%{
+            created: ctime,
+            path: latest,
+            link: profile
+          })
         else
           {:error, _} = err -> err
         end
@@ -96,18 +98,6 @@ defmodule Nix.Profile do
             err
         end
       end
-    end
-  end
-
-  defmodule Generation do
-    import TypedStruct
-
-    @derive Jason.Encoder
-
-    typedstruct enforce: true do
-      field :created, DateTime.t()
-      field :path, String.t()
-      field :link, String.t()
     end
   end
 end

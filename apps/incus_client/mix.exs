@@ -26,11 +26,11 @@ defmodule IncusClient.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:typedstruct, "~> 0.5"},
       {:igniter, "~> 0.6", only: [:dev, :test]},
       {:jason, "~> 1.0"},
       {:open_api_spex, "~> 3.0"},
-      {:req, "~> 0.5"}
+      {:req, "~> 0.5"},
+      {:typedstruct, "~> 0.5"}
     ]
   end
 end
