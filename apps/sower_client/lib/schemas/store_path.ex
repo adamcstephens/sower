@@ -1,7 +1,7 @@
 defmodule SowerClient.Schemas.StorePath do
-  require OpenApiSpex
-
   alias OpenApiSpex.Schema
+  require OpenApiSpex
+  use SowerClient.Schema
 
   OpenApiSpex.schema(%{
     title: "StorePath",

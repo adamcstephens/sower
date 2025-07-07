@@ -99,6 +99,22 @@ defmodule SowerWeb.AgentChannel do
     {:noreply, socket}
   end
 
+  def handle_in("seed:get", payload, socket) do
+    dbg(payload)
+
+    with {:ok, req_seed} <- SowerClient.Schemas.Seed.cast(payload),
+         seed <- Sower.Seed.get(req_seed.name, req_seed.seed_type) do
+      {:reply, {:ok, seed}, socket}
+    else
+      nil ->
+        {:reply, {:error, :not_found}, socket}
+
+      {:error, error} ->
+        Logger.error(msg: "Failed to get seed", payload: payload, error: error)
+        {:reply, :error, socket}
+    end
+  end
+
   @impl Phoenix.Channel
   def handle_info(:track_presence, %Phoenix.Socket{assigns: %{agent: agent}} = socket) do
     Logger.debug(msg: "Tracking agent presence", agent_sid: agent.sid)

@@ -41,16 +41,15 @@ defmodule SowerWeb.Api.SeedController do
 
     if can(conn.assigns.access_token)
        |> create?(%Sower.Seed{org_id: conn.assigns.access_token.org_id}) do
-      with {:ok, %Sower.Seed{} = seed} <-
-             Sower.Seed.create(%{name: name, seed_type: seed_type}),
-           Logger.debug(seed) do
-        conn
-        |> put_status(:created)
-        |> render(:show, seed: seed)
-      else
+      case Sower.Seed.create(%{name: name, seed_type: seed_type}) do
+        {:ok, %Sower.Seed{} = seed} ->
+          conn
+          |> put_status(:created)
+          |> render(:show, seed: seed)
+
         {:error, %Ecto.Changeset{errors: errors}} ->
-          Logger.error(errors)
-          conn |> put_status(409) |> render(:error, error: "seed already exists")
+          Logger.error(error: "Failed to create seed", errors: errors)
+          conn |> put_status(409) |> render(:error, error: "Failed to create seed")
       end
     else
       conn |> put_status(401) |> render(:error, error: "unauthorized")

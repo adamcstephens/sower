@@ -1,7 +1,7 @@
 defmodule SowerClient.Schemas.Seed do
-  require OpenApiSpex
-
   alias OpenApiSpex.Schema
+  require OpenApiSpex
+  use SowerClient.Schema
 
   @seed_types ["nixos", "home-manager", "nix-darwin", "service"]
 
