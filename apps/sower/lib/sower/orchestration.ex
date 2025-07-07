@@ -165,4 +165,124 @@ defmodule Sower.Orchestration do
   def change_agent(%Agent{} = agent, attrs \\ %{}) do
     Agent.changeset(agent, attrs)
   end
+
+  alias Sower.Orchestration.Subscription
+
+  @doc """
+  Returns the list of subscriptions.
+
+  ## Examples
+
+      iex> list_subscriptions()
+      [%Subscription{}, ...]
+
+  """
+  def list_subscriptions do
+    Repo.all(Subscription)
+    |> Sower.Repo.preload(:agent)
+  end
+
+  @doc """
+  Gets a single subscription.
+
+  Raises `Ecto.NoResultsError` if the Subscription does not exist.
+
+  ## Examples
+
+      iex> get_subscription!(123)
+      %Subscription{}
+
+      iex> get_subscription!(456)
+      ** (Ecto.NoResultsError)
+
+  """
+  def get_subscription!(id) do
+    Repo.get!(Subscription, id)
+    |> Sower.Repo.preload(:agent)
+  end
+
+  @doc """
+  Gets a single subscription by sid.
+
+  Raises `Ecto.NoResultsError` if the Subscription does not exist.
+
+  ## Examples
+
+      iex> get_subscription_sid!(123)
+      %Subscription{}
+
+      iex> get_subscription_sid!(456)
+      ** (Ecto.NoResultsError)
+
+  """
+  def get_subscription_sid!(sid), do: Repo.get_by!(Subscription, sid: sid)
+
+  @doc """
+  Creates a subscription.
+
+  ## Examples
+
+      iex> create_subscription(%{field: value})
+      {:ok, %Subscription{}}
+
+      iex> create_subscription(%{field: bad_value})
+      {:error, %Ecto.Changeset{}}
+
+  """
+  def create_subscription(attrs \\ %{}) do
+    %Subscription{
+      org_id: Sower.Repo.get_org_id()
+    }
+    |> Subscription.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Updates a subscription.
+
+  ## Examples
+
+      iex> update_subscription(subscription, %{field: new_value})
+      {:ok, %Subscription{}}
+
+      iex> update_subscription(subscription, %{field: bad_value})
+      {:error, %Ecto.Changeset{}}
+
+  """
+  def update_subscription(%Subscription{} = subscription, attrs) do
+    subscription
+    |> Subscription.changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Deletes a subscription.
+
+  ## Examples
+
+      iex> delete_subscription(subscription)
+      {:ok, %Subscription{}}
+
+      iex> delete_subscription(subscription)
+      {:error, %Ecto.Changeset{}}
+
+  """
+  def delete_subscription(%Subscription{} = subscription) do
+    Repo.delete(subscription)
+  end
+
+  @doc """
+  Returns an `%Ecto.Changeset{}` for tracking subscription changes.
+
+  ## Examples
+
+      iex> change_subscription(subscription)
+      %Ecto.Changeset{data: %Subscription{}}
+
+  """
+  def change_subscription(%Subscription{} = subscription, attrs \\ %{}) do
+    subscription
+    |> Repo.preload(:agent)
+    |> Subscription.changeset(attrs)
+  end
 end

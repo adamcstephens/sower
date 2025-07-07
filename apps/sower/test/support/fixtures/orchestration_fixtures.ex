@@ -18,4 +18,18 @@ defmodule Sower.OrchestrationFixtures do
 
     agent
   end
+
+  @doc """
+  Generate a subscription.
+  """
+  def subscription_fixture(attrs \\ %{}) do
+    {:ok, subscription} =
+      attrs
+      |> Enum.into(%{
+        sid: "some sid"
+      })
+      |> Sower.Orchestration.create_subscription()
+
+    subscription
+  end
 end

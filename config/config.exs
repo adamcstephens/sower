@@ -56,6 +56,10 @@ config :elixir, :time_zone_database, Timex.Timezone.Database
 # disable runtime fetching
 config :tzdata, :autoupdate, :disabled
 
+config :sower, :generators,
+  migration: true,
+  timestamp_type: :utc_datetime
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

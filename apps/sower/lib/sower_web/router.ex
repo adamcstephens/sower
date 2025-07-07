@@ -73,6 +73,12 @@ defmodule SowerWeb.Router do
       live "/settings/access-tokens/:sid/edit", Settings.AccessTokenLive.Index, :edit
       live "/settings/access-tokens/:sid", Settings.AccessTokenLive.Show, :show
       live "/settings/access-tokens/:sid/show/edit", Settings.AccessTokenLive.Show, :edit
+
+      live "/subscriptions", SubscriptionLive.Index, :index
+      live "/subscriptions/new", SubscriptionLive.Index, :new
+      live "/subscriptions/:sid/edit", SubscriptionLive.Index, :edit
+      live "/subscriptions/:sid", SubscriptionLive.Show, :show
+      live "/subscriptions/:sid/show/edit", SubscriptionLive.Show, :edit
     end
   end
 

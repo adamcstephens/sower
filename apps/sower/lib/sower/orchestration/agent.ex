@@ -11,6 +11,8 @@ defmodule Sower.Orchestration.Agent do
     field :local_sid, :string
     field :org_id, Ecto.UUID
 
+    has_many :subscriptions, Sower.Orchestration.Subscription
+
     timestamps()
   end
 
