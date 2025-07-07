@@ -60,16 +60,14 @@ defmodule SowerAgent.SocketClient do
 
   @impl Slipstream
   def init(_args) do
-    config =
-      Application.fetch_env!(:sower_agent, __MODULE__)
+    config = Application.get_all_env(__MODULE__)
 
     uri =
       config
       |> Keyword.get(:uri)
-      |> URI.parse()
       |> Map.put(
         :query,
-        "token=#{Base.encode64(Application.get_env(:sower_agent, :config).access_token)}"
+        "token=#{Base.encode64(Application.fetch_env!(:sower_agent, :config).access_token)}"
       )
       |> URI.to_string()
 
@@ -110,7 +108,7 @@ defmodule SowerAgent.SocketClient do
         socket,
         @lobby_topic,
         "agent:hello",
-        SowerClient.AgentHello.cast!(%{
+        SowerClient.Schemas.AgentHello.cast!(%{
           name: "TODO",
           local_sid: SowerAgent.Storage.read().local_sid,
           agent_sid: SowerAgent.Storage.read().agent_sid

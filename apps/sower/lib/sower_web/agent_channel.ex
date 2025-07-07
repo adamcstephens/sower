@@ -72,7 +72,7 @@ defmodule SowerWeb.AgentChannel do
 
   def handle_in("agent:hello", payload, socket) do
     case payload
-         |> SowerClient.AgentHello.cast!()
+         |> SowerClient.Schemas.AgentHello.cast!()
          |> get_agent(socket) do
       {:ok, agent} ->
         Logger.debug(msg: "Replying to hello", agent: agent)
@@ -135,7 +135,7 @@ defmodule SowerWeb.AgentChannel do
   end
 
   defp get_agent(
-         %SowerClient.AgentHello{agent_sid: nil, name: name, local_sid: local_sid},
+         %SowerClient.Schemas.AgentHello{agent_sid: nil, name: name, local_sid: local_sid},
          socket
        ) do
     case Orchestration.get_agent_local_sid(local_sid) do
@@ -165,7 +165,7 @@ defmodule SowerWeb.AgentChannel do
   end
 
   defp get_agent(
-         %SowerClient.AgentHello{agent_sid: agent_sid, name: name, local_sid: local_sid},
+         %SowerClient.Schemas.AgentHello{agent_sid: agent_sid, name: name, local_sid: local_sid},
          socket
        ) do
     case Orchestration.get_agent_sid(agent_sid) do

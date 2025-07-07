@@ -73,10 +73,3 @@ config :phoenix, :stacktrace_depth, 20
 config :phoenix, :plug_init_mode, :runtime
 
 config :libcluster, topologies: [sower: [strategy: Cluster.Strategy.LocalEpmd]]
-
-config :sower_agent, SowerAgent.SocketClient,
-  uri: "ws://localhost:7150/agent/websocket",
-  reconnect_after_msec: [200, 500, 1_000, 2_000]
-
-config :sower_agent, SowerAgent.Storage, file: Path.expand("./data/storage.etf", __DIR__)
-config :sower_agent, access_token_file: Path.expand("../.dev-api-token", __DIR__)
