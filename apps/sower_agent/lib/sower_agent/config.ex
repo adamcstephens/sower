@@ -27,10 +27,18 @@ defmodule SowerAgent.Config do
         type: :string,
         description: "directory where state files are written",
         default: "/var/lib/sower_agent"
+      },
+      subscriptions: %Schema{
+        type: :array,
+        items: SowerClient.Schemas.Subscription.schema()
       }
     },
     required: ~w(access_token endpoint)a
   })
+
+  def get() do
+    Application.get_env(@app, :config)
+  end
 
   def load(config_map) do
     cfg =

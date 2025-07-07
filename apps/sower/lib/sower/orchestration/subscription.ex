@@ -10,6 +10,7 @@ defmodule Sower.Orchestration.Subscription do
     field :org_id, Ecto.UUID
 
     belongs_to :agent, Sower.Orchestration.Agent
+    belongs_to :seed, Sower.Seed
 
     timestamps(type: :utc_datetime)
   end

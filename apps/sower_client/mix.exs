@@ -25,6 +25,7 @@ defmodule SowerClient.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:cuid2_ex, "~> 0.2"},
       {:igniter, "~> 0.6", only: [:dev, :test]},
       {:jason, "~> 1.0"},
       {:open_api_spex, "~> 3.20"},
