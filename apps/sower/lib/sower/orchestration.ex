@@ -234,7 +234,10 @@ defmodule Sower.Orchestration do
       org_id: Sower.Repo.get_org_id()
     }
     |> Subscription.changeset(attrs)
-    |> Repo.insert()
+    |> Repo.insert(
+      on_conflict: {:replace, [:updated_at]},
+      conflict_target: [:agent_id, :seed_id, :org_id]
+    )
   end
 
   @doc """

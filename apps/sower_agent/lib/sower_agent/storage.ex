@@ -9,9 +9,15 @@ defmodule SowerAgent.Storage do
   typedstruct do
     field :local_sid, String.t()
     field :agent_sid, String.t()
+
+    # field :subscriptions,
   end
 
   # client
+
+  def put(field, value) do
+    read() |> Map.put(field, value) |> write()
+  end
 
   def write(struct) do
     GenServer.call(__MODULE__, {:write, struct})

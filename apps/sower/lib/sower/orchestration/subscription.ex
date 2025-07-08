@@ -18,8 +18,7 @@ defmodule Sower.Orchestration.Subscription do
   @doc false
   def changeset(subscription, attrs) do
     subscription
-    |> cast(attrs, [])
+    |> cast(attrs, [:agent_id, :seed_id])
     |> validate_required([])
-    |> put_assoc(:agent, attrs.agent)
   end
 end

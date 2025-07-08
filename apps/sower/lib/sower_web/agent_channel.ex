@@ -103,11 +103,35 @@ defmodule SowerWeb.AgentChannel do
     dbg(payload)
 
     with {:ok, req_seed} <- SowerClient.Schemas.Seed.cast(payload),
-         seed <- Sower.Seed.get(req_seed.name, req_seed.seed_type) do
+         seed when not is_nil(seed) <- Sower.Seed.get(req_seed.name, req_seed.seed_type) do
       {:reply, {:ok, seed}, socket}
     else
       nil ->
         {:reply, {:error, :not_found}, socket}
+
+      {:error, error} ->
+        Logger.error(msg: "Failed to get seed", payload: payload, error: error)
+        {:reply, :error, socket}
+    end
+  end
+
+  def handle_in("subscription:register", payload, socket) do
+    with {:ok, req_sub} <- SowerClient.Schemas.Subscription.cast(payload),
+         seed when not is_nil(seed) <- Sower.Seed.get(req_sub.name, req_sub.seed_type),
+         {:ok, subscription} <-
+           Sower.Orchestration.create_subscription(%{
+             agent_id: socket.assigns.agent.id,
+             seed_id: seed.id
+           }) do
+      subscription =
+        req_sub
+        |> Map.merge(%{subscription_sid: subscription.sid, seed_sid: seed.sid})
+        |> SowerClient.Schemas.Subscription.cast()
+
+      {:reply, subscription, socket}
+    else
+      nil ->
+        {:reply, {:error, "Seed not found"}, socket}
 
       {:error, error} ->
         Logger.error(msg: "Failed to get seed", payload: payload, error: error)

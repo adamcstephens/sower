@@ -19,6 +19,10 @@ defmodule SowerAgent.SocketClient do
     GenServer.call(__MODULE__, {event, params})
   end
 
+  def cast(event) when is_atom(event) do
+    GenServer.cast(__MODULE__, event)
+  end
+
   def cast(event, params) do
     GenServer.cast(__MODULE__, {event, params})
   end
@@ -35,7 +39,7 @@ defmodule SowerAgent.SocketClient do
   end
 
   def handle_call({event, params}, _from, socket) do
-    {:ok, ref} = push(socket, "agent:#{Storage.read().agent_sid}", event, params)
+    {:ok, ref} = push(socket, private_channel(), event, params)
     {:reply, await_reply(ref), socket}
   end
 
@@ -46,7 +50,28 @@ defmodule SowerAgent.SocketClient do
 
   @impl Slipstream
   def handle_cast({event, params}, socket) do
-    {:ok, _} = push(socket, "agent:#{Storage.read().agent_sid}", event, params)
+    {:ok, _} = push(socket, private_channel(), event, params)
+    {:noreply, socket}
+  end
+
+  def handle_cast(:register_subscriptions, socket) do
+    subscriptions =
+      SowerAgent.Config.get().subscriptions
+      |> Enum.map(fn sub ->
+        with {:ok, ref} <- push(socket, private_channel(), "subscription:register", sub),
+             {:ok, subscription} <- await_reply(ref),
+             {:ok, subscription} <- SowerClient.Schemas.Subscription.cast(subscription) do
+          subscription
+        else
+          {:error, error} ->
+            Logger.error(msg: "Failed to register subscription", error: error, subscription: sub)
+            nil
+        end
+      end)
+      |> Enum.reject(&is_nil/1)
+
+    SowerAgent.Storage.put(:subscriptions, subscriptions)
+
     {:noreply, socket}
   end
 
@@ -126,6 +151,9 @@ defmodule SowerAgent.SocketClient do
   @impl Slipstream
   def handle_join("agent:" <> _sid = topic, %{"conn_sid" => conn_sid}, socket) do
     Logger.info(msg: "Joined channel topic", topic: topic, conn_sid: conn_sid)
+
+    cast(:register_subscriptions)
+
     {:ok, assign(socket, :conn_sid, conn_sid)}
   end
 
@@ -166,8 +194,12 @@ defmodule SowerAgent.SocketClient do
     {:noreply, socket}
   end
 
-  def handle_reply(ref, message, socket) do
-    Logger.debug(msg: "Received unknown reply", ref: ref, message: message)
+  def handle_reply(ref, payload, socket) do
+    Logger.debug(msg: "Received unknown reply", ref: ref, payload: payload)
     {:noreply, socket}
+  end
+
+  defp private_channel() do
+    "agent:#{Storage.read().agent_sid}"
   end
 end

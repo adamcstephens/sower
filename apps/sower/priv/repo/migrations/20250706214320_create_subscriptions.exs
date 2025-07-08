@@ -15,5 +15,6 @@ defmodule Sower.Repo.Migrations.CreateSubscriptions do
     create index(:subscriptions, [:org_id])
     create index(:subscriptions, [:agent_id])
     create index(:subscriptions, [:seed_id])
+    create unique_index(:subscriptions, [:agent_id, :org_id, :seed_id])
   end
 end

@@ -5,7 +5,10 @@ if config_env() == :dev do
     access_token_file: Path.expand("../.dev-api-token", __DIR__),
     endpoint: "http://localhost:7150",
     state_directory: Path.expand("../_build", __DIR__),
-    subscriptions: [%{name: "test1", seed_type: "nixos"}]
+    subscriptions: [
+      %{name: "test1", seed_type: "nixos"},
+      %{name: "deck", seed_type: "home-manager"}
+    ]
   })
 end
 
