@@ -13,7 +13,10 @@ defmodule SowerWeb.SubscriptionLive.Show do
     {:noreply,
      socket
      |> assign(:page_title, page_title(socket.assigns.live_action))
-     |> assign(:subscription, Orchestration.get_subscription_sid!(sid))}
+     |> assign(
+       :subscription,
+       Orchestration.get_subscription_sid!(sid) |> Sower.Repo.preload([:agent, :seed])
+     )}
   end
 
   defp page_title(:show), do: "Show Subscription"

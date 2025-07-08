@@ -9,12 +9,26 @@
 </.header>
 
 <.list>
-  <:item title="Sid">{@subscription.sid}</:item>
+  <:item title="Agent">
+    <.link patch={~p"/agents/#{@subscription.agent}"}>
+      {@subscription.agent.name}
+    </.link>
+  </:item>
+  <:item title="Seed">
+    <.link patch={~p"/seeds/#{@subscription.seed}"}>
+      {@subscription.seed.name} - {@subscription.seed.seed_type}
+    </.link>
+  </:item>
 </.list>
 
 <.back navigate={~p"/subscriptions"}>Back to subscriptions</.back>
 
-<.modal :if={@live_action == :edit} id="subscription-modal" show on_cancel={JS.patch(~p"/subscriptions/#{@subscription}")}>
+<.modal
+  :if={@live_action == :edit}
+  id="subscription-modal"
+  show
+  on_cancel={JS.patch(~p"/subscriptions/#{@subscription}")}
+>
   <.live_component
     module={SowerWeb.SubscriptionLive.FormComponent}
     id={@subscription.id}

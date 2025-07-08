@@ -19,7 +19,7 @@ defmodule SowerWeb.AgentLive.Show do
     socket =
       socket
       |> assign(:page_title, page_title(socket.assigns.live_action))
-      |> assign(:agent, Orchestration.get_agent_sid!(sid))
+      |> assign(:agent, Orchestration.get_agent_sid!(sid) |> Sower.Repo.preload(:subscriptions))
       |> add_online_status()
       |> assign(:current_generation, %{})
 
