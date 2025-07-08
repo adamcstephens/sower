@@ -1,6 +1,6 @@
 module codeberg.org/adamcstephens/sower
 
-go 1.24.3
+go 1.24.4
 
 require (
 	github.com/adrg/xdg v0.5.3
