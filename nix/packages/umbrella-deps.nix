@@ -36,6 +36,11 @@ callPackages ./deps.nix {
       }
     );
 
+    # certifi = prev.certifi.override (_: {
+    #   env.DEBUG = "1";
+    #   env.DIAGNOSTIC = "1";
+    # });
+
     esbuild = prev.esbuild.override (old: {
       patches = [ ./esbuild-loadpaths.patch ];
     });
@@ -43,16 +48,6 @@ callPackages ./deps.nix {
     typedstruct = prev.typedstruct.override (old: {
       preConfigure = ''
         substituteInPlace mix.exs --replace-fail 'version = vsn()' 'version = "${old.version}"'
-      '';
-    });
-
-    typed_struct_ecto_changeset = prev.typed_struct_ecto_changeset.override (old: {
-      beamDeps = [ self.typedstruct ];
-
-      preConfigure = ''
-        substituteInPlace mix.exs --replace-fail \
-          '{:typed_struct, "~> 0.3.0", only: [:dev, :test], runtime: false}' \
-          '{:typedstruct, "${self.typedstruct.version}"}'
       '';
     });
 

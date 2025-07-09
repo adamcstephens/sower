@@ -38,7 +38,7 @@
 
             beamPackages = pkgs.beamMinimal27Packages.extend (
               _: prev: {
-                elixir = prev.elixir_1_18;
+                elixir = prev.elixir_1_19;
               }
             );
 
