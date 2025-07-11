@@ -28,7 +28,6 @@ defmodule Nix.MixProject do
     [
       {:igniter, "~> 0.5", only: [:dev, :test]},
       {:jason, "~> 1.0"},
-      {:timex, "~> 3.7"},
       {:xema, "~> 0.17"}
     ]
   end

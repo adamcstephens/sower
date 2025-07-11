@@ -100,8 +100,6 @@ defmodule SowerWeb.AgentChannel do
   end
 
   def handle_in("seed:get", payload, socket) do
-    dbg(payload)
-
     with {:ok, req_seed} <- SowerClient.Schemas.Seed.cast(payload),
          seed when not is_nil(seed) <- Sower.Seed.get(req_seed.name, req_seed.seed_type) do
       {:reply, {:ok, seed}, socket}

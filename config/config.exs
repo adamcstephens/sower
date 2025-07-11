@@ -51,10 +51,10 @@ config :logger, :console,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
-config :elixir, :time_zone_database, Timex.Timezone.Database
+# config :elixir, :time_zone_database, Timex.Timezone.Database
 
 # disable runtime fetching
-config :tzdata, :autoupdate, :disabled
+# config :tzdata, :autoupdate, :disabled
 
 config :sower, :generators,
   migration: true,
