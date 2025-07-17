@@ -89,7 +89,7 @@ defmodule SowerWeb.AgentChannel do
 
     store_path = Sower.Nix.submit_store_path!(payload.path)
 
-    Sower.Distribution.create_deployment(%{
+    Sower.Orchestration.create_deployment(%{
       deployed_at: payload.created,
       store_paths: [store_path]
     })

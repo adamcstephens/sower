@@ -1,4 +1,4 @@
-defmodule Sower.Distribution.StorePathDeployment do
+defmodule Sower.Orchestration.StorePathDeployment do
   use Sower.Schema
   import Ecto.Changeset
 

@@ -1,8 +1,8 @@
-defmodule Sower.Distribution.Deployment do
+defmodule Sower.Orchestration.Deployment do
   use Sower.Schema
   import Ecto.Changeset
 
-  alias Sower.Distribution
+  alias Sower.Orchestration
 
   @derive {Jason.Encoder, only: [:sid]}
   @derive {Phoenix.Param, key: :sid}
@@ -11,8 +11,10 @@ defmodule Sower.Distribution.Deployment do
     field :sid, Sower.Schema.Sid, autogenerate: true
     field :org_id, Ecto.UUID
 
-    many_to_many :seeds, Sower.Seed, join_through: Distribution.SeedDeployment
-    many_to_many :store_paths, Sower.Nix.StorePath, join_through: Distribution.StorePathDeployment
+    many_to_many :seeds, Sower.Seed, join_through: Orchestration.SeedDeployment
+
+    many_to_many :store_paths, Sower.Nix.StorePath,
+      join_through: Orchestration.StorePathDeployment
 
     field :deployed_at, :utc_datetime
 

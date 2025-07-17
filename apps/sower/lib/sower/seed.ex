@@ -4,7 +4,7 @@ defmodule Sower.Seed do
   import Ecto.Changeset
   import Ecto.Query, only: [from: 2]
 
-  alias Sower.{Distribution, Nix, Repo, Seed, SeedStorePath}
+  alias Sower.{Orchestration, Nix, Repo, Seed, SeedStorePath}
 
   @derive {Jason.Encoder, only: [:sid, :name, :seed_type]}
 
@@ -19,7 +19,9 @@ defmodule Sower.Seed do
     field :org_id, Ecto.UUID
 
     many_to_many :store_paths, Nix.StorePath, join_through: Sower.SeedStorePath
-    many_to_many :deployments, Distribution.Deployment, join_through: Distribution.SeedDeployment
+
+    many_to_many :deployments, Orchestration.Deployment,
+      join_through: Orchestration.SeedDeployment
 
     timestamps()
   end
