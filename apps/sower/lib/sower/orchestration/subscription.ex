@@ -1,16 +1,20 @@
 defmodule Sower.Orchestration.Subscription do
-  use Ecto.Schema
+  use Sower.Schema
   import Ecto.Changeset
 
   @derive {Jason.Encoder, only: [:sid]}
   @derive {Phoenix.Param, key: :sid}
 
+  alias Sower.Orchestration.{Agent, Deployment}
+
   schema "subscriptions" do
     field :sid, Sower.Schema.Sid, autogenerate: true
     field :org_id, Ecto.UUID
 
-    belongs_to :agent, Sower.Orchestration.Agent
+    belongs_to :agent, Agent
     belongs_to :seed, Sower.Seed
+
+    has_many :deployments, Deployment
 
     timestamps(type: :utc_datetime)
   end

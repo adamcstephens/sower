@@ -11,7 +11,7 @@ defmodule Sower.Orchestration.Deployment do
     field :sid, Sower.Schema.Sid, autogenerate: true
     field :org_id, Ecto.UUID
 
-    many_to_many :seeds, Sower.Seed, join_through: Orchestration.SeedDeployment
+    belongs_to :subscription, Orchestration.Subscription
 
     many_to_many :store_paths, Sower.Nix.StorePath,
       join_through: Orchestration.StorePathDeployment

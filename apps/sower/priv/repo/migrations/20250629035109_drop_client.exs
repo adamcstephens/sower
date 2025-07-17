@@ -1,7 +1,11 @@
 defmodule Sower.Repo.Migrations.DropClient do
   use Ecto.Migration
 
-  def change do
+  def up do
     drop table(:clients)
+  end
+
+  def down do
+    create table(:clients)
   end
 end
