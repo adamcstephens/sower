@@ -217,6 +217,12 @@ defmodule Sower.Orchestration do
   """
   def get_subscription_sid!(sid), do: Repo.get_by!(Subscription, sid: sid)
 
+  def get_subscription_sid(sid) do
+    Subscription
+    |> Repo.get_by(sid: sid)
+    |> Repo.preload(:seed)
+  end
+
   @doc """
   Creates a subscription.
 
@@ -385,5 +391,29 @@ defmodule Sower.Orchestration do
   """
   def change_deployment(%Deployment{} = deployment, attrs \\ %{}) do
     Deployment.changeset(deployment, attrs)
+  end
+
+  @doc """
+  Request and create a deployment for a subscription
+  """
+  def request_subscription_deployment(
+        %SowerClient.Schemas.Subscription.UpgradeRequest{} = upgrade
+      ) do
+    with sub when not is_nil(sub) <- get_subscription_sid(upgrade.subscription_sid),
+         seed_store_path <- Sower.Seed.latest_store_path(sub.seed),
+         {:ok, deploy} <-
+           create_deployment(%{
+             store_paths: [seed_store_path.store_path],
+             subscription: sub
+           }) do
+      {:ok,
+       %SowerClient.Schemas.Orchestration.Deployment{subscription_sid: sub.sid, sid: deploy.sid}}
+    else
+      {:error, _} = err ->
+        err
+
+      nil ->
+        {:error, :subscription_not_found}
+    end
   end
 end

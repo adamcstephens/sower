@@ -26,6 +26,7 @@ defmodule Sower.Orchestration.Deployment do
     deployment
     |> cast(attrs, [:deployed_at])
     |> put_assoc(:store_paths, attrs.store_paths)
+    |> put_assoc(:subscription, attrs.subscription)
     |> validate_required([])
   end
 end

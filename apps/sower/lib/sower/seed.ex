@@ -84,6 +84,15 @@ defmodule Sower.Seed do
     )
   end
 
+  def latest_store_path(%__MODULE__{id: id}) do
+    Repo.one(
+      from s in Sower.SeedStorePath,
+        where: s.id == ^id,
+        order_by: [desc: s.updated_at]
+    )
+    |> Repo.preload(:store_path)
+  end
+
   def latest_store_path_by_sid(sid) do
     seed = Sower.Seed.get_sid!(sid)
 

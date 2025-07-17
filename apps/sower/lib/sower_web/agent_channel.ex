@@ -137,6 +137,22 @@ defmodule SowerWeb.AgentChannel do
     end
   end
 
+  def handle_in("subscription:upgrade", payload, socket) do
+    with {:ok, req_sub} <- SowerClient.Schemas.Subscription.UpgradeRequest.cast(payload),
+         {:ok, deploy} <- Sower.Orchestration.request_subscription_deployment(req_sub) do
+      {:reply, {:ok, deploy}, socket}
+    else
+      {:error, error} ->
+        Logger.error(
+          msg: "Failed to request subscription upgrade",
+          payload: payload,
+          error: error
+        )
+
+        {:reply, :error, socket}
+    end
+  end
+
   @impl Phoenix.Channel
   def handle_info(:track_presence, %Phoenix.Socket{assigns: %{agent: agent}} = socket) do
     Logger.debug(msg: "Tracking agent presence", agent_sid: agent.sid)
