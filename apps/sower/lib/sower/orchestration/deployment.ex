@@ -11,7 +11,8 @@ defmodule Sower.Orchestration.Deployment do
     field :sid, Sower.Schema.Sid, autogenerate: true
     field :org_id, Ecto.UUID
 
-    belongs_to :subscription, Orchestration.Subscription
+    many_to_many :subscriptions, Sower.Orchestration.Subscription,
+      join_through: Orchestration.SubscriptionDeployment
 
     many_to_many :store_paths, Sower.Nix.StorePath,
       join_through: Orchestration.StorePathDeployment
@@ -26,7 +27,7 @@ defmodule Sower.Orchestration.Deployment do
     deployment
     |> cast(attrs, [:deployed_at])
     |> put_assoc(:store_paths, attrs.store_paths)
-    |> put_assoc(:subscription, attrs.subscription)
+    |> put_assoc(:subscriptions, attrs.subscriptions)
     |> validate_required([])
   end
 end
