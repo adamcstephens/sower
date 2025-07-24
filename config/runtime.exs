@@ -6,7 +6,7 @@ if config_env() == :dev do
     endpoint: "http://localhost:7150",
     state_directory: Path.expand("../_build", __DIR__),
     subscriptions: [
-      %{name: "test1", seed_type: "nixos"},
+      %{name: "deck", seed_type: "nixos"},
       %{name: "deck", seed_type: "home-manager"}
     ]
   })

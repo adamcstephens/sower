@@ -124,7 +124,6 @@ defmodule SowerWeb.AgentChannel do
       subscription =
         SowerClient.Schemas.Orchestration.Subscription.cast(%{
           sid: subscription.sid,
-          local_sid: req_sub.local_sid,
           seed_sid: seed.sid,
           name: seed.name,
           seed_type: seed.seed_type

@@ -40,7 +40,7 @@ defmodule SowerAgent.SocketClient do
 
   def handle_call({:subscription_upgrade, sid}, _from, socket) do
     with {:ok, upgrade_request} <-
-           SowerClient.Schemas.Orchestration.UpgradeRequest.cast(%{
+           SowerClient.Schemas.Orchestration.UpgradeRequest.new(%{
              subscription_sids: [sid]
            }),
          {:ok, ref} <-
@@ -57,6 +57,14 @@ defmodule SowerAgent.SocketClient do
         )
 
         {:reply, {:error, error}, socket}
+
+      :error ->
+        Logger.error(
+          msg: "Failed to request subscription upgrade with unknown error",
+          sid: sid
+        )
+
+        {:reply, :error, socket}
     end
   end
 
@@ -88,6 +96,14 @@ defmodule SowerAgent.SocketClient do
         else
           {:error, error} ->
             Logger.error(msg: "Failed to register subscription", error: error, subscription: sub)
+            nil
+
+          :error ->
+            Logger.error(
+              msg: "Failed to register subscription with unknown error",
+              subscription: sub
+            )
+
             nil
         end
       end)

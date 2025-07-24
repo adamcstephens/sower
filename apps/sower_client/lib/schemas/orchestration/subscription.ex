@@ -11,11 +11,6 @@ defmodule SowerClient.Schemas.Orchestration.Subscription do
         readOnly: true,
         nullable: true
       },
-      local_sid: %Schema{
-        type: :string,
-        description: "sid allocated locally",
-        default: "lsid_#{Cuid2Ex.create()}"
-      },
       name: %Schema{
         type: :string,
         description: "Name of the seed"
