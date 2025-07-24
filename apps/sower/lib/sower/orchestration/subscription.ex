@@ -8,7 +8,7 @@ defmodule Sower.Orchestration.Subscription do
   alias Sower.Orchestration.{Agent, Deployment, SubscriptionDeployment}
 
   schema "subscriptions" do
-    field :sid, Sower.Schema.Sid, autogenerate: true
+    field :sid, SowerClient.Schemas.Sid, autogenerate: true
     field :org_id, Ecto.UUID
 
     belongs_to :agent, Agent

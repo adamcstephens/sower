@@ -169,7 +169,7 @@ defmodule SowerWeb.AgentChannel do
   end
 
   def handle_info(:ping, socket) do
-    ref = Sower.Schema.Sid.generate()
+    ref = SowerClient.Schemas.Sid.generate()
     Logger.debug(msg: "Sending ping", ref: ref)
     push(socket, "ping", %{ref: ref})
     {:noreply, socket}

@@ -5,7 +5,7 @@ defmodule Sower.Forge.Connection do
   @derive {Phoenix.Param, key: :sid}
 
   schema "forges" do
-    field :sid, Sower.Schema.Sid, autogenerate: true
+    field :sid, SowerClient.Schemas.Sid, autogenerate: true
     field :name, :string
     field :type, Ecto.Enum, values: [:forgejo]
     field :url, :string

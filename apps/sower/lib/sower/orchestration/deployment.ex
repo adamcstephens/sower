@@ -8,7 +8,7 @@ defmodule Sower.Orchestration.Deployment do
   @derive {Phoenix.Param, key: :sid}
 
   schema "deployments" do
-    field :sid, Sower.Schema.Sid, autogenerate: true
+    field :sid, SowerClient.Schemas.Sid, autogenerate: true
     field :org_id, Ecto.UUID
 
     many_to_many :subscriptions, Sower.Orchestration.Subscription,

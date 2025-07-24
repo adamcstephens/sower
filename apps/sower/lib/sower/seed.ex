@@ -13,7 +13,7 @@ defmodule Sower.Seed do
   @seed_types SowerClient.Schemas.Seed.seed_types()
 
   schema "seeds" do
-    field :sid, Sower.Schema.Sid, autogenerate: true
+    field :sid, SowerClient.Schemas.Sid, autogenerate: true
     field :name, :string
     field :seed_type, :string
     field :org_id, Ecto.UUID

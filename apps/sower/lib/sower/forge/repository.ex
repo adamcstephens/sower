@@ -5,7 +5,7 @@ defmodule Sower.Forge.Repository do
   @derive {Phoenix.Param, key: :sid}
 
   schema "repositories" do
-    field :sid, Sower.Schema.Sid, autogenerate: true
+    field :sid, SowerClient.Schemas.Sid, autogenerate: true
     field :owner, :string
     field :repo, :string
     field :url, :string
