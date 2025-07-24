@@ -179,7 +179,7 @@ defmodule Sower.Orchestration do
   """
   def list_subscriptions do
     Repo.all(Subscription)
-    |> Sower.Repo.preload(:agent)
+    |> Sower.Repo.preload([:agent, :seed])
   end
 
   @doc """
@@ -223,6 +223,17 @@ defmodule Sower.Orchestration do
     |> Repo.preload(:seed)
   end
 
+  def get_subscription_sids(sids) when is_list(sids) and length(sids) > 0 do
+    query = from sub in Subscription, where: sub.sid in ^sids
+
+    Repo.all(query)
+    |> Repo.preload(:seed)
+  end
+
+  def get_subscription_sids(sids) when is_list(sids) and length(sids) == 0 do
+    {:error, :no_sids_provided}
+  end
+
   @doc """
   Creates a subscription.
 
@@ -236,14 +247,17 @@ defmodule Sower.Orchestration do
 
   """
   def create_subscription(attrs \\ %{}) do
-    %Subscription{
-      org_id: Sower.Repo.get_org_id()
-    }
-    |> Subscription.changeset(attrs)
-    |> Repo.insert(
-      on_conflict: {:replace, [:updated_at]},
-      conflict_target: [:agent_id, :seed_id, :org_id]
-    )
+    case %Subscription{
+           org_id: Sower.Repo.get_org_id()
+         }
+         |> Subscription.changeset(attrs)
+         |> Repo.insert(
+           on_conflict: {:replace, [:updated_at]},
+           conflict_target: [:agent_id, :seed_id, :org_id]
+         ) do
+      {:ok, sub} -> {:ok, Repo.reload(sub)}
+      err -> err
+    end
   end
 
   @doc """
@@ -397,17 +411,22 @@ defmodule Sower.Orchestration do
   Request and create a deployment for a subscription
   """
   def request_subscription_deployment(
-        %SowerClient.Schemas.Subscription.UpgradeRequest{} = upgrade
+        %SowerClient.Schemas.Orchestration.UpgradeRequest{} = upgrade
       ) do
-    with sub when not is_nil(sub) <- get_subscription_sid(upgrade.subscription_sid),
-         seed_store_path <- Sower.Seed.latest_store_path(sub.seed),
+    with subs when length(subs) > 0 <- get_subscription_sids(upgrade.subscription_sids),
+         seed_store_paths <-
+           subs |> Enum.map(&Sower.Seed.latest_store_path(&1.seed)) |> Enum.map(& &1.store_path),
          {:ok, deploy} <-
            create_deployment(%{
-             store_paths: [seed_store_path.store_path],
-             subscription: sub
+             store_paths: seed_store_paths,
+             subscriptions: subs
            }) do
       {:ok,
-       %SowerClient.Schemas.Orchestration.Deployment{subscription_sid: sub.sid, sid: deploy.sid}}
+       %SowerClient.Schemas.Orchestration.Deployment{
+         request_id: upgrade.request_id,
+         subscription_sids: Enum.map(subs, & &1.sid),
+         sid: deploy.sid
+       }}
     else
       {:error, _} = err ->
         err

@@ -40,8 +40,8 @@ defmodule SowerAgent.SocketClient do
 
   def handle_call({:subscription_upgrade, sid}, _from, socket) do
     with {:ok, upgrade_request} <-
-           SowerClient.Schemas.Subscription.UpgradeRequest.cast(%{
-             subscription_sid: sid
+           SowerClient.Schemas.Orchestration.UpgradeRequest.cast(%{
+             subscription_sids: [sid]
            }),
          {:ok, ref} <-
            push(socket, private_channel(), "subscription:upgrade", upgrade_request),
@@ -53,7 +53,7 @@ defmodule SowerAgent.SocketClient do
         Logger.error(
           msg: "Failed to request subscription upgrade",
           error: error,
-          subscription_sid: sid
+          sid: sid
         )
 
         {:reply, {:error, error}, socket}
@@ -82,7 +82,8 @@ defmodule SowerAgent.SocketClient do
       |> Enum.map(fn sub ->
         with {:ok, ref} <- push(socket, private_channel(), "subscription:register", sub),
              {:ok, subscription} <- await_reply(ref),
-             {:ok, subscription} <- SowerClient.Schemas.Subscription.cast(subscription) do
+             {:ok, subscription} <-
+               SowerClient.Schemas.Orchestration.Subscription.cast(subscription) do
           subscription
         else
           {:error, error} ->

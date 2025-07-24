@@ -114,7 +114,7 @@ defmodule SowerWeb.AgentChannel do
   end
 
   def handle_in("subscription:register", payload, socket) do
-    with {:ok, req_sub} <- SowerClient.Schemas.Subscription.cast(payload),
+    with {:ok, req_sub} <- SowerClient.Schemas.Orchestration.Subscription.cast(payload),
          seed when not is_nil(seed) <- Sower.Seed.get(req_sub.name, req_sub.seed_type),
          {:ok, subscription} <-
            Sower.Orchestration.create_subscription(%{
@@ -122,9 +122,13 @@ defmodule SowerWeb.AgentChannel do
              seed_id: seed.id
            }) do
       subscription =
-        req_sub
-        |> Map.merge(%{subscription_sid: subscription.sid, seed_sid: seed.sid})
-        |> SowerClient.Schemas.Subscription.cast()
+        SowerClient.Schemas.Orchestration.Subscription.cast(%{
+          sid: subscription.sid,
+          local_sid: req_sub.local_sid,
+          seed_sid: seed.sid,
+          name: seed.name,
+          seed_type: seed.seed_type
+        })
 
       {:reply, subscription, socket}
     else
@@ -138,7 +142,7 @@ defmodule SowerWeb.AgentChannel do
   end
 
   def handle_in("subscription:upgrade", payload, socket) do
-    with {:ok, req_sub} <- SowerClient.Schemas.Subscription.UpgradeRequest.cast(payload),
+    with {:ok, req_sub} <- SowerClient.Schemas.Orchestration.UpgradeRequest.cast(payload),
          {:ok, deploy} <- Sower.Orchestration.request_subscription_deployment(req_sub) do
       {:reply, {:ok, deploy}, socket}
     else

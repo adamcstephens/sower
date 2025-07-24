@@ -5,7 +5,7 @@ defmodule Sower.Orchestration.Subscription do
   @derive {Jason.Encoder, only: [:sid]}
   @derive {Phoenix.Param, key: :sid}
 
-  alias Sower.Orchestration.{Agent, Deployment}
+  alias Sower.Orchestration.{Agent, Deployment, SubscriptionDeployment}
 
   schema "subscriptions" do
     field :sid, Sower.Schema.Sid, autogenerate: true
@@ -14,7 +14,7 @@ defmodule Sower.Orchestration.Subscription do
     belongs_to :agent, Agent
     belongs_to :seed, Sower.Seed
 
-    has_many :deployments, Deployment
+    many_to_many :deployments, Deployment, join_through: SubscriptionDeployment
 
     timestamps(type: :utc_datetime)
   end

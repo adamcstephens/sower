@@ -1,10 +1,16 @@
-defmodule SowerClient.Schemas.Subscription do
+defmodule SowerClient.Schemas.Orchestration.Subscription do
   use SowerClient.Schema
 
   OpenApiSpex.schema(%{
     title: "Subscription",
     type: :object,
     properties: %{
+      sid: %Schema{
+        type: :string,
+        description: "subscription sid allocated by Sower",
+        readOnly: true,
+        nullable: true
+      },
       local_sid: %Schema{
         type: :string,
         description: "sid allocated locally",
@@ -14,20 +20,14 @@ defmodule SowerClient.Schemas.Subscription do
         type: :string,
         description: "Name of the seed"
       },
-      seed_sid: %Schema{
-        type: :string,
-        description: "seed sid allocated by Sower",
-        readOnly: true,
-        nullable: true
-      },
       seed_type: %Schema{
         type: :string,
         description: "Type of the seed",
         enum: SowerClient.Schemas.Seed.seed_types()
       },
-      subscription_sid: %Schema{
+      seed_sid: %Schema{
         type: :string,
-        description: "subscription sid allocated by Sower",
+        description: "seed sid allocated by Sower",
         readOnly: true,
         nullable: true
       }

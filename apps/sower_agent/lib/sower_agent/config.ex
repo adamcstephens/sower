@@ -30,7 +30,7 @@ defmodule SowerAgent.Config do
       },
       subscriptions: %Schema{
         type: :array,
-        items: SowerClient.Schemas.Subscription.schema()
+        items: SowerClient.Schemas.Orchestration.Subscription.schema()
       }
     },
     required: ~w(access_token endpoint)a

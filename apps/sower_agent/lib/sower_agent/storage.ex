@@ -10,7 +10,7 @@ defmodule SowerAgent.Storage do
     field :local_sid, String.t()
     field :agent_sid, String.t()
 
-    field :subscriptions, list(SowerClient.Schemas.Subscription)
+    field :subscriptions, list(SowerClient.Schemas.Orchestration.Subscription)
   end
 
   # client
