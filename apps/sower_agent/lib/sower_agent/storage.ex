@@ -72,7 +72,7 @@ defmodule SowerAgent.Storage do
 
   defp default() do
     %__MODULE__{
-      local_sid: "lsid_#{Cuid2Ex.create()}"
+      local_sid: SowerClient.Schemas.Sid.generate("lsid")
     }
   end
 end

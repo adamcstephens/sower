@@ -27,7 +27,7 @@ defmodule SowerClient.Schemas.Orchestration.UpgradeRequest do
   """
   def new(map) do
     map
-    |> Map.put_new_lazy(:request_id, fn -> "req_#{Cuid2Ex.create()}" end)
+    |> Map.put_new_lazy(:request_id, fn -> SowerClient.Schemas.Sid.generate("req") end)
     |> cast()
   end
 end
