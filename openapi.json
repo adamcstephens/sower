@@ -36,7 +36,7 @@
         ],
         "title": "Nix Cache",
         "type": "object",
-        "x-struct": "Elixir.SowerWeb.Schemas.Nix.Cache",
+        "x-struct": "Elixir.SowerClient.Schemas.Nix.Cache",
         "x-validate": null
       },
       "Seed": {
@@ -44,7 +44,8 @@
         "example": {
           "id": "example4ser3adju75ddusbr",
           "name": "myhost",
-          "seed_type": "nixos"
+          "seed_type": "nixos",
+          "store_path": "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-nixos"
         },
         "properties": {
           "name": {
@@ -66,8 +67,14 @@
             "x-validate": null
           },
           "sid": {
-            "description": "sid of the seed",
+            "description": "sid of the seed set by the server",
             "readOnly": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "store_path": {
+            "description": "Store path of the seed",
             "type": "string",
             "x-struct": null,
             "x-validate": null
@@ -75,40 +82,12 @@
         },
         "required": [
           "name",
-          "seed_type"
+          "seed_type",
+          "store_path"
         ],
         "title": "Seed",
         "type": "object",
-        "x-struct": "Elixir.SowerWeb.Schemas.Seed",
-        "x-validate": null
-      },
-      "StorePath": {
-        "description": "A store path is a Nix store path that can by installed by a client",
-        "example": {
-          "path": "/nix/store/examplehxpf8d7x5ys5p9v0z9x587hs1-...",
-          "path_digest": "examplehxpf8d7x5ys5p9v0z9x587hs1"
-        },
-        "properties": {
-          "path": {
-            "description": "Nix store path",
-            "type": "string",
-            "x-struct": null,
-            "x-validate": null
-          },
-          "path_digest": {
-            "description": "id of the store path",
-            "readOnly": true,
-            "type": "string",
-            "x-struct": null,
-            "x-validate": null
-          }
-        },
-        "required": [
-          "path"
-        ],
-        "title": "StorePath",
-        "type": "object",
-        "x-struct": "Elixir.SowerWeb.Schemas.StorePath",
+        "x-struct": "Elixir.SowerClient.Schemas.Seed",
         "x-validate": null
       }
     },
@@ -329,6 +308,90 @@
         "tags": []
       }
     },
+    "/api/seeds/latest": {
+      "get": {
+        "callbacks": {},
+        "operationId": "LatestSeed",
+        "parameters": [
+          {
+            "description": "Seed name",
+            "example": "host1",
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          },
+          {
+            "description": "Seed type",
+            "example": "nixos",
+            "in": "query",
+            "name": "seed_type",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Seed"
+                }
+              }
+            },
+            "description": "Seed response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Seed error response"
+          }
+        },
+        "summary": "Find latest Seed",
+        "tags": []
+      }
+    },
     "/api/seeds/{sid}": {
       "get": {
         "callbacks": {},
@@ -398,142 +461,6 @@
           }
         },
         "summary": "Get Seed",
-        "tags": []
-      }
-    },
-    "/api/seeds/{sid}/paths": {
-      "post": {
-        "callbacks": {},
-        "operationId": "NewSeedStorePath",
-        "parameters": [
-          {
-            "description": "Seed SID",
-            "example": "example4ser3adju75ddusbr",
-            "in": "path",
-            "name": "sid",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "x-struct": null,
-              "x-validate": null
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StorePath"
-              }
-            }
-          },
-          "description": "Seed params",
-          "required": false
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StorePath"
-                }
-              }
-            },
-            "description": "Seed response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "error": {
-                      "type": "string",
-                      "x-struct": null,
-                      "x-validate": null
-                    }
-                  },
-                  "type": "object",
-                  "x-struct": null,
-                  "x-validate": null
-                }
-              }
-            },
-            "description": "Unauthorized"
-          }
-        },
-        "summary": "New Seed Store Path",
-        "tags": []
-      }
-    },
-    "/api/seeds/{sid}/paths/latest": {
-      "get": {
-        "callbacks": {},
-        "operationId": "LatestStorePathBySeed",
-        "parameters": [
-          {
-            "description": "Seed SID",
-            "example": "example4ser3adju75ddusbr",
-            "in": "path",
-            "name": "sid",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "x-struct": null,
-              "x-validate": null
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StorePath"
-                }
-              }
-            },
-            "description": "Seed response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "error": {
-                      "type": "string",
-                      "x-struct": null,
-                      "x-validate": null
-                    }
-                  },
-                  "type": "object",
-                  "x-struct": null,
-                  "x-validate": null
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "error": {
-                      "type": "string",
-                      "x-struct": null,
-                      "x-validate": null
-                    }
-                  },
-                  "type": "object",
-                  "x-struct": null,
-                  "x-validate": null
-                }
-              }
-            },
-            "description": "Store Path error response"
-          }
-        },
-        "summary": "Get latest Store Path for a Seed",
         "tags": []
       }
     }

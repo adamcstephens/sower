@@ -413,7 +413,7 @@ defmodule Sower.Orchestration do
   def request_subscription_deployment(
         %SowerClient.Schemas.Orchestration.UpgradeRequest{} = upgrade
       ) do
-    with subs when length(subs) > 0 <- get_subscription_sids(upgrade.subscription_sids),
+    with subs when subs != [] <- get_subscription_sids(upgrade.subscription_sids),
          seed_store_paths <-
            subs |> Enum.map(&Sower.Seed.latest_store_path(&1.seed)) |> Enum.map(& &1.store_path),
          {:ok, deploy} <-

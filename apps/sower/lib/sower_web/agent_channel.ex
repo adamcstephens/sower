@@ -84,20 +84,20 @@ defmodule SowerWeb.AgentChannel do
     end
   end
 
-  def handle_in("agent:current_generation", payload, socket) do
-    payload = Nix.Profile.Generation.cast!(payload)
-
-    store_path = Sower.Nix.submit_store_path!(payload.path)
-
-    Sower.Orchestration.create_deployment(%{
-      deployed_at: payload.created,
-      store_paths: [store_path]
-    })
-
-    Phoenix.PubSub.broadcast(Sower.PubSub, "agent:view:#{socket.assigns.agent.sid}", payload)
-
-    {:noreply, socket}
-  end
+  # def handle_in("agent:current_generation", payload, socket) do
+  #   payload = Nix.Profile.Generation.cast!(payload)
+  #
+  #   store_path = Sower.Nix.submit_store_path!(payload.path)
+  #
+  #   Sower.Orchestration.create_deployment(%{
+  #     deployed_at: payload.created,
+  #     store_paths: [store_path]
+  #   })
+  #
+  #   Phoenix.PubSub.broadcast(Sower.PubSub, "agent:view:#{socket.assigns.agent.sid}", payload)
+  #
+  #   {:noreply, socket}
+  # end
 
   def handle_in("seed:get", payload, socket) do
     with {:ok, req_seed} <- SowerClient.Schemas.Seed.cast(payload),

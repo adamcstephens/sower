@@ -25,7 +25,7 @@ defmodule Sower.SeedTest do
     end
   end
 
-  describe "submit/1" do
+  describe "create/1" do
     test "creates the seed if it does not exist" do
       name = unique_seed_name()
 
@@ -35,30 +35,12 @@ defmodule Sower.SeedTest do
       assert %Seed{id: ^id} = Seed.latest(seed.name, "nixos")
     end
 
-    test "adds a store path if seed already exists" do
+    test "upserts" do
       seed = seed_fixture()
 
-      {:ok, _} =
-        Seed.submit(seed.sid, random_store_path())
+      {:ok, _} = Seed.create(Map.from_struct(seed))
 
-      assert Enum.count(seed |> Sower.Repo.preload(:store_paths) |> Map.get(:store_paths)) == 1
-
-      {:ok, _} =
-        Seed.submit(seed.sid, random_store_path())
-
-      assert Enum.count(seed |> Sower.Repo.preload(:store_paths) |> Map.get(:store_paths)) == 2
-    end
-
-    test "no new store paths if seed and path already exist" do
-      store_path = store_path_fixture()
-      seed = seed_fixture()
-
-      {:ok, _} = Seed.submit(seed.sid, store_path.path)
-
-      seed = seed |> Sower.Repo.preload(:store_paths)
-
-      assert Enum.count(seed.store_paths) == 1
-      assert Repo.all(Sower.Nix.StorePath) |> Enum.count() == 1
+      assert Repo.all(Sower.Seed) |> Enum.count() == 1
     end
   end
 end

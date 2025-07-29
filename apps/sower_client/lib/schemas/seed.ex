@@ -10,7 +10,7 @@ defmodule SowerClient.Schemas.Seed do
     properties: %{
       sid: %Schema{
         type: :string,
-        description: "sid of the seed",
+        description: "sid of the seed set by the server",
         readOnly: true
       },
       name: %Schema{
@@ -21,13 +21,18 @@ defmodule SowerClient.Schemas.Seed do
         type: :string,
         description: "Type of the seed",
         enum: @seed_types
+      },
+      store_path: %Schema{
+        type: :string,
+        description: "Store path of the seed"
       }
     },
-    required: ~w(name seed_type)a,
+    required: ~w(name seed_type store_path)a,
     example: %{
       "id" => "example4ser3adju75ddusbr",
       "name" => "myhost",
-      "seed_type" => "nixos"
+      "seed_type" => "nixos",
+      "store_path" => "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-nixos"
     }
   })
 

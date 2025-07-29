@@ -66,17 +66,14 @@ defmodule Sower.Repo.Seeds.Org do
             Sower.Seed.create(%{
               name: name,
               seed_type: "nixos",
-              org_id: user.org_id
+              org_id: user.org_id,
+              store_path:
+                ~s"/nix/store/#{Cuid2Ex.create(length: 32) |> String.downcase()}-nixos-system-#{name}-24.11.20240703.9f4128e"
             })
 
           seed ->
             {:ok, seed}
         end
-
-      Sower.Seed.submit(
-        seed,
-        ~s"/nix/store/#{Cuid2Ex.create(length: 32) |> String.downcase()}-nixos-system-#{name}-24.11.20240703.9f4128e"
-      )
     end)
   end
 end

@@ -64,8 +64,6 @@ defmodule SowerWeb.Router do
       live "/nix/caches/:sid/edit", Nix.CacheLive.Index, :edit
       live "/nix/caches/:sid", Nix.CacheLive.Show, :show
       live "/nix/caches/:sid/show/edit", Nix.CacheLive.Show, :edit
-      live "/nix/store_paths", Nix.StorePathLive.Index, :index
-      live "/nix/store_paths/:digest", Nix.StorePathLive.Show, :show
 
       live "/settings", Settings.IndexLive, :index
       live "/settings/access-tokens", Settings.AccessTokenLive.Index, :index
@@ -107,9 +105,8 @@ defmodule SowerWeb.Router do
     get "/nix/caches", Nix.CacheController, :list
     get "/seeds", SeedController, :list
     get "/seeds/:sid", SeedController, :get
-    get "/seeds/:sid/paths/latest", SeedController, :latest
+    get "/seeds/latest", SeedController, :latest
     post "/seeds", SeedController, :new
-    post "/seeds/:sid/paths", SeedController, :new_store_path
   end
 
   scope "/auth" do

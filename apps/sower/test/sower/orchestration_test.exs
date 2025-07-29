@@ -2,6 +2,14 @@ defmodule Sower.OrchestrationTest do
   use Sower.DataCase
 
   alias Sower.Orchestration
+  import Sower.AccountsFixtures
+
+  setup _ do
+    org = organization_fixture()
+    Sower.Repo.put_org_id(org.org_id)
+
+    %{organization: org}
+  end
 
   describe "agents" do
     alias Sower.Orchestration.Agent
@@ -79,7 +87,9 @@ defmodule Sower.OrchestrationTest do
     test "create_subscription/1 with valid data creates a subscription" do
       valid_attrs = %{sid: "some sid"}
 
-      assert {:ok, %Subscription{} = subscription} = Orchestration.create_subscription(valid_attrs)
+      assert {:ok, %Subscription{} = subscription} =
+               Orchestration.create_subscription(valid_attrs)
+
       assert subscription.sid == "some sid"
     end
 
@@ -91,13 +101,18 @@ defmodule Sower.OrchestrationTest do
       subscription = subscription_fixture()
       update_attrs = %{sid: "some updated sid"}
 
-      assert {:ok, %Subscription{} = subscription} = Orchestration.update_subscription(subscription, update_attrs)
+      assert {:ok, %Subscription{} = subscription} =
+               Orchestration.update_subscription(subscription, update_attrs)
+
       assert subscription.sid == "some updated sid"
     end
 
     test "update_subscription/2 with invalid data returns error changeset" do
       subscription = subscription_fixture()
-      assert {:error, %Ecto.Changeset{}} = Orchestration.update_subscription(subscription, @invalid_attrs)
+
+      assert {:error, %Ecto.Changeset{}} =
+               Orchestration.update_subscription(subscription, @invalid_attrs)
+
       assert subscription == Orchestration.get_subscription!(subscription.id)
     end
 

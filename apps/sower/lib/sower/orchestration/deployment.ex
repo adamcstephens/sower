@@ -14,8 +14,7 @@ defmodule Sower.Orchestration.Deployment do
     many_to_many :subscriptions, Sower.Orchestration.Subscription,
       join_through: Orchestration.SubscriptionDeployment
 
-    many_to_many :store_paths, Sower.Nix.StorePath,
-      join_through: Orchestration.StorePathDeployment
+    many_to_many :seeds, Sower.Seed, join_through: Orchestration.SeedDeployment
 
     field :deployed_at, :utc_datetime
 
@@ -26,7 +25,7 @@ defmodule Sower.Orchestration.Deployment do
   def changeset(deployment, attrs) do
     deployment
     |> cast(attrs, [:deployed_at])
-    |> put_assoc(:store_paths, attrs.store_paths)
+    |> put_assoc(:seeds, attrs.seeds)
     |> put_assoc(:subscriptions, attrs.subscriptions)
     |> validate_required([])
   end

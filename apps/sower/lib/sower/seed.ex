@@ -4,7 +4,7 @@ defmodule Sower.Seed do
   import Ecto.Changeset
   import Ecto.Query, only: [from: 2]
 
-  alias Sower.{Orchestration, Nix, Repo, Seed, SeedStorePath}
+  alias Sower.{Nix, Repo, Seed}
 
   @derive {Jason.Encoder, only: [:sid, :name, :seed_type]}
 
@@ -14,36 +14,25 @@ defmodule Sower.Seed do
 
   schema "seeds" do
     field :sid, SowerClient.Schemas.Sid, autogenerate: true
-    field :name, :string
-    field :seed_type, :string
     field :org_id, Ecto.UUID
 
-    many_to_many :store_paths, Nix.StorePath, join_through: Sower.SeedStorePath
+    field :name, :string
+    field :seed_type, :string
+    field :store_path, :string
 
     timestamps()
   end
 
   def create(attrs) do
-    %Sower.Seed{
+    %Seed{
       org_id: Sower.Repo.get_org_id()
     }
     |> changeset(attrs)
-    |> Repo.insert()
-  end
-
-  def submit(%Seed{} = seed, path) do
-    store_path = Nix.submit_store_path!(path)
-
-    SeedStorePath.submit!(seed, store_path)
-
-    {:ok, _} = updated_at_now(seed)
-
-    {:ok, store_path}
-  end
-
-  def submit(seed_sid, path) do
-    seed = get_sid!(seed_sid)
-    submit(seed, path)
+    |> Repo.insert(
+      on_conflict: {:replace, [:updated_at]},
+      conflict_target: [:name, :seed_type, :store_path, :org_id],
+      returning: true
+    )
   end
 
   def update(seed, attrs) do
@@ -53,32 +42,32 @@ defmodule Sower.Seed do
   end
 
   def get_by_id!(id) do
-    Repo.get!(Sower.Seed, id)
+    Repo.get!(Seed, id)
   end
 
   def get_by_id(id) do
-    Repo.get(Sower.Seed, id)
+    Repo.get(Seed, id)
   end
 
   def get!(name, seed_type) do
-    Repo.get_by!(Sower.Seed, name: name, seed_type: seed_type)
+    Repo.get_by!(Seed, name: name, seed_type: seed_type)
   end
 
   def get(name, seed_type) do
-    Repo.get_by(Sower.Seed, name: name, seed_type: seed_type)
+    Repo.get_by(Seed, name: name, seed_type: seed_type)
   end
 
   def get_sid!(sid) do
-    Repo.get_by!(Sower.Seed, sid: sid)
+    Repo.get_by!(Seed, sid: sid)
   end
 
   def list() do
-    Repo.all(Sower.Seed)
+    Repo.all(Seed)
   end
 
   def latest(name, seed_type) do
     Repo.one(
-      from s in Sower.Seed,
+      from s in Seed,
         where: s.name == ^name and s.seed_type == ^seed_type,
         order_by: [desc: s.updated_at]
     )
@@ -86,37 +75,26 @@ defmodule Sower.Seed do
 
   def latest_store_path(%__MODULE__{id: id}) do
     Repo.one(
-      from s in Sower.SeedStorePath,
+      from s in Seed,
         where: s.id == ^id,
         order_by: [desc: s.updated_at]
     )
-    |> Repo.preload(:store_path)
   end
 
   def latest_store_path_by_sid(sid) do
-    seed = Sower.Seed.get_sid!(sid)
-
-    query =
-      from sp in Sower.SeedStorePath,
-        where: sp.seed_id == ^seed.id,
-        order_by: [desc: sp.updated_at],
-        limit: 1
-
-    case Repo.one(query) do
-      nil ->
-        nil
-
-      store_path ->
-        store_path |> Repo.preload(:store_path) |> Map.get(:store_path)
-    end
+    Repo.one(
+      from s in Seed,
+        where: s.sid == ^sid,
+        order_by: [desc: s.updated_at]
+    )
   end
 
   defp changeset(seed, attrs) do
     seed
-    |> cast(attrs, [:name, :seed_type, :org_id])
+    |> cast(attrs, [:name, :seed_type, :org_id, :store_path])
     |> validate_inclusion(:seed_type, @seed_types)
-    |> validate_required([:name, :seed_type, :org_id])
-    |> unique_constraint([:name, :seed_type, :org_id], error_key: :unique_seed)
+    |> validate_required([:name, :seed_type, :org_id, :store_path])
+    |> unique_constraint([:name, :seed_type, :org_id, :store_path], error_key: :unique_seed)
   end
 
   defp updated_at_now(seed) do

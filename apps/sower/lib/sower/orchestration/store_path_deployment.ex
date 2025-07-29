@@ -1,17 +1,17 @@
-defmodule Sower.Orchestration.StorePathDeployment do
+defmodule Sower.Orchestration.SeedDeployment do
   use Sower.Schema
   import Ecto.Changeset
 
-  schema "store_paths_deployments" do
-    field :store_path_id, :id
+  schema "seed_deployments" do
+    field :seed_id, :id
     field :deployment_id, :id
 
     timestamps()
   end
 
   @doc false
-  def changeset(store_path_deployment, attrs) do
-    store_path_deployment
+  def changeset(seed_deployment, attrs) do
+    seed_deployment
     |> cast(attrs, [])
     |> validate_required([])
   end

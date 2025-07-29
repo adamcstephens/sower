@@ -32,7 +32,8 @@ defmodule SowerWeb.Api.SeedController do
         %Plug.Conn{
           body_params: %Schemas.Seed{
             name: name,
-            seed_type: seed_type
+            seed_type: seed_type,
+            store_path: store_path
           }
         } = conn,
         _params
@@ -41,7 +42,7 @@ defmodule SowerWeb.Api.SeedController do
 
     if can(conn.assigns.access_token)
        |> create?(%Sower.Seed{org_id: conn.assigns.access_token.org_id}) do
-      case Sower.Seed.create(%{name: name, seed_type: seed_type}) do
+      case Sower.Seed.create(%{name: name, seed_type: seed_type, store_path: store_path}) do
         {:ok, %Sower.Seed{} = seed} ->
           conn
           |> put_status(:created)
@@ -56,65 +57,25 @@ defmodule SowerWeb.Api.SeedController do
     end
   end
 
-  operation(:new_store_path,
-    operation_id: "NewSeedStorePath",
-    summary: "New Seed Store Path",
-    parameters: [
-      sid: [
-        in: :path,
-        description: "Seed SID",
-        type: :string,
-        example: "example4ser3adju75ddusbr"
-      ]
-    ],
-    request_body: {"Seed params", "application/json", Schemas.StorePath},
-    responses: [
-      created: {"Seed response", "application/json", Schemas.StorePath},
-      unauthorized:
-        {"Unauthorized", "application/json",
-         %Schema{type: :object, properties: %{error: %Schema{type: :string}}}}
-    ]
-  )
-
-  def new_store_path(
-        %Plug.Conn{
-          body_params: %Schemas.StorePath{
-            path: path
-          }
-        } = conn,
-        %{sid: sid}
-      ) do
-    conn = Map.put(conn, :body_params, %{})
-
-    if conn.assigns.access_token
-       |> can()
-       |> update?(%Sower.Seed{org_id: conn.assigns.access_token.org_id}) do
-      case Sower.Seed.submit(sid, path) do
-        {:ok, %Sower.Nix.StorePath{} = store_path} ->
-          conn
-          |> put_status(:created)
-          |> render(:show, store_path: store_path)
-      end
-    else
-      conn |> put_status(401) |> render(:error, error: "unauthorized")
-    end
-  end
-
   operation(:latest,
-    operation_id: "LatestStorePathBySeed",
-    summary: "Get latest Store Path for a Seed",
+    operation_id: "LatestSeed",
+    summary: "Find latest Seed",
     parameters: [
-      sid: [
-        in: :path,
-        description: "Seed SID",
+      name: [
+        description: "Seed name",
         type: :string,
-        example: "example4ser3adju75ddusbr"
+        example: "host1"
+      ],
+      seed_type: [
+        description: "Seed type",
+        type: :string,
+        example: "nixos"
       ]
     ],
     responses: %{
-      ok: {"Seed response", "application/json", Schemas.StorePath},
+      ok: {"Seed response", "application/json", Schemas.Seed},
       not_found:
-        {"Store Path error response", "application/json",
+        {"Seed error response", "application/json",
          %Schema{type: :object, properties: %{error: %Schema{type: :string}}}},
       unauthorized:
         {"Unauthorized", "application/json",
@@ -122,10 +83,10 @@ defmodule SowerWeb.Api.SeedController do
     }
   )
 
-  def latest(conn, %{sid: sid}) do
+  def latest(conn, %{name: name, seed_type: seed_type}) do
     if can(conn.assigns.access_token)
        |> read?(%Sower.Seed{org_id: conn.assigns.access_token.org_id}) do
-      case Sower.Seed.latest_store_path_by_sid(sid) do
+      case Sower.Seed.latest(name, seed_type) do
         nil ->
           conn |> put_status(404) |> render(:not_found)
 
