@@ -141,12 +141,12 @@ testers.runNixOSTest {
 
       with subtest("basic submission"):
           server_profile = server.succeed("readlink -f /run/booted-system").strip()
-          server.succeed(f"sower seed submit --create --path {server_profile} --debug")
+          server.succeed(f"sower seed submit --path {server_profile} --debug")
 
           client_profile = client.succeed("readlink -f /run/booted-system").strip()
-          server.succeed(f"sower seed submit --create --name client --type nixos --path {client_profile} --debug")
+          server.succeed(f"sower seed submit --name client --type nixos --path {client_profile} --debug")
 
-          server.succeed("sower seed submit --create --name simple-service --type service --path ${simple-service} --debug")
+          server.succeed("sower seed submit --name simple-service --type service --path ${simple-service} --debug")
 
       with subtest("activate seed"):
           server.succeed("sower seed upgrade --debug")

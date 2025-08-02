@@ -150,7 +150,7 @@ export def post-sower-seeds [] {
   # sower only understands certain build outputs
   $configs | filter { |c| $c.seed_type == "home-manager" or $c.seed_type == "nix-darwin" or $c.seed_type == "nixos" } | each { |c|
     $c.targets | filter { |t| $t.build != null } | each { |t|
-      sower seed submit --create --name $t.name --type $c.seed_type --path $t.build.outputs.out.0
+      sower seed submit --name $t.name --type $c.seed_type --path $t.build.outputs.out.0
     }
   }
 }

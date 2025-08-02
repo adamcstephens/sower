@@ -18,16 +18,16 @@ import (
 var nixpkgsref = "refs/heads/nixos-unstable"
 
 type ServicesManifest struct {
-	Inputs []client.StorePath `json:"inputs"`
+	Seeds []client.Seed `json:"seeds"`
 }
 
 // https://github.com/NixOS/nixpkgs/archive/refs/heads/master.zip
-func buildServicesUnits(paths []client.StorePath) (string, error) {
-	if len(paths) == 0 {
-		return "", fmt.Errorf("no paths specified")
+func buildServicesUnits(seeds []client.Seed) (string, error) {
+	if len(seeds) == 0 {
+		return "", fmt.Errorf("no seeds specified")
 	}
 
-	profileDir := filepath.Join(profileParentDir(), "services", servicesHash(paths))
+	profileDir := filepath.Join(profileParentDir(), "services", servicesHash(seeds))
 	manifest := &ServicesManifest{}
 	slog.Debug("Collecting services units", "profile", profileDir)
 
@@ -40,8 +40,8 @@ func buildServicesUnits(paths []client.StorePath) (string, error) {
 		}
 	}
 
-	for _, path := range paths {
-		sourceDir := filepath.Join(path.Path, ".sower", "systemd")
+	for _, seed := range seeds {
+		sourceDir := filepath.Join(seed.Artifact, ".sower", "systemd")
 
 		// revisit in 1.25 to see if the CopyFS behavior changes, but currently fails on symlinks
 		// err = os.CopyFS(profileDir, os.DirFS(sourceDir))
@@ -49,10 +49,10 @@ func buildServicesUnits(paths []client.StorePath) (string, error) {
 		cmd := exec.Command("cp", "--recursive", "--no-clobber", sourceDir, profileDir)
 		err = cmd.Run()
 		if err != nil {
-			return "", fmt.Errorf("failed to copy path %s to profile %s: %v", path.Path, profileDir, err)
+			return "", fmt.Errorf("failed to copy path %s to profile %s: %v", seed.Artifact, profileDir, err)
 		}
 
-		manifest.Inputs = append(manifest.Inputs, path)
+		manifest.Seeds = append(manifest.Seeds, seed)
 	}
 
 	data, err := json.MarshalIndent(manifest, "", "  ")
@@ -69,10 +69,10 @@ func buildServicesUnits(paths []client.StorePath) (string, error) {
 	return profileDir, nil
 }
 
-func servicesHash(paths []client.StorePath) string {
+func servicesHash(seeds []client.Seed) string {
 	hash := sha256.New()
-	for _, path := range paths {
-		hash.Write([]byte(path.Path))
+	for _, seed := range seeds {
+		hash.Write([]byte(seed.Artifact))
 	}
 
 	return hex.EncodeToString(hash.Sum(nil))
@@ -91,7 +91,7 @@ func activateServices(profilePath string) error {
 		}
 		err = os.MkdirAll(filepath.Join(oldProfile, "systemd", "system"), 0755)
 		if err != nil {
-			return fmt.Errorf("failed to create fake systemd dir: %v", err)
+			return fmt.Errorf("failed to seed.Artifact dir: %v", err)
 		}
 	} else {
 		oldProfile, err = filepath.EvalSymlinks(profilePath)

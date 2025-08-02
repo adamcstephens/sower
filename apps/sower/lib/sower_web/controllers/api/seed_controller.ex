@@ -124,7 +124,13 @@ defmodule SowerWeb.Api.SeedController do
     if conn.assigns.access_token
        |> can()
        |> read?(%Sower.Seed{org_id: conn.assigns.access_token.org_id}) do
-      render(conn, :show, seed: Sower.Seed.get_sid!(sid))
+      case Sower.Seed.get_sid(sid) do
+        nil ->
+          conn |> put_status(404) |> render(:error, error: "not found")
+
+        seed ->
+          render(conn, :show, seed: seed)
+      end
     else
       conn |> put_status(401) |> render(:error, error: "unauthorized")
     end

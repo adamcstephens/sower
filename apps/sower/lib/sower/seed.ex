@@ -57,6 +57,10 @@ defmodule Sower.Seed do
     Repo.get_by(Seed, name: name, seed_type: seed_type)
   end
 
+  def get_sid(sid) do
+    Repo.get_by(Seed, sid: sid)
+  end
+
   def get_sid!(sid) do
     Repo.get_by!(Seed, sid: sid)
   end

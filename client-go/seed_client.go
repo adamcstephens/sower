@@ -14,7 +14,7 @@ type SeedClient struct {
 	client *ClientWithResponses
 }
 
-func NewSeedClient(endpoint, token string) (*SeedClient, error) {
+func NewSowerClient(endpoint, token string) (*SeedClient, error) {
 	if token == "" {
 		return nil, fmt.Errorf("API token missing")
 	}
@@ -36,7 +36,7 @@ func NewSeedClient(endpoint, token string) (*SeedClient, error) {
 	}, nil
 }
 
-func (s *SeedClient) CreateSeed(name, seedType string) (*Seed, error) {
+func (s *SeedClient) CreateSeed(name, seedType, artifact string) (*Seed, error) {
 	if name == "" || seedType == "" {
 		return nil, fmt.Errorf("seed name and type are required")
 	}
@@ -46,7 +46,7 @@ func (s *SeedClient) CreateSeed(name, seedType string) (*Seed, error) {
 		return nil, err
 	}
 
-	resp, err := s.client.NewSeedWithResponse(context.TODO(), Seed{Name: name, SeedType: st})
+	resp, err := s.client.NewSeedWithResponse(context.TODO(), Seed{Name: name, SeedType: st, Artifact: artifact})
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func (s *SeedClient) CreateSeed(name, seedType string) (*Seed, error) {
 	return seed, nil
 }
 
-func (s *SeedClient) GetSeed(name, seedType string) (*Seed, error) {
+func (s *SeedClient) GetLatestSeed(name, seedType string) (*Seed, error) {
 	if name == "" || seedType == "" {
 		return nil, fmt.Errorf("seed name and type are required")
 	}
@@ -80,7 +80,7 @@ func (s *SeedClient) GetSeed(name, seedType string) (*Seed, error) {
 		return nil, fmt.Errorf("must specify both name and type")
 	}
 
-	resp, err := s.client.ListSeedsWithResponse(context.TODO(), &ListSeedsParams{Name: &name, SeedType: &seedType})
+	resp, err := s.client.LatestSeedWithResponse(context.TODO(), &LatestSeedParams{Name: &name, SeedType: &seedType})
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +97,7 @@ func (s *SeedClient) GetSeed(name, seedType string) (*Seed, error) {
 		return nil, fmt.Errorf("unknown error")
 	}
 
-	newSeed = (*resp.JSON200)[0]
+	newSeed = (*resp.JSON200)
 
 	slog.Debug("Found seed", "name", newSeed.Name, "type", newSeed.SeedType, "sid", *newSeed.Sid)
 
@@ -133,51 +133,6 @@ func (s *SeedClient) GetSeedById(id string) (*Seed, error) {
 	slog.Debug("Found seed", "name", newSeed.Name, "type", newSeed.SeedType, "sid", *newSeed.Sid)
 
 	return &newSeed, nil
-}
-
-func (s *SeedClient) GetSeedLatestPath(seed *Seed) (*StorePath, error) {
-	resp, err := s.client.LatestStorePathBySeedWithResponse(context.TODO(), *seed.Sid)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode() == http.StatusUnauthorized {
-		return nil, fmt.Errorf("%s", *(*resp.JSON401).Error)
-	}
-
-	if resp.StatusCode() == http.StatusNotFound {
-		return nil, fmt.Errorf("%s", *(*resp.JSON404).Error)
-	}
-
-	if resp.StatusCode() != http.StatusOK {
-		return nil, fmt.Errorf("unknown error")
-	}
-
-	seedPath := resp.JSON200
-	slog.Debug("Found path for seed", "path", seedPath.Path, "seed_sid", *seed.Sid)
-
-	return seedPath, nil
-}
-
-func (s *SeedClient) SubmitSeedPath(seed *Seed, path string) (*StorePath, error) {
-	resp, err := s.client.NewSeedStorePathWithResponse(context.TODO(), *seed.Sid, StorePath{Path: path})
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode() == http.StatusUnauthorized {
-		return nil, fmt.Errorf("%s", *(*resp.JSON401).Error)
-	}
-
-	if resp.StatusCode() != http.StatusCreated {
-		return nil, fmt.Errorf("unknown error")
-	}
-
-	storePath := resp.JSON201
-
-	slog.Debug("Created path for seed", "path", storePath, "sid", seed.Sid)
-
-	return storePath, nil
 }
 
 func stringToSeedSeedType(s string) (SeedSeedType, error) {
