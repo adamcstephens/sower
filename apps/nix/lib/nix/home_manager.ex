@@ -8,6 +8,6 @@ defmodule Nix.HomeManager do
 
   @impl Nix.Profile
   def profile_path() do
-    "#{System.get_env("XDG_STATE_HOME")}/nix/profiles/home-manager"
+    "#{System.fetch_env!("XDG_STATE_HOME")}/nix/profiles/home-manager"
   end
 end

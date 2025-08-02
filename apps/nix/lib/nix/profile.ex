@@ -13,10 +13,10 @@ defmodule Nix.Profile do
   end
 
   @doc "Path to the currently running version of the profile"
-  @callback current_path() :: :string
+  @callback current_path() :: String.t()
 
   @doc "Calculate path to the profile"
-  @callback profile_path() :: :string
+  @callback profile_path() :: String.t()
 
   @doc "read the type's state"
   @callback get_state() :: {:ok, __MODULE__} | {:error, :string | atom()}
