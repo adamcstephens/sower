@@ -104,8 +104,8 @@ defmodule SowerWeb.Router do
 
     get "/nix/caches", Nix.CacheController, :list
     get "/seeds", SeedController, :list
-    get "/seeds/:sid", SeedController, :get
     get "/seeds/latest", SeedController, :latest
+    get "/seeds/:sid", SeedController, :get
     post "/seeds", SeedController, :new
   end
 

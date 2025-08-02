@@ -6,7 +6,7 @@ defmodule Sower.Seed do
 
   alias Sower.{Repo, Seed}
 
-  @derive {Jason.Encoder, only: [:sid, :name, :seed_type]}
+  @derive {Jason.Encoder, only: [:sid, :name, :seed_type, :artifact]}
 
   @derive {Phoenix.Param, key: :sid}
 
@@ -73,7 +73,8 @@ defmodule Sower.Seed do
     Repo.one(
       from s in Seed,
         where: s.name == ^name and s.seed_type == ^seed_type,
-        order_by: [desc: s.updated_at]
+        order_by: [desc: s.updated_at],
+        limit: 1
     )
   end
 
