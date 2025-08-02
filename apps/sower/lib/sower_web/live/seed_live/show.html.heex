@@ -4,16 +4,8 @@
 </.header>
 
 <.list>
-  <:item title="store_paths">
-    <.table
-      id="store_paths"
-      rows={@seed.store_paths}
-      row_click={fn store_path -> JS.navigate(~p"/nix/store_paths/#{store_path}") end}
-    >
-      <:col :let={store_path}>{store_path.path}</:col>
-      <:col :let={store_path}>{store_path.updated_at}</:col>
-    </.table>
-  </:item>
+  <:item title="seed type">{@seed.seed_type}</:item>
+  <:item title="artifact">{@seed.artifact}</:item>
   <:item title="created">{@seed.inserted_at}</:item>
   <:item title="updated">{@seed.updated_at}</:item>
 </.list>

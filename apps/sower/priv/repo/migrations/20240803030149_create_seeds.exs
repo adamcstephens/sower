@@ -8,13 +8,13 @@ defmodule Sower.Repo.Migrations.CreateSeeds do
 
       add :name, :string, null: false
       add :seed_type, :string, null: false
-      add :store_path, :string, null: false
+      add :artifact, :string, null: false
 
       timestamps()
     end
 
     create unique_index(:seeds, [:id, :org_id])
-    create unique_index(:seeds, [:name, :seed_type, :store_path, :org_id])
+    create unique_index(:seeds, [:name, :seed_type, :artifact, :org_id])
     create unique_index(:seeds, [:sid])
   end
 end

@@ -4,7 +4,7 @@ defmodule Sower.Seed do
   import Ecto.Changeset
   import Ecto.Query, only: [from: 2]
 
-  alias Sower.{Nix, Repo, Seed}
+  alias Sower.{Repo, Seed}
 
   @derive {Jason.Encoder, only: [:sid, :name, :seed_type]}
 
@@ -18,7 +18,7 @@ defmodule Sower.Seed do
 
     field :name, :string
     field :seed_type, :string
-    field :store_path, :string
+    field :artifact, :string
 
     timestamps()
   end
@@ -30,7 +30,7 @@ defmodule Sower.Seed do
     |> changeset(attrs)
     |> Repo.insert(
       on_conflict: {:replace, [:updated_at]},
-      conflict_target: [:name, :seed_type, :store_path, :org_id],
+      conflict_target: [:name, :seed_type, :artifact, :org_id],
       returning: true
     )
   end
@@ -73,7 +73,7 @@ defmodule Sower.Seed do
     )
   end
 
-  def latest_store_path(%__MODULE__{id: id}) do
+  def latest_artifact(%__MODULE__{id: id}) do
     Repo.one(
       from s in Seed,
         where: s.id == ^id,
@@ -81,7 +81,7 @@ defmodule Sower.Seed do
     )
   end
 
-  def latest_store_path_by_sid(sid) do
+  def latest_artifact_by_sid(sid) do
     Repo.one(
       from s in Seed,
         where: s.sid == ^sid,
@@ -91,16 +91,9 @@ defmodule Sower.Seed do
 
   defp changeset(seed, attrs) do
     seed
-    |> cast(attrs, [:name, :seed_type, :org_id, :store_path])
+    |> cast(attrs, [:name, :seed_type, :org_id, :artifact])
     |> validate_inclusion(:seed_type, @seed_types)
-    |> validate_required([:name, :seed_type, :org_id, :store_path])
-    |> unique_constraint([:name, :seed_type, :org_id, :store_path], error_key: :unique_seed)
-  end
-
-  defp updated_at_now(seed) do
-    seed
-    |> change()
-    |> put_change(:updated_at, NaiveDateTime.local_now())
-    |> Repo.update()
+    |> validate_required([:name, :seed_type, :org_id, :artifact])
+    |> unique_constraint([:name, :seed_type, :org_id, :artifact], error_key: :unique_seed)
   end
 end

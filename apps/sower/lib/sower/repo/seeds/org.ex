@@ -1,4 +1,6 @@
 defmodule Sower.Repo.Seeds.Org do
+  require Logger
+
   @enforce_keys [:name]
   defstruct [:name, :email]
 
@@ -11,8 +13,8 @@ defmodule Sower.Repo.Seeds.Org do
       end
 
     {:ok, user} =
-      case Sower.Accounts.User.get_by_email(org_seed.email) do
-        nil ->
+      case Sower.Repo.all_by(Sower.Accounts.User, [email: org_seed.email], skip_org_id: true) do
+        [] ->
           {:ok, org} = Sower.Accounts.Organization.create(%{name: org_seed.name})
           Sower.Repo.put_org_id(org.org_id)
 
@@ -23,8 +25,12 @@ defmodule Sower.Repo.Seeds.Org do
             oidc_id: Ecto.UUID.generate()
           })
 
-        user ->
+        [user] ->
           {:ok, user}
+
+        other ->
+          Logger.error(msg: "Too many matching users", other: other)
+          Kernel.exit(1)
       end
 
     user
@@ -60,20 +66,19 @@ defmodule Sower.Repo.Seeds.Org do
     |> Enum.map(fn t ->
       name = ~s"test#{t}"
 
-      {:ok, seed} =
-        case Sower.Seed.get(name, "nixos") do
-          nil ->
-            Sower.Seed.create(%{
-              name: name,
-              seed_type: "nixos",
-              org_id: user.org_id,
-              store_path:
-                ~s"/nix/store/#{Cuid2Ex.create(length: 32) |> String.downcase()}-nixos-system-#{name}-24.11.20240703.9f4128e"
-            })
+      case Sower.Seed.get(name, "nixos") do
+        nil ->
+          Sower.Seed.create(%{
+            name: name,
+            seed_type: "nixos",
+            org_id: user.org_id,
+            artifact:
+              ~s"/nix/store/#{Cuid2Ex.create(length: 32) |> String.downcase()}-nixos-system-#{name}-24.11.20240703.9f4128e"
+          })
 
-          seed ->
-            {:ok, seed}
-        end
+        seed ->
+          {:ok, seed}
+      end
     end)
   end
 end

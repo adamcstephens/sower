@@ -414,11 +414,11 @@ defmodule Sower.Orchestration do
         %SowerClient.Schemas.Orchestration.UpgradeRequest{} = upgrade
       ) do
     with subs when subs != [] <- get_subscription_sids(upgrade.subscription_sids),
-         seed_store_paths <-
-           subs |> Enum.map(&Sower.Seed.latest_store_path(&1.seed)) |> Enum.map(& &1.store_path),
+         seed_artifacts <-
+           subs |> Enum.map(&Sower.Seed.latest_artifact(&1.seed)) |> Enum.map(& &1.artifact),
          {:ok, deploy} <-
            create_deployment(%{
-             store_paths: seed_store_paths,
+             artifacts: seed_artifacts,
              subscriptions: subs
            }) do
       {:ok,

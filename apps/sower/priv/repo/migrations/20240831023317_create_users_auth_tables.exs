@@ -28,8 +28,8 @@ defmodule Sower.Repo.Migrations.CreateUsersAuthTables do
     create index(:users_tokens, [:user_id])
 
     create unique_index(:users, :sid)
-    create unique_index(:users, :email)
-    create unique_index(:users, :oidc_id)
+    create unique_index(:users, [:email, :org_id])
+    create unique_index(:users, [:oidc_id, :org_id])
     create unique_index(:users_tokens, :sid)
     create unique_index(:users_tokens, [:context, :token])
   end

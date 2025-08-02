@@ -8,7 +8,7 @@ defmodule SowerWeb.SeedLive.Show do
 
   @impl true
   def handle_params(%{"sid" => sid}, _, socket) do
-    seed = Sower.Seed.get_sid!(sid) |> Sower.Repo.preload(:store_paths)
+    seed = Sower.Seed.get_sid!(sid)
 
     {:noreply,
      socket

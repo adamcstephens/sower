@@ -33,7 +33,7 @@ defmodule SowerWeb.Api.SeedController do
           body_params: %Schemas.Seed{
             name: name,
             seed_type: seed_type,
-            store_path: store_path
+            artifact: artifact
           }
         } = conn,
         _params
@@ -42,7 +42,7 @@ defmodule SowerWeb.Api.SeedController do
 
     if can(conn.assigns.access_token)
        |> create?(%Sower.Seed{org_id: conn.assigns.access_token.org_id}) do
-      case Sower.Seed.create(%{name: name, seed_type: seed_type, store_path: store_path}) do
+      case Sower.Seed.create(%{name: name, seed_type: seed_type, artifact: artifact}) do
         {:ok, %Sower.Seed{} = seed} ->
           conn
           |> put_status(:created)

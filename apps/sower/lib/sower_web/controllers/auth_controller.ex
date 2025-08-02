@@ -11,8 +11,10 @@ defmodule SowerWeb.AuthController do
         |> SowerWeb.UserAuth.log_in_user(user)
 
       {:error, reason} ->
+        Logger.error(msg: "Failed to authenticate", reason: reason)
+
         conn
-        |> put_flash(:error, reason)
+        |> put_flash(:error, "Failed to authenticate")
         |> redirect(to: "/")
     end
   end

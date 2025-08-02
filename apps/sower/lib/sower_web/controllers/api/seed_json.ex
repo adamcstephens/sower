@@ -13,8 +13,8 @@ defmodule SowerWeb.Api.SeedJSON do
     seed
   end
 
-  def show(%{store_path: store_path}) do
-    store_path
+  def show(%{artifact: artifact}) do
+    artifact
   end
 
   def not_found(_) do

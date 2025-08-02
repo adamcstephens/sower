@@ -125,7 +125,7 @@ export def get-config-outputs [] {
   $configs | each { |c|
     # simplify for output
     $c.targets | filter { |t| $t.build != null } | each { |t|
-      { seed_type: $c.seed_type, name: $t.name, store_path: $t.build.outputs.out.0 }
+      { seed_type: $c.seed_type, name: $t.name, artifact: $t.build.outputs.out.0 }
     }
   } | flatten
 }

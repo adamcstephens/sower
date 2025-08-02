@@ -6,7 +6,7 @@ defmodule Sower.SeedFixtures do
 
   def unique_seed_name, do: "seed#{System.unique_integer()}"
 
-  def random_store_path do
+  def random_nix_artifact do
     "/nix/store/#{:crypto.strong_rand_bytes(32) |> Base.encode16() |> String.slice(0..31) |> String.downcase()}-something"
   end
 
@@ -14,7 +14,7 @@ defmodule Sower.SeedFixtures do
     Enum.into(attrs, %{
       name: unique_seed_name(),
       seed_type: "nixos",
-      store_path: random_store_path()
+      artifact: random_nix_artifact()
     })
   end
 
@@ -27,9 +27,8 @@ defmodule Sower.SeedFixtures do
     seed
   end
 
-  def store_path_fixture(attrs \\ %{}) do
+  def artifact_fixture(attrs \\ %{}) do
     attrs
-    |> Enum.into(%{path: random_store_path()})
-    |> Sower.Nix.submit_store_path!()
+    |> Enum.into(%{path: random_nix_artifact()})
   end
 end

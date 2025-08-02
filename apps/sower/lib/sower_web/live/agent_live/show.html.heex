@@ -15,9 +15,7 @@
   <:item title="Local sid">{@agent.local_sid}</:item>
   <:item title="Current Generation">
     <%= if Map.has_key?(@current_generation, :path) do %>
-      <.link patch={~p"/nix/store_paths/#{Nix.narhash_from_path(@current_generation.path)}"}>
-        {@current_generation.path}
-      </.link>
+      {@current_generation.path}
     <% end %>
   </:item>
   <:item title="subscriptions">
