@@ -24,15 +24,15 @@ defmodule Sower.AccountsTest do
   end
 
   describe "new/1" do
-    test "validates email uniqueness", %{organization: org} do
-      %{email: email} = user_fixture()
+    test "validates email uniqueness" do
+      %{email: email, org_id: org_id} = user_fixture()
 
       {:error, changeset} =
         User.new(%{
           email: email,
           name: "Jane Doe",
           oidc_id: Ecto.UUID.generate(),
-          org_id: org.org_id
+          org_id: org_id
         })
 
       assert "has already been taken" in errors_on(changeset).email
@@ -43,7 +43,7 @@ defmodule Sower.AccountsTest do
           email: String.upcase(email),
           name: "Jack Doe",
           oidc_id: Ecto.UUID.generate(),
-          org_id: org.org_id
+          org_id: org_id
         })
 
       assert "has already been taken" in errors_on(changeset).email

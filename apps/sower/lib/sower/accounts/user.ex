@@ -75,6 +75,6 @@ defmodule Sower.Accounts.User do
     |> validate_required([:email])
     |> validate_format(:email, ~r/^[^\s]+@[^\s]+$/, message: "must have the @ sign and no spaces")
     |> validate_length(:email, max: 160)
-    |> unique_constraint(:email)
+    |> unique_constraint([:email, :org_id])
   end
 end

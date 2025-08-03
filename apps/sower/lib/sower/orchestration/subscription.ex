@@ -23,6 +23,7 @@ defmodule Sower.Orchestration.Subscription do
   def changeset(subscription, attrs) do
     subscription
     |> cast(attrs, [:agent_id, :seed_id])
+    |> unique_constraint([:agent_id, :seed_id, :org_id])
     |> validate_required([])
   end
 end

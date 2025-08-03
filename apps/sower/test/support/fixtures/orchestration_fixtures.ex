@@ -11,6 +11,7 @@ defmodule Sower.OrchestrationFixtures do
     {:ok, agent} =
       attrs
       |> Enum.into(%{
+        name: SowerClient.Schemas.Sid.generate("agent"),
         local_sid: "some local_sid",
         sid: "some sid"
       })
@@ -26,7 +27,6 @@ defmodule Sower.OrchestrationFixtures do
     {:ok, subscription} =
       attrs
       |> Enum.into(%{
-        sid: "some sid"
       })
       |> Sower.Orchestration.create_subscription()
 
