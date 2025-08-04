@@ -33,7 +33,7 @@ defmodule SowerAgent.Config do
         items: SowerClient.Schemas.Orchestration.Subscription.schema()
       }
     },
-    required: ~w(access_token endpoint)a
+    required: [:access_token, :endpoint]
   })
 
   def get() do

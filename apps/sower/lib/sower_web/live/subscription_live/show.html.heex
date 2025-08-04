@@ -14,11 +14,8 @@
       {@subscription.agent.name}
     </.link>
   </:item>
-  <:item title="Seed">
-    <.link patch={~p"/seeds/#{@subscription.seed}"}>
-      {@subscription.seed.name} - {@subscription.seed.seed_type}
-    </.link>
-  </:item>
+  <:item title="Seed Name">{@subscription.seed_name}</:item>
+  <:item title="Seed Type">{@subscription.seed_type}</:item>
 </.list>
 
 <.back navigate={~p"/subscriptions"}>Back to subscriptions</.back>

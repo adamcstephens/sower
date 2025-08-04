@@ -115,19 +115,14 @@ defmodule SowerWeb.AgentChannel do
 
   def handle_in("subscription:register", payload, socket) do
     with {:ok, req_sub} <- SowerClient.Schemas.Orchestration.Subscription.cast(payload),
-         seed when not is_nil(seed) <- Sower.Seed.get(req_sub.name, req_sub.seed_type),
          {:ok, subscription} <-
            Sower.Orchestration.create_subscription(%{
              agent_id: socket.assigns.agent.id,
-             seed_id: seed.id
+             seed_name: req_sub.seed_name,
+             seed_type: req_sub.seed_type
            }) do
       subscription =
-        SowerClient.Schemas.Orchestration.Subscription.cast(%{
-          sid: subscription.sid,
-          seed_sid: seed.sid,
-          name: seed.name,
-          seed_type: seed.seed_type
-        })
+        SowerClient.Schemas.Orchestration.Subscription.cast(subscription)
 
       {:reply, subscription, socket}
     else

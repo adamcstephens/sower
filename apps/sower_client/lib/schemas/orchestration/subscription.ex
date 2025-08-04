@@ -11,7 +11,7 @@ defmodule SowerClient.Schemas.Orchestration.Subscription do
         readOnly: true,
         nullable: true
       },
-      name: %Schema{
+      seed_name: %Schema{
         type: :string,
         description: "Name of the seed"
       },
@@ -19,14 +19,8 @@ defmodule SowerClient.Schemas.Orchestration.Subscription do
         type: :string,
         description: "Type of the seed",
         enum: SowerClient.Schemas.Seed.seed_types()
-      },
-      seed_sid: %Schema{
-        type: :string,
-        description: "seed sid allocated by Sower",
-        readOnly: true,
-        nullable: true
       }
     },
-    required: ~w(name seed_type)a
+    required: []
   })
 end

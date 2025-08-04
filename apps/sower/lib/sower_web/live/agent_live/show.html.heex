@@ -24,7 +24,8 @@
       rows={@agent.subscriptions}
       row_click={fn subscription -> JS.navigate(~p"/subscriptions/#{subscription.sid}") end}
     >
-      <:col :let={subscription}>{subscription.seed_id}</:col>
+      <:col :let={subscription}>{subscription.seed_name}</:col>
+      <:col :let={subscription}>{subscription.seed_type}</:col>
       <:col :let={subscription}>{subscription.updated_at}</:col>
     </.table>
   </:item>

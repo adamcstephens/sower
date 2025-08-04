@@ -179,7 +179,7 @@ defmodule Sower.Orchestration do
   """
   def list_subscriptions do
     Repo.all(Subscription)
-    |> Sower.Repo.preload([:agent, :seed])
+    |> Sower.Repo.preload([:agent])
   end
 
   @doc """
@@ -251,10 +251,7 @@ defmodule Sower.Orchestration do
            org_id: Sower.Repo.get_org_id()
          }
          |> Subscription.changeset(attrs)
-         |> Repo.insert(
-           on_conflict: {:replace, [:updated_at]},
-           conflict_target: [:agent_id, :seed_id, :org_id]
-         ) do
+         |> Repo.insert() do
       {:ok, sub} -> {:ok, Repo.reload(sub)}
       err -> err
     end

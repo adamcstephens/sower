@@ -6,8 +6,8 @@ if config_env() == :dev do
     endpoint: "http://localhost:7150",
     state_directory: Path.expand("../_build", __DIR__),
     subscriptions: [
-      %{name: "deck", seed_type: "nixos"},
-      %{name: "deck", seed_type: "home-manager"}
+      %{seed_name: "deck", seed_type: "nixos"},
+      %{seed_name: "deck", seed_type: "home-manager"}
     ]
   })
 end
@@ -22,8 +22,8 @@ if config_env() == :test do
     endpoint: "http://localhost:7150",
     state_directory: Path.expand("../_build", __DIR__),
     subscriptions: [
-      %{name: "deck", seed_type: "nixos"},
-      %{name: "deck", seed_type: "home-manager"}
+      %{seed_name: "deck", seed_type: "nixos"},
+      %{seed_name: "deck", seed_type: "home-manager"}
     ]
   })
 end

@@ -15,7 +15,7 @@ defmodule SowerWeb.SubscriptionLive.Show do
      |> assign(:page_title, page_title(socket.assigns.live_action))
      |> assign(
        :subscription,
-       Orchestration.get_subscription_sid!(sid) |> Sower.Repo.preload([:agent, :seed])
+       Orchestration.get_subscription_sid!(sid) |> Sower.Repo.preload([:agent])
      )}
   end
 
