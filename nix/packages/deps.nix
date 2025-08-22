@@ -561,48 +561,6 @@ let
         in
         drv;
 
-      libcluster =
-        let
-          version = "3.3.3";
-          drv = buildMix {
-            inherit version;
-            name = "libcluster";
-            appConfigPath = ../../config;
-
-            src = fetchHex {
-              inherit version;
-              pkg = "libcluster";
-              sha256 = "7c0a2275a0bb83c07acd17dab3c3bfb4897b145106750eeccc62d302e3bdfee5";
-            };
-
-            beamDeps = [
-              jason
-            ];
-          };
-        in
-        drv;
-
-      libcluster_consul =
-        let
-          version = "1.3.0";
-          drv = buildMix {
-            inherit version;
-            name = "libcluster_consul";
-            appConfigPath = ../../config;
-
-            src = fetchHex {
-              inherit version;
-              pkg = "libcluster_consul";
-              sha256 = "fb63bc580f931a5af041c582a565df52bca3c8005c2ada13cce71647e674da25";
-            };
-
-            beamDeps = [
-              libcluster
-            ];
-          };
-        in
-        drv;
-
       mime =
         let
           version = "2.0.6";

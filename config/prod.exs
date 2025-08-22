@@ -13,22 +13,5 @@ config :sower, SowerWeb.Endpoint, scheme: "https"
 # Do not print debug messages in production
 config :logger, level: :info
 
-config :libcluster,
-  topologies: [
-    consul: [
-      strategy: Cluster.Strategy.Consul,
-      config: [
-        base_url: "http://localhost:8500",
-
-        # The Consul endpoints used to fetch service nodes.
-        list_using: [
-          Cluster.Strategy.Consul.Agent,
-          {Cluster.Strategy.Consul.Health, [passing: true]}
-        ],
-        service: [name: "sower"]
-      ]
-    ]
-  ]
-
 # Runtime production configuration, including reading
 # of environment variables, is done on config/runtime.exs.
