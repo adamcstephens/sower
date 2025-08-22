@@ -9,7 +9,17 @@ defmodule Sower.Repo do
 
   @impl Ecto.Repo
   def init(_context, config) do
-    {:ok, Keyword.merge(config, Application.get_env(:sower, :database, []))}
+    {:ok, Keyword.merge(config, app_config())}
+  end
+
+  defp app_config() do
+    dbcfg = Application.get_env(:sower, :database)
+
+    if Keyword.get(dbcfg, :ssl, false) do
+      Keyword.put(dbcfg, :ssl, cacerts: :public_key.cacerts_get())
+    else
+      dbcfg
+    end
   end
 
   @doc """

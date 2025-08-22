@@ -78,6 +78,11 @@ defmodule Sower.Config do
           "socket" => %{
             "type" => "string"
           },
+          "ssl" => %{
+            "type" => "bool",
+            "description" => "enable ssl and verification with system cacerts",
+            "default" => false
+          },
           "user" => %{
             "type" => "string"
           },
