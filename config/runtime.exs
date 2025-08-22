@@ -179,7 +179,13 @@ defmodule Sower.Config do
       with {:ok, database} <- json_config |> Keyword.fetch(:database),
            {:ok, password_file} <- database |> Keyword.fetch(:password_file),
            {:ok, password} <- read_credential(password_file) do
-        json_config |> Keyword.put(:database, database |> Keyword.put(:password, password))
+        json_config
+        |> Keyword.put(
+          :database,
+          database
+          |> Keyword.put(:password, password)
+          |> Keyword.put(:ssl_opts, cacerts: :public_key.cacerts_get())
+        )
       else
         # assume missing password_file is intentional
         :error ->
