@@ -39,7 +39,7 @@ export def filter-configs [--system: string] {
   } else {
     $configs | each { |c|
       $c | update targets (
-        $c.targets | filter { |i|
+        $c.targets | where { |i|
           $system in $i.config.systems
         } | each { |i|
           $i | update config.systems [$system]
@@ -86,7 +86,7 @@ export def upload-configs [--attic-cache: string, --cache-build-deps = false, --
   let configs = $in
 
   $configs | reduce --fold [] { |c, acc|
-    let built_targets = $c.targets | filter { |t| $t.build != null } | get build | flatten
+    let built_targets = $c.targets | where { |t| $t.build != null } | get build | flatten
     let build_dependencies = if $cache_build_deps {
       $built_targets | get drvPath | each { |drv|
         nix-store --query --requisites --include-outputs $drv | lines
@@ -102,14 +102,14 @@ export def upload-configs [--attic-cache: string, --cache-build-deps = false, --
 export def get-config-failures [] {
   let configs = $in
 
-  $configs | filter { |c|
+  $configs | where { |c|
     # filter top-levels down to failed ones
     $c.targets | any { |t|
       $t.build == null
     }
   } | each { |c|
     # filter targets down to failed ones
-    $c | update targets ($c.targets | filter { |t|
+    $c | update targets ($c.targets | where { |t|
       $t.build == null
     })
   } | each { |c|
@@ -125,7 +125,7 @@ export def get-config-outputs [] {
 
   $configs | each { |c|
     # simplify for output
-    $c.targets | filter { |t| $t.build != null } | each { |t|
+    $c.targets | where { |t| $t.build != null } | each { |t|
       { seed_type: $c.seed_type, name: $t.name, artifact: $t.build.outputs.out.0 }
     }
   } | flatten
@@ -149,8 +149,8 @@ export def post-sower-seeds [] {
   let repo_url = get-repo-url
 
   # sower only understands certain build outputs
-  $configs | filter { |c| $c.seed_type == "home-manager" or $c.seed_type == "nix-darwin" or $c.seed_type == "nixos" } | each { |c|
-    $c.targets | filter { |t| $t.build != null } | each { |t|
+  $configs | where { |c| $c.seed_type == "home-manager" or $c.seed_type == "nix-darwin" or $c.seed_type == "nixos" } | each { |c|
+    $c.targets | where { |t| $t.build != null } | each { |t|
       sower seed submit --name $t.name --type $c.seed_type --path $t.build.outputs.out.0
     }
   }
