@@ -3,6 +3,7 @@
   lib,
   beamPackages,
   overrides ? (x: y: { }),
+  overrideFenixOverlay ? null,
 }:
 
 let
@@ -22,12 +23,16 @@ let
       old:
       let
         extendedPkgs = pkgs.extend fenixOverlay;
-        fenixOverlay = import "${
-          fetchTarball {
-            url = "https://github.com/nix-community/fenix/archive/056c9393c821a4df356df6ce7f14c722dc8717ec.tar.gz";
-            sha256 = "sha256:1cdfh6nj81gjmn689snigidyq7w98gd8hkl5rvhly6xj7vyppmnd";
-          }
-        }/overlay.nix";
+        fenixOverlay =
+          if overrideFenixOverlay == null then
+            import "${
+              fetchTarball {
+                url = "https://github.com/nix-community/fenix/archive/056c9393c821a4df356df6ce7f14c722dc8717ec.tar.gz";
+                sha256 = "sha256:1cdfh6nj81gjmn689snigidyq7w98gd8hkl5rvhly6xj7vyppmnd";
+              }
+            }/overlay.nix"
+          else
+            overrideFenixOverlay;
         nativeDir = "${old.src}/native/${with builtins; head (attrNames (readDir "${old.src}/native"))}";
         fenix =
           if toolchain == null then
@@ -47,7 +52,7 @@ let
               };
               nativeBuildInputs = [
                 extendedPkgs.cmake
-              ] ++ extendedPkgs.lib.lists.optional extendedPkgs.stdenv.isDarwin extendedPkgs.darwin.IOKit;
+              ];
               doCheck = false;
             };
 
@@ -159,7 +164,7 @@ let
 
       bandit =
         let
-          version = "1.7.0";
+          version = "1.8.0";
           drv = buildMix {
             inherit version;
             name = "bandit";
@@ -168,7 +173,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "bandit";
-              sha256 = "3e2f7a98c7a11f48d9d8c037f7177cd39778e74d55c7af06fe6227c742a8168a";
+              sha256 = "8458ff4eed20ff2a2ea69d4854883a077c33ea42b51f6811b044ceee0fa15422";
             };
 
             beamDeps = [
@@ -178,23 +183,6 @@ let
               thousand_island
               websock
             ];
-          };
-        in
-        drv;
-
-      castore =
-        let
-          version = "1.0.14";
-          drv = buildMix {
-            inherit version;
-            name = "castore";
-            appConfigPath = ../../config;
-
-            src = fetchHex {
-              inherit version;
-              pkg = "castore";
-              sha256 = "7bc1b65249d31701393edaaac18ec8398d8974d52c647b7904d01b964137b9f4";
-            };
           };
         in
         drv;
@@ -670,7 +658,6 @@ let
             };
 
             beamDeps = [
-              castore
               hpax
             ];
           };
@@ -757,7 +744,7 @@ let
 
       open_api_spex =
         let
-          version = "3.21.5";
+          version = "3.22.0";
           drv = buildMix {
             inherit version;
             name = "open_api_spex";
@@ -766,7 +753,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "open_api_spex";
-              sha256 = "bd83c8f462222236fa85044098ba3bf57f7b7d7fd5286e6bc0060c7916f7c0d8";
+              sha256 = "dd751ddbdd709bb4a5313e9a24530da6e66594773c7242a0c2592cbd9f589063";
             };
 
             beamDeps = [
@@ -820,7 +807,7 @@ let
 
       phoenix =
         let
-          version = "1.7.21";
+          version = "1.8.0";
           drv = buildMix {
             inherit version;
             name = "phoenix";
@@ -829,11 +816,11 @@ let
             src = fetchHex {
               inherit version;
               pkg = "phoenix";
-              sha256 = "336dce4f86cba56fed312a7d280bf2282c720abb6074bdb1b61ec8095bdd0bc9";
+              sha256 = "15f6e9cb76646ad8d9f2947240519666fc2c4f29f8a93ad9c7664916ab4c167b";
             };
 
             beamDeps = [
-              castore
+              bandit
               jason
               phoenix_pubsub
               phoenix_template
@@ -913,7 +900,7 @@ let
 
       phoenix_live_view =
         let
-          version = "1.0.17";
+          version = "1.1.8";
           drv = buildMix {
             inherit version;
             name = "phoenix_live_view";
@@ -922,7 +909,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "phoenix_live_view";
-              sha256 = "a4ca05c1eb6922c4d07a508a75bfa12c45e5f4d8f77ae83283465f02c53741e1";
+              sha256 = "6184cf1e82fe6627d40cfa62236133099438513710d30358f4c085c16ecb84b4";
             };
 
             beamDeps = [
@@ -1017,7 +1004,7 @@ let
 
       postgrex =
         let
-          version = "0.21.0";
+          version = "0.21.1";
           drv = buildMix {
             inherit version;
             name = "postgrex";
@@ -1026,7 +1013,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "postgrex";
-              sha256 = "c35cd8f18b5c59da08eff27cb40c8533c561320af830821c740efd7e97c8ac9f";
+              sha256 = "27d8d21c103c3cc68851b533ff99eef353e6a0ff98dc444ea751de43eb48bdac";
             };
 
             beamDeps = [
@@ -1221,7 +1208,7 @@ let
 
       thousand_island =
         let
-          version = "1.3.14";
+          version = "1.4.0";
           drv = buildMix {
             inherit version;
             name = "thousand_island";
@@ -1230,7 +1217,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "thousand_island";
-              sha256 = "d0d24a929d31cdd1d7903a4fe7f2409afeedff092d277be604966cd6aa4307ef";
+              sha256 = "686ff52b9e4cf1e16d2bd8ba83360f2357ac6ca304250702ecc3b40000f04015";
             };
 
             beamDeps = [

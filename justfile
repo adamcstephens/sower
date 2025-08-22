@@ -86,10 +86,11 @@ update: update-nix update-elixir update-go
 update-nix:
     nix flake update --commit-lock-file
 
-update-elixir: mix-clean
+update-elixir:
     mix deps.update --all
     mix deps.get
     mix hex.outdated
+    just mix-clean
     just mix-nix-lock
     git add mix.exs mix.lock nix/packages/deps.nix
     git commit -m 'server(chore): update elixir deps' -- mix.exs mix.lock nix/packages/deps.nix
