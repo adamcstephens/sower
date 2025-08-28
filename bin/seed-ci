@@ -233,11 +233,11 @@ def main [
   }
 
   print "🎯 Built seeds"
-  print ($built_seeds | get-config-outputs)
+  print ($built_seeds | get-config-outputs | table --width 120 --expand)
 
   if ($built_seeds | any { |c| $c.targets | any { |t| $t.build == null } }) {
     print "💀 Failed targets"
-    print ($built_seeds | get-config-failures)
+    print ($built_seeds | get-config-failures | table --width 120 --expand)
     exit 1
   } else {
     print "🥳 Success!"
