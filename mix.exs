@@ -22,7 +22,8 @@ defmodule SowerUmbrella.MixProject do
         ]
       ],
       start_permanent: Mix.env() == :prod,
-      version: version
+      version: version,
+      listeners: [Phoenix.CodeReloader]
     ]
   end
 
