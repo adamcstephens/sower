@@ -11,7 +11,11 @@ config :sower, SowerWeb.Endpoint, cache_static_manifest: "priv/static/cache_mani
 config :sower, SowerWeb.Endpoint, scheme: "https"
 
 # Do not print debug messages in production
-config :logger, level: :info
+# Disable timestamps since the journal has those
+config :logger, :console,
+  level: :info,
+  format: "$metadata[$level] $message\n",
+  metadata: [:request_id, :mfa]
 
 config :libcluster,
   topologies: [
