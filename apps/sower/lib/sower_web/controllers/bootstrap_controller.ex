@@ -1,7 +1,7 @@
 defmodule SowerWeb.BootstrapController do
   use SowerWeb, :controller
 
-  action_fallback SowerWeb.BootstrapFallbackController
+  require Logger
 
   def client_script(conn, _params) do
     conn
@@ -51,24 +51,37 @@ defmodule SowerWeb.BootstrapController do
   def client_bin(conn, %{"system" => system}) do
     clients = Application.get_env(:sower, :clients)
 
-    # don't trust input when it comes to the local filesystem
-    if system in (clients |> Keyword.keys() |> Enum.map(&Atom.to_string/1)) do
+    system =
+      try do
+        String.to_existing_atom(system)
+      rescue
+        _ ->
+          :not_found
+      end
+
+    if system in (clients |> Keyword.keys()) do
       local_path =
-        Kernel.get_in(clients, [String.to_existing_atom(system), :path]) <> "/bin/sower"
+        Kernel.get_in(clients, [system, :path]) <> "/bin/sower"
 
       if File.exists?(local_path) do
+        Logger.debug(msg: "Sending download file", local_path: local_path, system: system)
+
         conn
         |> send_download({:file, local_path},
           filename: "sower",
           content_type: "application/octet-stream"
         )
       else
+        Logger.error(msg: "Download file not found", local_path: local_path, system: system)
+
         conn
         |> put_status(:not_found)
         |> text("Not found")
         |> halt()
       end
     else
+      Logger.error(msg: "Unknown system requested for download", system: system)
+
       conn
       |> put_status(:not_found)
       |> text("Not found")
