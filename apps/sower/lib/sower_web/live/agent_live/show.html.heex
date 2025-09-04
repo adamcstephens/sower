@@ -1,6 +1,5 @@
 <.header>
-  Agent {@agent.id}
-  <:subtitle>This is a agent record from your database.</:subtitle>
+  Agent: {@agent.name}
   <:actions>
     <.link patch={~p"/agents/#{@agent}/show/edit"} phx-click={JS.push_focus()}>
       <.button>Edit agent</.button>
@@ -10,7 +9,6 @@
 
 <.list>
   <:item title="Online">{@online}</:item>
-  <:item title="Name">{@agent.name}</:item>
   <:item title="sid">{@agent.sid}</:item>
   <:item title="Local sid">{@agent.local_sid}</:item>
   <:item title="Current Generation">

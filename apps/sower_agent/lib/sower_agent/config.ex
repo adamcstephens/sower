@@ -30,7 +30,8 @@ defmodule SowerAgent.Config do
       },
       subscriptions: %Schema{
         type: :array,
-        items: SowerClient.Schemas.Orchestration.Subscription.schema()
+        items: SowerClient.Schemas.Orchestration.Subscription.schema(),
+        default: []
       }
     },
     required: [:access_token, :endpoint]
@@ -40,11 +41,15 @@ defmodule SowerAgent.Config do
     Application.get_env(@app, :config)
   end
 
-  def load(config_map) do
+  def load(config_map \\ %{}) do
+    Application.ensure_all_started(:logger)
+
     cfg =
-      case config_map
-           |> read_files()
-           |> OpenApiSpex.cast_value(schema()) do
+      config_map
+      |> add_config_file()
+      |> parse_files_to_values()
+      |> OpenApiSpex.cast_value(schema())
+      |> case do
         {:ok, cfg} ->
           cfg
 
@@ -62,6 +67,10 @@ defmodule SowerAgent.Config do
     Application.put_env(@app, :config, cfg)
   end
 
+  @doc """
+  external_config is processed for each child in the config.
+  It allows for mapping from a config file format to elixir native config manually.
+  """
   def external_config({:endpoint, endpoint}) do
     uri = URI.parse(endpoint)
 
@@ -90,13 +99,36 @@ defmodule SowerAgent.Config do
 
   def external_config(cfg), do: cfg
 
+  def add_config_file(cfg) do
+    Map.merge(cfg, read_config_file(System.get_env("SOWER_AGENT_CONFIG")))
+  end
+
+  def read_config_file(nil) do
+    read_config_file(default_config_file())
+  end
+
+  def read_config_file(file) do
+    file = Path.absname(file)
+
+    if File.exists?(file) do
+      file |> File.read!() |> Jason.decode!()
+    else
+      Logger.warning(msg: "Config file is missing!", file: file)
+      %{}
+    end
+  end
+
+  def default_config_file() do
+    Application.get_env(@app, __MODULE__, "/etc/sower/agent.json")
+  end
+
   def reload() do
     Application.put_env(:sower_agent, :config, load(%{}))
     Application.stop(:sower_agent)
     Application.start(:sower_agent)
   end
 
-  defp read_files(config_map) do
+  defp parse_files_to_values(config_map) do
     config_map
     |> Enum.map(fn {key, value} ->
       key =
@@ -108,7 +140,8 @@ defmodule SowerAgent.Config do
 
       if String.ends_with?(key, "_file") do
         real_key = String.trim(key, "_file")
-        {real_key, value |> File.read!() |> String.trim()}
+        value = value |> Path.absname() |> File.read!() |> String.trim()
+        {real_key, value}
       else
         {key, value}
       end
