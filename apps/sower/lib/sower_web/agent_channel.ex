@@ -130,7 +130,12 @@ defmodule SowerWeb.AgentChannel do
         {:reply, {:error, "Seed not found"}, socket}
 
       {:error, error} ->
-        Logger.error(msg: "Failed to get seed", payload: payload, error: error)
+        Logger.error(
+          msg: "Failed to get seed",
+          payload: payload,
+          error: error
+        )
+
         {:reply, :error, socket}
     end
   end
@@ -165,7 +170,7 @@ defmodule SowerWeb.AgentChannel do
 
   def handle_info(:ping, socket) do
     ref = SowerClient.Schemas.Sid.generate()
-    Logger.debug(msg: "Sending ping", ref: ref)
+    Logger.debug(msg: "Sending ping", ref: ref, component: :server, topic: socket.topic)
     push(socket, "ping", %{ref: ref})
     {:noreply, socket}
   end

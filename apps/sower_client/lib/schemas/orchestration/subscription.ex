@@ -19,8 +19,37 @@ defmodule SowerClient.Schemas.Orchestration.Subscription do
         type: :string,
         description: "Type of the seed",
         enum: SowerClient.Schemas.Seed.seed_types()
+      },
+      rules: %Schema{
+        type: :array,
+        items: __MODULE__.Rule,
+        nullable: true
       }
     },
     required: []
   })
+
+  defmodule Rule do
+    use SowerClient.Schema
+
+    OpenApiSpex.schema(%{
+      title: "SubscriptionRule",
+      type: :object,
+      properties: %{
+        key: %Schema{
+          type: :string,
+          description: "tag key"
+        },
+        op: %Schema{
+          type: :string,
+          description: "operation to apply"
+        },
+        value: %Schema{
+          type: :string,
+          description: "value"
+        }
+      },
+      required: [:key, :op, :value]
+    })
+  end
 end

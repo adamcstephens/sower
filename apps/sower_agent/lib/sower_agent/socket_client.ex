@@ -92,6 +92,7 @@ defmodule SowerAgent.SocketClient do
              {:ok, subscription} <- await_reply(ref),
              {:ok, subscription} <-
                SowerClient.Schemas.Orchestration.Subscription.cast(subscription) do
+          Logger.debug(subscription)
           subscription
         else
           {:error, error} ->

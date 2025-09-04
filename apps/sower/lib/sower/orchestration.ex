@@ -247,11 +247,13 @@ defmodule Sower.Orchestration do
 
   """
   def create_subscription(attrs \\ %{}) do
-    case %Subscription{
-           org_id: Sower.Repo.get_org_id()
-         }
+    case %Subscription{org_id: Sower.Repo.get_org_id()}
          |> Subscription.changeset(attrs)
-         |> Repo.insert() do
+         |> Repo.insert(
+           on_conflict: {:replace, [:updated_at]},
+           conflict_target: [:agent_id, :org_id, :seed_name, :seed_type],
+           returning: true
+         ) do
       {:ok, sub} -> {:ok, Repo.reload(sub)}
       err -> err
     end

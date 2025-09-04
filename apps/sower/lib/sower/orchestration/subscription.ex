@@ -26,7 +26,7 @@ defmodule Sower.Orchestration.Subscription do
   def changeset(subscription, attrs) do
     subscription
     |> cast(attrs, [:agent_id, :seed_name, :seed_type])
-    |> unique_constraint([:agent_id, :org_id])
+    |> unique_constraint([:agent_id, :org_id, :seed_name, :seed_type])
   end
 
   defmodule Rule do
