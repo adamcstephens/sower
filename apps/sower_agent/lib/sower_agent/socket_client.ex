@@ -38,10 +38,14 @@ defmodule SowerAgent.SocketClient do
     {:reply, {:ok, :pong}, socket}
   end
 
-  def handle_call({:subscription_upgrade, sid}, _from, socket) do
+  def handle_call(
+        {:deployment_request, subscription = %SowerClient.Schemas.Orchestration.Subscription{}},
+        _from,
+        socket
+      ) do
     with {:ok, upgrade_request} <-
-           SowerClient.Schemas.Orchestration.UpgradeRequest.new(%{
-             subscription_sids: [sid]
+           SowerClient.Schemas.Orchestration.DeploymentRequest.new(%{
+             subscription_sids: [subscription.sid]
            }),
          {:ok, ref} <-
            push(socket, private_channel(), "subscription:upgrade", upgrade_request),
@@ -53,7 +57,7 @@ defmodule SowerAgent.SocketClient do
         Logger.error(
           msg: "Failed to request subscription upgrade",
           error: error,
-          sid: sid
+          subscription_sid: subscription.sid
         )
 
         {:reply, {:error, error}, socket}
@@ -61,7 +65,7 @@ defmodule SowerAgent.SocketClient do
       :error ->
         Logger.error(
           msg: "Failed to request subscription upgrade with unknown error",
-          sid: sid
+          subscription_sid: subscription.sid
         )
 
         {:reply, :error, socket}

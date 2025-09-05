@@ -1,8 +1,8 @@
-defmodule SowerClient.Schemas.Orchestration.UpgradeRequest do
+defmodule SowerClient.Schemas.Orchestration.DeploymentRequest do
   use SowerClient.Schema
 
   OpenApiSpex.schema(%{
-    title: "SubscriptionUpgradeRequest",
+    title: "DeploymentRequest",
     type: :object,
     properties: %{
       request_id: %Schema{
@@ -14,12 +14,11 @@ defmodule SowerClient.Schemas.Orchestration.UpgradeRequest do
         type: :array,
         items: %Schema{
           type: :string,
-          description: "subscription sid allocated by Sower",
-          readOnly: true
+          description: "subscription sid allocated by Sower"
         }
       }
     },
-    required: ~w(subscription_sids)a
+    required: [:subscription_sids]
   })
 
   @doc """

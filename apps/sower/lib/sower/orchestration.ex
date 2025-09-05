@@ -8,6 +8,8 @@ defmodule Sower.Orchestration do
 
   alias Sower.Orchestration.Agent
 
+  require Logger
+
   @doc """
   Returns the list of agents.
 
@@ -220,14 +222,12 @@ defmodule Sower.Orchestration do
   def get_subscription_sid(sid) do
     Subscription
     |> Repo.get_by(sid: sid)
-    |> Repo.preload(:seed)
   end
 
   def get_subscription_sids(sids) when is_list(sids) and length(sids) > 0 do
     query = from sub in Subscription, where: sub.sid in ^sids
 
     Repo.all(query)
-    |> Repo.preload(:seed)
   end
 
   def get_subscription_sids(sids) when is_list(sids) and length(sids) == 0 do
@@ -309,6 +309,10 @@ defmodule Sower.Orchestration do
   end
 
   alias Sower.Orchestration.Deployment
+
+  def match_seed(%Subscription{} = subscription) do
+    Sower.Seed.latest(subscription.seed_name, subscription.seed_type)
+  end
 
   @doc """
   Returns the list of deployments.
@@ -409,26 +413,25 @@ defmodule Sower.Orchestration do
   @doc """
   Request and create a deployment for a subscription
   """
-  def request_subscription_deployment(
-        %SowerClient.Schemas.Orchestration.UpgradeRequest{} = upgrade
-      ) do
-    with subs when subs != [] <- get_subscription_sids(upgrade.subscription_sids),
-         seed_artifacts <-
-           subs |> Enum.map(&Sower.Seed.latest_artifact(&1.seed)) |> Enum.map(& &1.artifact),
+  def request_deployment(%SowerClient.Schemas.Orchestration.DeploymentRequest{} = deploy) do
+    with subs when subs != [] <- get_subscription_sids(deploy.subscription_sids),
+         seeds <-
+           subs |> Enum.map(&match_seed/1),
          {:ok, deploy} <-
            create_deployment(%{
-             artifacts: seed_artifacts,
+             seeds: seeds,
              subscriptions: subs
            }) do
       {:ok,
        %SowerClient.Schemas.Orchestration.Deployment{
-         request_id: upgrade.request_id,
+         request_id: deploy.request_id,
          subscription_sids: Enum.map(subs, & &1.sid),
          sid: deploy.sid
        }}
     else
       {:error, _} = err ->
-        err
+        Logger.error(msg: "Failed to return deployment", error: IO.inspect(err))
+        {:error, :unknown_error}
 
       nil ->
         {:error, :subscription_not_found}

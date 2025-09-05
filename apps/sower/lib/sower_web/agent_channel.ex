@@ -141,8 +141,8 @@ defmodule SowerWeb.AgentChannel do
   end
 
   def handle_in("subscription:upgrade", payload, socket) do
-    with {:ok, req_sub} <- SowerClient.Schemas.Orchestration.UpgradeRequest.cast(payload),
-         {:ok, deploy} <- Sower.Orchestration.request_subscription_deployment(req_sub) do
+    with {:ok, req_sub} <- SowerClient.Schemas.Orchestration.DeploymentRequest.cast(payload),
+         {:ok, deploy} <- Sower.Orchestration.request_deployment(req_sub) do
       {:reply, {:ok, deploy}, socket}
     else
       {:error, error} ->
