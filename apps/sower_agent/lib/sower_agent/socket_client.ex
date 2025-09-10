@@ -43,33 +43,14 @@ defmodule SowerAgent.SocketClient do
         _from,
         socket
       ) do
-    with {:ok, upgrade_request} <-
-           SowerClient.Schemas.Orchestration.DeploymentRequest.new(%{
-             subscription_sids: [subscription.sid]
-           }),
-         {:ok, ref} <-
-           push(socket, private_channel(), "subscription:upgrade", upgrade_request),
-         {:ok, response} <- await_reply(ref),
-         {:ok, deployment} <- SowerClient.Schemas.Orchestration.Deployment.cast(response) do
-      {:reply, {:ok, deployment}, socket}
-    else
-      {:error, error} ->
-        Logger.error(
-          msg: "Failed to request subscription upgrade",
-          error: error,
-          subscription_sid: subscription.sid
-        )
+    {:ok, upgrade_request} =
+      SowerClient.Schemas.Orchestration.DeploymentRequest.new(%{
+        subscription_sids: [subscription.sid]
+      })
 
-        {:reply, {:error, error}, socket}
+    {:ok, ref} = push(socket, private_channel(), "subscription:upgrade", upgrade_request)
 
-      :error ->
-        Logger.error(
-          msg: "Failed to request subscription upgrade with unknown error",
-          subscription_sid: subscription.sid
-        )
-
-        {:reply, :error, socket}
-    end
+    {:reply, :ok, Map.put(socket, :upgrade_ref, ref)}
   end
 
   def handle_call({event, params}, _from, socket) do
@@ -230,6 +211,31 @@ defmodule SowerAgent.SocketClient do
       socket
       |> join("agent:#{agent_sid}", %{local_sid: storage.local_sid})
       |> Map.put(:assigns, Map.delete(socket.assigns, :hello_ref))
+
+    {:ok, socket}
+  end
+
+  def handle_reply(ref, response, %{upgrade_ref: ref} = socket) do
+    {:ok, response} = response
+
+    case SowerClient.Schemas.Orchestration.Deployment.cast(response) do
+      {:ok, deployment} ->
+        dbg(deployment)
+
+        Logger.debug(
+          msg: "Received deployment",
+          request_id: deployment.request_id,
+          deployment_sid: deployment.sid
+        )
+
+      # deployment.seeds
+      # |> Enum.each(fn seed ->
+      #   {_, 0} = System.cmd("nix-store", ["--realize", seed.artifact], into: IO.stream())
+      # end)
+
+      {:error, error} ->
+        Logger.error(msg: "Error handling deployment", error: error)
+    end
 
     {:ok, socket}
   end
