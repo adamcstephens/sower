@@ -78,29 +78,25 @@ defmodule Nix.Profile do
         end
       end
 
-      def profile_generations(profile \\ __MODULE__.profile_path()) do
-        profile
-        |> profiles()
-        |> Enum.map(&unquote(__MODULE__).Generation.cast!/1)
-      end
-
       def profile(profile \\ __MODULE__.profile_path()) do
         with {:ok, latest} <- follow_link(profile),
              {:ok, %File.Stat{ctime: ctime}} <- File.lstat(profile),
              {:ok, created} <- erl_local_to_utc(ctime) do
           {:ok,
-           %{
+           unquote(__MODULE__).Generation.cast!(%{
              created: created,
              path: latest,
              link: profile
-           }}
+           })}
         else
           {:error, _} = err -> err
         end
       end
 
       def profile!(profile \\ __MODULE__.profile_path()) do
-        {:ok, profile = profile(profile)}
+        {:ok, profile} = profile(profile)
+
+        profile
       end
 
       def profiles(profile \\ __MODULE__.profile_path()) do
@@ -113,7 +109,8 @@ defmodule Nix.Profile do
         |> Enum.map(&Path.expand(&1, parent))
         |> Enum.sort()
         |> Enum.reverse()
-        |> Enum.map(&profile/1)
+        |> Enum.map(&profile!/1)
+        |> dbg()
       end
 
       defp follow_link(path) do
