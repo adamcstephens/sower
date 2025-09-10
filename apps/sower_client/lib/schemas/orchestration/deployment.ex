@@ -23,6 +23,10 @@ defmodule SowerClient.Schemas.Orchestration.Deployment do
           readOnly: true
         }
       },
+      seeds: %Schema{
+        type: :array,
+        items: SowerClient.Schemas.Seed.schema()
+      },
       deployed_at: %Schema{
         type: :string,
         format: :date_time,

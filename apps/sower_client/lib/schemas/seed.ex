@@ -24,12 +24,12 @@ defmodule SowerClient.Schemas.Seed do
       },
       artifact: %Schema{
         type: :string,
-        description: "Store path of the seed"
+        description: "Artifact of the seed"
       }
     },
-    required: ~w(name seed_type artifact)a,
+    required: [:name, :seed_type, :artifact],
     example: %{
-      "id" => "example4ser3adju75ddusbr",
+      "sid" => "example4ser3adju75ddusbr",
       "name" => "myhost",
       "seed_type" => "nixos",
       "artifact" => "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-nixos"

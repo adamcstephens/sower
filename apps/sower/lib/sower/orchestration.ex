@@ -413,8 +413,8 @@ defmodule Sower.Orchestration do
   @doc """
   Request and create a deployment for a subscription
   """
-  def request_deployment(%SowerClient.Schemas.Orchestration.DeploymentRequest{} = deploy) do
-    with subs when subs != [] <- get_subscription_sids(deploy.subscription_sids),
+  def request_deployment(%SowerClient.Schemas.Orchestration.DeploymentRequest{} = request) do
+    with subs when subs != [] <- get_subscription_sids(request.subscription_sids),
          seeds <-
            subs |> Enum.map(&match_seed/1),
          {:ok, deploy} <-
@@ -424,9 +424,10 @@ defmodule Sower.Orchestration do
            }) do
       {:ok,
        %SowerClient.Schemas.Orchestration.Deployment{
-         request_id: deploy.request_id,
+         request_id: request.request_id,
          subscription_sids: Enum.map(subs, & &1.sid),
-         sid: deploy.sid
+         sid: deploy.sid,
+         seeds: seeds
        }}
     else
       {:error, _} = err ->

@@ -2,7 +2,7 @@ defmodule Sower.Orchestration.SeedDeployment do
   use Sower.Schema
   import Ecto.Changeset
 
-  schema "seed_deployments" do
+  schema "seed_deployment" do
     field :seed_id, :id
     field :deployment_id, :id
 
