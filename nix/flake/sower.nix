@@ -18,6 +18,7 @@
 
   config = {
     sower.jobs = {
+      packages.enable = lib.mkDefault true;
       services.enable = lib.mkDefault true;
     };
   };

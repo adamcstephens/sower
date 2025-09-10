@@ -49,43 +49,42 @@
             devShells.default = pkgs.mkShell {
               inputsFrom = [ config.process-compose.devServices.services.outputs.devShell ];
 
-              packages =
-                [
-                  # elixir
-                  beamPackages.erlang
-                  beamPackages.elixir
-                  beamPackages.elixir-ls
-                  pkgs.next-ls
+              packages = [
+                # elixir
+                beamPackages.erlang
+                beamPackages.elixir
+                beamPackages.elixir-ls
+                pkgs.next-ls
 
-                  # elixir deps build deps
-                  pkgs.cargo
+                # elixir deps build deps
+                pkgs.cargo
 
-                  # go
-                  pkgs.go
-                  pkgs.delve
-                  pkgs.gci
-                  pkgs.golangci-lint
-                  pkgs.gopls
-                  pkgs.oapi-codegen
+                # go
+                pkgs.go
+                pkgs.delve
+                pkgs.gci
+                pkgs.golangci-lint
+                pkgs.gopls
+                pkgs.oapi-codegen
 
-                  pkgs.attic-client
-                  self'.packages.seed-ci
-                  pkgs.nushell
+                pkgs.attic-client
+                self'.packages.seed-ci
+                pkgs.nushell
 
-                  pkgs.just
-                  pkgs.mix2nix
-                  pkgs.nix-eval-jobs
-                  pkgs.nvfetcher
-                  pkgs.process-compose
-                  config.process-compose.devServices.services.postgres.postgres1.package
-                  config.process-compose.devServices.outputs.package
-                  pkgs.sd-switch
-                  pkgs.entr
-                ]
-                ++ lib.optionals pkgs.stdenv.isLinux [
-                  # elixir
-                  pkgs.inotify-tools
-                ];
+                pkgs.just
+                pkgs.mix2nix
+                pkgs.nix-eval-jobs
+                pkgs.nvfetcher
+                pkgs.process-compose
+                config.process-compose.devServices.services.postgres.postgres1.package
+                config.process-compose.devServices.outputs.package
+                pkgs.sd-switch
+                pkgs.entr
+              ]
+              ++ lib.optionals pkgs.stdenv.isLinux [
+                # elixir
+                pkgs.inotify-tools
+              ];
 
               shellHook = ''
                 export PC_CONFIG_FILES=${config.process-compose.devServices.outputs.settingsFile}

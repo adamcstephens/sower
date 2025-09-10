@@ -38,6 +38,7 @@ type config struct {
 type builderCmd struct {
 	Eval  *builderEvalCmd  `arg:"subcommand:eval"`
 	Build *builderBuildCmd `arg:"subcommand:build"`
+	Push  *builderPushCmd  `arg:"subcommand:push"`
 }
 
 type builderBuildCmd struct {
@@ -46,6 +47,11 @@ type builderBuildCmd struct {
 }
 
 type builderEvalCmd struct {
+	Workers int    `arg:"--workers,-w"`
+	System  string `arg:"--system"`
+}
+
+type builderPushCmd struct {
 	Workers int    `arg:"--workers,-w"`
 	System  string `arg:"--system"`
 }
@@ -232,6 +238,12 @@ func buildCommand(cfg config) {
 		}
 	case cfg.Builder.Eval != nil:
 		err := builder.Eval(cfg.Builder.Eval.Workers, cfg.Builder.Eval.System)
+		if err != nil {
+			slog.Error("Failed to eval", "error", err)
+			os.Exit(1)
+		}
+	case cfg.Builder.Push != nil:
+		err := builder.Push(cfg.Builder.Push.Workers, cfg.Builder.Push.System)
 		if err != nil {
 			slog.Error("Failed to eval", "error", err)
 			os.Exit(1)

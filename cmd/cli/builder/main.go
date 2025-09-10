@@ -5,8 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"os"
 	"os/exec"
+	"strings"
 
 	"codeberg.org/adamcstephens/sower/cmd/cli/commands"
 	"github.com/golang-queue/queue"
@@ -25,20 +28,11 @@ type evalResult struct {
 
 type inputDrv map[string][]string
 
-// func All() error {
-// 	err := Eval()
-// 	if err != nil {
-// 		return fmt.Errorf("failed to build: %v", err)
-// 	}
-//
-// 	return nil
-// }
-
-func Push(workers int) error {
+func Push(workers int, system string) error {
 	q := queue.NewPool(int64(workers))
 	defer q.Release()
 
-	err := evalJobs(workers, "", q, pushResult)
+	err := evalJobs(workers, system, q, pushResult)
 	if err != nil {
 		return err
 	}
@@ -161,9 +155,67 @@ func printResult(result evalResult) error {
 }
 
 func pushResult(result evalResult) error {
-	err := commands.SimpleRun(exec.Command("nix", "build", fmt.Sprintf("%v^*", result.DrvPath)))
+	outputs, err := commands.Run(exec.Command("nix", "build", "--print-out-paths", fmt.Sprintf("%v^*", result.DrvPath)))
 	if err != nil {
 		return fmt.Errorf("failed to build: %v", err)
+	}
+
+	output_list := strings.Split(outputs, "\n")
+
+	slog.Debug("Build result", "outputs", output_list)
+
+	_ = printResult(result)
+
+	attic_cache := os.Getenv("ATTIC_CACHE")
+	if attic_cache == "" {
+		slog.Error("Must set ATTIC_CACHE to name of pre-configured cache. e.g. myserver:mycache")
+		os.Exit(1)
+	}
+
+	attic_jobs := os.Getenv("ATTIC_JOBS")
+	if attic_jobs == "" {
+		attic_jobs = "20"
+	}
+
+	pushCmd := exec.Command("attic", "push", "--stdin", "--ignore-upstream-cache-filter", "--jobs", attic_jobs, attic_cache)
+	stdout, err := pushCmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("error creating stdout: %v", err)
+	}
+	stderr, err := pushCmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("error creating stderr: %v", err)
+	}
+	stdin, _ := pushCmd.StdinPipe()
+
+	err = pushCmd.Start()
+	if err != nil {
+		return fmt.Errorf("failed to start command: %v", err)
+	}
+
+	var ioErr error
+	go func() {
+		_, ioErr = io.Copy(os.Stdout, stdout) // Redirect stdout to terminal's stdout
+		if ioErr != nil {
+			slog.Error("failed to configure stdout")
+		}
+	}()
+	go func() {
+		_, ioErr = io.Copy(os.Stderr, stderr) // Redirect stderr to terminal's stderr
+		if ioErr != nil {
+			slog.Error("failed to configure stderr")
+		}
+	}()
+
+	_, err = stdin.Write([]byte(outputs))
+	if err != nil {
+		return fmt.Errorf("failed to send stdin to push: %v", err)
+	}
+	stdin.Close()
+
+	err = pushCmd.Wait()
+	if err != nil {
+		return fmt.Errorf("failed to wait for run command: %v", err)
 	}
 
 	return nil
