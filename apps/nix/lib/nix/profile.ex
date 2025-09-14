@@ -1,42 +1,52 @@
 defmodule Nix.Profile do
-  use Xema
-
-  @derive Jason.Encoder
-
-  xema_struct do
-    field :type, atom()
-    field :current, __MODULE__.Generation
-    field :latest, __MODULE__.Generation
-    field :previous, :list, items: __MODULE__.Generation
-
-    required [:type, :current]
-  end
-
   @doc "Path to the currently running version of the profile"
   @callback current_path() :: String.t()
 
   @doc "Calculate path to the profile"
   @callback profile_path() :: String.t()
 
-  @doc "read the type's state"
-  @callback get_state() :: {:ok, __MODULE__} | {:error, :string | atom()}
+  @doc "set tags"
+  @callback tags() :: map()
 
-  defmacro __using__(opts) do
-    type = Keyword.fetch!(opts, :type)
+  defmacro __using__(_opts) do
+    caller = __CALLER__.module
 
     quote do
-      @behaviour unquote(__MODULE__)
+      use Xema
 
-      @impl unquote(__MODULE__)
+      @derive Jason.Encoder
+
+      xema_struct do
+        field :current, Nix.Profile.Generation
+        field :latest, Nix.Profile.Generation
+        field :profiles, :list, items: Nix.Profile.Generation
+        field :tags, :map
+
+        required [:current]
+      end
+
+      @behaviour Nix.Profile
+      import Nix.Profile
+
+      @impl Nix.Profile
+      def current_path() do
+        profile_path()
+      end
+
+      @impl Nix.Profile
+      def tags() do
+        %{}
+      end
+
       def get_state() do
-        case path_to_generation() do
+        case profile() do
           {:ok, latest_generation} ->
-            unquote(__MODULE__).cast(%{
-              type: unquote(type),
+            %unquote(caller){
               current: profile!(current_path()),
               latest: latest_generation,
-              previous: profiles()
-            })
+              profiles: profiles(),
+              tags: tags()
+            }
 
           {:error, _} = err ->
             err
@@ -44,62 +54,31 @@ defmodule Nix.Profile do
       end
 
       def current_generation!() do
-        current_path() |> path_to_generation!()
+        current_path() |> profile!()
       end
 
-      def path_to_generation(profile \\ __MODULE__.profile_path()) do
-        case profile(profile) do
-          {:ok, profile} -> unquote(__MODULE__).Generation.cast(profile)
-          {:error, _} = err -> err
-        end
-      end
-
-      def path_to_generation!(profile) do
-        {:ok, generation} = path_to_generation(profile)
-
-        generation
-      end
-
-      # avoid needing an entire tz library
-      defp erl_local_to_utc(erl_time) do
-        with {:ok, ctime} <- NaiveDateTime.from_erl(erl_time),
-             {tz, 0} <-
-               System.cmd("date", ["+%z"]),
-             tz <-
-               tz
-               |> String.trim()
-               |> String.slice(0..2)
-               |> String.to_integer(),
-             {:ok, ctime} <- DateTime.from_naive(ctime, "Etc/UTC") do
-          {:ok, DateTime.add(ctime, tz * -1, :hour)}
-        else
-          {_, x} when is_integer(x) -> {:error, :date_cmd_failure}
-          _ -> {:error, :time_conversion_failure}
-        end
-      end
-
-      def profile(profile \\ __MODULE__.profile_path()) do
+      def profile(profile \\ profile_path()) do
         with {:ok, latest} <- follow_link(profile),
              {:ok, %File.Stat{ctime: ctime}} <- File.lstat(profile),
              {:ok, created} <- erl_local_to_utc(ctime) do
           {:ok,
-           unquote(__MODULE__).Generation.cast!(%{
+           %Nix.Profile.Generation{
              created: created,
              path: latest,
              link: profile
-           })}
+           }}
         else
           {:error, _} = err -> err
         end
       end
 
-      def profile!(profile \\ __MODULE__.profile_path()) do
+      def profile!(profile \\ profile_path()) do
         {:ok, profile} = profile(profile)
 
         profile
       end
 
-      def profiles(profile \\ __MODULE__.profile_path()) do
+      def profiles(profile \\ profile_path()) do
         parent = Path.dirname(profile)
         profile_name = Path.basename(profile)
 
@@ -110,26 +89,45 @@ defmodule Nix.Profile do
         |> Enum.sort()
         |> Enum.reverse()
         |> Enum.map(&profile!/1)
-        |> dbg()
       end
 
-      defp follow_link(path) do
-        parent = Path.dirname(path)
+      defoverridable(current_path: 0, tags: 0)
+    end
+  end
 
-        case File.read_link(path) do
-          {:ok, source} ->
-            source = Path.absname(source, parent)
+  # avoid needing an entire tz library
+  def erl_local_to_utc(erl_time) do
+    with {:ok, ctime} <- NaiveDateTime.from_erl(erl_time),
+         {tz, 0} <-
+           System.cmd("date", ["+%z"]),
+         tz <-
+           tz
+           |> String.trim()
+           |> String.slice(0..2)
+           |> String.to_integer(),
+         {:ok, ctime} <- DateTime.from_naive(ctime, "Etc/UTC") do
+      {:ok, DateTime.add(ctime, tz * -1, :hour)}
+    else
+      {_, x} when is_integer(x) -> {:error, :date_cmd_failure}
+      _ -> {:error, :time_conversion_failure}
+    end
+  end
 
-            case source |> Path.absname() |> File.lstat() do
-              {:ok, %{type: :symlink}} -> follow_link(source)
-              {:ok, _} -> {:ok, source}
-              {:error, _} = err -> err
-            end
+  def follow_link(path) do
+    parent = Path.dirname(path)
 
-          {:error, _} = err ->
-            err
+    case File.read_link(path) do
+      {:ok, source} ->
+        source = Path.absname(source, parent)
+
+        case source |> Path.absname() |> File.lstat() do
+          {:ok, %{type: :symlink}} -> follow_link(source)
+          {:ok, _} -> {:ok, source}
+          {:error, _} = err -> err
         end
-      end
+
+      {:error, _} = err ->
+        err
     end
   end
 end

@@ -1,5 +1,5 @@
 defmodule Nix.NixOS do
-  use Nix.Profile, type: :nixos
+  use Nix.Profile
 
   @impl Nix.Profile
   def current_path() do
