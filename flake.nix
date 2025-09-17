@@ -62,7 +62,7 @@
                 # go
                 pkgs.go
                 pkgs.delve
-                pkgs.gci
+                # broken 2025-09-19 pkgs.gci
                 pkgs.golangci-lint
                 pkgs.gopls
                 pkgs.oapi-codegen
