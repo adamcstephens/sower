@@ -48,7 +48,7 @@ defmodule SowerAgent.SocketClient do
         subscription_sids: [subscription.sid]
       })
 
-    {:ok, ref} = push(socket, private_channel(), "subscription:upgrade", upgrade_request)
+    {:ok, ref} = push(socket, private_channel(), "deployment:request", upgrade_request)
 
     {:reply, :ok, Map.put(socket, :upgrade_ref, ref)}
   end

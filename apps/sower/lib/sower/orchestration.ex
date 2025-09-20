@@ -343,6 +343,11 @@ defmodule Sower.Orchestration do
   """
   def get_deployment!(id), do: Repo.get!(Deployment, id)
 
+  def get_deployment_sid(sid) do
+    Deployment
+    |> Repo.get_by(sid: sid)
+  end
+
   @doc """
   Creates a deployment.
 
@@ -377,6 +382,7 @@ defmodule Sower.Orchestration do
   """
   def update_deployment(%Deployment{} = deployment, attrs) do
     deployment
+    |> Repo.preload([:seeds, :subscriptions])
     |> Deployment.changeset(attrs)
     |> Repo.update()
   end
@@ -436,6 +442,16 @@ defmodule Sower.Orchestration do
 
       nil ->
         {:error, :subscription_not_found}
+    end
+  end
+
+  def record_deployment(%SowerClient.Schemas.Orchestration.DeploymentResult{} = result) do
+    case get_deployment_sid(result.deployment_sid) do
+      nil ->
+        {:error, :deployment_not_found}
+
+      deploy ->
+        update_deployment(deploy, %{deployed_at: result.deployed_at})
     end
   end
 end

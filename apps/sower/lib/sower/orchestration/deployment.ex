@@ -25,8 +25,8 @@ defmodule Sower.Orchestration.Deployment do
   def changeset(deployment, attrs) do
     deployment
     |> cast(attrs, [:deployed_at])
-    |> put_assoc(:seeds, attrs.seeds)
-    |> put_assoc(:subscriptions, attrs.subscriptions)
+    |> put_assoc(:seeds, Map.get(attrs, :seeds, deployment.seeds))
+    |> put_assoc(:subscriptions, Map.get(attrs, :subscriptions, deployment.subscriptions))
     |> validate_required([])
   end
 end
