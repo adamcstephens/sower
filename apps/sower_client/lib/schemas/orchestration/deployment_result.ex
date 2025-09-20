@@ -13,9 +13,10 @@ defmodule SowerClient.Schemas.Orchestration.DeploymentResult do
         type: :string,
         description: "deployment sid which is being reported on"
       },
-      success: %Schema{
-        type: :boolean,
-        description: "result of the deployment"
+      result: %Schema{
+        type: :string,
+        description: "result of the deployment",
+        enum: [:success, :failure, :partial]
       },
       output: %Schema{
         type: :array,
@@ -32,6 +33,6 @@ defmodule SowerClient.Schemas.Orchestration.DeploymentResult do
         default: DateTime.from_unix!(0) |> DateTime.to_iso8601()
       }
     },
-    required: [:request_id, :deployment_sid, :success]
+    required: [:request_id, :deployment_sid, :result]
   })
 end

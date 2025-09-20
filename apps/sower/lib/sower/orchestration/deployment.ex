@@ -17,6 +17,7 @@ defmodule Sower.Orchestration.Deployment do
     many_to_many :seeds, Sower.Seed, join_through: Orchestration.SeedDeployment
 
     field :deployed_at, :utc_datetime
+    field :result, Ecto.Enum, values: [:success, :failure, :partial]
 
     timestamps()
   end
@@ -24,7 +25,7 @@ defmodule Sower.Orchestration.Deployment do
   @doc false
   def changeset(deployment, attrs) do
     deployment
-    |> cast(attrs, [:deployed_at])
+    |> cast(attrs, [:deployed_at, :result])
     |> put_assoc(:seeds, Map.get(attrs, :seeds, deployment.seeds))
     |> put_assoc(:subscriptions, Map.get(attrs, :subscriptions, deployment.subscriptions))
     |> validate_required([])

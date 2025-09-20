@@ -451,7 +451,7 @@ defmodule Sower.Orchestration do
         {:error, :deployment_not_found}
 
       deploy ->
-        update_deployment(deploy, %{deployed_at: result.deployed_at})
+        update_deployment(deploy, %{deployed_at: result.deployed_at, result: result.result})
     end
   end
 end

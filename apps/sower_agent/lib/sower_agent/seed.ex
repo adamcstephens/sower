@@ -18,6 +18,8 @@ defmodule SowerAgent.Seed do
           Logger.error(msg: "Failed to activate", output: output, return_code: code)
           {:error, code}
       end
+    else
+      {:ok, ["noop"]}
     end
   end
 

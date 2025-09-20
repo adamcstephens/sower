@@ -7,6 +7,7 @@ defmodule Sower.Repo.Migrations.CreateDeployments do
       add :org_id, references(:organizations, column: :org_id, type: :uuid), null: false
 
       add :deployed_at, :utc_datetime
+      add :result, :string
 
       timestamps()
     end
