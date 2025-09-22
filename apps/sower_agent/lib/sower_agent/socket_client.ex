@@ -216,6 +216,8 @@ defmodule SowerAgent.SocketClient do
   end
 
   def handle_reply(ref, response, %{upgrade_ref: ref} = socket) do
+    socket = Map.delete(socket, :upgrade_ref)
+
     {:ok, response} = response
 
     case SowerClient.Schemas.Orchestration.Deployment.cast(response) do
