@@ -21,6 +21,7 @@ defmodule SowerWeb do
 
   def router do
     quote do
+      # explicit path management
       use Phoenix.Router, helpers: true
 
       # Import common connection and controller functions to use in pipelines
@@ -38,9 +39,7 @@ defmodule SowerWeb do
 
   def controller do
     quote do
-      use Phoenix.Controller,
-        formats: [:html, :json],
-        layouts: [html: SowerWeb.Layouts]
+      use Phoenix.Controller, formats: [:html, :json]
 
       import Plug.Conn
       import SowerWeb.Gettext
@@ -51,8 +50,7 @@ defmodule SowerWeb do
 
   def live_view do
     quote do
-      use Phoenix.LiveView,
-        layout: {SowerWeb.Layouts, :app}
+      use Phoenix.LiveView
 
       unquote(html_helpers())
     end
@@ -87,8 +85,8 @@ defmodule SowerWeb do
       import SowerWeb.CoreComponents
       import SowerWeb.Gettext
 
-      # Shortcut for generating JS commands
       alias Phoenix.LiveView.JS
+      alias SowerWeb.Layouts
 
       # Routes generation with the ~p sigil
       unquote(verified_routes())
@@ -105,7 +103,7 @@ defmodule SowerWeb do
   end
 
   @doc """
-  When used, dispatch to the appropriate controller/view/etc.
+  When used, dispatch to the appropriate controller/live_view/etc.
   """
   defmacro __using__(which) when is_atom(which) do
     apply(__MODULE__, which, [])
