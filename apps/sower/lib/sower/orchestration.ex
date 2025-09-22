@@ -343,6 +343,11 @@ defmodule Sower.Orchestration do
   """
   def get_deployment!(id), do: Repo.get!(Deployment, id)
 
+  def get_deployment_sid!(sid) do
+    Deployment
+    |> Repo.get_by!(sid: sid)
+  end
+
   def get_deployment_sid(sid) do
     Deployment
     |> Repo.get_by(sid: sid)
