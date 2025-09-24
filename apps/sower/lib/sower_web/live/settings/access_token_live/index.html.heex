@@ -1,52 +1,54 @@
-<.header>
-  My Tokens
-  <:actions>
-    <.link patch={~p"/settings/access-tokens/new"}>
-      <.button>New Token</.button>
-    </.link>
-  </:actions>
-</.header>
+<Layouts.app flash={@flash} current_user={@current_user}>
+  <.header>
+    My Tokens
+    <:actions>
+      <.link patch={~p"/settings/access-tokens/new"}>
+        <.button>New Token</.button>
+      </.link>
+    </:actions>
+  </.header>
 
-<.table
-  id="access-tokens"
-  rows={@streams.access_tokens}
-  row_click={
-    fn {_id, access_token} -> JS.navigate(~p"/settings/access-tokens/#{access_token}") end
-  }
->
-  <:action :let={{_id, access_token}}>
-    <div class="sr-only">
-      <.link navigate={~p"/settings/access-tokens/#{access_token}"}>Show</.link>
-    </div>
-    <.link patch={~p"/settings/access-tokens/#{access_token}/edit"}>Edit</.link>
-  </:action>
-  <:action :let={{id, access_token}}>
-    <.link
-      phx-click={JS.push("delete", value: %{id: access_token.id}) |> hide("##{id}")}
-      data-confirm="Are you sure?"
-    >
-      Delete
-    </.link>
-  </:action>
+  <.table
+    id="access-tokens"
+    rows={@streams.access_tokens}
+    row_click={
+      fn {_id, access_token} -> JS.navigate(~p"/settings/access-tokens/#{access_token}") end
+    }
+  >
+    <:action :let={{_id, access_token}}>
+      <div class="sr-only">
+        <.link navigate={~p"/settings/access-tokens/#{access_token}"}>Show</.link>
+      </div>
+      <.link patch={~p"/settings/access-tokens/#{access_token}/edit"}>Edit</.link>
+    </:action>
+    <:action :let={{id, access_token}}>
+      <.link
+        phx-click={JS.push("delete", value: %{id: access_token.id}) |> hide("##{id}")}
+        data-confirm="Are you sure?"
+      >
+        Delete
+      </.link>
+    </:action>
 
-  <:col :let={{_id, access_token}} label="Description">{access_token.description}</:col>
-  <:col :let={{_id, access_token}} label="Token">sower_{access_token.sid}_...</:col>
-  <:col :let={{_id, access_token}} label="Expires">{access_token.expires_at}</:col>
-</.table>
+    <:col :let={{_id, access_token}} label="Description">{access_token.description}</:col>
+    <:col :let={{_id, access_token}} label="Token">sower_{access_token.sid}_...</:col>
+    <:col :let={{_id, access_token}} label="Expires">{access_token.expires_at}</:col>
+  </.table>
 
-<.modal
-  :if={@live_action in [:new, :edit]}
-  id="access_token-modal"
-  show
-  on_cancel={JS.patch(~p"/settings/access-tokens")}
->
-  <.live_component
-    module={SowerWeb.Settings.AccessTokenLive.FormComponent}
-    id={@access_token.id || :new}
-    title={@page_title}
-    action={@live_action}
-    access_token={@access_token}
-    current_user={@current_user}
-    patch={~p"/settings/access-tokens"}
-  />
-</.modal>
+  <.modal
+    :if={@live_action in [:new, :edit]}
+    id="access_token-modal"
+    show
+    on_cancel={JS.patch(~p"/settings/access-tokens")}
+  >
+    <.live_component
+      module={SowerWeb.Settings.AccessTokenLive.FormComponent}
+      id={@access_token.id || :new}
+      title={@page_title}
+      action={@live_action}
+      access_token={@access_token}
+      current_user={@current_user}
+      patch={~p"/settings/access-tokens"}
+    />
+  </.modal>
+</Layouts.app>

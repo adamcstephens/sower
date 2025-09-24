@@ -1,48 +1,50 @@
-<.header>
-  Listing Forges
-  <:actions>
-    <.link patch={~p"/forges/new"}>
-      <.button>New Connection</.button>
-    </.link>
-  </:actions>
-</.header>
+<Layouts.app flash={@flash} current_user={@current_user}>
+  <.header>
+    Listing Forges
+    <:actions>
+      <.link patch={~p"/forges/new"}>
+        <.button>New Connection</.button>
+      </.link>
+    </:actions>
+  </.header>
 
-<.table
-  id="forges"
-  rows={@streams.forges}
-  row_click={fn {_id, connection} -> JS.navigate(~p"/forges/#{connection}") end}
->
-  <:col :let={{_id, connection}} label="Name">{connection.name}</:col>
-  <:col :let={{_id, connection}} label="Url">{connection.url}</:col>
-  <:col :let={{_id, connection}} label="Type">{connection.type}</:col>
-  <:action :let={{_id, connection}}>
-    <div class="sr-only">
-      <.link navigate={~p"/forges/#{connection}"}>Show</.link>
-    </div>
-    <.link patch={~p"/forges/#{connection}/edit"}>Edit</.link>
-  </:action>
-  <:action :let={{id, connection}}>
-    <.link
-      phx-click={JS.push("delete", value: %{id: connection.id}) |> hide("##{id}")}
-      data-confirm="Are you sure?"
-    >
-      Delete
-    </.link>
-  </:action>
-</.table>
+  <.table
+    id="forges"
+    rows={@streams.forges}
+    row_click={fn {_id, connection} -> JS.navigate(~p"/forges/#{connection}") end}
+  >
+    <:col :let={{_id, connection}} label="Name">{connection.name}</:col>
+    <:col :let={{_id, connection}} label="Url">{connection.url}</:col>
+    <:col :let={{_id, connection}} label="Type">{connection.type}</:col>
+    <:action :let={{_id, connection}}>
+      <div class="sr-only">
+        <.link navigate={~p"/forges/#{connection}"}>Show</.link>
+      </div>
+      <.link patch={~p"/forges/#{connection}/edit"}>Edit</.link>
+    </:action>
+    <:action :let={{id, connection}}>
+      <.link
+        phx-click={JS.push("delete", value: %{id: connection.id}) |> hide("##{id}")}
+        data-confirm="Are you sure?"
+      >
+        Delete
+      </.link>
+    </:action>
+  </.table>
 
-<.modal
-  :if={@live_action in [:new, :edit]}
-  id="connection-modal"
-  show
-  on_cancel={JS.patch(~p"/forges")}
->
-  <.live_component
-    module={SowerWeb.Forge.ConnectionLive.FormComponent}
-    id={@connection.id || :new}
-    title={@page_title}
-    action={@live_action}
-    connection={@connection}
-    patch={~p"/forges"}
-  />
-</.modal>
+  <.modal
+    :if={@live_action in [:new, :edit]}
+    id="connection-modal"
+    show
+    on_cancel={JS.patch(~p"/forges")}
+  >
+    <.live_component
+      module={SowerWeb.Forge.ConnectionLive.FormComponent}
+      id={@connection.id || :new}
+      title={@page_title}
+      action={@live_action}
+      connection={@connection}
+      patch={~p"/forges"}
+    />
+  </.modal>
+</Layouts.app>

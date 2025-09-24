@@ -1,48 +1,50 @@
-<.header>
-  Agent: {@agent.name}
-  <:actions>
-    <.link patch={~p"/agents/#{@agent}/show/edit"} phx-click={JS.push_focus()}>
-      <.button>Edit agent</.button>
-    </.link>
-  </:actions>
-</.header>
+<Layouts.app flash={@flash} current_user={@current_user}>
+  <.header>
+    Agent: {@agent.name}
+    <:actions>
+      <.link patch={~p"/agents/#{@agent}/show/edit"} phx-click={JS.push_focus()}>
+        <.button>Edit agent</.button>
+      </.link>
+    </:actions>
+  </.header>
 
-<.list>
-  <:item title="Online">{@online}</:item>
-  <:item title="sid">{@agent.sid}</:item>
-  <:item title="Local sid">{@agent.local_sid}</:item>
-  <:item title="Current Generation">
-    <%= if Map.has_key?(@current_generation, :path) do %>
-      {@current_generation.path}
-    <% end %>
-  </:item>
-  <:item title="subscriptions">
-    <.table
-      id="subscriptions"
-      rows={@agent.subscriptions}
-      row_click={fn subscription -> JS.navigate(~p"/subscriptions/#{subscription.sid}") end}
-    >
-      <:col :let={subscription}>{subscription.seed_name}</:col>
-      <:col :let={subscription}>{subscription.seed_type}</:col>
-      <:col :let={subscription}>{subscription.updated_at}</:col>
-    </.table>
-  </:item>
-</.list>
+  <.list>
+    <:item title="Online">{@online}</:item>
+    <:item title="sid">{@agent.sid}</:item>
+    <:item title="Local sid">{@agent.local_sid}</:item>
+    <:item title="Current Generation">
+      <%= if Map.has_key?(@current_generation, :path) do %>
+        {@current_generation.path}
+      <% end %>
+    </:item>
+    <:item title="subscriptions">
+      <.table
+        id="subscriptions"
+        rows={@agent.subscriptions}
+        row_click={fn subscription -> JS.navigate(~p"/subscriptions/#{subscription.sid}") end}
+      >
+        <:col :let={subscription}>{subscription.seed_name}</:col>
+        <:col :let={subscription}>{subscription.seed_type}</:col>
+        <:col :let={subscription}>{subscription.updated_at}</:col>
+      </.table>
+    </:item>
+  </.list>
 
-<.back navigate={~p"/agents"}>Back to agents</.back>
+  <.back navigate={~p"/agents"}>Back to agents</.back>
 
-<.modal
-  :if={@live_action == :edit}
-  id="agent-modal"
-  show
-  on_cancel={JS.patch(~p"/agents/#{@agent}")}
->
-  <.live_component
-    module={SowerWeb.AgentLive.FormComponent}
-    id={@agent.id}
-    title={@page_title}
-    action={@live_action}
-    agent={@agent}
-    patch={~p"/agents/#{@agent}"}
-  />
-</.modal>
+  <.modal
+    :if={@live_action == :edit}
+    id="agent-modal"
+    show
+    on_cancel={JS.patch(~p"/agents/#{@agent}")}
+  >
+    <.live_component
+      module={SowerWeb.AgentLive.FormComponent}
+      id={@agent.id}
+      title={@page_title}
+      action={@live_action}
+      agent={@agent}
+      patch={~p"/agents/#{@agent}"}
+    />
+  </.modal>
+</Layouts.app>

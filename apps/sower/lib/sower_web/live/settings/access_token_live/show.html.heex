@@ -1,48 +1,50 @@
-<.header>
-  Token - {@access_token.sid}
-  <:actions>
-    <.link
-      patch={~p"/settings/access-tokens/#{@access_token}/show/edit"}
-      phx-click={JS.push_focus()}
-    >
-      <.button>Edit</.button>
-    </.link>
-    <.link
-      phx-click={JS.push("delete", value: %{id: @access_token.id})}
-      data-confirm="Are you sure?"
-    >
-      <.button class="bg-red-500 dark:bg-red-500">Delete</.button>
-    </.link>
-  </:actions>
-</.header>
+<Layouts.app flash={@flash} current_user={@current_user}>
+  <.header>
+    Token - {@access_token.sid}
+    <:actions>
+      <.link
+        patch={~p"/settings/access-tokens/#{@access_token}/show/edit"}
+        phx-click={JS.push_focus()}
+      >
+        <.button>Edit</.button>
+      </.link>
+      <.link
+        phx-click={JS.push("delete", value: %{id: @access_token.id})}
+        data-confirm="Are you sure?"
+      >
+        <.button class="bg-red-500 dark:bg-red-500">Delete</.button>
+      </.link>
+    </:actions>
+  </.header>
 
-<.flash_token flash={@flash} />
+  <.flash_token flash={@flash} />
 
-<.list>
-  <:item title="description">{@access_token.description}</:item>
-  <:item title="expiration date">{@access_token.expires_at}</:item>
-  <:item title="token">sower_{@access_token.sid}_...</:item>
-  <:item title="roles">
-    <.table id="permissions" rows={@access_token.permissions}>
-      <:col :let={permission}>{permission.role}</:col>
-    </.table>
-  </:item>
-</.list>
+  <.list>
+    <:item title="description">{@access_token.description}</:item>
+    <:item title="expiration date">{@access_token.expires_at}</:item>
+    <:item title="token">sower_{@access_token.sid}_...</:item>
+    <:item title="roles">
+      <.table id="permissions" rows={@access_token.permissions}>
+        <:col :let={permission}>{permission.role}</:col>
+      </.table>
+    </:item>
+  </.list>
 
-<.back navigate={~p"/settings/access-tokens"}>Back to access-tokens</.back>
+  <.back navigate={~p"/settings/access-tokens"}>Back to access-tokens</.back>
 
-<.modal
-  :if={@live_action == :edit}
-  id="access_token-modal"
-  show
-  on_cancel={JS.patch(~p"/settings/access-tokens/#{@access_token}")}
->
-  <.live_component
-    module={SowerWeb.Settings.AccessTokenLive.FormComponent}
-    id={@access_token.id}
-    title={@page_title}
-    action={@live_action}
-    access_token={@access_token}
-    patch={~p"/settings/access-tokens/#{@access_token}"}
-  />
-</.modal>
+  <.modal
+    :if={@live_action == :edit}
+    id="access_token-modal"
+    show
+    on_cancel={JS.patch(~p"/settings/access-tokens/#{@access_token}")}
+  >
+    <.live_component
+      module={SowerWeb.Settings.AccessTokenLive.FormComponent}
+      id={@access_token.id}
+      title={@page_title}
+      action={@live_action}
+      access_token={@access_token}
+      patch={~p"/settings/access-tokens/#{@access_token}"}
+    />
+  </.modal>
+</Layouts.app>

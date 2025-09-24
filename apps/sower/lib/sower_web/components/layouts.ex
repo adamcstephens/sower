@@ -14,16 +14,12 @@ defmodule SowerWeb.Layouts do
 
   ## Examples
 
-      <Layouts.app flash={@flash}>
+      <Layouts.app flash={@flash} current_user={@current_user}>
         <h1>Content</h1>
       </Layouts.app>
 
   """
   attr :flash, :map, required: true, doc: "the map of flash messages"
-
-  attr :current_scope, :map,
-    default: nil,
-    doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
 
   attr :current_user, :map, default: nil
 

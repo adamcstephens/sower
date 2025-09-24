@@ -1,13 +1,15 @@
-<.header>
-  {@seed.name}
-  <:subtitle>{@seed.seed_type}</:subtitle>
-</.header>
+<Layouts.app flash={@flash} current_user={@current_user}>
+  <.header>
+    {@seed.name}
+    <:subtitle>{@seed.seed_type}</:subtitle>
+  </.header>
 
-<.list>
-  <:item title="seed type">{@seed.seed_type}</:item>
-  <:item title="artifact">{@seed.artifact}</:item>
-  <:item title="created">{@seed.inserted_at}</:item>
-  <:item title="updated">{@seed.updated_at}</:item>
-</.list>
+  <.list>
+    <:item title="seed type">{@seed.seed_type}</:item>
+    <:item title="artifact">{@seed.artifact}</:item>
+    <:item title="created">{@seed.inserted_at}</:item>
+    <:item title="updated">{@seed.updated_at}</:item>
+  </.list>
 
-<.back navigate={~p"/seeds"}>Back to seeds</.back>
+  <.back navigate={~p"/seeds"}>Back to seeds</.back>
+</Layouts.app>

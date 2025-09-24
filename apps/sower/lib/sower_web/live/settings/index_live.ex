@@ -3,13 +3,15 @@ defmodule SowerWeb.Settings.IndexLive do
 
   def render(assigns) do
     ~H"""
-    <.header class="text-center">
-      Account Settings
-    </.header>
+    <Layouts.app flash={@flash} current_user={@current_user}>
+      <.header class="text-center">
+        Account Settings
+      </.header>
 
-    <div class="space-y-12 divide-y">
-      <.link navigate={~p"/settings/access-tokens"}>Access Tokens</.link>
-    </div>
+      <div class="space-y-12 divide-y">
+        <.link navigate={~p"/settings/access-tokens"}>Access Tokens</.link>
+      </div>
+    </Layouts.app>
     """
   end
 

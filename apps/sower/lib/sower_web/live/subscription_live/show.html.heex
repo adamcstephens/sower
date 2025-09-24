@@ -1,37 +1,39 @@
-<.header>
-  Subscription {@subscription.id}
-  <:subtitle>This is a subscription record from your database.</:subtitle>
-  <:actions>
-    <.link patch={~p"/subscriptions/#{@subscription}/show/edit"} phx-click={JS.push_focus()}>
-      <.button>Edit subscription</.button>
-    </.link>
-  </:actions>
-</.header>
+<Layouts.app flash={@flash} current_user={@current_user}>
+  <.header>
+    Subscription {@subscription.id}
+    <:subtitle>This is a subscription record from your database.</:subtitle>
+    <:actions>
+      <.link patch={~p"/subscriptions/#{@subscription}/show/edit"} phx-click={JS.push_focus()}>
+        <.button>Edit subscription</.button>
+      </.link>
+    </:actions>
+  </.header>
 
-<.list>
-  <:item title="Agent">
-    <.link patch={~p"/agents/#{@subscription.agent}"}>
-      {@subscription.agent.name}
-    </.link>
-  </:item>
-  <:item title="Seed Name">{@subscription.seed_name}</:item>
-  <:item title="Seed Type">{@subscription.seed_type}</:item>
-</.list>
+  <.list>
+    <:item title="Agent">
+      <.link patch={~p"/agents/#{@subscription.agent}"}>
+        {@subscription.agent.name}
+      </.link>
+    </:item>
+    <:item title="Seed Name">{@subscription.seed_name}</:item>
+    <:item title="Seed Type">{@subscription.seed_type}</:item>
+  </.list>
 
-<.back navigate={~p"/subscriptions"}>Back to subscriptions</.back>
+  <.back navigate={~p"/subscriptions"}>Back to subscriptions</.back>
 
-<.modal
-  :if={@live_action == :edit}
-  id="subscription-modal"
-  show
-  on_cancel={JS.patch(~p"/subscriptions/#{@subscription}")}
->
-  <.live_component
-    module={SowerWeb.SubscriptionLive.FormComponent}
-    id={@subscription.id}
-    title={@page_title}
-    action={@live_action}
-    subscription={@subscription}
-    patch={~p"/subscriptions/#{@subscription}"}
-  />
-</.modal>
+  <.modal
+    :if={@live_action == :edit}
+    id="subscription-modal"
+    show
+    on_cancel={JS.patch(~p"/subscriptions/#{@subscription}")}
+  >
+    <.live_component
+      module={SowerWeb.SubscriptionLive.FormComponent}
+      id={@subscription.id}
+      title={@page_title}
+      action={@live_action}
+      subscription={@subscription}
+      patch={~p"/subscriptions/#{@subscription}"}
+    />
+  </.modal>
+</Layouts.app>

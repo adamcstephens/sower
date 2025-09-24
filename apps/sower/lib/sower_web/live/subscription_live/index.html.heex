@@ -1,41 +1,48 @@
-<.header>
-  Listing Subscriptions
-  <:actions>
-    <.link patch={~p"/subscriptions/new"}>
-      <.button>New Subscription</.button>
-    </.link>
-  </:actions>
-</.header>
+<Layouts.app flash={@flash} current_user={@current_user}>
+  <.header>
+    Listing Subscriptions
+    <:actions>
+      <.link patch={~p"/subscriptions/new"}>
+        <.button>New Subscription</.button>
+      </.link>
+    </:actions>
+  </.header>
 
-<.table
-  id="subscriptions"
-  rows={@streams.subscriptions}
-  row_click={fn {_id, subscription} -> JS.navigate(~p"/subscriptions/#{subscription}") end}
->
-  <:col :let={{_id, subscription}} label="Sid">{subscription.sid}</:col>
-  <:action :let={{_id, subscription}}>
-    <div class="sr-only">
-      <.link navigate={~p"/subscriptions/#{subscription}"}>Show</.link>
-    </div>
-    <.link patch={~p"/subscriptions/#{subscription}/edit"}>Edit</.link>
-  </:action>
-  <:action :let={{id, subscription}}>
-    <.link
-      phx-click={JS.push("delete", value: %{id: subscription.id}) |> hide("##{id}")}
-      data-confirm="Are you sure?"
-    >
-      Delete
-    </.link>
-  </:action>
-</.table>
+  <.table
+    id="subscriptions"
+    rows={@streams.subscriptions}
+    row_click={fn {_id, subscription} -> JS.navigate(~p"/subscriptions/#{subscription}") end}
+  >
+    <:col :let={{_id, subscription}} label="Sid">{subscription.sid}</:col>
+    <:action :let={{_id, subscription}}>
+      <div class="sr-only">
+        <.link navigate={~p"/subscriptions/#{subscription}"}>Show</.link>
+      </div>
+      <.link patch={~p"/subscriptions/#{subscription}/edit"}>Edit</.link>
+    </:action>
+    <:action :let={{id, subscription}}>
+      <.link
+        phx-click={JS.push("delete", value: %{id: subscription.id}) |> hide("##{id}")}
+        data-confirm="Are you sure?"
+      >
+        Delete
+      </.link>
+    </:action>
+  </.table>
 
-<.modal :if={@live_action in [:new, :edit]} id="subscription-modal" show on_cancel={JS.patch(~p"/subscriptions")}>
-  <.live_component
-    module={SowerWeb.SubscriptionLive.FormComponent}
-    id={@subscription.id || :new}
-    title={@page_title}
-    action={@live_action}
-    subscription={@subscription}
-    patch={~p"/subscriptions"}
-  />
-</.modal>
+  <.modal
+    :if={@live_action in [:new, :edit]}
+    id="subscription-modal"
+    show
+    on_cancel={JS.patch(~p"/subscriptions")}
+  >
+    <.live_component
+      module={SowerWeb.SubscriptionLive.FormComponent}
+      id={@subscription.id || :new}
+      title={@page_title}
+      action={@live_action}
+      subscription={@subscription}
+      patch={~p"/subscriptions"}
+    />
+  </.modal>
+</Layouts.app>
