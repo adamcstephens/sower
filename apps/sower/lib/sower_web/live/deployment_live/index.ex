@@ -10,11 +10,6 @@ defmodule SowerWeb.DeploymentLive.Index do
     <Layouts.app flash={@flash} current_user={@current_user}>
       <.header>
         Listing Deployments
-        <:actions>
-          <.button variant="primary" navigate={~p"/deployments/new"}>
-            <.icon name="hero-plus" /> New Deployment
-          </.button>
-        </:actions>
       </.header>
 
       <.table
@@ -22,7 +17,10 @@ defmodule SowerWeb.DeploymentLive.Index do
         rows={@streams.deployments}
         row_click={fn {_id, deployment} -> JS.navigate(~p"/deployments/#{deployment}") end}
       >
-        <:col :let={{_id, deployment}} label="Seed type">{deployment.sid}</:col>
+        <:col :let={{_id, deployment}} label="sid">{deployment.sid}</:col>
+        <:col :let={{_id, deployment}} label="result">{deployment.result}</:col>
+        <:col :let={{_id, deployment}} label="initiated">{deployment.inserted_at}</:col>
+        <:col :let={{_id, deployment}} label="done">{deployment.deployed_at}</:col>
         <:action :let={{_id, deployment}}>
           <div class="sr-only">
             <.link navigate={~p"/deployments/#{deployment}"}>Show</.link>

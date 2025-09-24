@@ -324,7 +324,8 @@ defmodule Sower.Orchestration do
 
   """
   def list_deployments do
-    Repo.all(Deployment)
+    query = from r in Deployment, order_by: [desc: r.inserted_at]
+    Repo.all(query)
   end
 
   @doc """

@@ -60,6 +60,14 @@ defmodule SowerWeb.Layouts do
                   Forges
                 </.link>
               </li>
+              <li>
+                <.link
+                  navigate={~p"/deployments"}
+                  class="hover:text-orange-700 dark:hover:text-orange-300"
+                >
+                  Deployments
+                </.link>
+              </li>
             </ul>
           </div>
 
