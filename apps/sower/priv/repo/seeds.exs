@@ -10,9 +10,11 @@
 # We recommend using the bang functions (`insert!`, `update!`
 # and so on) as they will fail if something goes wrong.
 
-alias Sower.Repo.Seeds.Org
-
-user = Org.new_org_and_user(%Org{name: "default organization", email: "default@sower.dev"})
-
-user |> Org.access_token()
-user |> Org.fake_seeds()
+# if you want fake environment
+# alias Sower.Repo.Seeds.Org
+#
+# user = Org.new_org_and_user(%Org{name: "default organization", email: "default@sower.dev"})
+#
+# user |> Org.access_token()
+#
+# user |> Org.fake_seeds()

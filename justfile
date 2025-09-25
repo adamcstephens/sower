@@ -21,11 +21,11 @@ check-go-lint:
 check-nix:
     nix build .#checks.x86_64-linux.default --print-build-logs
 
-dev: && start
-    mix deps.get
-    mix deps.compile
-    mix ecto.setup
-    mix assets.build
+clean:
+    mix ecto.drop
+    git clean -dnx --exclude .dev\* --exclude .jj --exclude .secret.envrc --exclude dev-\*
+    # git clean won't purge the deps directories
+    rm -rf deps
 
 dev-add-user email:
     mix run apps/sower/priv/repo/seeds-user.exs {{ email }} --no-start
@@ -57,9 +57,19 @@ openapi-output:
 openapi-generate: openapi-output
     go generate ./client-go
 
+reset: clean setup
+
 set-version: && openapi-generate
     @echo "Current version: $(cat VERSION)"
     @read -p "New version? " new_version; [ -n "$new_version" ] && echo -n $new_version > VERSION
+
+setup:
+    mix deps.get
+    mix deps.compile
+    mix ecto.setup
+    mix assets.build
+    # just dev-add-user <email>
+    # just dev-seed-from-local
 
 release: set-version
     git add VERSION openapi.json

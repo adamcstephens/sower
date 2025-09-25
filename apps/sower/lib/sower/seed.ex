@@ -66,7 +66,8 @@ defmodule Sower.Seed do
   end
 
   def list() do
-    Repo.all(Seed)
+    query = from s in Seed, order_by: [desc: s.updated_at]
+    Repo.all(query)
   end
 
   def latest(name, seed_type) do

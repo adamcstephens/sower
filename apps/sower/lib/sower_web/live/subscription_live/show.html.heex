@@ -17,6 +17,15 @@
     </:item>
     <:item title="Seed Name">{@subscription.seed_name}</:item>
     <:item title="Seed Type">{@subscription.seed_type}</:item>
+    <:item title="Deployments">
+      <.table
+        id="deployments"
+        rows={@subscription.deployments}
+        row_click={fn deployment -> JS.navigate(~p"/deployments/#{deployment.sid}") end}
+      >
+        <:col :let={deployment}>{deployment.sid}</:col>
+      </.table>
+    </:item>
   </.list>
 
   <.back navigate={~p"/subscriptions"}>Back to subscriptions</.back>

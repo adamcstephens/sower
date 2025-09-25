@@ -16,10 +16,13 @@ defmodule SowerWeb.AgentLive.Show do
 
   @impl true
   def handle_params(%{"sid" => sid}, _, socket) do
+    orchestration =
+      Orchestration.get_agent_sid!(sid) |> Sower.Repo.preload(subscriptions: [:deployments])
+
     socket =
       socket
       |> assign(:page_title, page_title(socket.assigns.live_action))
-      |> assign(:agent, Orchestration.get_agent_sid!(sid) |> Sower.Repo.preload(:subscriptions))
+      |> assign( :agent, orchestration)
       |> add_online_status()
       |> assign(:current_generation, %{})
 
@@ -39,7 +42,6 @@ defmodule SowerWeb.AgentLive.Show do
         %Nix.Profile.Generation{} = generation,
         socket
       ) do
-    dbg(generation)
     {:noreply, assign(socket, :current_generation, generation)}
   end
 

@@ -28,6 +28,17 @@
         <:col :let={subscription}>{subscription.updated_at}</:col>
       </.table>
     </:item>
+    <:item title="deployments">
+      <.table
+        id="subscriptions"
+        rows={@agent.subscriptions}
+        row_click={fn subscription -> JS.navigate(~p"/subscriptions/#{subscription.sid}") end}
+      >
+        <:col :let={subscription}>{subscription.seed_name}</:col>
+        <:col :let={subscription}>{subscription.seed_type}</:col>
+        <:col :let={subscription}>{subscription.updated_at}</:col>
+      </.table>
+    </:item>
   </.list>
 
   <.back navigate={~p"/agents"}>Back to agents</.back>

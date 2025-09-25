@@ -8,7 +8,11 @@
 import Config
 
 config :sower, ecto_repos: [Sower.Repo]
-config :sower, Sower.Repo, migration_primary_key: [type: :identity]
+
+config :sower, Sower.Repo,
+  migration_primary_key: [type: :identity],
+  # store with usec mostly to avoid having to truncate utc_now()
+  migration_timestamps: [type: :utc_datetime_usec]
 
 # Configures the endpoint
 config :sower, SowerWeb.Endpoint,
@@ -58,7 +62,7 @@ config :phoenix, :json_library, Jason
 
 config :sower, :generators,
   migration: true,
-  timestamp_type: :utc_datetime
+  timestamp_type: :utc_datetime_usec
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

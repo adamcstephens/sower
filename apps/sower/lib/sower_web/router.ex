@@ -48,9 +48,7 @@ defmodule SowerWeb.Router do
       live "/agents/:sid/show/edit", AgentLive.Show, :edit
 
       live "/deployments", DeploymentLive.Index, :index
-      live "/deployments/new", DeploymentLive.Form, :new
       live "/deployments/:sid", DeploymentLive.Show, :show
-      live "/deployments/:sid/edit", DeploymentLive.Form, :edit
 
       get "/forges/:sid/login", Forge.OauthController, :login
       get "/forges/oauth/callback", Forge.OauthController, :callback

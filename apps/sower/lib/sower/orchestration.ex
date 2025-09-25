@@ -171,6 +171,15 @@ defmodule Sower.Orchestration do
   alias Sower.Orchestration.Subscription
 
   @doc """
+  Find deployments for an agent
+  """
+  def deployments_for_agent(%Agent{} = agent) do
+    agent.subscriptions
+    |> Enum.map(& &1.deployments)
+    |> dbg()
+  end
+
+  @doc """
   Returns the list of subscriptions.
 
   ## Examples

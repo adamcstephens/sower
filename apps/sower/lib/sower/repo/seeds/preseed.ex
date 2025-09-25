@@ -18,9 +18,37 @@ defmodule Sower.Repo.Seeds.Preseed do
   end
 
   def for_dev(email) do
-    name = email |> String.split("@") |> List.first()
+    Application.load(:sower)
 
-    simple_org_and_key(%Org{name: name, email: email}, Path.absname(".dev-api-token"))
+    token_file = Path.absname(".dev-api-token")
+
+    Ecto.Migrator.with_repo(Sower.Repo, fn _repo ->
+      case Sower.Repo.all_by(Sower.Accounts.User, [email: email], skip_org_id: true) do
+        [] ->
+          Logger.error(msg: "User for email not found. Did you log in first?")
+          Kernel.exit(1)
+
+        [user] ->
+          case Sower.Accounts.Organization.list() do
+            [_org] ->
+              access_token =
+                Org.access_token(user, "dev token", %{
+                  "expires_at" => Date.add(Date.utc_today(), 30)
+                })
+
+              File.write!(token_file, access_token.token)
+              Logger.info("Wrote #{token_file}")
+
+            orgs ->
+              Logger.error(
+                msg: "Can't handle no organizations or more than one organization.",
+                organizations: orgs
+              )
+
+              Kernel.exit(1)
+          end
+      end
+    end)
   end
 
   defp simple_org_and_key(%Org{} = org, token_file) do
