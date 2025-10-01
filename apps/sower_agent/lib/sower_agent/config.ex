@@ -70,10 +70,15 @@ defmodule SowerAgent.Config do
       end
 
     # process side effects
-    cfg
-    |> Map.to_list()
-    |> Enum.map(&external_config/1)
-    |> Enum.reject(&is_nil/1)
+    cfg =
+      cfg
+      |> Map.to_list()
+      |> Enum.map(&external_config/1)
+      |> Enum.reject(&is_nil/1)
+      |> Map.new()
+
+    # cast back into a struct
+    cfg = struct(__MODULE__, cfg)
 
     Application.put_env(@app, :config, cfg)
   end
@@ -108,6 +113,12 @@ defmodule SowerAgent.Config do
     nil
   end
 
+  def external_config({:state_directory, dir}) do
+    {:state_directory, Path.expand(dir)}
+  end
+
+  def external_config({:__struct__, _}), do: nil
+
   def external_config(cfg), do: cfg
 
   def add_config_file(cfg) do
@@ -118,12 +129,24 @@ defmodule SowerAgent.Config do
   def defaults() do
     %{
       "name" => default_agent_name(),
-      "config_path" => System.get_env("SOWER_AGENT_CONFIG", default_config_file())
+      "config_path" => System.get_env("SOWER_AGENT_CONFIG", default_config_file()),
+      "state_directory" => default_state_dir()
     }
   end
 
   def default_agent_name() do
     :inet.gethostname() |> then(fn {:ok, hostname} -> to_string(hostname) end)
+  end
+
+  def default_state_dir() do
+    case System.get_env("USER") do
+      user when user != "root" ->
+        System.get_env("XDG_STATE_HOME", Path.join(System.fetch_env!("HOME"), ".local/state"))
+        |> Path.join("sower_agent")
+
+      _ ->
+        "/var/lib/sower_agent"
+    end
   end
 
   def read_config_file(file) when not is_nil(file) do

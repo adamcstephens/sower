@@ -35,8 +35,8 @@ defmodule SowerAgent.Storage do
 
   @impl GenServer
   def init(_opts) do
-    state_dir = Application.get_env(:sower_agent, :config).state_directory
-    file = Path.expand("./storage.etf", state_dir)
+    state_dir = SowerAgent.Config.get().state_directory
+    file = Path.join(state_dir, "storage.etf")
 
     if not File.exists?(file) do
       parent_dir = file |> Path.dirname()

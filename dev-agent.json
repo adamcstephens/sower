@@ -1,5 +1,5 @@
 {
   "access_token_file": "./.dev-api-token",
   "endpoint": "http://localhost:7150",
-  "state_directory": "./_build"
+  "state_directory": "./_build/agent1"
 }
