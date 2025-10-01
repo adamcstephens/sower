@@ -22,7 +22,7 @@ defmodule SowerWeb.AgentLive.Show do
     socket =
       socket
       |> assign(:page_title, page_title(socket.assigns.live_action))
-      |> assign( :agent, orchestration)
+      |> assign(:agent, orchestration)
       |> add_online_status()
       |> assign(:current_generation, %{})
 
