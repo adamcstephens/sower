@@ -17,11 +17,21 @@ defmodule SowerAgent.Config do
         description: "Sower access token",
         readOnly: true
       },
+      config_path: %Schema{
+        type: :string,
+        description: "config file path",
+        readOnly: true
+      },
       endpoint: %Schema{
         type: :string,
         format: :uri,
         description: "Sower endpoint",
         example: "https://my.sower.dev"
+      },
+      name: %Schema{
+        type: :string,
+        description: "Agent name",
+        default: "system hostname"
       },
       state_directory: %Schema{
         type: :string,
@@ -45,7 +55,8 @@ defmodule SowerAgent.Config do
     Application.ensure_all_started(:logger)
 
     cfg =
-      config_map
+      defaults()
+      |> Map.merge(config_map)
       |> add_config_file()
       |> parse_files_to_values()
       |> OpenApiSpex.cast_value(schema())
@@ -100,14 +111,22 @@ defmodule SowerAgent.Config do
   def external_config(cfg), do: cfg
 
   def add_config_file(cfg) do
-    Map.merge(cfg, read_config_file(System.get_env("SOWER_AGENT_CONFIG")))
+    cfg
+    |> Map.merge(read_config_file(cfg["config_path"]))
   end
 
-  def read_config_file(nil) do
-    read_config_file(default_config_file())
+  def defaults() do
+    %{
+      "name" => default_agent_name(),
+      "config_path" => System.get_env("SOWER_AGENT_CONFIG", default_config_file())
+    }
   end
 
-  def read_config_file(file) do
+  def default_agent_name() do
+    :inet.gethostname() |> then(fn {:ok, hostname} -> to_string(hostname) end)
+  end
+
+  def read_config_file(file) when not is_nil(file) do
     file = Path.absname(file)
 
     if File.exists?(file) do
@@ -119,7 +138,14 @@ defmodule SowerAgent.Config do
   end
 
   def default_config_file() do
-    Application.get_env(@app, __MODULE__, "/etc/sower/agent.json")
+    case System.get_env("USER") do
+      user when user != "root" ->
+        System.get_env("XDG_CONFIG_HOME", Path.join(System.fetch_env!("HOME"), ".config"))
+        |> Path.join("sower/agent.json")
+
+      _ ->
+        "/etc/sower/agent.json"
+    end
   end
 
   def reload() do

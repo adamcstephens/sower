@@ -249,7 +249,7 @@ defmodule SowerWeb.AgentChannel do
         )
 
         if socket.assigns.access_token |> can() |> create?(Sower.Orchestration.Agent) do
-          Orchestration.update_agent(agent, %{local_sid: local_sid})
+          agent = Orchestration.update_agent(agent, %{local_sid: local_sid})
 
           {:ok, agent}
         else
@@ -266,6 +266,22 @@ defmodule SowerWeb.AgentChannel do
           local_sid: local_sid,
           agent_sid: agent.sid
         )
+
+        {:ok, agent}
+
+      %Orchestration.Agent{} = agent
+      when agent.sid == agent_sid and
+             agent.name != name and
+             agent.local_sid == local_sid ->
+        Logger.info(
+          msg: "Found matching agent with different name, renaming",
+          name: name,
+          previous_name: agent.name,
+          local_sid: local_sid,
+          agent_sid: agent.sid
+        )
+
+        {:ok, agent} = Orchestration.update_agent(agent, %{name: name})
 
         {:ok, agent}
 

@@ -159,7 +159,7 @@ defmodule SowerAgent.SocketClient do
         @lobby_topic,
         "agent:hello",
         SowerClient.Schemas.AgentHello.cast!(%{
-          name: "TODO",
+          name: SowerAgent.Config.get().name,
           local_sid: SowerAgent.Storage.read().local_sid,
           agent_sid: SowerAgent.Storage.read().agent_sid
         })
