@@ -6,6 +6,8 @@ defmodule SowerWeb.AgentLive.Index do
   alias Sower.Orchestration.Agent
   alias SowerWeb.Presence
 
+  import SowerWeb.SowerComponents
+
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket) do

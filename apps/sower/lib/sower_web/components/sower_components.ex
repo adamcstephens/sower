@@ -1,6 +1,33 @@
 defmodule SowerWeb.SowerComponents do
   use Phoenix.Component
 
+  attr :state, :boolean, required: true
+
+  def online(assigns) do
+    ~H"""
+    <svg class="w-4 h-4" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <circle
+        cx="12"
+        cy="12"
+        r="10"
+        class={
+          if @state,
+            do: "fill-green-500",
+            else: "fill-none stroke-gray-300 stroke-2"
+        }
+      />
+      <line
+        :if={not @state}
+        x1="4"
+        y1="20"
+        x2="20"
+        y2="4"
+        class="stroke-gray-300 stroke-2"
+      />
+    </svg>
+    """
+  end
+
   attr :result, :string, required: true
 
   def result(assigns) do

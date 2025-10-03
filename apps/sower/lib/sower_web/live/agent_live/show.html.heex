@@ -1,6 +1,10 @@
 <Layouts.app flash={@flash} current_user={@current_user}>
   <.header>
-    Agent: {@agent.name}
+    <div class="flex items-center space-x-2">
+      <.online state={@online} />
+      <span>Agent: {@agent.name}</span>
+    </div>
+
     <:actions>
       <.link patch={~p"/agents/#{@agent}/show/edit"} phx-click={JS.push_focus()}>
         <.button>Edit agent</.button>
@@ -9,7 +13,6 @@
   </.header>
 
   <.list>
-    <:item title="Online">{@online}</:item>
     <:item title="sid">{@agent.sid}</:item>
     <:item title="Local sid">{@agent.local_sid}</:item>
     <:item title="Current Generation">
