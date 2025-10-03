@@ -5,7 +5,7 @@ defmodule Sower.Repo.Migrations.CreateSubscriptions do
     create table(:subscriptions) do
       add(:sid, :string, null: false)
       add(:org_id, references(:organizations, column: :org_id, type: :uuid), null: false)
-      add(:agent_id, references(:agents, on_delete: :nothing), null: false)
+      add(:agent_id, references(:agents, on_delete: :delete_all), null: false)
 
       add(:seed_name, :string)
       add(:seed_type, :string)

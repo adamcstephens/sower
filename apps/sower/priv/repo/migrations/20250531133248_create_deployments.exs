@@ -16,8 +16,8 @@ defmodule Sower.Repo.Migrations.CreateDeployments do
     create(unique_index(:deployments, :sid))
 
     create table(:seed_deployment) do
-      add(:seed_id, references(:seeds, on_delete: :nothing), null: false)
-      add(:deployment_id, references(:deployments, on_delete: :nothing), null: false)
+      add(:seed_id, references(:seeds, on_delete: :delete_all), null: false)
+      add(:deployment_id, references(:deployments, on_delete: :delete_all), null: false)
 
       timestamps()
     end
@@ -27,8 +27,8 @@ defmodule Sower.Repo.Migrations.CreateDeployments do
     create(unique_index(:seed_deployment, [:seed_id, :deployment_id]))
 
     create table(:subscriptions_deployments) do
-      add(:subscription_id, references(:subscriptions, on_delete: :nothing), null: false)
-      add(:deployment_id, references(:deployments, on_delete: :nothing), null: false)
+      add(:subscription_id, references(:subscriptions, on_delete: :delete_all), null: false)
+      add(:deployment_id, references(:deployments, on_delete: :delete_all), null: false)
 
       timestamps()
     end
