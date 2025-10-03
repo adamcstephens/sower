@@ -13,7 +13,28 @@
     rows={@streams.agents}
     row_click={fn {_id, agent} -> JS.navigate(~p"/agents/#{agent}") end}
   >
-    <:col :let={{_id, agent}} label="Online">{agent.sid in Map.keys(@agent_presence)}</:col>
+    <:col :let={{_id, agent}} label="Online">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <circle
+          cx="12"
+          cy="12"
+          r="10"
+          class={
+            if agent.sid in Map.keys(@agent_presence),
+              do: "fill-green-500",
+              else: "fill-none stroke-gray-300 stroke-2"
+          }
+        />
+        <line
+          :if={agent.sid not in Map.keys(@agent_presence)}
+          x1="4"
+          y1="20"
+          x2="20"
+          y2="4"
+          class="stroke-gray-300 stroke-2"
+        />
+      </svg>
+    </:col>
     <:col :let={{_id, agent}} label="Name">{agent.name}</:col>
     <:col :let={{_id, agent}} label="sid">{agent.sid}</:col>
     <:col :let={{_id, agent}} label="Local sid">{agent.local_sid}</:col>

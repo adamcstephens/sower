@@ -4,6 +4,7 @@ defmodule SowerWeb.AgentLive.Show do
   alias Phoenix.Socket.Broadcast
   alias Sower.Orchestration
   alias SowerWeb.Presence
+  import SowerWeb.SowerComponents
 
   @impl true
   def mount(_params, _session, socket) do
@@ -19,10 +20,16 @@ defmodule SowerWeb.AgentLive.Show do
     orchestration =
       Orchestration.get_agent_sid!(sid) |> Sower.Repo.preload(subscriptions: [:deployments])
 
+    deployments =
+      Enum.reduce(orchestration.subscriptions, [], fn sub, acc ->
+        acc ++ sub.deployments
+      end)
+
     socket =
       socket
       |> assign(:page_title, page_title(socket.assigns.live_action))
       |> assign(:agent, orchestration)
+      |> assign(:deployments, deployments)
       |> add_online_status()
       |> assign(:current_generation, %{})
 

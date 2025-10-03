@@ -4,6 +4,8 @@ defmodule SowerWeb.DeploymentLive.Index do
   alias Sower.Orchestration
   alias SowerWeb.Layouts
 
+  import SowerWeb.SowerComponents
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -17,8 +19,10 @@ defmodule SowerWeb.DeploymentLive.Index do
         rows={@streams.deployments}
         row_click={fn {_id, deployment} -> JS.navigate(~p"/deployments/#{deployment}") end}
       >
+        <:col :let={{_id, deployment}} label="Result">
+          <.result result={deployment.result} />
+        </:col>
         <:col :let={{_id, deployment}} label="sid">{deployment.sid}</:col>
-        <:col :let={{_id, deployment}} label="result">{deployment.result}</:col>
         <:col :let={{_id, deployment}} label="completed">{deployment.deployed_at}</:col>
         <:action :let={{_id, deployment}}>
           <div class="sr-only">

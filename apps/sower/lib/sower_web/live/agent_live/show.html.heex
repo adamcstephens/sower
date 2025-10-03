@@ -30,13 +30,15 @@
     </:item>
     <:item title="deployments">
       <.table
-        id="subscriptions"
-        rows={@agent.subscriptions}
-        row_click={fn subscription -> JS.navigate(~p"/subscriptions/#{subscription.sid}") end}
+        id="deployments"
+        rows={@deployments}
+        row_click={fn deployment -> JS.navigate(~p"/deployments/#{deployment.sid}") end}
       >
-        <:col :let={subscription}>{subscription.seed_name}</:col>
-        <:col :let={subscription}>{subscription.seed_type}</:col>
-        <:col :let={subscription}>{subscription.updated_at}</:col>
+        <:col :let={deployment} label="Result">
+          <.result result={deployment.result} />
+        </:col>
+        <:col :let={deployment}>{deployment.sid}</:col>
+        <:col :let={deployment}>{deployment.inserted_at}</:col>
       </.table>
     </:item>
   </.list>
