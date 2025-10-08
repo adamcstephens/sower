@@ -4,7 +4,8 @@ defmodule Sower.Seed do
   import Ecto.Changeset
   import Ecto.Query, only: [from: 2]
 
-  alias Sower.{Repo, Seed}
+  alias Sower.{Repo, Seed, SeedTag}
+  alias Ecto.Multi
 
   @derive {Jason.Encoder, only: [:sid, :name, :seed_type, :artifact]}
 
@@ -20,19 +21,40 @@ defmodule Sower.Seed do
     field :seed_type, :string
     field :artifact, :string
 
+    has_many :tags, SeedTag
+
     timestamps()
   end
 
   def create(attrs) do
-    %Seed{
-      org_id: Sower.Repo.get_org_id()
-    }
-    |> changeset(attrs)
-    |> Repo.insert(
+    Multi.new()
+    |> Multi.insert(:seed, changeset(%Seed{org_id: Sower.Repo.get_org_id()}, attrs),
       on_conflict: {:replace, [:updated_at]},
       conflict_target: [:name, :seed_type, :artifact, :org_id],
       returning: true
     )
+    |> Multi.run(:tags, fn repo, %{seed: seed} ->
+      case attrs do
+        %{tags: tags} when is_list(tags) ->
+          tags =
+            Enum.map(tags, fn tag_attrs ->
+              tag_attrs
+              |> Map.put(:seed_id, seed.id)
+            end)
+
+          repo.insert_all(SeedTag, tags, on_conflict: :nothing)
+
+          {:ok, nil}
+
+        _ ->
+          {:ok, nil}
+      end
+    end)
+    |> Repo.transact()
+    |> case do
+      {:ok, %{seed: seed}} -> {:ok, Repo.preload(seed, :tags)}
+      {:error, _, _, _} = error -> error
+    end
   end
 
   def update(seed, attrs) do

@@ -333,7 +333,7 @@ defmodule Sower.Orchestration do
 
   """
   def list_deployments do
-    query = from r in Deployment, order_by: [desc: r.inserted_at]
+    query = from r in Deployment, order_by: [desc: r.deployed_at]
     Repo.all(query)
   end
 
