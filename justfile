@@ -73,7 +73,7 @@ setup:
 
 release: set-version
     git add VERSION openapi.json
-    git commit -m "release: version $(cat VERSION)"
+    jj commit -m "release: version $(cat VERSION)"
 
 release-push:
     git tag -a -m v$(cat VERSION) v$(cat VERSION)
@@ -102,16 +102,14 @@ update-elixir:
     mix hex.outdated
     just mix-clean
     just mix-nix-lock
-    git add mix.exs mix.lock nix/packages/deps.nix
-    git commit -m 'server(chore): update elixir deps' -- mix.exs mix.lock nix/packages/deps.nix
+    jj commit -m 'server(chore): update elixir deps' mix.exs mix.lock nix/packages/deps.nix
 
 update-go:
     go get -u ./...
     go mod edit -go=$(go version | awk '{print $3}' | sed 's/go//')
     go mod tidy
     just update-go-hash
-    git add go.mod go.sum nix/packages/cli.nix
-    git commit -m 'server(chore): update go deps' -- go.mod go.sum nix/packages/cli.nix
+    jj commit -m 'server(chore): update go deps' go.mod go.sum nix/packages/cli.nix
 
 update-go-hash:
     #!/usr/bin/env bash
