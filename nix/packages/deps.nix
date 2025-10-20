@@ -266,7 +266,7 @@ let
 
       db_connection =
         let
-          version = "2.8.0";
+          version = "2.8.1";
           drv = buildMix {
             inherit version;
             name = "db_connection";
@@ -275,7 +275,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "db_connection";
-              sha256 = "008399dae5eee1bf5caa6e86d204dcb44242c82b1ed5e22c881f2c34da201b15";
+              sha256 = "a61a3d489b239d76f326e03b98794fb8e45168396c925ef25feb405ed09da8fd";
             };
 
             beamDeps = [
@@ -304,7 +304,7 @@ let
 
       ecto =
         let
-          version = "3.13.2";
+          version = "3.13.3";
           drv = buildMix {
             inherit version;
             name = "ecto";
@@ -313,7 +313,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "ecto";
-              sha256 = "669d9291370513ff56e7b7e7081b7af3283d02e046cf3d403053c557894a0b3e";
+              sha256 = "1927db768f53a88843ff25b6ba7946599a8ca8a055f69ad8058a1432a399af94";
             };
 
             beamDeps = [
@@ -447,7 +447,7 @@ let
 
       file_system =
         let
-          version = "1.1.0";
+          version = "1.1.1";
           drv = buildMix {
             inherit version;
             name = "file_system";
@@ -456,7 +456,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "file_system";
-              sha256 = "bfcf81244f416871f2a2e15c1b515287faa5db9c6bcf290222206d120b3d43f6";
+              sha256 = "7a15ff97dfe526aeefb090a7a9d3d03aa907e100e262a0f8f7746b78f8f87a5d";
             };
           };
         in
@@ -489,7 +489,7 @@ let
 
       gettext =
         let
-          version = "0.26.2";
+          version = "1.0.0";
           drv = buildMix {
             inherit version;
             name = "gettext";
@@ -498,7 +498,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "gettext";
-              sha256 = "aa978504bcf76511efdc22d580ba08e2279caab1066b76bb9aa81c4a1e0a32a5";
+              sha256 = "cc8196640756894a4fd75606067bed41a9863c0db09d6d6cc576e6170cffaa74";
             };
 
             beamDeps = [
@@ -721,7 +721,7 @@ let
 
       oidcc =
         let
-          version = "3.4.0";
+          version = "3.6.0";
           drv = buildMix {
             inherit version;
             name = "oidcc";
@@ -730,7 +730,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "oidcc";
-              sha256 = "07f5f5de3c9e8f25277a479c48cca52b74e4b915b967bdc6bf2dd3f72bc67314";
+              sha256 = "99b26b1db95d617150416b18a7a84bb09525007fdbbcf963a60edb6156c6a1ce";
             };
 
             beamDeps = [
@@ -807,7 +807,7 @@ let
 
       phoenix =
         let
-          version = "1.8.0";
+          version = "1.8.1";
           drv = buildMix {
             inherit version;
             name = "phoenix";
@@ -816,7 +816,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "phoenix";
-              sha256 = "15f6e9cb76646ad8d9f2947240519666fc2c4f29f8a93ad9c7664916ab4c167b";
+              sha256 = "84d77d2b2e77c3c7e7527099bd01ef5c8560cd149c036d6b3a40745f11cd2fb2";
             };
 
             beamDeps = [
@@ -859,7 +859,7 @@ let
 
       phoenix_html =
         let
-          version = "4.2.1";
+          version = "4.3.0";
           drv = buildMix {
             inherit version;
             name = "phoenix_html";
@@ -868,7 +868,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "phoenix_html";
-              sha256 = "cff108100ae2715dd959ae8f2a8cef8e20b593f8dfd031c9cba92702cf23e053";
+              sha256 = "3eaa290a78bab0f075f791a46a981bbe769d94bc776869f4f3063a14f30497ad";
             };
           };
         in
@@ -900,7 +900,7 @@ let
 
       phoenix_live_view =
         let
-          version = "1.1.8";
+          version = "1.1.14";
           drv = buildMix {
             inherit version;
             name = "phoenix_live_view";
@@ -909,7 +909,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "phoenix_live_view";
-              sha256 = "6184cf1e82fe6627d40cfa62236133099438513710d30358f4c085c16ecb84b4";
+              sha256 = "b827980e2bc00fddd8674e3b567519a4e855b5de04bf8607140414f1101e2627";
             };
 
             beamDeps = [
@@ -1113,7 +1113,7 @@ let
 
       tailwind =
         let
-          version = "0.3.1";
+          version = "0.4.1";
           drv = buildMix {
             inherit version;
             name = "tailwind";
@@ -1122,7 +1122,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "tailwind";
-              sha256 = "98a45febdf4a87bc26682e1171acdedd6317d0919953c353fcd1b4f9f4b676a2";
+              sha256 = "6249d4f9819052911120dbdbe9e532e6bd64ea23476056adb7f730aa25c220d1";
             };
           };
         in
@@ -1208,7 +1208,7 @@ let
 
       thousand_island =
         let
-          version = "1.4.0";
+          version = "1.4.2";
           drv = buildMix {
             inherit version;
             name = "thousand_island";
@@ -1217,7 +1217,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "thousand_island";
-              sha256 = "686ff52b9e4cf1e16d2bd8ba83360f2357ac6ca304250702ecc3b40000f04015";
+              sha256 = "1c7637f16558fc1c35746d5ee0e83b18b8e59e18d28affd1f2fa1645f8bc7473";
             };
 
             beamDeps = [
@@ -1229,7 +1229,7 @@ let
 
       typedstruct =
         let
-          version = "0.5.3";
+          version = "0.5.4";
           drv = buildMix {
             inherit version;
             name = "typedstruct";
@@ -1238,7 +1238,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "typedstruct";
-              sha256 = "b53b8186701417c0b2782bf02a2db5524f879b8488f91d1d83b97d84c2943432";
+              sha256 = "ffaef36d5dbaebdbf4ed07f7fb2ebd1037b2c1f757db6fb8e7bcbbfabbe608d8";
             };
           };
         in
