@@ -72,7 +72,8 @@ defmodule SowerAgent.TaskRunner do
 
   def async_stream(enumerable, func) do
     Task.Supervisor.async_stream_nolink(SowerAgent.TaskSupervisor, enumerable, func,
-      max_concurrency: 3
+      max_concurrency: 3,
+      timeout: 30_000
     )
   end
 end

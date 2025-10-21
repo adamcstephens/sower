@@ -48,8 +48,6 @@ defmodule SowerAgent.Seed do
         Logger.error(msg: "Failed to activate", output: output, return_code: code)
         {:error, code}
     end
-
-    {:error, :TODO}
   end
 
   defp maybe_sudo_cmd(command, args, opts \\ []) do
