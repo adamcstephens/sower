@@ -53,7 +53,7 @@ defmodule Sower.Seed do
     |> Repo.transact()
     |> case do
       {:ok, %{seed: seed}} -> {:ok, Repo.preload(seed, :tags)}
-      {:error, _, _, _} = error -> error
+      {:error, _} = error -> error
     end
   end
 
