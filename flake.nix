@@ -36,9 +36,9 @@
           let
             version = builtins.readFile ./VERSION;
 
-            beamPackages = pkgs.beamMinimal27Packages.extend (
+            beamPackages = pkgs.beamMinimal28Packages.extend (
               _: prev: {
-                elixir = prev.elixir_1_18;
+                elixir = prev.elixir_1_19;
               }
             );
 
