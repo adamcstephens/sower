@@ -1,5 +1,34 @@
-defmodule SowerAgent.TaskRunner do
+defmodule SowerAgent.Deployer do
   require Logger
+
+  alias SowerClient.Schemas.Orchestration.Deployment
+
+  def run(%Deployment{} = deploy) do
+    deploy_result = upgrade(deploy.seeds)
+
+    Enum.all?(deploy_result, fn r ->
+      case r do
+        {:ok, {:ok, _}} -> true
+        _ -> false
+      end
+    end)
+    |> case do
+      true ->
+        :success
+
+      false ->
+        Enum.any?(deploy_result, fn r ->
+          case r do
+            {:ok, {:ok, _}} -> true
+            _ -> false
+          end
+        end)
+        |> case do
+          true -> :partial
+          false -> :failure
+        end
+    end
+  end
 
   def upgrade(seeds) do
     seeds

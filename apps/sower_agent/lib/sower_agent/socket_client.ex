@@ -215,6 +215,8 @@ defmodule SowerAgent.SocketClient do
     {:ok, socket}
   end
 
+  # TODO: add multi-upgrade async support
+  # currently is last deploy wins
   def handle_reply(ref, response, %{upgrade_ref: ref} = socket) do
     socket = Map.delete(socket, :upgrade_ref)
 
@@ -228,31 +230,7 @@ defmodule SowerAgent.SocketClient do
           deployment_sid: deployment.sid
         )
 
-        deploy_result = SowerAgent.TaskRunner.upgrade(deployment.seeds)
-
-        result =
-          Enum.all?(deploy_result, fn r ->
-            case r do
-              {:ok, {:ok, _}} -> true
-              _ -> false
-            end
-          end)
-          |> case do
-            true ->
-              :success
-
-            false ->
-              Enum.any?(deploy_result, fn r ->
-                case r do
-                  {:ok, {:ok, _}} -> true
-                  _ -> false
-                end
-              end)
-              |> case do
-                true -> :partial
-                false -> :failure
-              end
-          end
+        result = SowerAgent.Deployer.run(deployment)
 
         {:ok, result} =
           SowerClient.Schemas.Orchestration.DeploymentResult.cast(%{
