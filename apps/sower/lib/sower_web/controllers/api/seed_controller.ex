@@ -33,7 +33,8 @@ defmodule SowerWeb.Api.SeedController do
           body_params: %Schemas.Seed{
             name: name,
             seed_type: seed_type,
-            artifact: artifact
+            artifact: artifact,
+            tags: tags
           }
         } = conn,
         _params
@@ -42,7 +43,19 @@ defmodule SowerWeb.Api.SeedController do
 
     if can(conn.assigns.access_token)
        |> create?(%Sower.Seed{org_id: conn.assigns.access_token.org_id}) do
-      case Sower.Seed.create(%{name: name, seed_type: seed_type, artifact: artifact}) do
+      seed_attrs = %{name: name, seed_type: seed_type, artifact: artifact}
+
+      seed_attrs =
+        case tags do
+          nil ->
+            seed_attrs
+
+          tags when is_list(tags) ->
+            Map.put(seed_attrs, :tags, Enum.map(tags, &Map.from_struct/1))
+        end
+        |> dbg()
+
+      case Sower.Seed.create(seed_attrs) do
         {:ok, %Sower.Seed{} = seed} ->
           conn
           |> put_status(:created)

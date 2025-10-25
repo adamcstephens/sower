@@ -45,7 +45,8 @@
           "artifact": "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-nixos",
           "name": "myhost",
           "seed_type": "nixos",
-          "sid": "example4ser3adju75ddusbr"
+          "sid": "example4ser3adju75ddusbr",
+          "tags": []
         },
         "properties": {
           "artifact": {
@@ -78,6 +79,15 @@
             "type": "string",
             "x-struct": null,
             "x-validate": null
+          },
+          "tags": {
+            "description": "Tags associated with the seed",
+            "items": {
+              "$ref": "#/components/schemas/SeedTag"
+            },
+            "type": "array",
+            "x-struct": null,
+            "x-validate": null
           }
         },
         "required": [
@@ -88,6 +98,35 @@
         "title": "Seed",
         "type": "object",
         "x-struct": "Elixir.SowerClient.Schemas.Seed",
+        "x-validate": null
+      },
+      "SeedTag": {
+        "description": "A tag associated with a seed",
+        "example": {
+          "key": "environment",
+          "value": "production"
+        },
+        "properties": {
+          "key": {
+            "description": "Tag key",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "value": {
+            "description": "Tag value",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ],
+        "title": "SeedTag",
+        "type": "object",
+        "x-struct": "Elixir.SowerClient.Schemas.SeedTag",
         "x-validate": null
       }
     },

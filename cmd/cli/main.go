@@ -81,7 +81,8 @@ type seedRebootCmd struct {
 }
 
 type seedSubmitCmd struct {
-	Artifact string `arg:"--path,-p,required"`
+	Artifact string   `arg:"--path,-p,required"`
+	Tags     []string `arg:"--tag,separate" help:"Tags in key=value format. Can be repeated."`
 }
 
 type seedUpgradeCmd struct {
@@ -330,9 +331,22 @@ func seedSubcommand(cfg config) error {
 			os.Exit(1)
 		}
 
+		var tags []client.SeedTag
+		for _, tagStr := range cmdArgs.Tags {
+			parts := strings.SplitN(tagStr, "=", 2)
+			if len(parts) != 2 {
+				slog.Error("Invalid tag format. Expected key=value", "tag", tagStr)
+				os.Exit(1)
+			}
+			tags = append(tags, client.SeedTag{
+				Key:   parts[0],
+				Value: parts[1],
+			})
+		}
+
 		var seed *client.Seed
 
-		seed, err = seedClient.CreateSeed(cfg.Seed.Name, cfg.Seed.SeedType, cmdArgs.Artifact)
+		seed, err = seedClient.CreateSeed(cfg.Seed.Name, cfg.Seed.SeedType, cmdArgs.Artifact, tags)
 		if err != nil {
 			slog.Error("Failed to create seed", "error", err)
 			os.Exit(1)

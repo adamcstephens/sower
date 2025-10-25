@@ -53,10 +53,22 @@ type Seed struct {
 
 	// Sid sid of the seed set by the server
 	Sid *string `json:"sid,omitempty"`
+
+	// Tags Tags associated with the seed
+	Tags *[]SeedTag `json:"tags,omitempty"`
 }
 
 // SeedSeedType Type of the seed
 type SeedSeedType string
+
+// SeedTag A tag associated with a seed
+type SeedTag struct {
+	// Key Tag key
+	Key string `json:"key"`
+
+	// Value Tag value
+	Value string `json:"value"`
+}
 
 // ListSeedsParams defines parameters for ListSeeds.
 type ListSeedsParams struct {

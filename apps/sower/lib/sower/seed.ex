@@ -7,7 +7,7 @@ defmodule Sower.Seed do
   alias Sower.{Repo, Seed, SeedTag}
   alias Ecto.Multi
 
-  @derive {Jason.Encoder, only: [:sid, :name, :seed_type, :artifact]}
+  @derive {Jason.Encoder, only: [:sid, :name, :seed_type, :artifact, :tags]}
 
   @derive {Phoenix.Param, key: :sid}
 
@@ -27,6 +27,8 @@ defmodule Sower.Seed do
   end
 
   def create(attrs) do
+    dbg(attrs)
+
     Multi.new()
     |> Multi.insert(:seed, changeset(%Seed{org_id: Sower.Repo.get_org_id()}, attrs),
       on_conflict: {:replace, [:updated_at]},

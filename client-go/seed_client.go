@@ -36,7 +36,7 @@ func NewSowerClient(endpoint, token string) (*SeedClient, error) {
 	}, nil
 }
 
-func (s *SeedClient) CreateSeed(name, seedType, artifact string) (*Seed, error) {
+func (s *SeedClient) CreateSeed(name, seedType, artifact string, tags []SeedTag) (*Seed, error) {
 	if name == "" || seedType == "" {
 		return nil, fmt.Errorf("seed name and type are required")
 	}
@@ -46,7 +46,12 @@ func (s *SeedClient) CreateSeed(name, seedType, artifact string) (*Seed, error) 
 		return nil, err
 	}
 
-	resp, err := s.client.NewSeedWithResponse(context.TODO(), Seed{Name: name, SeedType: st, Artifact: artifact})
+	seed := Seed{Name: name, SeedType: st, Artifact: artifact}
+	if len(tags) > 0 {
+		seed.Tags = &tags
+	}
+
+	resp, err := s.client.NewSeedWithResponse(context.TODO(), seed)
 	if err != nil {
 		return nil, err
 	}
@@ -63,10 +68,10 @@ func (s *SeedClient) CreateSeed(name, seedType, artifact string) (*Seed, error) 
 		return nil, fmt.Errorf("unknown error")
 	}
 
-	seed := resp.JSON201
-	slog.Debug("Created seed", "sid", seed.Sid)
+	seed_resp := resp.JSON201
+	slog.Debug("Created seed", "sid", seed_resp.Sid)
 
-	return seed, nil
+	return seed_resp, nil
 }
 
 func (s *SeedClient) GetLatestSeed(name, seedType string) (*Seed, error) {

@@ -2,6 +2,8 @@ defmodule Sower.SeedTag do
   use Sower.Schema
   import Ecto.Changeset
 
+  @derive {Jason.Encoder, only: [:key, :value]}
+
   schema "seed_tags" do
     field :key, :string
     field :value, :string

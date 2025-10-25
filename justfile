@@ -12,10 +12,13 @@ check-elixir-format:
 check-elixir-test: dev-services
     mix test
 
-check-go: check-go-lint
+check-go: check-go-lint check-go-test
 
 check-go-lint:
     golangci-lint run
+
+check-go-test:
+    go test ./...
 
 check-nix:
     nix build .#checks.x86_64-linux.default --print-build-logs
@@ -30,8 +33,8 @@ dev-add-user email:
     mix run apps/sower/priv/repo/seeds-user.exs {{ email }} --no-start
 
 dev-seed-from-local:
-    go run ./cmd/cli seed submit --name $(hostname -s) --type nixos --path $(readlink -f /run/current-system)
-    go run ./cmd/cli seed submit --name $(hostname -s) --type home-manager --path $(readlink -f $HOME/.local/state/nix/profiles/home-manager)
+    go run ./cmd/cli seed submit --name $(hostname -s) --type nixos --path $(readlink -f /run/current-system) --tag source=dev  --tag test=anotherval
+    go run ./cmd/cli seed submit --name $(hostname -s) --type home-manager --path $(readlink -f $HOME/.local/state/nix/profiles/home-manager) --tag source=dev
 
 dev-services:
     process-compose list || process-compose up --detached

@@ -25,6 +25,11 @@ defmodule SowerClient.Schemas.Seed do
       artifact: %Schema{
         type: :string,
         description: "Artifact of the seed"
+      },
+      tags: %Schema{
+        type: :array,
+        description: "Tags associated with the seed",
+        items: SowerClient.Schemas.SeedTag
       }
     },
     required: [:name, :seed_type, :artifact],
@@ -32,7 +37,8 @@ defmodule SowerClient.Schemas.Seed do
       "sid" => "example4ser3adju75ddusbr",
       "name" => "myhost",
       "seed_type" => "nixos",
-      "artifact" => "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-nixos"
+      "artifact" => "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-nixos",
+      "tags" => []
     }
   })
 
