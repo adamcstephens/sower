@@ -119,7 +119,8 @@ defmodule SowerWeb.AgentChannel do
            Sower.Orchestration.create_subscription(%{
              agent_id: socket.assigns.agent.id,
              seed_name: req_sub.seed_name,
-             seed_type: req_sub.seed_type
+             seed_type: req_sub.seed_type,
+             rules: req_sub.rules
            }) do
       subscription =
         SowerClient.Schemas.Orchestration.Subscription.cast(subscription)
@@ -131,7 +132,7 @@ defmodule SowerWeb.AgentChannel do
 
       {:error, error} ->
         Logger.error(
-          msg: "Failed to get seed",
+          msg: "Failed to register subscription",
           payload: payload,
           error: error
         )

@@ -318,9 +318,41 @@ defmodule Sower.Orchestration do
   end
 
   alias Sower.Orchestration.Deployment
+  alias Sower.Seed
 
-  def match_seed(%Subscription{} = subscription) do
-    Sower.Seed.latest(subscription.seed_name, subscription.seed_type)
+  def match_seed(%Subscription{rules: rules} = subscription) do
+    # Build subquery to find all matching seed IDs
+    base_query =
+      from s in Seed,
+        where: s.name == ^subscription.seed_name and s.seed_type == ^subscription.seed_type,
+        select: s.id
+
+    matching_seed_ids =
+      Enum.reduce(rules || [], base_query, fn rule, q ->
+        case rule.op do
+          :eq ->
+            from s in q,
+              join: t in assoc(s, :tags),
+              where: t.key == ^rule.key and t.value == ^rule.value
+        end
+      end)
+      |> distinct(true)
+      |> Repo.all()
+
+    # Now find the latest seed from the matching IDs
+    case matching_seed_ids do
+      [] ->
+        nil
+
+      ids ->
+        from(s in Seed,
+          where: s.id in ^ids,
+          order_by: [desc: s.inserted_at, desc: s.id],
+          limit: 1
+        )
+        |> Repo.one()
+        |> Repo.preload(:tags)
+    end
   end
 
   @doc """

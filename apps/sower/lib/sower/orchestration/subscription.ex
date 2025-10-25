@@ -26,16 +26,24 @@ defmodule Sower.Orchestration.Subscription do
   def changeset(subscription, attrs) do
     subscription
     |> cast(attrs, [:agent_id, :seed_name, :seed_type])
+    |> cast_embed(:rules, with: &__MODULE__.Rule.changeset/2)
     |> unique_constraint([:agent_id, :org_id, :seed_name, :seed_type])
   end
 
   defmodule Rule do
     use Ecto.Schema
+    import Ecto.Changeset
 
     embedded_schema do
       field :key, :string
       field :op, Ecto.Enum, values: [:eq]
       field :value, :string
+    end
+
+    def changeset(rule, attrs) do
+      rule
+      |> cast(attrs, [:key, :op, :value])
+      |> validate_required([:key, :op, :value])
     end
   end
 end

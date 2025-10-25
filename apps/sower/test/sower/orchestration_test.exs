@@ -3,6 +3,7 @@ defmodule Sower.OrchestrationTest do
 
   alias Sower.Orchestration
   import Sower.AccountsFixtures
+  import Sower.SeedFixtures
 
   setup _ do
     org = organization_fixture()
@@ -63,6 +64,202 @@ defmodule Sower.OrchestrationTest do
     test "change_agent/1 returns a agent changeset" do
       agent = agent_fixture()
       assert %Ecto.Changeset{} = Orchestration.change_agent(agent)
+    end
+  end
+
+  describe "match_seed/1" do
+    import Sower.OrchestrationFixtures
+
+    test "returns nil when no seed matches name and type" do
+      agent = agent_fixture()
+
+      subscription =
+        subscription_fixture(%{
+          agent_id: agent.id,
+          seed_name: "nonexistent",
+          seed_type: "nixos"
+        })
+
+      assert Orchestration.match_seed(subscription) == nil
+    end
+
+    test "returns seed when name and type match with no rules" do
+      agent = agent_fixture()
+      seed = seed_fixture(%{name: "myhost", seed_type: "nixos"})
+
+      subscription =
+        subscription_fixture(%{
+          agent_id: agent.id,
+          seed_name: "myhost",
+          seed_type: "nixos"
+        })
+
+      matched = Orchestration.match_seed(subscription)
+      assert matched.id == seed.id
+    end
+
+    test "returns seed when single rule matches" do
+      agent = agent_fixture()
+
+      seed =
+        seed_fixture(%{
+          name: "myhost",
+          seed_type: "nixos",
+          tags: [%{key: "branch", value: "main"}]
+        })
+
+      subscription =
+        subscription_fixture(%{
+          agent_id: agent.id,
+          seed_name: "myhost",
+          seed_type: "nixos",
+          rules: [%{key: "branch", op: :eq, value: "main"}]
+        })
+
+      matched = Orchestration.match_seed(subscription)
+      assert matched.id == seed.id
+    end
+
+    test "returns seed when all rules match" do
+      agent = agent_fixture()
+
+      seed =
+        seed_fixture(%{
+          name: "myhost",
+          seed_type: "nixos",
+          tags: [
+            %{key: "branch", value: "main"},
+            %{key: "repo", value: "http://example.com/repo"}
+          ]
+        })
+
+      subscription =
+        subscription_fixture(%{
+          agent_id: agent.id,
+          seed_name: "myhost",
+          seed_type: "nixos",
+          rules: [
+            %{key: "branch", op: :eq, value: "main"},
+            %{key: "repo", op: :eq, value: "http://example.com/repo"}
+          ]
+        })
+
+      matched = Orchestration.match_seed(subscription)
+      assert matched.id == seed.id
+      assert length(matched.tags) == 2
+    end
+
+    test "returns seed when all rules match even if seed has more tags" do
+      agent = agent_fixture()
+
+      seed =
+        seed_fixture(%{
+          name: "myhost",
+          seed_type: "nixos",
+          tags: [
+            %{key: "branch", value: "main"},
+            %{key: "repo", value: "http://example.com/repo"},
+            %{key: "sometag", value: "somevalue"}
+          ]
+        })
+
+      subscription =
+        subscription_fixture(%{
+          agent_id: agent.id,
+          seed_name: "myhost",
+          seed_type: "nixos",
+          rules: [
+            %{key: "branch", op: :eq, value: "main"},
+            %{key: "repo", op: :eq, value: "http://example.com/repo"}
+          ]
+        })
+
+      matched = Orchestration.match_seed(subscription)
+      assert matched.id == seed.id
+    end
+
+    test "returns nil when rule does not match" do
+      agent = agent_fixture()
+
+      seed_fixture(%{
+        name: "myhost",
+        seed_type: "nixos",
+        tags: [%{key: "branch", value: "dev"}]
+      })
+
+      subscription =
+        subscription_fixture(%{
+          agent_id: agent.id,
+          seed_name: "myhost",
+          seed_type: "nixos",
+          rules: [%{key: "branch", op: :eq, value: "main"}]
+        })
+
+      assert Orchestration.match_seed(subscription) == nil
+    end
+
+    test "returns nil when only some rules match" do
+      agent = agent_fixture()
+
+      seed_fixture(%{
+        name: "myhost",
+        seed_type: "nixos",
+        tags: [
+          %{key: "branch", value: "main"}
+        ]
+      })
+
+      subscription =
+        subscription_fixture(%{
+          agent_id: agent.id,
+          seed_name: "myhost",
+          seed_type: "nixos",
+          rules: [
+            %{key: "branch", op: :eq, value: "main"},
+            %{key: "repo", op: :eq, value: "http://example.com/repo"}
+          ]
+        })
+
+      assert Orchestration.match_seed(subscription) == nil
+    end
+
+    test "returns latest seed when multiple seeds match" do
+      agent = agent_fixture()
+
+      artifact1 = random_nix_artifact()
+      artifact2 = random_nix_artifact()
+
+      _older_seed =
+        seed_fixture(%{
+          name: "myhost",
+          seed_type: "nixos",
+          artifact: artifact1,
+          tags: [%{key: "branch", value: "main"}]
+        })
+
+      # Sleep to ensure different timestamps
+      Process.sleep(10)
+
+      _newer_seed =
+        seed_fixture(%{
+          name: "myhost",
+          seed_type: "nixos",
+          artifact: artifact2,
+          tags: [%{key: "branch", value: "main"}]
+        })
+
+      subscription =
+        subscription_fixture(%{
+          agent_id: agent.id,
+          seed_name: "myhost",
+          seed_type: "nixos",
+          rules: [%{key: "branch", op: :eq, value: "main"}]
+        })
+
+      matched = Orchestration.match_seed(subscription)
+      # Verify we got the newer seed by checking the artifact
+      # The newer seed should have artifact2 since it was created second
+      assert matched.artifact == artifact2
     end
   end
 end
