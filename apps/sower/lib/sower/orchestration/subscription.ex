@@ -34,10 +34,16 @@ defmodule Sower.Orchestration.Subscription do
     use Ecto.Schema
     import Ecto.Changeset
 
+    @derive {Jason.Encoder, only: [:key, :op, :value]}
+
     embedded_schema do
       field :key, :string
-      field :op, Ecto.Enum, values: [:eq]
+      field :op, :string
       field :value, :string
+    end
+
+    def changeset(rule, %SowerClient.Schemas.Orchestration.Subscription.Rule{} = attrs) do
+      changeset(rule, Map.from_struct(attrs))
     end
 
     def changeset(rule, attrs) do

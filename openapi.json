@@ -43,13 +43,13 @@
         "description": "A seed is an installable unit",
         "example": {
           "artifact": "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-nixos",
-          "id": "example4ser3adju75ddusbr",
           "name": "myhost",
-          "seed_type": "nixos"
+          "seed_type": "nixos",
+          "sid": "example4ser3adju75ddusbr"
         },
         "properties": {
           "artifact": {
-            "description": "Store path of the seed",
+            "description": "Artifact of the seed",
             "type": "string",
             "x-struct": null,
             "x-validate": null

@@ -744,21 +744,22 @@ let
 
       open_api_spex =
         let
-          version = "3.22.0";
+          version = "d7ad0631b5689666d29115f27c21c5d397242888";
           drv = buildMix {
             inherit version;
             name = "open_api_spex";
             appConfigPath = ../../config;
 
-            src = fetchHex {
-              inherit version;
-              pkg = "open_api_spex";
-              sha256 = "dd751ddbdd709bb4a5313e9a24530da6e66594773c7242a0c2592cbd9f589063";
+            src = pkgs.fetchFromGitHub {
+              owner = "adamcstephens";
+              repo = "open_api_spex";
+              rev = "d7ad0631b5689666d29115f27c21c5d397242888";
+              hash = "sha256-eBImBQNM2zY8yYtFz0gkynn9z4IHFE1E7gdeuuPNSIc=";
             };
 
             beamDeps = [
-              decimal
               jason
+              decimal
               plug
             ];
           };

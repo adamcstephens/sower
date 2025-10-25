@@ -42,7 +42,7 @@ type NixCache struct {
 
 // Seed A seed is an installable unit
 type Seed struct {
-	// Artifact Store path of the seed
+	// Artifact Artifact of the seed
 	Artifact string `json:"artifact"`
 
 	// Name Name of the seed

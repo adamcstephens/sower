@@ -5,11 +5,13 @@ defmodule SowerClient.Schema do
       require OpenApiSpex
 
       def cast(attrs \\ %{}) do
-        OpenApiSpex.cast_value(attrs, schema())
+        spec = SowerClient.spec()
+        resolved_schema = spec.components.schemas[schema().title]
+        OpenApiSpex.cast_value(attrs, resolved_schema, spec)
       end
 
       def cast!(attrs \\ %{}) do
-        {:ok, val} = OpenApiSpex.cast_value(attrs, schema())
+        {:ok, val} = cast(attrs)
         val
       end
     end

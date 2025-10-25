@@ -28,7 +28,9 @@ defmodule IncusClient.MixProject do
     [
       {:igniter, "~> 0.6", only: [:dev, :test]},
       {:jason, "~> 1.0"},
-      {:open_api_spex, "~> 3.0"},
+      {:open_api_spex,
+       git: "https://github.com/adamcstephens/open_api_spex.git",
+       ref: "d7ad0631b5689666d29115f27c21c5d397242888"},
       {:req, "~> 0.5"},
       {:typedstruct, "~> 0.5"}
     ]

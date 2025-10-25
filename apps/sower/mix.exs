@@ -48,7 +48,6 @@ defmodule Sower.MixProject do
       {:mime, "~> 2.0.6"},
       {:mix_test_watch, "~> 1.0", only: [:dev, :test], runtime: false},
       {:nix, in_umbrella: true},
-      {:open_api_spex, "~> 3.20"},
       {:permit, "~> 0.3.0"},
       {:permit_ecto, "~> 0.2.3"},
       {:phoenix, "~> 1.8.0"},

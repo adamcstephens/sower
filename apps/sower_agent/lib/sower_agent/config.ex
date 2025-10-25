@@ -40,7 +40,7 @@ defmodule SowerAgent.Config do
       },
       subscriptions: %Schema{
         type: :array,
-        items: SowerClient.Schemas.Orchestration.Subscription.schema(),
+        items: SowerClient.Schemas.Orchestration.Subscription,
         default: []
       }
     },
@@ -54,12 +54,21 @@ defmodule SowerAgent.Config do
   def load(config_map \\ %{}) do
     Application.ensure_all_started(:logger)
 
+    spec =
+      %OpenApiSpex.OpenApi{
+        info: %OpenApiSpex.Info{title: "Config", version: "1.0.0"},
+        paths: %{},
+        components: nil
+      }
+      |> OpenApiSpex.resolve_schema_modules()
+      |> OpenApiSpex.add_schemas([SowerAgent.Config])
+
     cfg =
       defaults()
       |> Map.merge(config_map)
       |> add_config_file()
       |> parse_files_to_values()
-      |> OpenApiSpex.cast_value(schema())
+      |> OpenApiSpex.cast_value(spec.components.schemas["Config"], spec)
       |> case do
         {:ok, cfg} ->
           cfg

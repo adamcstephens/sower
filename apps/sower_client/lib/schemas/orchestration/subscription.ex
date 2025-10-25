@@ -13,20 +13,31 @@ defmodule SowerClient.Schemas.Orchestration.Subscription do
       },
       seed_name: %Schema{
         type: :string,
-        description: "Name of the seed"
+        description: "Name of the seed",
+        example: "myhost"
       },
       seed_type: %Schema{
         type: :string,
         description: "Type of the seed",
-        enum: SowerClient.Schemas.Seed.seed_types()
+        enum: SowerClient.Schemas.Seed.seed_types(),
+        example: "nixos"
       },
       rules: %Schema{
         type: :array,
         items: __MODULE__.Rule,
-        nullable: true
+        default: [],
+        description: "Tag-based rules to filter seeds"
       }
     },
-    required: []
+    required: [],
+    example: %{
+      seed_name: "myhost",
+      seed_type: "nixos",
+      rules: [
+        %{key: "branch", op: "eq", value: "main"},
+        %{key: "repo", op: "eq", value: "https://github.com/example/repo"}
+      ]
+    }
   })
 
   defmodule Rule do
@@ -38,15 +49,18 @@ defmodule SowerClient.Schemas.Orchestration.Subscription do
       properties: %{
         key: %Schema{
           type: :string,
-          description: "tag key"
+          description: "tag key",
+          example: "branch"
         },
         op: %Schema{
           type: :string,
-          description: "operation to apply"
+          description: "operation to apply",
+          enum: ["eq"]
         },
         value: %Schema{
           type: :string,
-          description: "value"
+          description: "value",
+          example: "main"
         }
       },
       required: [:key, :op, :value]
