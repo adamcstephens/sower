@@ -40,6 +40,7 @@ defmodule Sower.MixProject do
       {:faker, "~> 0.18", only: :test},
       {:finch, "~> 0.13"},
       {:floki, ">= 0.30.0", only: :test},
+      {:lazy_html, ">= 0.1.0", only: :test},
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.2"},
       {:joken, "~> 2.6.1"},

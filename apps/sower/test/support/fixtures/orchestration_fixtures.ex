@@ -31,4 +31,16 @@ defmodule Sower.OrchestrationFixtures do
 
     subscription
   end
+
+  @doc """
+  Generate a deployment.
+  """
+  def deployment_fixture(attrs \\ %{}) do
+    {:ok, deployment} =
+      attrs
+      |> Enum.into(%{seeds: [], subscriptions: []})
+      |> Sower.Orchestration.create_deployment()
+
+    deployment
+  end
 end
