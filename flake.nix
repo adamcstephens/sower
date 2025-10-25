@@ -54,6 +54,7 @@
                 beamPackages.erlang
                 beamPackages.elixir
                 beamPackages.elixir-ls
+                beamPackages.hex
                 pkgs.next-ls
 
                 # elixir deps build deps
