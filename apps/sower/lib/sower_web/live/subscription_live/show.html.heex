@@ -17,6 +17,17 @@
     </:item>
     <:item title="Seed Name">{@subscription.seed_name}</:item>
     <:item title="Seed Type">{@subscription.seed_type}</:item>
+    <:item title="Rules">
+      <%= if Enum.empty?(@subscription.rules) do %>
+        <span class="text-gray-500">No rules</span>
+      <% else %>
+        <%= for rule <- @subscription.rules do %>
+          <span class="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10 mr-1">
+            {rule.key} {rule.op} {rule.value}
+          </span>
+        <% end %>
+      <% end %>
+    </:item>
     <:item title="Deployments">
       <.table
         id="deployments"
