@@ -7,6 +7,17 @@
   <.list>
     <:item title="seed type">{@seed.seed_type}</:item>
     <:item title="artifact">{@seed.artifact}</:item>
+    <:item title="tags">
+      <%= if Enum.empty?(@seed.tags) do %>
+        <span class="text-gray-500">No tags</span>
+      <% else %>
+        <%= for tag <- @seed.tags do %>
+          <span class="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10 mr-1">
+            {tag.key}={tag.value}
+          </span>
+        <% end %>
+      <% end %>
+    </:item>
     <:item title="created">{@seed.inserted_at}</:item>
     <:item title="updated">{@seed.updated_at}</:item>
   </.list>
