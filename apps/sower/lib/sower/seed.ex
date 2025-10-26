@@ -27,8 +27,6 @@ defmodule Sower.Seed do
   end
 
   def create(attrs) do
-    dbg(attrs)
-
     Multi.new()
     |> Multi.insert(:seed, changeset(%Seed{org_id: Sower.Repo.get_org_id()}, attrs),
       on_conflict: {:replace, [:updated_at]},

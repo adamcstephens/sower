@@ -329,7 +329,13 @@ defmodule Sower.Orchestration do
 
     matching_seed_ids =
       Enum.reduce(rules || [], base_query, fn rule, q ->
-        case rule.op do
+        op =
+          case rule.op do
+            op when is_atom(op) -> op
+            op when is_binary(op) -> String.to_existing_atom(op)
+          end
+
+        case op do
           :eq ->
             from s in q,
               join: t in assoc(s, :tags),

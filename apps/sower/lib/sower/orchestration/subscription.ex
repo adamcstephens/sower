@@ -47,6 +47,12 @@ defmodule Sower.Orchestration.Subscription do
     end
 
     def changeset(rule, attrs) do
+      attrs =
+        case attrs do
+          %{op: op} when is_atom(op) -> Map.put(attrs, :op, Atom.to_string(op))
+          _ -> attrs
+        end
+
       rule
       |> cast(attrs, [:key, :op, :value])
       |> validate_required([:key, :op, :value])

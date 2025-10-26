@@ -162,12 +162,44 @@ defmodule SowerAgent.Config do
     file = Path.absname(file)
 
     if File.exists?(file) do
-      file |> File.read!() |> Jason.decode!()
+      file
+      |> File.read!()
+      |> Jason.decode!()
+      |> normalize_subscription_rules()
     else
       Logger.warning(msg: "Config file is missing!", file: file)
       %{}
     end
   end
+
+  defp normalize_subscription_rules(%{"subscriptions" => subscriptions} = config)
+       when is_list(subscriptions) do
+    normalized_subscriptions =
+      Enum.map(subscriptions, fn subscription ->
+        case subscription do
+          %{"rules" => rules} when is_list(rules) ->
+            normalized_rules =
+              Enum.map(rules, fn rule ->
+                case rule do
+                  rule when is_binary(rule) ->
+                    SowerClient.SubscriptionRuleFormat.parse!(rule)
+
+                  rule when is_map(rule) ->
+                    rule
+                end
+              end)
+
+            Map.put(subscription, "rules", normalized_rules)
+
+          subscription ->
+            subscription
+        end
+      end)
+
+    Map.put(config, "subscriptions", normalized_subscriptions)
+  end
+
+  defp normalize_subscription_rules(config), do: config
 
   def default_config_file() do
     case System.get_env("USER") do
