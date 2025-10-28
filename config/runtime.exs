@@ -4,17 +4,7 @@ if config_env() == :dev do
   SowerAgent.Config.load(%{
     access_token_file: Path.expand("../.dev-api-token", __DIR__),
     endpoint: "http://localhost:7150",
-    state_directory: Path.expand("../_build", __DIR__),
-    subscriptions: [
-      %{
-        seed_name: "deck",
-        seed_type: "nixos",
-        rules: [
-          %{key: "branch", op: "eq", value: "main"}
-        ]
-      },
-      %{seed_name: "deck", seed_type: "home-manager"}
-    ]
+    state_directory: Path.expand("../_build", __DIR__)
   })
 end
 
@@ -28,8 +18,8 @@ if config_env() == :test do
     endpoint: "http://localhost:7150",
     state_directory: Path.expand("../_build", __DIR__),
     subscriptions: [
-      %{seed_name: "deck", seed_type: "nixos"},
-      %{seed_name: "deck", seed_type: "home-manager"}
+      %{seed_name: "test1", seed_type: "nixos"},
+      %{seed_name: "test1", seed_type: "home-manager"}
     ]
   })
 end

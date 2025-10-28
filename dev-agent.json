@@ -1,5 +1,16 @@
 {
   "access_token_file": "./.dev-api-token",
   "endpoint": "http://localhost:7150",
-  "state_directory": "./_build/agent1"
+  "state_directory": "./_build/agent1",
+  "subscriptions": [
+    {
+      "seed_name": "deck",
+      "seed_type": "nixos",
+      "rules": ["branch=main"]
+    },
+    {
+      "seed_name": "deck",
+      "seed_type": "home-manager"
+    }
+  ]
 }
