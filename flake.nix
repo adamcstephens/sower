@@ -45,43 +45,42 @@
             devShells.default = pkgs.mkShell {
               inputsFrom = [ config.process-compose.devServices.services.outputs.devShell ];
 
-              packages =
-                [
-                  # elixir
-                  beamPackages.erlang
-                  elixir
-                  (beamPackages.elixir-ls.override { inherit elixir; })
-                  pkgs.next-ls
+              packages = [
+                # elixir
+                beamPackages.erlang
+                elixir
+                (beamPackages.elixir-ls.override { inherit elixir; })
+                pkgs.next-ls
 
-                  # go
-                  pkgs.go_1_23
-                  pkgs.delve
-                  pkgs.gci
-                  pkgs.golangci-lint
-                  pkgs.gopls
-                  pkgs.oapi-codegen
+                # go
+                pkgs.go_1_23
+                pkgs.delve
+                pkgs.gci
+                pkgs.golangci-lint
+                pkgs.gopls
+                pkgs.oapi-codegen
 
-                  # rust
-                  pkgs.cargo
+                # rust
+                pkgs.cargo
 
-                  pkgs.attic-client
-                  self'.packages.seed-ci
-                  pkgs.nushell
+                pkgs.attic-client
+                self'.packages.seed-ci
+                pkgs.nushell
 
-                  pkgs.docker
-                  pkgs.just
-                  pkgs.mix2nix
-                  pkgs.nix-eval-jobs
-                  pkgs.nvfetcher
-                  pkgs.process-compose
-                  config.process-compose.devServices.services.postgres.postgres1.package
-                  config.process-compose.devServices.outputs.package
-                  pkgs.watchexec
-                ]
-                ++ lib.optionals pkgs.stdenv.isLinux [
-                  # elixir
-                  pkgs.inotify-tools
-                ];
+                pkgs.docker
+                pkgs.just
+                pkgs.mix2nix
+                pkgs.nix-eval-jobs
+                pkgs.nvfetcher
+                pkgs.process-compose
+                config.process-compose.devServices.services.postgres.postgres1.package
+                config.process-compose.devServices.outputs.package
+                pkgs.watchexec
+              ]
+              ++ lib.optionals pkgs.stdenv.isLinux [
+                # elixir
+                pkgs.inotify-tools
+              ];
 
               shellHook = ''
                 export PC_CONFIG_FILES=${config.process-compose.devServices.outputs.settingsFile}
@@ -105,7 +104,7 @@
             packages = {
               seed-ci = pkgs.callPackage ./nix/packages/seed-ci.nix { };
               client = pkgs.callPackage ./nix/packages/client.nix {
-                buildGoModule = pkgs.buildGo123Module;
+                buildGoModule = pkgs.buildGoModule;
                 inherit version;
               };
               server = pkgs.callPackage ./nix/packages/server.nix { inherit beamPackages elixir version; };
