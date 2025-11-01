@@ -42,7 +42,7 @@ in
           output: (builtins.elem output outputs) && (builtins.elem output cfg.buildOutputs);
 
         nonSystemOutputToSower =
-          output: lib.mapAttrs (n: v: { systems = [ v.pkgs.hostPlatform.system ]; }) output;
+          output: lib.mapAttrs (n: v: { systems = [ v.pkgs.stdenv.hostPlatform.system ]; }) output;
 
         perSystemOutputToSower =
           output:
