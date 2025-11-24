@@ -42,3 +42,4 @@ data/
 # go bin
 /sower
 dev-server.json
+.erlang-history/
