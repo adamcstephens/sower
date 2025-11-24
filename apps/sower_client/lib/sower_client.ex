@@ -11,7 +11,8 @@ defmodule SowerClient do
     |> OpenApiSpex.resolve_schema_modules()
     |> OpenApiSpex.add_schemas([
       SowerClient.Schemas.AgentHello,
-      SowerClient.Schemas.Orchestration.Subscription
+      SowerClient.Schemas.Orchestration.Subscription,
+      SowerClient.Schemas.Orchestration.DeploymentRequest
     ])
   end
 end
