@@ -96,6 +96,26 @@ let
           ${old.buildPhase}
         '';
       };
+
+    elixirMake = _unusedArgs: old: {
+      preConfigure = ''
+        export ELIXIR_MAKE_CACHE_DIR="$TEMPDIR/elixir_make_cache"
+      '';
+    };
+
+    lazyHtml = _unusedArgs: old: {
+      preConfigure = ''
+        export ELIXIR_MAKE_CACHE_DIR="$TEMPDIR/elixir_make_cache"
+      '';
+
+      postPatch = ''
+        substituteInPlace mix.exs           --replace-fail "Fine.include_dir()" '"${packages.fine}/src/c_include"'           --replace-fail '@lexbor_git_sha "244b84956a6dc7eec293781d051354f351274c46"' '@lexbor_git_sha ""'
+      '';
+
+      preBuild = ''
+        install -Dm644           -t _build/c/third_party/lexbor/$LEXBOR_GIT_SHA/build           ${pkgs.lexbor}/lib/liblexbor_static.a
+      '';
+    };
   };
 
   defaultOverrides = (
@@ -304,7 +324,7 @@ let
 
       ecto =
         let
-          version = "3.13.3";
+          version = "3.13.5";
           drv = buildMix {
             inherit version;
             name = "ecto";
@@ -313,7 +333,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "ecto";
-              sha256 = "1927db768f53a88843ff25b6ba7946599a8ca8a055f69ad8058a1432a399af94";
+              sha256 = "df9efebf70cf94142739ba357499661ef5dbb559ef902b68ea1f3c1fabce36de";
             };
 
             beamDeps = [
@@ -409,7 +429,7 @@ let
 
       expo =
         let
-          version = "1.1.0";
+          version = "1.1.1";
           drv = buildMix {
             inherit version;
             name = "expo";
@@ -418,7 +438,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "expo";
-              sha256 = "fbadf93f4700fb44c331362177bdca9eeb8097e8b0ef525c9cc501cb9917c960";
+              sha256 = "5fb308b9cb359ae200b7e23d37c76978673aa1b06e2b3075d814ce12c5811640";
             };
           };
         in
@@ -489,7 +509,7 @@ let
 
       gettext =
         let
-          version = "1.0.0";
+          version = "1.0.2";
           drv = buildMix {
             inherit version;
             name = "gettext";
@@ -498,7 +518,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "gettext";
-              sha256 = "cc8196640756894a4fd75606067bed41a9863c0db09d6d6cc576e6170cffaa74";
+              sha256 = "eab805501886802071ad290714515c8c4a17196ea76e5afc9d06ca85fb1bfeb3";
             };
 
             beamDeps = [
@@ -569,7 +589,7 @@ let
 
       jose =
         let
-          version = "1.11.10";
+          version = "1.11.12";
           drv = buildMix {
             inherit version;
             name = "jose";
@@ -578,7 +598,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "jose";
-              sha256 = "0d6cd36ff8ba174db29148fc112b5842186b68a90ce9fc2b3ec3afe76593e614";
+              sha256 = "31e92b653e9210b696765cdd885437457de1add2a9011d92f8cf63e4641bab7b";
             };
           };
         in
@@ -666,7 +686,7 @@ let
 
       mint_web_socket =
         let
-          version = "1.0.4";
+          version = "1.0.5";
           drv = buildMix {
             inherit version;
             name = "mint_web_socket";
@@ -675,7 +695,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "mint_web_socket";
-              sha256 = "027d4c5529c45a4ba0ce27a01c0f35f284a5468519c045ca15f43decb360a991";
+              sha256 = "04b35663448fc758f3356cce4d6ac067ca418bbafe6972a3805df984b5f12e61";
             };
 
             beamDeps = [
@@ -835,7 +855,7 @@ let
 
       phoenix_ecto =
         let
-          version = "4.6.5";
+          version = "4.7.0";
           drv = buildMix {
             inherit version;
             name = "phoenix_ecto";
@@ -844,7 +864,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "phoenix_ecto";
-              sha256 = "26ec3208eef407f31b748cadd044045c6fd485fbff168e35963d2f9dfff28d4b";
+              sha256 = "1d75011e4254cb4ddf823e81823a9629559a1be93b4321a6a5f11a5306fbf4cc";
             };
 
             beamDeps = [
@@ -900,7 +920,7 @@ let
 
       phoenix_live_view =
         let
-          version = "1.1.14";
+          version = "1.1.17";
           drv = buildMix {
             inherit version;
             name = "phoenix_live_view";
@@ -909,7 +929,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "phoenix_live_view";
-              sha256 = "b827980e2bc00fddd8674e3b567519a4e855b5de04bf8607140414f1101e2627";
+              sha256 = "fa82307dd9305657a8236d6b48e60ef2e8d9f742ee7ed832de4b8bcb7e0e5ed2";
             };
 
             beamDeps = [
@@ -926,7 +946,7 @@ let
 
       phoenix_pubsub =
         let
-          version = "2.1.3";
+          version = "2.2.0";
           drv = buildMix {
             inherit version;
             name = "phoenix_pubsub";
@@ -935,7 +955,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "phoenix_pubsub";
-              sha256 = "bba06bc1dcfd8cb086759f0edc94a8ba2bc8896d5331a1e2c2902bf8e36ee502";
+              sha256 = "adc313a5bf7136039f63cfd9668fde73bba0765e0614cba80c06ac9460ff3e96";
             };
           };
         in
@@ -1027,7 +1047,7 @@ let
 
       req =
         let
-          version = "0.5.15";
+          version = "0.5.16";
           drv = buildMix {
             inherit version;
             name = "req";
@@ -1036,7 +1056,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "req";
-              sha256 = "a6513a35fad65467893ced9785457e91693352c70b58bbc045b47e5eb2ef0c53";
+              sha256 = "974a7a27982b9b791df84e8f6687d21483795882a7840e8309abdbe08bb06f09";
             };
 
             beamDeps = [
@@ -1328,7 +1348,7 @@ let
 
       websock_adapter =
         let
-          version = "0.5.8";
+          version = "0.5.9";
           drv = buildMix {
             inherit version;
             name = "websock_adapter";
@@ -1337,7 +1357,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "websock_adapter";
-              sha256 = "315b9a1865552212b5f35140ad194e67ce31af45bcee443d4ecb96b5fd3f3782";
+              sha256 = "5534d5c9adad3c18a0f58a9371220d75a803bf0b9a3d87e6fe072faaeed76a08";
             };
 
             beamDeps = [

@@ -26,7 +26,7 @@ defmodule Nix.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:igniter, "~> 0.5", only: [:dev, :test]},
+      {:igniter, only: [:dev, :test]},
       {:jason, "~> 1.0"},
       {:xema, "~> 0.17"}
     ]

@@ -28,7 +28,7 @@ defmodule SowerAgent.MixProject do
     [
       {:cuid2_ex, "~> 0.2"},
       {:deps_nix, "~> 2.0", only: [:dev]},
-      {:igniter, "~> 0.6", only: [:dev, :test]},
+      {:igniter, only: [:dev, :test]},
       {:jason, "~> 1.0"},
       {:nix, in_umbrella: true},
       {:slipstream, "~> 1.0"},
