@@ -79,6 +79,17 @@ defmodule Sower.Seed do
     Repo.get_by(Seed, name: name, seed_type: seed_type)
   end
 
+  @doc """
+  Get a seed from a SowerClient.Schemas.Seed struct.
+  Returns `{:ok, seed}` or `nil` if not found.
+  """
+  def get_by_request(%SowerClient.Schemas.Seed{name: name, seed_type: seed_type}) do
+    case get(name, seed_type) do
+      nil -> nil
+      seed -> {:ok, seed}
+    end
+  end
+
   def get_sid(sid) do
     Repo.get_by(Seed, sid: sid)
   end

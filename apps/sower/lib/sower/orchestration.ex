@@ -3,10 +3,11 @@ defmodule Sower.Orchestration do
   The Orchestration context.
   """
 
-  import Ecto.Query, warn: false
   alias Sower.Repo
-
   alias Sower.Orchestration.Agent
+
+  import Ecto.Query, warn: false
+  import Sower.Authorization
 
   require Logger
 
@@ -21,6 +22,111 @@ defmodule Sower.Orchestration do
   """
   def list_agents do
     Repo.all(Agent)
+  end
+
+  def get_agent(
+        %SowerClient.Schemas.AgentHello{agent_sid: nil, name: name, local_sid: local_sid},
+        socket
+      ) do
+    case get_agent_local_sid(local_sid) do
+      nil ->
+        Logger.debug(
+          msg: "Registering new agent",
+          name: name,
+          local_sid: local_sid
+        )
+
+        if socket.assigns.access_token |> can() |> create?(Agent) do
+          create_agent(%{name: name, local_sid: local_sid})
+        else
+          {:error, :unauthorized}
+        end
+
+      %Agent{} = agent ->
+        Logger.error(
+          msg: "Local agent attempted to re-register existing agent",
+          name: agent.name,
+          local_sid: local_sid,
+          existing_agent_sid: agent.sid
+        )
+
+        {:error, :unauthorized_agent_hello}
+    end
+  end
+
+  def get_agent(
+        %SowerClient.Schemas.AgentHello{agent_sid: agent_sid, name: name, local_sid: local_sid},
+        socket
+      ) do
+    case get_agent_sid(agent_sid) do
+      nil ->
+        Logger.debug(
+          msg: "Local agent requested a missing agent",
+          name: name,
+          local_sid: local_sid,
+          requested_agent_sid: agent_sid
+        )
+
+        if socket.assigns.access_token |> can() |> create?(Agent) do
+          create_agent(%{name: name, local_sid: local_sid})
+        else
+          {:error, :unauthorized}
+        end
+
+      %Agent{local_sid: nil} = agent when agent.name == name ->
+        Logger.debug(
+          msg: "Registering local sid to existing agent",
+          name: agent.name,
+          local_sid: local_sid,
+          agent_sid: agent.sid
+        )
+
+        if socket.assigns.access_token |> can() |> create?(Agent) do
+          agent = update_agent(agent, %{local_sid: local_sid})
+
+          {:ok, agent}
+        else
+          {:error, :unauthorized_agent_hello}
+        end
+
+      %Agent{} = agent
+      when agent.sid == agent_sid and
+             agent.name == name and
+             agent.local_sid == local_sid ->
+        Logger.debug(
+          msg: "Found matching agent",
+          name: agent.name,
+          local_sid: local_sid,
+          agent_sid: agent.sid
+        )
+
+        {:ok, agent}
+
+      %Agent{} = agent
+      when agent.sid == agent_sid and
+             agent.name != name and
+             agent.local_sid == local_sid ->
+        Logger.info(
+          msg: "Found matching agent with different name, renaming",
+          name: name,
+          previous_name: agent.name,
+          local_sid: local_sid,
+          agent_sid: agent.sid
+        )
+
+        {:ok, agent} = update_agent(agent, %{name: name})
+
+        {:ok, agent}
+
+      %Agent{} = agent ->
+        Logger.error(
+          msg: "Invalid agent request",
+          local_sid: local_sid,
+          agent_sid: agent.sid
+        )
+
+        {:error, :unauthorized_agent_hello}
+    end
   end
 
   @doc """
@@ -265,6 +371,40 @@ defmodule Sower.Orchestration do
          ) do
       {:ok, sub} -> {:ok, Repo.reload(sub)}
       err -> err
+    end
+  end
+
+  @doc """
+  Register a subscription from a SowerClient.Schemas.Orchestration.Subscription struct.
+
+  ## Examples
+
+      iex> register_subscription(req, agent_id)
+      {:ok, %SowerClient.Schemas.Orchestration.Subscription{}}
+
+      iex> register_subscription(req, agent_id)
+      {:error, %Ecto.Changeset{}}
+
+  """
+  def register_subscription(
+        %SowerClient.Schemas.Orchestration.Subscription{
+          seed_name: seed_name,
+          seed_type: seed_type,
+          rules: rules
+        },
+        agent_id
+      ) do
+    case create_subscription(%{
+           agent_id: agent_id,
+           seed_name: seed_name,
+           seed_type: seed_type,
+           rules: rules
+         }) do
+      {:ok, subscription} ->
+        {:ok, SowerClient.Schemas.Orchestration.Subscription.cast!(subscription)}
+
+      {:error, _} = error ->
+        error
     end
   end
 

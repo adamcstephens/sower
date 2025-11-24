@@ -1,5 +1,4 @@
 defmodule SowerWeb.AgentChannel do
-  import Sower.Authorization
   use Phoenix.Channel
 
   alias Sower.Orchestration
@@ -73,7 +72,7 @@ defmodule SowerWeb.AgentChannel do
   def handle_in("agent:hello", payload, socket) do
     case payload
          |> SowerClient.Schemas.AgentHello.cast!()
-         |> get_agent(socket) do
+         |> Sower.Orchestration.get_agent(socket) do
       {:ok, agent} ->
         Logger.debug(msg: "Replying to hello", agent: agent)
         {:reply, {:ok, agent}, assign(socket, :agent_sid, agent.sid)}
@@ -84,93 +83,32 @@ defmodule SowerWeb.AgentChannel do
     end
   end
 
-  # def handle_in("agent:current_generation", payload, socket) do
-  #   payload = Nix.Profile.Generation.cast!(payload)
-  #
-  #   artifact = Sower.Nix.submit_artifact!(payload.path)
-  #
-  #   Sower.Orchestration.create_deployment(%{
-  #     deployed_at: payload.created,
-  #     artifacts: [artifact]
-  #   })
-  #
-  #   Phoenix.PubSub.broadcast(Sower.PubSub, "agent:view:#{socket.assigns.agent.sid}", payload)
-  #
-  #   {:noreply, socket}
-  # end
-
   def handle_in("seed:get", payload, socket) do
-    with {:ok, req_seed} <- SowerClient.Schemas.Seed.cast(payload),
-         seed when not is_nil(seed) <- Sower.Seed.get(req_seed.name, req_seed.seed_type) do
-      {:reply, {:ok, seed}, socket}
-    else
-      nil ->
-        {:reply, {:error, :not_found}, socket}
-
-      {:error, error} ->
-        Logger.error(msg: "Failed to get seed", payload: payload, error: error)
-        {:reply, :error, socket}
-    end
+    handle_message(payload, SowerClient.Schemas.Seed, socket, &Sower.Seed.get_by_request/1)
   end
 
   def handle_in("subscription:register", payload, socket) do
-    with {:ok, req_sub} <- SowerClient.Schemas.Orchestration.Subscription.cast(payload),
-         {:ok, subscription} <-
-           Sower.Orchestration.create_subscription(%{
-             agent_id: socket.assigns.agent.id,
-             seed_name: req_sub.seed_name,
-             seed_type: req_sub.seed_type,
-             rules: req_sub.rules
-           }) do
-      subscription =
-        SowerClient.Schemas.Orchestration.Subscription.cast(subscription)
-
-      {:reply, subscription, socket}
-    else
-      nil ->
-        {:reply, {:error, "Seed not found"}, socket}
-
-      {:error, error} ->
-        Logger.error(
-          msg: "Failed to register subscription",
-          payload: payload,
-          error: error
-        )
-
-        {:reply, :error, socket}
-    end
+    handle_message(payload, SowerClient.Schemas.Orchestration.Subscription, socket, fn req ->
+      Sower.Orchestration.register_subscription(req, socket.assigns.agent.id)
+    end)
   end
 
   def handle_in("deployment:request", payload, socket) do
-    with {:ok, req_sub} <- SowerClient.Schemas.Orchestration.DeploymentRequest.cast(payload),
-         {:ok, deploy} <- Sower.Orchestration.request_deployment(req_sub) do
-      {:reply, {:ok, deploy}, socket}
-    else
-      {:error, error} ->
-        Logger.error(
-          msg: "Failed to request subscription upgrade",
-          payload: payload,
-          error: error
-        )
-
-        {:reply, :error, socket}
-    end
+    handle_message(
+      payload,
+      SowerClient.Schemas.Orchestration.DeploymentRequest,
+      socket,
+      &Sower.Orchestration.request_deployment/1
+    )
   end
 
   def handle_in("deployment:result", payload, socket) do
-    with {:ok, result} <- SowerClient.Schemas.Orchestration.DeploymentResult.cast(payload),
-         {:ok, _deploy} <- Sower.Orchestration.record_deployment(result) do
-      {:reply, :ok, socket}
-    else
-      {:error, error} ->
-        Logger.error(
-          msg: "Failed to request subscription upgrade",
-          payload: payload,
-          error: error
-        )
-
-        {:reply, :error, socket}
-    end
+    handle_message(
+      payload,
+      SowerClient.Schemas.Orchestration.DeploymentResult,
+      socket,
+      &Sower.Orchestration.record_deployment/1
+    )
   end
 
   @impl Phoenix.Channel
@@ -192,108 +130,18 @@ defmodule SowerWeb.AgentChannel do
     {:noreply, socket}
   end
 
-  defp get_agent(
-         %SowerClient.Schemas.AgentHello{agent_sid: nil, name: name, local_sid: local_sid},
-         socket
-       ) do
-    case Orchestration.get_agent_local_sid(local_sid) do
+  # provide a standard way of casting the schemas and handling the errors
+  defp handle_message(payload, schema, socket, fun) do
+    with {:ok, params} <- schema.cast(payload),
+         {:ok, result} <- fun.(params) do
+      {:reply, {:ok, result}, socket}
+    else
       nil ->
-        Logger.debug(
-          msg: "Registering new agent",
-          name: name,
-          local_sid: local_sid
-        )
+        {:reply, {:error, :not_found}, socket}
 
-        if socket.assigns.access_token |> can() |> create?(Sower.Orchestration.Agent) do
-          Orchestration.create_agent(%{name: name, local_sid: local_sid})
-        else
-          {:error, :unauthorized}
-        end
-
-      %Orchestration.Agent{} = agent ->
-        Logger.error(
-          msg: "Local agent attempted to re-register existing agent",
-          name: agent.name,
-          local_sid: local_sid,
-          existing_agent_sid: agent.sid
-        )
-
-        {:error, :unauthorized_agent_hello}
-    end
-  end
-
-  defp get_agent(
-         %SowerClient.Schemas.AgentHello{agent_sid: agent_sid, name: name, local_sid: local_sid},
-         socket
-       ) do
-    case Orchestration.get_agent_sid(agent_sid) do
-      nil ->
-        Logger.debug(
-          msg: "Local agent requested a missing agent",
-          name: name,
-          local_sid: local_sid,
-          requested_agent_sid: agent_sid
-        )
-
-        if socket.assigns.access_token |> can() |> create?(Sower.Orchestration.Agent) do
-          Orchestration.create_agent(%{name: name, local_sid: local_sid})
-        else
-          {:error, :unauthorized}
-        end
-
-      %Orchestration.Agent{local_sid: nil} = agent when agent.name == name ->
-        Logger.debug(
-          msg: "Registering local sid to existing agent",
-          name: agent.name,
-          local_sid: local_sid,
-          agent_sid: agent.sid
-        )
-
-        if socket.assigns.access_token |> can() |> create?(Sower.Orchestration.Agent) do
-          agent = Orchestration.update_agent(agent, %{local_sid: local_sid})
-
-          {:ok, agent}
-        else
-          {:error, :unauthorized_agent_hello}
-        end
-
-      %Orchestration.Agent{} = agent
-      when agent.sid == agent_sid and
-             agent.name == name and
-             agent.local_sid == local_sid ->
-        Logger.debug(
-          msg: "Found matching agent",
-          name: agent.name,
-          local_sid: local_sid,
-          agent_sid: agent.sid
-        )
-
-        {:ok, agent}
-
-      %Orchestration.Agent{} = agent
-      when agent.sid == agent_sid and
-             agent.name != name and
-             agent.local_sid == local_sid ->
-        Logger.info(
-          msg: "Found matching agent with different name, renaming",
-          name: name,
-          previous_name: agent.name,
-          local_sid: local_sid,
-          agent_sid: agent.sid
-        )
-
-        {:ok, agent} = Orchestration.update_agent(agent, %{name: name})
-
-        {:ok, agent}
-
-      %Orchestration.Agent{} = agent ->
-        Logger.error(
-          msg: "Invalid agent request",
-          local_sid: local_sid,
-          agent_sid: agent.sid
-        )
-
-        {:error, :unauthorized_agent_hello}
+      {:error, _} = error ->
+        Logger.error(msg: "Channel handler error", error: error, topic: socket.topic)
+        {:reply, error, socket}
     end
   end
 end
