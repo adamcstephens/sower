@@ -5,6 +5,9 @@
     flake-parts.url = "github:hercules-ci/flake-parts";
     process-compose-flake.url = "github:Platonic-Systems/process-compose-flake";
     services-flake.url = "github:juspay/services-flake";
+
+    expert.url = "github:elixir-lang/expert?ref=main";
+    expert.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
@@ -28,6 +31,7 @@
         perSystem =
           {
             config,
+            inputs',
             lib,
             pkgs,
             self',
@@ -53,9 +57,9 @@
                 # elixir
                 beamPackages.erlang
                 beamPackages.elixir
-                beamPackages.elixir-ls
                 beamPackages.hex
                 pkgs.next-ls
+                inputs'.expert.packages.expert
 
                 # elixir deps build deps
                 pkgs.cargo
