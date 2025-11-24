@@ -362,6 +362,7 @@ defmodule Sower.Orchestration do
 
   """
   def create_subscription(attrs \\ %{}) do
+    # TODO handle changing rules
     case %Subscription{org_id: Sower.Repo.get_org_id()}
          |> Subscription.changeset(attrs)
          |> Repo.insert(

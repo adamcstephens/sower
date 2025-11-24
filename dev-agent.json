@@ -6,7 +6,7 @@
     {
       "seed_name": "deck",
       "seed_type": "nixos",
-      "rules": ["branch=main"]
+      "rules": ["source=dev"]
     },
     {
       "seed_name": "deck",
