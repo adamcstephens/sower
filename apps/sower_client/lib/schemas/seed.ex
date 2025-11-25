@@ -1,5 +1,6 @@
 defmodule SowerClient.Schemas.Seed do
   use SowerClient.Schema
+  use SowerClient.ChannelMessage, event: "get:seed"
 
   @seed_types ["nixos", "home-manager", "nix-darwin", "service"]
 

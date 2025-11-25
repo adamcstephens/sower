@@ -1,9 +1,25 @@
+defmodule SowerWeb.AgentChannel.Impl do
+  defmacro handle_schema(module, func) do
+    {_, _, module} = module
+    module = Module.concat(module)
+    event = apply(module, :event, [])
+
+    quote do
+      def handle_in(unquote(event), payload, socket) do
+        handle_message(payload, unquote(module), socket, unquote(func))
+      end
+    end
+  end
+end
+
 defmodule SowerWeb.AgentChannel do
   use Phoenix.Channel
 
   alias Sower.Orchestration
   alias SowerWeb.Presence
   require Logger
+
+  import SowerWeb.AgentChannel.Impl, only: [handle_schema: 2]
 
   def get_assigns(agent_sid) do
     Phoenix.PubSub.broadcast(Sower.PubSub, "agent:#{agent_sid}", :ping)
@@ -83,33 +99,21 @@ defmodule SowerWeb.AgentChannel do
     end
   end
 
-  def handle_in("seed:get", payload, socket) do
-    handle_message(payload, SowerClient.Schemas.Seed, socket, &Sower.Seed.get_by_request/1)
-  end
+  handle_schema(SowerClient.Schemas.Seed, &Sower.Seed.get_by_request/1)
 
-  def handle_in("subscription:register", payload, socket) do
-    handle_message(payload, SowerClient.Schemas.Orchestration.Subscription, socket, fn req ->
-      Sower.Orchestration.register_subscription(req, socket.assigns.agent.id)
-    end)
-  end
+  handle_schema(SowerClient.Schemas.Orchestration.Subscription, fn req, socket ->
+    Sower.Orchestration.register_subscription(req, socket.assigns.agent.id)
+  end)
 
-  def handle_in("deployment:request", payload, socket) do
-    handle_message(
-      payload,
-      SowerClient.Schemas.Orchestration.DeploymentRequest,
-      socket,
-      &Sower.Orchestration.request_deployment/1
-    )
-  end
+  handle_schema(
+    SowerClient.Schemas.Orchestration.DeploymentRequest,
+    &Sower.Orchestration.request_deployment/1
+  )
 
-  def handle_in("deployment:result", payload, socket) do
-    handle_message(
-      payload,
-      SowerClient.Schemas.Orchestration.DeploymentResult,
-      socket,
-      &Sower.Orchestration.record_deployment/1
-    )
-  end
+  handle_schema(
+    SowerClient.Schemas.Orchestration.DeploymentResult,
+    &Sower.Orchestration.record_deployment/1
+  )
 
   @impl Phoenix.Channel
   def handle_info(:track_presence, %Phoenix.Socket{assigns: %{agent: agent}} = socket) do
@@ -133,7 +137,7 @@ defmodule SowerWeb.AgentChannel do
   # provide a standard way of casting the schemas and handling the errors
   defp handle_message(payload, schema, socket, fun) do
     with {:ok, params} <- schema.cast(payload),
-         {:ok, result} <- fun.(params) do
+         {:ok, result} <- apply_handler(fun, params, socket) do
       {:reply, {:ok, result}, socket}
     else
       nil ->
@@ -142,6 +146,19 @@ defmodule SowerWeb.AgentChannel do
       {:error, _} = error ->
         Logger.error(msg: "Channel handler error", error: error, topic: socket.topic)
         {:reply, error, socket}
+    end
+  end
+
+  defp apply_handler(fun, params, socket) do
+    case :erlang.fun_info(fun, :arity) do
+      {:arity, 1} ->
+        fun.(params)
+
+      {:arity, 2} ->
+        fun.(params, socket)
+
+      {:arity, arity} ->
+        raise ArgumentError, "Channel handler arity #{arity} is not supported"
     end
   end
 end
