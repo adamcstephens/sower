@@ -48,7 +48,7 @@ defmodule SowerAgent.SocketClient do
         subscription_sids: [subscription.sid]
       })
 
-    {:ok, ref} = push(socket, private_channel(), "deployment:request", upgrade_request)
+    {:ok, ref} = push_message(socket, upgrade_request)
 
     {:reply, :ok, Map.put(socket, :upgrade_ref, ref)}
   end
@@ -73,7 +73,7 @@ defmodule SowerAgent.SocketClient do
     subscriptions =
       SowerAgent.Config.get().subscriptions
       |> Enum.map(fn sub ->
-        with {:ok, ref} <- push(socket, private_channel(), "subscription:register", sub),
+        with {:ok, ref} <- push_message(socket, sub),
              {:ok, subscription} <- await_reply(ref),
              {:ok, subscription} <-
                SowerClient.Schemas.Orchestration.Subscription.cast(subscription) do
@@ -154,10 +154,8 @@ defmodule SowerAgent.SocketClient do
     Logger.info(msg: "Joined channel topic", topic: @lobby_topic, conn_sid: conn_sid)
 
     {:ok, hello_ref} =
-      push(
+      push_message(
         socket,
-        @lobby_topic,
-        "agent:hello",
         SowerClient.Schemas.AgentHello.cast!(%{
           name: SowerAgent.Config.get().name,
           local_sid: SowerAgent.Storage.read().local_sid,
@@ -241,13 +239,7 @@ defmodule SowerAgent.SocketClient do
             deployed_at: DateTime.utc_now() |> DateTime.to_iso8601()
           })
 
-        {:ok, _result_ref} =
-          push(
-            socket,
-            private_channel(),
-            "deployment:result",
-            result
-          )
+        {:ok, _result_ref} = push_message(socket, result)
 
       {:error, error} ->
         Logger.error(msg: "Error handling deployment", error: error)
@@ -267,5 +259,19 @@ defmodule SowerAgent.SocketClient do
 
   defp private_channel() do
     "agent:#{Storage.read().agent_sid}"
+  end
+
+  defp push_message(socket, %module{} = struct) do
+    event = module.event()
+
+    topic =
+      case module.topic_type() do
+        :private -> private_channel()
+        :lobby -> @lobby_topic
+      end
+
+    with {:ok, ref} <- push(socket, topic, event, struct) do
+      {:ok, ref}
+    end
   end
 end

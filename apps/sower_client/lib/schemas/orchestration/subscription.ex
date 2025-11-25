@@ -1,5 +1,6 @@
 defmodule SowerClient.Schemas.Orchestration.Subscription do
   use SowerClient.Schema
+  use SowerClient.ChannelMessage, event: "subscription:register"
 
   OpenApiSpex.schema(%{
     title: "Subscription",

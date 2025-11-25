@@ -1,5 +1,6 @@
 defmodule SowerClient.Schemas.AgentHello do
   use SowerClient.Schema
+  use SowerClient.ChannelMessage, event: "agent:hello", topic_type: :lobby
 
   OpenApiSpex.schema(%{
     title: "AgentHello",
