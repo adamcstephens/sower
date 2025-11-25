@@ -30,7 +30,8 @@ defmodule SowerClient.MixProject do
       {:igniter, only: [:dev, :test]},
       {:jason, "~> 1.0"},
       {:open_api_spex, "~> 3.22"},
-      {:req, "~> 0.5.14"}
+      {:req, "~> 0.5.14"},
+      {:slipstream, "~> 1.0"}
     ]
   end
 end

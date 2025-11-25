@@ -1,42 +1,9 @@
 defmodule SowerAgent.SocketClient do
-  use Slipstream
+  use SowerAgent.ChannelClient, lobby_topic: "agent:lobby"
 
   require Logger
 
-  @lobby_topic "agent:lobby"
-
   alias SowerAgent.Storage
-
-  #
-  # client
-  #
-
-  def send(message) do
-    GenServer.call(__MODULE__, message)
-  end
-
-  def send(event, params) do
-    GenServer.call(__MODULE__, {event, params})
-  end
-
-  def cast(event) when is_atom(event) do
-    GenServer.cast(__MODULE__, event)
-  end
-
-  def cast(event, params) do
-    GenServer.cast(__MODULE__, {event, params})
-  end
-
-  def restart() do
-    GenServer.stop(__MODULE__, :shutdown)
-  end
-
-  @impl Slipstream
-  def handle_call(:ping, _, socket) do
-    {:ok, ref} = push(socket, "agent:lobby", "ping", %{})
-    {:ok, "pong"} = await_reply(ref)
-    {:reply, {:ok, :pong}, socket}
-  end
 
   def handle_call(
         {:deployment_request, subscription = %SowerClient.Schemas.Orchestration.Subscription{}},
@@ -53,22 +20,7 @@ defmodule SowerAgent.SocketClient do
     {:reply, :ok, Map.put(socket, :upgrade_ref, ref)}
   end
 
-  def handle_call({event, params}, _from, socket) do
-    {:ok, ref} = push(socket, private_channel(), event, params)
-    {:reply, await_reply(ref), socket}
-  end
-
-  def handle_call(request, from, socket) do
-    Logger.error(msg: "Unsupported call", request: request, from: from)
-    {:reply, {:error, :unsupported_request}, socket}
-  end
-
   @impl Slipstream
-  def handle_cast({event, params}, socket) do
-    {:ok, _} = push(socket, private_channel(), event, params)
-    {:noreply, socket}
-  end
-
   def handle_cast(:register_subscriptions, socket) do
     subscriptions =
       SowerAgent.Config.get().subscriptions
@@ -104,10 +56,6 @@ defmodule SowerAgent.SocketClient do
   # server
   #
 
-  def start_link(args) do
-    Slipstream.start_link(__MODULE__, args, name: __MODULE__)
-  end
-
   @impl Slipstream
   def init(_args) do
     config = Application.get_all_env(__MODULE__)
@@ -136,17 +84,6 @@ defmodule SowerAgent.SocketClient do
 
         :ignore
     end
-  end
-
-  @impl Slipstream
-  def handle_connect(socket) do
-    Logger.info(
-      msg: "Connected to websocket",
-      authority: socket.channel_config.uri.authority,
-      path: socket.channel_config.uri.path
-    )
-
-    {:ok, join(socket, @lobby_topic)}
   end
 
   @impl Slipstream
@@ -257,21 +194,7 @@ defmodule SowerAgent.SocketClient do
     {:noreply, socket}
   end
 
-  defp private_channel() do
+  def private_channel(_socket) do
     "agent:#{Storage.read().agent_sid}"
-  end
-
-  defp push_message(socket, %module{} = struct) do
-    event = module.event()
-
-    topic =
-      case module.topic_type() do
-        :private -> private_channel()
-        :lobby -> @lobby_topic
-      end
-
-    with {:ok, ref} <- push(socket, topic, event, struct) do
-      {:ok, ref}
-    end
   end
 end
