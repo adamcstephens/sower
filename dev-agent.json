@@ -6,11 +6,14 @@
     {
       "seed_name": "deck",
       "seed_type": "nixos",
-      "rules": ["source=dev"]
+      "rules": ["source=dev"],
+      "schedule": "*/15 * * * *",
+      "poll_on_connect": true
     },
     {
       "seed_name": "deck",
-      "seed_type": "home-manager"
+      "seed_type": "home-manager",
+      "poll_on_connect": false
     }
   ]
 }

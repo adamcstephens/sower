@@ -40,7 +40,7 @@ defmodule SowerAgent.Config do
       },
       subscriptions: %Schema{
         type: :array,
-        items: SowerClient.Schemas.Orchestration.Subscription,
+        items: SowerAgent.Subscription,
         default: []
       }
     },

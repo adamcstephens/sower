@@ -5,14 +5,10 @@ defmodule SowerAgent.SocketClient do
 
   alias SowerAgent.Storage
 
-  def handle_call(
-        {:deployment_request, subscription = %SowerClient.Schemas.Orchestration.Subscription{}},
-        _from,
-        socket
-      ) do
+  def handle_call({:deployment_request, %{sid: sid}}, _from, socket) do
     {:ok, upgrade_request} =
       SowerClient.Schemas.Orchestration.DeploymentRequest.new(%{
-        subscription_sids: [subscription.sid]
+        subscription_sids: [sid]
       })
 
     {:ok, ref} = push_message(socket, upgrade_request)
@@ -24,22 +20,31 @@ defmodule SowerAgent.SocketClient do
   def handle_cast(:register_subscriptions, socket) do
     subscriptions =
       SowerAgent.Config.get().subscriptions
-      |> Enum.map(fn sub ->
-        with {:ok, ref} <- push_message(socket, sub),
-             {:ok, subscription} <- await_reply(ref),
-             {:ok, subscription} <-
-               SowerClient.Schemas.Orchestration.Subscription.cast(subscription) do
-          Logger.debug(subscription)
-          subscription
+      |> Enum.map(fn agent_sub ->
+        # Convert to client schema before sending to server
+        client_sub = SowerAgent.Subscription.to_client_schema(agent_sub)
+
+        with {:ok, ref} <- push_message(socket, client_sub),
+             {:ok, response} <- await_reply(ref),
+             {:ok, registered} <-
+               SowerClient.Schemas.Orchestration.Subscription.cast(response) do
+          Logger.debug(registered)
+          # Merge server-assigned sid back into agent subscription
+          %{agent_sub | sid: registered.sid}
         else
           {:error, error} ->
-            Logger.error(msg: "Failed to register subscription", error: error, subscription: sub)
+            Logger.error(
+              msg: "Failed to register subscription",
+              error: error,
+              subscription: agent_sub
+            )
+
             nil
 
           :error ->
             Logger.error(
               msg: "Failed to register subscription with unknown error",
-              subscription: sub
+              subscription: agent_sub
             )
 
             nil
