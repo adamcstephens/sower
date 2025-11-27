@@ -267,6 +267,27 @@ let
         in
         drv;
 
+      crontab =
+        let
+          version = "1.2.0";
+          drv = buildMix {
+            inherit version;
+            name = "crontab";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "crontab";
+              sha256 = "ebd7ef4d831e1b20fa4700f0de0284a04cac4347e813337978e25b4cc5cc2207";
+            };
+
+            beamDeps = [
+              ecto
+            ];
+          };
+        in
+        drv;
+
       cuid2_ex =
         let
           version = "0.2.0";
@@ -503,6 +524,23 @@ let
               nimble_pool
               telemetry
             ];
+          };
+        in
+        drv;
+
+      gen_stage =
+        let
+          version = "1.3.2";
+          drv = buildMix {
+            inherit version;
+            name = "gen_stage";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "gen_stage";
+              sha256 = "0ffae547fa777b3ed889a6b9e1e64566217413d018cabd825f786e843ffe63e7";
+            };
           };
         in
         drv;
@@ -1040,6 +1078,30 @@ let
               db_connection
               decimal
               jason
+            ];
+          };
+        in
+        drv;
+
+      quantum =
+        let
+          version = "3.5.3";
+          drv = buildMix {
+            inherit version;
+            name = "quantum";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "quantum";
+              sha256 = "500fd3fa77dcd723ed9f766d4a175b684919ff7b6b8cfd9d7d0564d58eba8734";
+            };
+
+            beamDeps = [
+              crontab
+              gen_stage
+              telemetry
+              telemetry_registry
             ];
           };
         in

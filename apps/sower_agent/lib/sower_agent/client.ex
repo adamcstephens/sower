@@ -29,6 +29,7 @@ defmodule SowerAgent.Client do
              {:ok, registered} <-
                SowerClient.Schemas.Orchestration.Subscription.cast(response) do
           Logger.debug(registered)
+
           # Merge server-assigned sid back into agent subscription
           %{agent_sub | sid: registered.sid}
         else
@@ -51,6 +52,8 @@ defmodule SowerAgent.Client do
         end
       end)
       |> Enum.reject(&is_nil/1)
+
+    :ok = Enum.each(subscriptions, &SowerAgent.Subscription.start_schedule/1)
 
     SowerAgent.Storage.put(:subscriptions, subscriptions)
 

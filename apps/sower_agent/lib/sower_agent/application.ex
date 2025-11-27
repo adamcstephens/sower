@@ -11,7 +11,8 @@ defmodule SowerAgent.Application do
       # Starts a worker by calling: SowerAgent.Worker.start_link(arg)
       {SowerAgent.Client, []},
       {SowerAgent.Storage, []},
-      {Task.Supervisor, name: SowerAgent.TaskSupervisor}
+      {Task.Supervisor, name: SowerAgent.TaskSupervisor},
+      SowerAgent.Scheduler
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

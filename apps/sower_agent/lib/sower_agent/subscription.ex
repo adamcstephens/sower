@@ -1,13 +1,11 @@
 defmodule SowerAgent.Subscription do
   @moduledoc """
-  Agent-side subscription schema that extends the client subscription
-  with agent-only configuration fields like polling schedules.
-
-  Use `to_client_schema/1` to convert to the server-compatible schema
-  when communicating with the Sower server.
+  Agent has its own idea of subscription to avoid sending
+  everything to the server m
   """
   alias OpenApiSpex.Schema
   require OpenApiSpex
+  require Logger
 
   alias SowerClient.Schemas.Orchestration.Subscription.Rule
 
@@ -82,6 +80,23 @@ defmodule SowerAgent.Subscription do
     {:ok, val} = cast(attrs)
     val
   end
+
+  def start_schedule(%__MODULE__{sid: sid, schedule: schedule} = sub)
+      when not is_nil(sid) and not is_nil(schedule) do
+    SowerAgent.Scheduler.new_job()
+    |> Quantum.Job.set_name(:"sub_#{sid}")
+    |> Quantum.Job.set_schedule(sub.schedule)
+    |> Quantum.Job.set_task(fn ->
+      Logger.debug(
+        msg: "Running subscription schedule",
+        subscription_sid: sid,
+        schedule: schedule
+      )
+    end)
+    |> SowerAgent.Scheduler.add_job()
+  end
+
+  def start_schedule(_), do: nil
 
   defp build_spec do
     %OpenApiSpex.OpenApi{

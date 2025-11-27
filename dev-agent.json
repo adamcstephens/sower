@@ -7,7 +7,7 @@
       "seed_name": "deck",
       "seed_type": "nixos",
       "rules": ["source=dev"],
-      "schedule": "*/15 * * * *",
+      "schedule": "* * * * *",
       "poll_on_connect": true
     },
     {

@@ -126,6 +126,29 @@ defmodule SowerAgent.Config do
     {:state_directory, Path.expand(dir)}
   end
 
+  def external_config({:subscriptions, subscriptions})
+      when is_list(subscriptions) do
+    normalized_subscriptions =
+      Enum.map(subscriptions, fn subscription ->
+        case subscription do
+          %{schedule: schedule} when is_binary(schedule) ->
+            case Crontab.CronExpression.Parser.parse(schedule) do
+              {:ok, cron} ->
+                %{subscription | schedule: cron}
+
+              {:error, error} ->
+                Logger.error(msg: "Failed to parse schedule", error: error)
+                subscription
+            end
+
+          subscription ->
+            subscription
+        end
+      end)
+
+    {:subscriptions, normalized_subscriptions} |> dbg()
+  end
+
   def external_config({:__struct__, _}), do: nil
 
   def external_config(cfg), do: cfg
