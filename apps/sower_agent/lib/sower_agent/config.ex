@@ -116,8 +116,8 @@ defmodule SowerAgent.Config do
         end
       )
 
-    Application.put_env(SowerAgent.SocketClient, :uri, uri)
-    Application.put_env(SowerAgent.SocketClient, :reconnect_after_msec, [200, 500, 1_000, 2_000])
+    Application.put_env(SowerAgent.Client, :uri, uri)
+    Application.put_env(SowerAgent.Client, :reconnect_after_msec, [200, 500, 1_000, 2_000])
 
     nil
   end

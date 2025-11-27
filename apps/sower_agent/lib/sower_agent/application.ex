@@ -9,7 +9,7 @@ defmodule SowerAgent.Application do
   def start(_type, _args) do
     children = [
       # Starts a worker by calling: SowerAgent.Worker.start_link(arg)
-      {SowerAgent.SocketClient, []},
+      {SowerAgent.Client, []},
       {SowerAgent.Storage, []},
       {Task.Supervisor, name: SowerAgent.TaskSupervisor}
     ]

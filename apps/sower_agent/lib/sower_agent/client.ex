@@ -1,4 +1,4 @@
-defmodule SowerAgent.SocketClient do
+defmodule SowerAgent.Client do
   use SowerAgent.ChannelClient, lobby_topic: "agent:lobby"
 
   require Logger

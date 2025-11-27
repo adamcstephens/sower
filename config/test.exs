@@ -29,6 +29,6 @@ config :phoenix, :plug_init_mode, :runtime
 config :sower, :database,
   encryption_key: "UIFQeYN5EBgkXgK502I8mosh3vbEj3AE1rRwWJDysBk=" |> Base.decode64!()
 
-config :sower_agent, SocketClient,
+config :sower_agent, Client,
   uri: "ws://example.org/socket/websocket",
   reconnect_after_msec: [200, 500, 1_000, 2_000]
