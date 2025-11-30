@@ -8,7 +8,7 @@
   testers,
 }:
 let
-  simple-service = flake.packages.${pkgs.system}.tests-simple-service;
+  simple-service = flake.packages.${pkgs.stdenv.hostPlatform.system}.tests-simple-service;
 in
 testers.runNixOSTest {
   name = "sower";
@@ -37,7 +37,7 @@ testers.runNixOSTest {
           ];
 
           environment.systemPackages = [
-            flake.packages.${pkgs.system}.seed-ci
+            flake.packages.${pkgs.stdenv.hostPlatform.system}.seed-ci
 
           ];
 
@@ -52,7 +52,7 @@ testers.runNixOSTest {
 
           services.sower.client = {
             enable = true;
-            package = flake.packages.${pkgs.system}.cli;
+            package = flake.packages.${pkgs.stdenv.hostPlatform.system}.cli;
 
             settings = {
               api-token-file = "/run/sower/test_token";
@@ -67,7 +67,7 @@ testers.runNixOSTest {
 
           services.sower.server = {
             enable = true;
-            package = flake.packages.${pkgs.system}.server;
+            package = flake.packages.${pkgs.stdenv.hostPlatform.system}.server;
             initSecrets = true;
             e2eTest = true;
 
@@ -90,7 +90,9 @@ testers.runNixOSTest {
 
               log_level = "debug";
 
-              clients."${pkgs.system}".path = builtins.toString flake.packages.${pkgs.system}.cli;
+              clients."${pkgs.stdenv.hostPlatform.system}".path =
+                builtins.toString
+                  flake.packages.${pkgs.stdenv.hostPlatform.system}.cli;
             };
           };
           # if server fails to start, fail immediately
@@ -117,7 +119,7 @@ testers.runNixOSTest {
 
       services.sower.client = {
         enable = true;
-        package = flake.packages.${pkgs.system}.cli;
+        package = flake.packages.${pkgs.stdenv.hostPlatform.system}.cli;
 
         settings = {
           api-token-file = "/run/sower/test_token";
