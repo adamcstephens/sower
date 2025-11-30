@@ -1,13 +1,13 @@
 {
   lib,
   makeWrapper,
-  runCommandNoCC,
+  runCommand,
 
   attic-client,
   coreutils,
   nushell,
 }:
-runCommandNoCC "seed-ci"
+runCommand "seed-ci"
   {
     nativeBuildInputs = [ makeWrapper ];
     buildInputs = [ nushell ];
