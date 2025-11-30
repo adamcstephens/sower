@@ -24,7 +24,7 @@ testers.runNixOSTest {
           boot.loader.grub.enable = false;
 
           environment.systemPackages = [
-            flake.packages.${pkgs.system}.seed-ci
+            flake.packages.${pkgs.stdenv.hostPlatform.system}.seed-ci
           ];
 
           networking.firewall.allowedTCPPorts = [ 4000 ];
@@ -36,7 +36,7 @@ testers.runNixOSTest {
 
           services.sower.client = {
             enable = true;
-            package = flake.packages.${pkgs.system}.client;
+            package = flake.packages.${pkgs.stdenv.hostPlatform.system}.client;
 
             settings = {
               api-token-file = "/run/sower/test_token";
@@ -47,7 +47,7 @@ testers.runNixOSTest {
 
           services.sower.server = {
             enable = true;
-            package = flake.packages.${pkgs.system}.server;
+            package = flake.packages.${pkgs.stdenv.hostPlatform.system}.server;
             initSecrets = true;
             e2eTest = true;
 
@@ -70,7 +70,9 @@ testers.runNixOSTest {
 
               log_level = "debug";
 
-              clients."${pkgs.system}".path = builtins.toString flake.packages.${pkgs.system}.client;
+              clients."${pkgs.stdenv.hostPlatform.system}".path =
+                builtins.toString
+                  flake.packages.${pkgs.stdenv.hostPlatform.system}.client;
             };
           };
           # if server fails to start, fail immediately
