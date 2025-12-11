@@ -45,11 +45,19 @@ type AtticUploader struct {
 func (a *AtticUploader) Push(outputs []string) error {
 	outputStr := strings.Join(outputs, "\n")
 
+	// Create temporary file to capture output (prevents noisy progress bars in CI)
+	logFile, err := os.CreateTemp("", "attic-push-*.log")
+	if err != nil {
+		return fmt.Errorf("failed to create temp log file: %v", err)
+	}
+	defer os.Remove(logFile.Name())
+	defer logFile.Close()
+
 	pushCmd := exec.Command("attic", "push", "--stdin", "--ignore-upstream-cache-filter", "--jobs", a.Jobs, a.Cache)
 
-	// Directly attach streams for real-time output
-	pushCmd.Stdout = os.Stdout
-	pushCmd.Stderr = os.Stderr
+	// Redirect both stdout and stderr to log file (progress bars overwrite in file)
+	pushCmd.Stdout = logFile
+	pushCmd.Stderr = logFile
 
 	stdin, err := pushCmd.StdinPipe()
 	if err != nil {
@@ -69,7 +77,25 @@ func (a *AtticUploader) Push(outputs []string) error {
 
 	err = pushCmd.Wait()
 	if err != nil {
+		// Display log on error
+		if _, seekErr := logFile.Seek(0, 0); seekErr != nil {
+			slog.Warn("Failed to seek log file", "error", seekErr)
+		}
+		logContent, _ := os.ReadFile(logFile.Name())
+		slog.Error("Attic push failed", "output", string(logContent))
 		return fmt.Errorf("failed to wait for run command: %v", err)
+	}
+
+	// Display final output (without progress bar spam)
+	if _, err := logFile.Seek(0, 0); err != nil {
+		slog.Warn("Failed to seek log file", "error", err)
+		return nil
+	}
+	logContent, err := os.ReadFile(logFile.Name())
+	if err != nil {
+		slog.Warn("Failed to read attic output", "error", err)
+	} else if len(logContent) > 0 {
+		fmt.Fprint(os.Stdout, string(logContent))
 	}
 
 	return nil
