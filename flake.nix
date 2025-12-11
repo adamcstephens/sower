@@ -50,58 +50,67 @@
             os = if pkgs.stdenv.isDarwin then "darwin" else "linux";
           in
           {
-            devShells.default = pkgs.mkShell {
-              inputsFrom = [ config.process-compose.devServices.services.outputs.devShell ];
+            devShells = {
+              ci = pkgs.mkShell {
+                packages = [
+                  pkgs.attic-client
+                  self'.packages.cli
+                ];
+              };
 
-              packages = [
-                # elixir
-                beamPackages.erlang
-                beamPackages.elixir
-                beamPackages.hex
-                pkgs.next-ls
-                inputs'.expert.packages.expert
+              default = pkgs.mkShell {
+                inputsFrom = [ config.process-compose.devServices.services.outputs.devShell ];
 
-                # elixir deps build deps
-                pkgs.cargo
+                packages = [
+                  # elixir
+                  beamPackages.erlang
+                  beamPackages.elixir
+                  beamPackages.hex
+                  pkgs.next-ls
+                  inputs'.expert.packages.expert
 
-                # go
-                pkgs.go
-                pkgs.delve
-                # broken 2025-09-19 pkgs.gci
-                pkgs.golangci-lint
-                pkgs.gopls
-                pkgs.oapi-codegen
+                  # elixir deps build deps
+                  pkgs.cargo
 
-                pkgs.attic-client
-                self'.packages.seed-ci
-                pkgs.nushell
+                  # go
+                  pkgs.go
+                  pkgs.delve
+                  # broken 2025-09-19 pkgs.gci
+                  pkgs.golangci-lint
+                  pkgs.gopls
+                  pkgs.oapi-codegen
 
-                pkgs.just
-                pkgs.mix2nix
-                pkgs.nix-eval-jobs
-                pkgs.nvfetcher
-                pkgs.process-compose
-                config.process-compose.devServices.services.postgres.postgres1.package
-                config.process-compose.devServices.outputs.package
-                pkgs.sd-switch
-                pkgs.entr
-              ]
-              ++ lib.optionals pkgs.stdenv.isLinux [
-                # elixir
-                pkgs.inotify-tools
-              ];
+                  pkgs.attic-client
+                  self'.packages.seed-ci
+                  pkgs.nushell
 
-              shellHook = ''
-                export PC_CONFIG_FILES=${config.process-compose.devServices.outputs.settingsFile}
+                  pkgs.just
+                  pkgs.mix2nix
+                  pkgs.nix-eval-jobs
+                  pkgs.nvfetcher
+                  pkgs.process-compose
+                  config.process-compose.devServices.services.postgres.postgres1.package
+                  config.process-compose.devServices.outputs.package
+                  pkgs.sd-switch
+                  pkgs.entr
+                ]
+                ++ lib.optionals pkgs.stdenv.isLinux [
+                  # elixir
+                  pkgs.inotify-tools
+                ];
 
-                mkdir -vp _build
+                shellHook = ''
+                  export PC_CONFIG_FILES=${config.process-compose.devServices.outputs.settingsFile}
 
-                ln -sf ${lib.getExe pkgs.tailwindcss_3} _build/tailwind-${os}-${arch}
-                ln -sf ${lib.getExe pkgs.esbuild} _build/esbuild-${os}-${arch}
-              '';
+                  mkdir -vp _build
 
-              # go delve fix
-              hardeningDisable = [ "fortify" ];
+                  ln -sf ${lib.getExe pkgs.tailwindcss_3} _build/tailwind-${os}-${arch}
+                  ln -sf ${lib.getExe pkgs.esbuild} _build/esbuild-${os}-${arch}
+                '';
+
+                # go delve fix
+                hardeningDisable = [ "fortify" ];
+              };
             };
 
             checks = lib.optionalAttrs pkgs.stdenv.isLinux {
