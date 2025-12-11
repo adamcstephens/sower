@@ -26,4 +26,9 @@ jobs:
 
       - run: |
           export HOME=$PWD
-          nix run .#cli -- builder build --workers 4 --system x86_64-linux --debug
+
+          # Setup attic cache
+          attic login main $ATTIC_URL $ATTIC_KEY
+
+          # Build and push to attic
+          nix run .#cli -- builder push --workers 4 --system x86_64-linux --target "attic:main:$ATTIC_CACHE" --debug
