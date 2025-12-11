@@ -122,6 +122,10 @@
 
             packages = rec {
               cli = pkgs.callPackage ./nix/packages/cli.nix {
+                inherit beamPackages version;
+              };
+
+              go-cli = pkgs.callPackage ./nix/packages/go-cli.nix {
                 inherit version;
               };
 

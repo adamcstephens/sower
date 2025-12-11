@@ -1,58 +1,42 @@
 {
+  beamPackages,
+  callPackages,
   lib,
-  buildGoModule,
   makeWrapper,
-  nix-eval-jobs,
-  sd-switch,
   version,
 }:
-let
-  nixpkgsref = lib.elemAt (lib.splitString "." lib.version) 3;
-in
 
-buildGoModule rec {
+beamPackages.mixRelease {
   pname = "sower-cli";
   inherit version;
 
-  src =
-    with lib.fileset;
-    toSource {
-      root = ../..;
-      fileset = unions [
-        ../../client-go
-        ../../cmd/cli
-        ../../go.mod
-        ../../go.sum
-        ../../openapi.json
-      ];
-    };
+  src = lib.fileset.toSource {
+    root = ../..;
+    fileset = lib.fileset.unions [
+      ../../apps/nix
+      ../../apps/sower_cli
+      ../../apps/sower_client
+      ../../config
+      ../../mix.exs
+      ../../mix.lock
+      ../../VERSION
+    ];
+  };
+
+  mixReleaseName = "cli";
+
+  mixNixDeps = callPackages ./umbrella-deps.nix { inherit beamPackages; };
 
   nativeBuildInputs = [
     makeWrapper
   ];
 
-  env.CGO_ENABLED = 0;
-
-  ldflags = [
-    "-X main.version=${version}"
-    "-X main.nixpkgsref=${nixpkgsref}"
-  ];
-
   postInstall = ''
     mv $out/bin/cli $out/bin/sower
-
-    wrapProgram $out/bin/sower --prefix PATH : ${
-      lib.makeBinPath [
-        nix-eval-jobs
-        sd-switch
-      ]
-    }
+    wrapProgram $out/bin/sower --add-flags "eval 'SowerCli.main(System.argv())'"
   '';
 
-  # disable checks for now until better fleshed out
-  doCheck = false;
+  doCheck = true;
 
-  vendorHash = "sha256-DJdtdiMwVJ0yREdx6OqDlYX/jp0dPHsBmz4Ltigqlgw=";
-
-  meta.mainProgram = "sower";
+  meta.mainProgram = "sower-cli";
 }
