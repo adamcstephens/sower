@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -28,11 +29,139 @@ type evalResult struct {
 
 type inputDrv map[string][]string
 
-func Push(workers int, system string) error {
+// Uploader defines the interface for pushing built outputs to a remote cache
+type Uploader interface {
+	Push(outputs []string) error
+}
+
+// AtticUploader pushes to an Attic cache
+type AtticUploader struct {
+	Cache string
+	Jobs  string
+}
+
+// Push implements Uploader for AtticUploader
+func (a *AtticUploader) Push(outputs []string) error {
+	outputStr := strings.Join(outputs, "\n")
+
+	pushCmd := exec.Command("attic", "push", "--stdin", "--ignore-upstream-cache-filter", "--jobs", a.Jobs, a.Cache)
+	stdout, err := pushCmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("error creating stdout: %v", err)
+	}
+	stderr, err := pushCmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("error creating stderr: %v", err)
+	}
+	stdin, _ := pushCmd.StdinPipe()
+
+	err = pushCmd.Start()
+	if err != nil {
+		return fmt.Errorf("failed to start command: %v", err)
+	}
+
+	var ioErr error
+	go func() {
+		_, ioErr = io.Copy(os.Stdout, stdout)
+		if ioErr != nil {
+			slog.Error("failed to configure stdout")
+		}
+	}()
+	go func() {
+		_, ioErr = io.Copy(os.Stderr, stderr)
+		if ioErr != nil {
+			slog.Error("failed to configure stderr")
+		}
+	}()
+
+	_, err = stdin.Write([]byte(outputStr))
+	if err != nil {
+		return fmt.Errorf("failed to send stdin to push: %v", err)
+	}
+	stdin.Close()
+
+	err = pushCmd.Wait()
+	if err != nil {
+		return fmt.Errorf("failed to wait for run command: %v", err)
+	}
+
+	return nil
+}
+
+// NixCopyUploader pushes using nix copy
+type NixCopyUploader struct {
+	Remote string
+}
+
+// Push implements Uploader for NixCopyUploader
+func (n *NixCopyUploader) Push(outputs []string) error {
+	args := append([]string{"copy", "--to", n.Remote}, outputs...)
+	cmd := exec.Command("nix", args...)
+
+	err := commands.SimpleRun(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to run nix copy: %v", err)
+	}
+
+	return nil
+}
+
+// NewUploader creates an Uploader from a target string
+func NewUploader(target string) (Uploader, error) {
+	parts := strings.SplitN(target, ":", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid target format: %s (expected type:target)", target)
+	}
+
+	uploadType := parts[0]
+	targetSpec := parts[1]
+
+	switch uploadType {
+	case "attic":
+		// Parse cache name and optional query params
+		cache := targetSpec
+		jobs := "20" // default
+
+		// Check if there are query params
+		if idx := strings.Index(targetSpec, "?"); idx != -1 {
+			cache = targetSpec[:idx]
+			queryStr := targetSpec[idx+1:]
+
+			params, err := url.ParseQuery(queryStr)
+			if err != nil {
+				return nil, fmt.Errorf("invalid query parameters in attic target: %v", err)
+			}
+
+			if j := params.Get("jobs"); j != "" {
+				jobs = j
+			}
+		}
+
+		return &AtticUploader{Cache: cache, Jobs: jobs}, nil
+
+	case "nix-copy":
+		return &NixCopyUploader{Remote: targetSpec}, nil
+
+	default:
+		return nil, fmt.Errorf("unknown upload target type %q, supported types: attic, nix-copy", uploadType)
+	}
+}
+
+func Push(workers int, system string, uploadTarget string) error {
+	uploader, err := NewUploader(uploadTarget)
+	if err != nil {
+		return err
+	}
+
 	q := queue.NewPool(int64(workers))
 	defer q.Release()
 
-	err := evalJobs(workers, system, q, pushResult)
+	// Create a closure that captures the uploader
+	pushResultFunc := func(result evalResult) error {
+		return pushResult(result, uploader)
+	}
+
+	err = evalJobs(workers, system, q, pushResultFunc)
 	if err != nil {
 		return err
 	}
@@ -154,69 +283,24 @@ func printResult(result evalResult) error {
 	return nil
 }
 
-func pushResult(result evalResult) error {
+func pushResult(result evalResult, uploader Uploader) error {
 	outputs, err := commands.Run(exec.Command("nix", "build", "--print-out-paths", fmt.Sprintf("%v^*", result.DrvPath)))
 	if err != nil {
 		return fmt.Errorf("failed to build: %v", err)
 	}
 
 	output_list := strings.Split(outputs, "\n")
+	// Filter out empty strings
+	var filteredOutputs []string
+	for _, output := range output_list {
+		if output != "" {
+			filteredOutputs = append(filteredOutputs, output)
+		}
+	}
 
-	slog.Debug("Build result", "outputs", output_list)
+	slog.Debug("Build result", "outputs", filteredOutputs)
 
 	_ = printResult(result)
 
-	attic_cache := os.Getenv("ATTIC_CACHE")
-	if attic_cache == "" {
-		slog.Error("Must set ATTIC_CACHE to name of pre-configured cache. e.g. myserver:mycache")
-		os.Exit(1)
-	}
-
-	attic_jobs := os.Getenv("ATTIC_JOBS")
-	if attic_jobs == "" {
-		attic_jobs = "20"
-	}
-
-	pushCmd := exec.Command("attic", "push", "--stdin", "--ignore-upstream-cache-filter", "--jobs", attic_jobs, attic_cache)
-	stdout, err := pushCmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("error creating stdout: %v", err)
-	}
-	stderr, err := pushCmd.StderrPipe()
-	if err != nil {
-		return fmt.Errorf("error creating stderr: %v", err)
-	}
-	stdin, _ := pushCmd.StdinPipe()
-
-	err = pushCmd.Start()
-	if err != nil {
-		return fmt.Errorf("failed to start command: %v", err)
-	}
-
-	var ioErr error
-	go func() {
-		_, ioErr = io.Copy(os.Stdout, stdout) // Redirect stdout to terminal's stdout
-		if ioErr != nil {
-			slog.Error("failed to configure stdout")
-		}
-	}()
-	go func() {
-		_, ioErr = io.Copy(os.Stderr, stderr) // Redirect stderr to terminal's stderr
-		if ioErr != nil {
-			slog.Error("failed to configure stderr")
-		}
-	}()
-
-	_, err = stdin.Write([]byte(outputs))
-	if err != nil {
-		return fmt.Errorf("failed to send stdin to push: %v", err)
-	}
-	stdin.Close()
-
-	err = pushCmd.Wait()
-	if err != nil {
-		return fmt.Errorf("failed to wait for run command: %v", err)
-	}
-
-	return nil
+	return uploader.Push(filteredOutputs)
 }
