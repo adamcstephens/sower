@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/url"
 	"os"
@@ -47,34 +46,20 @@ func (a *AtticUploader) Push(outputs []string) error {
 	outputStr := strings.Join(outputs, "\n")
 
 	pushCmd := exec.Command("attic", "push", "--stdin", "--ignore-upstream-cache-filter", "--jobs", a.Jobs, a.Cache)
-	stdout, err := pushCmd.StdoutPipe()
+
+	// Directly attach streams for real-time output
+	pushCmd.Stdout = os.Stdout
+	pushCmd.Stderr = os.Stderr
+
+	stdin, err := pushCmd.StdinPipe()
 	if err != nil {
-		return fmt.Errorf("error creating stdout: %v", err)
+		return fmt.Errorf("error creating stdin: %v", err)
 	}
-	stderr, err := pushCmd.StderrPipe()
-	if err != nil {
-		return fmt.Errorf("error creating stderr: %v", err)
-	}
-	stdin, _ := pushCmd.StdinPipe()
 
 	err = pushCmd.Start()
 	if err != nil {
 		return fmt.Errorf("failed to start command: %v", err)
 	}
-
-	var ioErr error
-	go func() {
-		_, ioErr = io.Copy(os.Stdout, stdout)
-		if ioErr != nil {
-			slog.Error("failed to configure stdout")
-		}
-	}()
-	go func() {
-		_, ioErr = io.Copy(os.Stderr, stderr)
-		if ioErr != nil {
-			slog.Error("failed to configure stderr")
-		}
-	}()
 
 	_, err = stdin.Write([]byte(outputStr))
 	if err != nil {
