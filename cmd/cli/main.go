@@ -52,9 +52,9 @@ type builderEvalCmd struct {
 }
 
 type builderPushCmd struct {
-	Workers int    `arg:"--workers,-w"`
-	System  string `arg:"--system"`
-	Target  string `arg:"--target,-t,required" help:"Upload target (attic:<cache>[?jobs=N] or nix-copy:<remote>)"`
+	Workers int      `arg:"--workers,-w"`
+	System  string   `arg:"--system"`
+	Targets []string `arg:"--target,-t,required,separate" help:"Upload target (attic:<cache>[?jobs=N] or nix-copy:<remote>). Can be repeated."`
 }
 
 type daemonCmd struct {
@@ -245,7 +245,7 @@ func buildCommand(cfg config) {
 			os.Exit(1)
 		}
 	case cfg.Builder.Push != nil:
-		err := builder.Push(cfg.Builder.Push.Workers, cfg.Builder.Push.System, cfg.Builder.Push.Target)
+		err := builder.Push(cfg.Builder.Push.Workers, cfg.Builder.Push.System, cfg.Builder.Push.Targets)
 		if err != nil {
 			slog.Error("Failed to eval", "error", err)
 			os.Exit(1)

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"codeberg.org/adamcstephens/sower/cmd/cli/commands"
 	"github.com/golang-queue/queue"
@@ -106,6 +108,42 @@ func (n *NixCopyUploader) Push(outputs []string) error {
 	return nil
 }
 
+// MultiUploader pushes to multiple targets in parallel
+type MultiUploader struct {
+	Uploaders []Uploader
+}
+
+// Push implements Uploader for MultiUploader
+func (m *MultiUploader) Push(outputs []string) error {
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(m.Uploaders))
+
+	for _, u := range m.Uploaders {
+		wg.Add(1)
+		go func(uploader Uploader) {
+			defer wg.Done()
+			if err := uploader.Push(outputs); err != nil {
+				slog.Error("Failed to push to target", "error", err)
+				errChan <- err
+			}
+		}(u)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	// Collect all errors
+	var errs []error
+	for err := range errChan {
+		errs = append(errs, err)
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to push to %d target(s): %w", len(errs), errors.Join(errs...))
+	}
+	return nil
+}
+
 // NewUploader creates an Uploader from a target string
 func NewUploader(target string) (Uploader, error) {
 	parts := strings.SplitN(target, ":", 2)
@@ -147,8 +185,32 @@ func NewUploader(target string) (Uploader, error) {
 	}
 }
 
-func Push(workers int, system string, uploadTarget string) error {
-	uploader, err := NewUploader(uploadTarget)
+// NewMultiUploader creates an Uploader from multiple target strings
+func NewMultiUploader(targets []string) (Uploader, error) {
+	if len(targets) == 0 {
+		return nil, fmt.Errorf("at least one upload target is required")
+	}
+
+	// Single target - return simple uploader (no wrapper overhead)
+	if len(targets) == 1 {
+		return NewUploader(targets[0])
+	}
+
+	// Multiple targets - create MultiUploader
+	uploaders := make([]Uploader, 0, len(targets))
+	for _, target := range targets {
+		u, err := NewUploader(target)
+		if err != nil {
+			return nil, err
+		}
+		uploaders = append(uploaders, u)
+	}
+
+	return &MultiUploader{Uploaders: uploaders}, nil
+}
+
+func Push(workers int, system string, uploadTargets []string) error {
+	uploader, err := NewMultiUploader(uploadTargets)
 	if err != nil {
 		return err
 	}
