@@ -18,7 +18,6 @@ callPackages ./deps.nix {
           version = version;
           src = "${old.src}/native";
           cargoHash = "sha256-D7mONUH6f/RmFwfx51sLr6XWlIELNTFPvFm9TrbEMl4=";
-          useFetchCargoVendor = true;
         };
       in
       {
