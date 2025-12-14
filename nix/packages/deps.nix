@@ -823,6 +823,23 @@ let
         in
         drv;
 
+      optimus =
+        let
+          version = "0.5.1";
+          drv = buildMix {
+            inherit version;
+            name = "optimus";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "optimus";
+              sha256 = "95c669e25e05e7f2a47bc1ff25ac237a19505f56135e9bfe88bc63ddbe60c07a";
+            };
+          };
+        in
+        drv;
+
       permit =
         let
           version = "0.3.0";
