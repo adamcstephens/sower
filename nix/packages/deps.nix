@@ -406,6 +406,22 @@ let
         in
         drv;
 
+      erlexec =
+        let
+          version = "2.2.2";
+          drv = buildRebar3 {
+            inherit version;
+            name = "erlexec";
+
+            src = fetchHex {
+              inherit version;
+              pkg = "erlexec";
+              sha256 = "5e8e3c3773113785361b3b55218d92f7e91509cc9d679bf67c5c3703b394c900";
+            };
+          };
+        in
+        drv;
+
       esbuild =
         let
           version = "0.10.0";

@@ -26,8 +26,10 @@ defmodule Nix.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:erlexec, "~> 2.0"},
       {:igniter, only: [:dev, :test]},
       {:jason, "~> 1.0"},
+      {:typedstruct, "~> 0.5.4"},
       {:xema, "~> 0.17"}
     ]
   end
