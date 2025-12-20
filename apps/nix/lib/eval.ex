@@ -19,6 +19,7 @@ defmodule Nix.Eval do
     field :errors, list(binary()) | binary(), default: []
     field :memory_limit_kb, integer()
     field :extra_args, list(binary), default: []
+    field :status, :ok | :error
   end
 
   def run(target, opts \\ []) do
@@ -42,12 +43,24 @@ defmodule Nix.Eval do
     {:ok, state}
   end
 
-  def handle_call(:run_process, from, state) do
+  def handle_call(:run_process, from, %__MODULE__{} = state) do
     start_time = DateTime.utc_now()
+
+    cmd = [
+      System.find_executable("nix"),
+      "eval",
+      "--json",
+      state.target,
+      "--no-eval-cache",
+      "--apply",
+      ~s|x: if (x?type && x.type == "derivation") then x.drvPath else builtins.attrNames x|
+    ]
+
+    Logger.debug(msg: "Running command", cmd: Enum.join(cmd, " "))
 
     {:ok, pid, ospid} =
       :exec.run_link(
-        [System.find_executable("nix"), "derivation", "show", state.target, "--no-eval-cache"],
+        cmd,
         [
           :stdout,
           :stderr
@@ -60,15 +73,15 @@ defmodule Nix.Eval do
     {:noreply, state}
   end
 
-  def handle_info({:stdout, ospid, stdout}, state) when ospid == state.ospid do
+  def handle_info({:stdout, ospid, stdout}, %__MODULE__{} = state) when ospid == state.ospid do
     {:noreply, %{state | output: [stdout | state.output]}}
   end
 
-  def handle_info({:stderr, ospid, stderr}, state) when ospid == state.ospid do
+  def handle_info({:stderr, ospid, stderr}, %__MODULE__{} = state) when ospid == state.ospid do
     {:noreply, %{state | errors: [stderr | state.errors]}}
   end
 
-  def handle_info(:tick, state) do
+  def handle_info(:tick, %__MODULE__{} = state) do
     mem = get_mem(state.ospid)
 
     if not is_nil(mem) do
@@ -101,7 +114,7 @@ defmodule Nix.Eval do
     {:noreply, %{state | mem_samples: [mem | state.mem_samples]}}
   end
 
-  def handle_info({:EXIT, pid, :normal}, state) when pid == state.pid do
+  def handle_info({:EXIT, pid, :normal}, %__MODULE__{} = state) when pid == state.pid do
     end_time = DateTime.utc_now()
 
     Logger.debug(msg: "Process exited cleanly")
@@ -111,7 +124,8 @@ defmodule Nix.Eval do
         state
         | output: finalize_output(state.output),
           errors: finalize_errors(state.errors),
-          end_time: end_time
+          end_time: end_time,
+          status: :ok
       }
 
     GenServer.reply(state.from, {:ok, state})
@@ -119,16 +133,35 @@ defmodule Nix.Eval do
     {:stop, :normal, state}
   end
 
-  def handle_info({:EXIT, pid, reason}, state) when pid == state.pid do
+  def handle_info({:EXIT, pid, reason}, %__MODULE__{} = state) when pid == state.pid do
     end_time = DateTime.utc_now()
 
-    Logger.warning(msg: "Process exited unexpectedly", reason: reason)
+    state =
+      %{
+        state
+        | output: finalize_output(state.output),
+          errors: finalize_errors(state.errors),
+          end_time: end_time,
+          status: :error
+      }
 
-    {:stop, :shutdown, %{state | end_time: end_time}}
+    Logger.warning(
+      msg: "Process exited unexpectedly",
+      target: state.target,
+      reason: reason,
+      errors: state.errors
+    )
+
+    GenServer.reply(state.from, {:error, state})
+
+    {:stop, :normal, %{state | end_time: end_time}}
   end
 
   def finalize_output(output) do
-    output |> Enum.reverse() |> Enum.join() |> Jason.decode!()
+    case output |> Enum.reverse() |> Enum.join() |> Jason.decode() do
+      {:ok, json} -> json
+      {:error, _} -> if output == [], do: "", else: output
+    end
   end
 
   def finalize_errors(errors) do

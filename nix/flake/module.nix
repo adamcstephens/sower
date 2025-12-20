@@ -13,13 +13,16 @@
     let
       cfg = config.sower.jobs;
       is_service = builtins.hasAttr "sowerServices";
+
       checks = lib.mapAttrs' (n: v: lib.nameValuePair "check/${n}" v) self'.checks;
-      packages = lib.mapAttrs' (n: v: lib.nameValuePair "package/${n}" v) (
-        lib.filterAttrs (_: v: !(is_service v)) self'.packages
-      );
-      services = lib.mapAttrs' (n: v: lib.nameValuePair "service/${n}" v) (
-        lib.filterAttrs (_: v: is_service v) self'.packages
-      );
+      packages = lib.pipe self'.packages [
+        (lib.filterAttrs (_: v: !(is_service v)))
+        (lib.mapAttrs' (n: v: lib.nameValuePair "package/${n}" v))
+      ];
+      services = lib.pipe self'.packages [
+        (lib.filterAttrs (_: v: (is_service v)))
+        (lib.mapAttrs' (n: v: lib.nameValuePair "package/${n}" v))
+      ];
     in
     {
 
