@@ -54,7 +54,7 @@ defmodule Nix.Eval do
         ]
       )
 
-    state = %{state | pid: pid, ospid: ospid, from: from, start_time: start_time} |> dbg()
+    state = %{state | pid: pid, ospid: ospid, from: from, start_time: start_time}
 
     Process.send_after(self(), :tick, @tick_interval)
     {:noreply, state}

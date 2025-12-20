@@ -86,7 +86,6 @@ defmodule IncusClient.ApiClient do
   def post(path, request, params \\ []) do
     req_schema =
       spec().paths[path].post.requestBody.content["application/json"].schema
-      |> dbg()
 
     case OpenApiSpex.cast_value(request, req_schema, spec()) do
       {:ok, valid} ->

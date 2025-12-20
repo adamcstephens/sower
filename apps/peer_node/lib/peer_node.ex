@@ -45,7 +45,6 @@ defmodule PeerNode do
                )
            }
            # this dbg silences dialyzer...
-           |> dbg()
          ) do
       {_, peer_pid, peer_name} ->
         node = %__MODULE__{
@@ -184,7 +183,7 @@ defmodule PeerNode do
 
     # TODO, gcroot this?
     {erl_path, 0} =
-      System.shell(~s{incus exec #{instance} --  bash -i -c 'readlink -f $(which erl)'}) |> dbg()
+      System.shell(~s{incus exec #{instance} --  bash -i -c 'readlink -f $(which erl)'})
 
     Nix.Store.realize(erl_path)
   end

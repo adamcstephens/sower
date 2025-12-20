@@ -1,7 +1,7 @@
 alias Sower.Repo.Seeds.Preseed
 require Logger
 
-args = System.argv() |> dbg()
+args = System.argv()
 
 if length(args) < 1 do
   Logger.error("Missing user email")

@@ -53,7 +53,6 @@ defmodule SowerWeb.Api.SeedController do
           tags when is_list(tags) ->
             Map.put(seed_attrs, :tags, Enum.map(tags, &Map.from_struct/1))
         end
-        |> dbg()
 
       case Sower.Seed.create(seed_attrs) do
         {:ok, %Sower.Seed{} = seed} ->

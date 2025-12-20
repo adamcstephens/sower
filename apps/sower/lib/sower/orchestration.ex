@@ -282,7 +282,6 @@ defmodule Sower.Orchestration do
   def deployments_for_agent(%Agent{} = agent) do
     agent.subscriptions
     |> Enum.map(& &1.deployments)
-    |> dbg()
   end
 
   @doc """

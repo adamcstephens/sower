@@ -146,7 +146,7 @@ defmodule SowerAgent.Config do
         end
       end)
 
-    {:subscriptions, normalized_subscriptions} |> dbg()
+    {:subscriptions, normalized_subscriptions}
   end
 
   def external_config({:__struct__, _}), do: nil

@@ -35,7 +35,7 @@ defmodule Sower.Accounts do
           email: email
         }
       ) do
-    case Repo.get_by(User, [oidc_id: oidc_id], skip_org_id: true) |> dbg() do
+    case Repo.get_by(User, [oidc_id: oidc_id], skip_org_id: true) do
       nil ->
         {:ok, organization} = find_or_create_org_default(name)
 
