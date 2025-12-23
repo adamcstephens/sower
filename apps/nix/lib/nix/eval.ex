@@ -115,55 +115,41 @@ defmodule Nix.Eval do
     {:noreply, %{state | mem_samples: [mem | state.mem_samples]}}
   end
 
-  def handle_info({:EXIT, pid, :normal}, %__MODULE__{} = state) when pid == state.pid do
-    end_time = DateTime.utc_now()
-
-    Logger.debug(msg: "Process exited cleanly")
-
-    state =
-      %{
-        state
-        | output: finalize_output(state.output),
-          errors: finalize_errors(state.errors),
-          end_time: end_time,
-          status: :ok
-      }
-
-    GenServer.reply(state.from, {:ok, state})
-
-    {:stop, :normal, state}
-  end
-
   def handle_info({:EXIT, pid, reason}, %__MODULE__{} = state) when pid == state.pid do
     end_time = DateTime.utc_now()
 
     status =
-      if Enum.max(state.mem_samples) >= state.memory_limit_kb do
-        :memory_limit_exceeded
-      else
-        :error
+      cond do
+        reason == :normal -> :ok
+        Enum.max(state.mem_samples) >= state.memory_limit_kb -> :memory_limit_exceeded
+        true -> :error
       end
 
-    state =
-      %{
-        state
-        | output: finalize_output(state.output),
-          errors: finalize_errors(state.errors),
-          end_time: end_time,
-          status: status
-      }
+    state = %{
+      state
+      | output: finalize_output(state.output),
+        errors: finalize_errors(state.errors),
+        end_time: end_time,
+        status: status
+    }
 
-    Logger.warning(
-      msg: "Process exited unexpectedly",
+    log = [
+      msg: "Evaluation complete",
       target: state.target,
       reason: reason,
       status: status,
       errors: state.errors
-    )
+    ]
+
+    if status == :ok do
+      Logger.info(log)
+    else
+      Logger.warning(log)
+    end
 
     GenServer.reply(state.from, {status, state})
 
-    {:stop, :normal, %{state | end_time: end_time}}
+    {:stop, :normal, state}
   end
 
   def finalize_output(output) do
