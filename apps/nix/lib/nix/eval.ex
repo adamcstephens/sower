@@ -14,7 +14,7 @@ defmodule Nix.Eval do
     field :ospid, integer()
     field :start_time, DateTime.t()
     field :end_time, DateTime.t()
-    field :mem_samples, list(integer() | nil), default: []
+    field :mem_samples, list(integer()), default: []
     field :output, list(binary()) | map() | nil, default: []
     field :errors, list(binary()) | binary(), default: []
     field :memory_limit_kb, integer()
@@ -52,6 +52,17 @@ defmodule Nix.Eval do
   def handle_call(:run_process, from, %__MODULE__{} = state) do
     start_time = DateTime.utc_now()
 
+    # we can't name the attribute outPath, or nix will only return that in the json
+    expr_body = """
+    if (!(builtins.isAttrs x)) then
+      null
+    else
+      if (x?type && x.type == "derivation") then
+        { drvPath = x.drvPath; storePath = x.outPath; meta = x.meta or {}; }
+      else
+        builtins.attrNames x
+    """
+
     cmd =
       case state.request.type do
         :flake ->
@@ -62,8 +73,9 @@ defmodule Nix.Eval do
             Nix.Eval.Request.to_flake_uri(state.request),
             "--no-eval-cache",
             "--apply",
-            # we can't name the attribute outPath, or nix will only return that in the json
-            ~s|x: if (x?type && x.type == "derivation") then { drvPath = x.drvPath; storePath = x.outPath; meta = x.meta or {}; } else builtins.attrNames x|
+            """
+            x: #{expr_body}
+            """
           ]
 
         :path ->
@@ -76,13 +88,11 @@ defmodule Nix.Eval do
             "eval-cache",
             "false",
             "--expr",
-            # we can't name the attribute outPath, or nix will only return that in the json
-            # nix
             """
-              let
-                x = #{Nix.Eval.Request.to_import(state.request)};
-              in
-              if (x?type && x.type == "derivation") then { drvPath = x.drvPath; storePath = x.outPath; meta = x.meta or {}; } else builtins.attrNames x
+            let
+              x = #{Nix.Eval.Request.to_import(state.request)};
+            in
+            #{expr_body}
             """
           ]
       end
@@ -142,7 +152,14 @@ defmodule Nix.Eval do
 
     Process.send_after(self(), :tick, @tick_interval)
 
-    {:noreply, %{state | mem_samples: [mem | state.mem_samples]}}
+    mem_samples =
+      if is_nil(mem) do
+        state.mem_samples
+      else
+        [mem | state.mem_samples]
+      end
+
+    {:noreply, %{state | mem_samples: mem_samples}}
   end
 
   def handle_info({:EXIT, pid, reason}, %__MODULE__{} = state) when pid == state.pid do
@@ -177,7 +194,7 @@ defmodule Nix.Eval do
     ]
 
     if status == :ok do
-      Logger.info(log)
+      Logger.debug(log)
     else
       Logger.warning(log)
     end
@@ -236,7 +253,11 @@ defmodule Nix.Eval do
         end
 
       {:error, :enoent} ->
-        Logger.warning(msg: "proc file does not exist")
+        Logger.debug(msg: "proc file does not exist")
+        nil
+
+      {:error, reason} ->
+        Logger.debug(msg: "failed to read proc file", reason: reason)
         nil
     end
   end

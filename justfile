@@ -83,7 +83,7 @@ release-push:
     just release
 
 start: dev-services
-    iex --name dev@10.143.96.1 -S mix phx.server
+    iex --sname dev1 -S mix phx.server
 
 [working-directory('agent')]
 start-agent:
