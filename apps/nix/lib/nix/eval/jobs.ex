@@ -3,36 +3,48 @@ defmodule Nix.Eval.Jobs do
   use TypedStruct
 
   typedstruct do
+    field :request, Nix.Eval.Request.t()
     field :queue, :queue.queue()
     field :running, %{reference() => String.t()}
     field :results, list()
     field :max_workers, integer()
     field :memory_limit_kb, integer()
     field :from, {pid(), term()}
+    field :start_time, DateTime.t()
+    field :end_time, DateTime.t()
   end
 
-  def run(target, opts \\ []) do
-    {:ok, pid} = GenServer.start_link(__MODULE__, {target, opts})
+  def run(target, opts \\ [])
+
+  def run(target, opts) when is_binary(target) do
+    run(Nix.Eval.Request.parse(target, Keyword.get(opts, :attr)), opts)
+  end
+
+  def run(%Nix.Eval.Request{} = request, opts) do
+    {:ok, pid} = GenServer.start_link(__MODULE__, {request, opts})
 
     GenServer.call(pid, :run, 10 * 60 * 60 * 1000)
   end
 
-  def init({target, opts}) do
+  def init({request, opts}) do
     state = %__MODULE__{
-      queue: :queue.from_list([target]),
+      queue: :queue.from_list([request]),
       running: %{},
       results: [],
       max_workers: Keyword.get(opts, :workers, 8),
       memory_limit_kb: Keyword.get(opts, :memory_limit_kb, 4_000_000),
-      from: nil
+      from: nil,
+      request: request
     }
 
     {:ok, state}
   end
 
   def handle_call(:run, from, state) do
+    start_time = DateTime.utc_now()
+
     # Start spawning workers and don't reply yet
-    state = %{state | from: from}
+    state = %{state | from: from, start_time: start_time}
     state = spawn_workers(state)
 
     {:noreply, state}
@@ -47,10 +59,14 @@ defmodule Nix.Eval.Jobs do
     if to_spawn > 0 do
       Enum.reduce(1..to_spawn, state, fn _, acc_state ->
         case :queue.out(acc_state.queue) do
-          {{:value, target}, new_queue} ->
-            task = Task.async(fn -> evaluate_target(target, acc_state.memory_limit_kb) end)
+          {{:value, request}, new_queue} ->
+            task = Task.async(fn -> evaluate_request(request, acc_state.memory_limit_kb) end)
 
-            %{acc_state | queue: new_queue, running: Map.put(acc_state.running, task.ref, target)}
+            %{
+              acc_state
+              | queue: new_queue,
+                running: Map.put(acc_state.running, task.ref, request)
+            }
 
           {:empty, _} ->
             acc_state
@@ -61,17 +77,15 @@ defmodule Nix.Eval.Jobs do
     end
   end
 
-  # Evaluate a single target and return the result
-  defp evaluate_target(target, memory_limit_kb) when is_binary(target) do
-    case Nix.Eval.run(target, memory_limit_kb: memory_limit_kb) do
+  # Evaluate a single request and return the result
+  defp evaluate_request(request, memory_limit_kb) do
+    case Nix.Eval.run(request, memory_limit_kb: memory_limit_kb) do
       {_, %{output: output} = eval} when is_map(output) or is_nil(output) ->
         # This is a derivation (returns map with drvPath, outPath, meta)
         {:leaf, eval}
 
       {:ok, %{output: output}} when is_list(output) ->
-        # Found more targets to evaluate (attrset with attribute names)
-        new_targets = Enum.map(output, &"#{target}.#{&1}")
-        {:branch, new_targets}
+        {:branch, output}
     end
   end
 
@@ -88,8 +102,8 @@ defmodule Nix.Eval.Jobs do
         {:branch, new_targets} ->
           # This was a branch, add new targets to queue
           new_queue =
-            Enum.reduce(new_targets, state.queue, fn target, q ->
-              :queue.in(target, q)
+            Enum.reduce(new_targets, state.queue, fn request, q ->
+              :queue.in(request, q)
             end)
 
           %{state | queue: new_queue}
@@ -99,8 +113,14 @@ defmodule Nix.Eval.Jobs do
 
     state =
       if :queue.is_empty(state.queue) and map_size(state.running) == 0 do
+        end_time = DateTime.utc_now()
         results = Enum.reverse(state.results)
-        GenServer.reply(state.from, {check_ok(results), results})
+
+        GenServer.reply(
+          state.from,
+          {check_ok(results), %{state | results: results, end_time: end_time}}
+        )
+
         state
       else
         spawn_workers(state)

@@ -8,7 +8,7 @@ defmodule Nix.Eval do
   @tick_interval 200
 
   typedstruct do
-    field :target, binary()
+    field :request, Nix.Eval.Request.t()
     field :from, pid()
     field :pid, pid()
     field :ospid, integer()
@@ -22,20 +22,26 @@ defmodule Nix.Eval do
     field :status, :ok | :error | :memory_limit_exceeded
   end
 
-  def run(target, opts \\ []) do
-    {:ok, pid} = GenServer.start_link(__MODULE__, {target, opts})
+  def run(target, opts \\ [])
+
+  def run(target, opts) when is_binary(target) do
+    run(Nix.Eval.Request.parse(target, Keyword.get(opts, :attr)), opts)
+  end
+
+  def run(%Nix.Eval.Request{} = req, opts) do
+    {:ok, pid} = GenServer.start_link(__MODULE__, {req, opts})
 
     # set a 10 hour timeout for the genserver
     # if this timeout is exceeded the child process may not be killed
     GenServer.call(pid, :run_process, 10 * 60 * 60 * 1000)
   end
 
-  def init({target, opts}) do
+  def init({%Nix.Eval.Request{} = req, opts}) do
     Process.flag(:trap_exit, true)
 
     state =
       %__MODULE__{
-        target: target,
+        request: req,
         memory_limit_kb: Keyword.get(opts, :memory_limit_kb, @default_memory_limit_kb),
         extra_args: Keyword.get(opts, :extra_args, [])
       }
@@ -46,16 +52,40 @@ defmodule Nix.Eval do
   def handle_call(:run_process, from, %__MODULE__{} = state) do
     start_time = DateTime.utc_now()
 
-    cmd = [
-      System.find_executable("nix"),
-      "eval",
-      "--json",
-      state.target,
-      "--no-eval-cache",
-      "--apply",
-      # we can't name the attribute outPath, or nix will only return that in the json
-      ~s|x: if (x?type && x.type == "derivation") then { drvPath = x.drvPath; storePath = x.outPath; meta = x.meta or {}; } else builtins.attrNames x|
-    ]
+    cmd =
+      case state.request.type do
+        :flake ->
+          [
+            System.find_executable("nix"),
+            "eval",
+            "--json",
+            Nix.Eval.Request.to_flake_uri(state.request),
+            "--no-eval-cache",
+            "--apply",
+            # we can't name the attribute outPath, or nix will only return that in the json
+            ~s|x: if (x?type && x.type == "derivation") then { drvPath = x.drvPath; storePath = x.outPath; meta = x.meta or {}; } else builtins.attrNames x|
+          ]
+
+        :path ->
+          [
+            System.find_executable("nix-instantiate"),
+            "--eval",
+            "--strict",
+            "--json",
+            "--option",
+            "eval-cache",
+            "false",
+            "--expr",
+            # we can't name the attribute outPath, or nix will only return that in the json
+            # nix
+            """
+              let
+                x = #{Nix.Eval.Request.to_import(state.request)};
+              in
+              if (x?type && x.type == "derivation") then { drvPath = x.drvPath; storePath = x.outPath; meta = x.meta or {}; } else builtins.attrNames x
+            """
+          ]
+      end
 
     Logger.debug(msg: "Running command", cmd: Enum.join(cmd, " "))
 
@@ -120,14 +150,19 @@ defmodule Nix.Eval do
 
     status =
       cond do
-        reason == :normal -> :ok
-        Enum.max(state.mem_samples) >= state.memory_limit_kb -> :memory_limit_exceeded
-        true -> :error
+        reason == :normal ->
+          :ok
+
+        length(state.mem_samples) > 0 and Enum.max(state.mem_samples) >= state.memory_limit_kb ->
+          :memory_limit_exceeded
+
+        true ->
+          :error
       end
 
     state = %{
       state
-      | output: finalize_output(state.output),
+      | output: finalize_output(state),
         errors: finalize_errors(state.errors),
         end_time: end_time,
         status: status
@@ -135,7 +170,7 @@ defmodule Nix.Eval do
 
     log = [
       msg: "Evaluation complete",
-      target: state.target,
+      request: state.request,
       reason: reason,
       status: status,
       errors: state.errors
@@ -152,10 +187,25 @@ defmodule Nix.Eval do
     {:stop, :normal, state}
   end
 
-  def finalize_output(output) do
+  def finalize_output(%__MODULE__{request: req, output: output}) do
     case output |> Enum.reverse() |> Enum.join() |> Jason.decode() do
-      {:ok, json} -> json
-      {:error, _} -> if output == [], do: nil, else: output
+      {:ok, json} when is_list(json) ->
+        Enum.map(json, fn child ->
+          attr =
+            if is_nil(req.attr) do
+              child
+            else
+              "#{req.attr}.#{child}"
+            end
+
+          %{req | attr: attr}
+        end)
+
+      {:ok, json} ->
+        json
+
+      {:error, _} ->
+        if output == [], do: nil, else: output
     end
   end
 
