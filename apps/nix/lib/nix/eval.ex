@@ -15,7 +15,7 @@ defmodule Nix.Eval do
     field :start_time, DateTime.t()
     field :end_time, DateTime.t()
     field :mem_samples, list(integer() | nil), default: []
-    field :output, list(binary()) | map(), default: []
+    field :output, list(binary()) | map() | nil, default: []
     field :errors, list(binary()) | binary(), default: []
     field :memory_limit_kb, integer()
     field :extra_args, list(binary), default: []
@@ -161,7 +161,7 @@ defmodule Nix.Eval do
   def finalize_output(output) do
     case output |> Enum.reverse() |> Enum.join() |> Jason.decode() do
       {:ok, json} -> json
-      {:error, _} -> if output == [], do: "", else: output
+      {:error, _} -> if output == [], do: nil, else: output
     end
   end
 
@@ -187,7 +187,7 @@ defmodule Nix.Eval do
             rest |> String.split() |> hd() |> String.to_integer()
 
           _ ->
-            Logger.warning(msg: "proc status file does not have VmRSS")
+            Logger.debug(msg: "proc status file does not have VmRSS")
             nil
         end
 

@@ -7,6 +7,7 @@ defmodule Nix.Eval.Jobs do
     field :running, %{reference() => String.t()}
     field :results, list()
     field :max_workers, integer()
+    field :memory_limit_kb, integer()
     field :from, {pid(), term()}
   end
 
@@ -22,6 +23,7 @@ defmodule Nix.Eval.Jobs do
       running: %{},
       results: [],
       max_workers: Keyword.get(opts, :workers, 8),
+      memory_limit_kb: Keyword.get(opts, :memory_limit_kb, 4_000_000),
       from: nil
     }
 
@@ -46,7 +48,7 @@ defmodule Nix.Eval.Jobs do
       Enum.reduce(1..to_spawn, state, fn _, acc_state ->
         case :queue.out(acc_state.queue) do
           {{:value, target}, new_queue} ->
-            task = Task.async(fn -> evaluate_target(target) end)
+            task = Task.async(fn -> evaluate_target(target, acc_state.memory_limit_kb) end)
 
             %{acc_state | queue: new_queue, running: Map.put(acc_state.running, task.ref, target)}
 
@@ -60,9 +62,9 @@ defmodule Nix.Eval.Jobs do
   end
 
   # Evaluate a single target and return the result
-  defp evaluate_target(target) when is_binary(target) do
-    case Nix.Eval.run(target) do
-      {_, %{output: output} = eval} when is_map(output) and not is_struct(output) ->
+  defp evaluate_target(target, memory_limit_kb) when is_binary(target) do
+    case Nix.Eval.run(target, memory_limit_kb: memory_limit_kb) do
+      {_, %{output: output} = eval} when is_map(output) or is_nil(output) ->
         # This is a derivation (returns map with drvPath, outPath, meta)
         {:leaf, eval}
 
