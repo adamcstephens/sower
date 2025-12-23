@@ -3,9 +3,11 @@ defmodule Nix.Eval.Jobs do
   use TypedStruct
 
   typedstruct do
-    field :target, String.t()
-    field :workers, integer()
-    field :from, pid()
+    field :queue, :queue.queue()
+    field :running, %{reference() => String.t()}
+    field :results, list()
+    field :max_workers, integer()
+    field :from, {pid(), term()}
   end
 
   def run(target, opts \\ []) do
@@ -16,37 +18,102 @@ defmodule Nix.Eval.Jobs do
 
   def init({target, opts}) do
     state = %__MODULE__{
-      target: target,
-      workers: Keyword.get(opts, :workers, 8)
+      queue: :queue.from_list([target]),
+      running: %{},
+      results: [],
+      max_workers: Keyword.get(opts, :workers, 8),
+      from: nil
     }
 
     {:ok, state}
   end
 
   def handle_call(:run, from, state) do
-    results = run_target(state.target)
+    # Start spawning workers and don't reply yet
+    state = %{state | from: from}
+    state = spawn_workers(state)
 
-    GenServer.reply(from, {check_ok(results), results})
-
-    # TODO shutdown?
     {:noreply, state}
   end
 
-  def run_target(target) when is_binary(target) do
-    case Nix.Eval.run(target) do
-      {_, %{output: output} = eval} when is_binary(output) ->
-        [eval]
+  # Spawn workers up to the limit while there's work in the queue
+  defp spawn_workers(state) do
+    available_slots = state.max_workers - map_size(state.running)
+    queue_size = :queue.len(state.queue)
+    to_spawn = min(available_slots, queue_size)
 
-      {:ok, %{output: output}} when is_list(output) ->
-        # TODO this is flake specific, at least handle it
-        output
-        |> Enum.map(&"#{target}.#{&1}")
-        |> Enum.map(&run_target/1)
-        |> List.flatten()
+    if to_spawn > 0 do
+      Enum.reduce(1..to_spawn, state, fn _, acc_state ->
+        case :queue.out(acc_state.queue) do
+          {{:value, target}, new_queue} ->
+            task = Task.async(fn -> evaluate_target(target) end)
+
+            %{acc_state | queue: new_queue, running: Map.put(acc_state.running, task.ref, target)}
+
+          {:empty, _} ->
+            acc_state
+        end
+      end)
+    else
+      state
     end
   end
 
-  def check_ok(results) do
+  # Evaluate a single target and return the result
+  defp evaluate_target(target) when is_binary(target) do
+    case Nix.Eval.run(target) do
+      {_, %{output: output} = eval} when is_binary(output) ->
+        {:leaf, eval}
+
+      {:ok, %{output: output}} when is_list(output) ->
+        # Found more targets to evaluate
+        new_targets = Enum.map(output, &"#{target}.#{&1}")
+        {:branch, new_targets}
+    end
+  end
+
+  # Handle task completion
+  def handle_info({ref, result}, state) when is_reference(ref) do
+    {_target, running} = Map.pop(state.running, ref)
+
+    state =
+      case result do
+        {:leaf, eval} ->
+          # This was a leaf node, add to results
+          %{state | results: [eval | state.results]}
+
+        {:branch, new_targets} ->
+          # This was a branch, add new targets to queue
+          new_queue =
+            Enum.reduce(new_targets, state.queue, fn target, q ->
+              :queue.in(target, q)
+            end)
+
+          %{state | queue: new_queue}
+      end
+
+    state = %{state | running: running}
+
+    state =
+      if :queue.is_empty(state.queue) and map_size(state.running) == 0 do
+        results = Enum.reverse(state.results)
+        GenServer.reply(state.from, {check_ok(results), results})
+        state
+      else
+        spawn_workers(state)
+      end
+
+    {:noreply, state}
+  end
+
+  def handle_info({:DOWN, ref, :process, _pid, _reason}, state) do
+    # Task processes exit normally after sending their result,
+    # so we just acknowledge the DOWN message
+    Process.demonitor(ref, [:flush])
+    {:noreply, state}
+  end
+
+  defp check_ok(results) do
     if Enum.any?(results, fn eval -> eval.status == :error end) do
       :error
     else
