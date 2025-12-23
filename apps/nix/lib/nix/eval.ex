@@ -19,7 +19,7 @@ defmodule Nix.Eval do
     field :errors, list(binary()) | binary(), default: []
     field :memory_limit_kb, integer()
     field :extra_args, list(binary), default: []
-    field :status, :ok | :error
+    field :status, :ok | :error | :memory_limit_exceeded
   end
 
   def run(target, opts \\ []) do
@@ -137,23 +137,31 @@ defmodule Nix.Eval do
   def handle_info({:EXIT, pid, reason}, %__MODULE__{} = state) when pid == state.pid do
     end_time = DateTime.utc_now()
 
+    status =
+      if Enum.max(state.mem_samples) >= state.memory_limit_kb do
+        :memory_limit_exceeded
+      else
+        :error
+      end
+
     state =
       %{
         state
         | output: finalize_output(state.output),
           errors: finalize_errors(state.errors),
           end_time: end_time,
-          status: :error
+          status: status
       }
 
     Logger.warning(
       msg: "Process exited unexpectedly",
       target: state.target,
       reason: reason,
+      status: status,
       errors: state.errors
     )
 
-    GenServer.reply(state.from, {:error, state})
+    GenServer.reply(state.from, {status, state})
 
     {:stop, :normal, %{state | end_time: end_time}}
   end

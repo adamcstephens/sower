@@ -117,10 +117,10 @@ defmodule Nix.Eval.Jobs do
   end
 
   defp check_ok(results) do
-    if Enum.any?(results, fn eval -> eval.status == :error end) do
-      :error
-    else
+    if Enum.all?(results, fn eval -> eval.status == :ok end) do
       :ok
+    else
+      :error
     end
   end
 end
