@@ -62,11 +62,12 @@ defmodule Nix.Eval.Jobs do
   # Evaluate a single target and return the result
   defp evaluate_target(target) when is_binary(target) do
     case Nix.Eval.run(target) do
-      {_, %{output: output} = eval} when is_binary(output) ->
+      {_, %{output: output} = eval} when is_map(output) and not is_struct(output) ->
+        # This is a derivation (returns map with drvPath, outPath, meta)
         {:leaf, eval}
 
       {:ok, %{output: output}} when is_list(output) ->
-        # Found more targets to evaluate
+        # Found more targets to evaluate (attrset with attribute names)
         new_targets = Enum.map(output, &"#{target}.#{&1}")
         {:branch, new_targets}
     end

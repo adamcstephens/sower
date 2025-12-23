@@ -15,7 +15,7 @@ defmodule Nix.Eval do
     field :start_time, DateTime.t()
     field :end_time, DateTime.t()
     field :mem_samples, list(integer() | nil), default: []
-    field :output, list(binary()) | binary(), default: []
+    field :output, list(binary()) | map(), default: []
     field :errors, list(binary()) | binary(), default: []
     field :memory_limit_kb, integer()
     field :extra_args, list(binary), default: []
@@ -53,7 +53,8 @@ defmodule Nix.Eval do
       state.target,
       "--no-eval-cache",
       "--apply",
-      ~s|x: if (x?type && x.type == "derivation") then x.drvPath else builtins.attrNames x|
+      # we can't name the attribute outPath, or nix will only return that in the json
+      ~s|x: if (x?type && x.type == "derivation") then { drvPath = x.drvPath; storePath = x.outPath; meta = x.meta or {}; } else builtins.attrNames x|
     ]
 
     Logger.debug(msg: "Running command", cmd: Enum.join(cmd, " "))
