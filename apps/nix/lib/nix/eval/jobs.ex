@@ -4,9 +4,12 @@ defmodule Nix.Eval.Jobs do
 
   require Logger
 
+  @tick_interval 5_000
+
   typedstruct do
     field :request, Nix.Eval.Request.t()
-    field :queue, :queue.queue()
+    field :queue, :ets.tid()
+    field :queue_counter, reference()
     field :running, %{reference() => Nix.Eval.Request.t()}
     field :results, list()
     field :max_workers, integer()
@@ -33,8 +36,13 @@ defmodule Nix.Eval.Jobs do
     # Start a task supervisor for this evaluation job
     {:ok, supervisor} = Task.Supervisor.start_link()
 
+    # Create ETS-backed queue
+    {queue, counter} = Nix.Eval.Queue.new()
+    Nix.Eval.Queue.enqueue(queue, counter, request)
+
     state = %__MODULE__{
-      queue: :queue.from_list([request]),
+      queue: queue,
+      queue_counter: counter,
       running: %{},
       results: [],
       max_workers: Keyword.get(opts, :workers, 8),
@@ -64,23 +72,8 @@ defmodule Nix.Eval.Jobs do
   # Spawn workers up to the limit while there's work in the queue
   defp spawn_workers(state) do
     available_slots = state.max_workers - map_size(state.running)
-    queue_size = :queue.len(state.queue)
+    queue_size = Nix.Eval.Queue.size(state.queue)
     to_spawn = min(available_slots, queue_size)
-
-    case Process.info(self(), :message_queue_len) do
-      {:message_queue_len, len} ->
-        Logger.info(
-          msg: "Messages in queue",
-          max_workers: state.max_workers,
-          queue_size: queue_size,
-          available_slots: available_slots,
-          message_queue_len: len,
-          processed: length(state.results)
-        )
-
-      nil ->
-        IO.puts("Process not found")
-    end
 
     if to_spawn > 0 do
       if to_spawn > 1 do
@@ -94,24 +87,21 @@ defmodule Nix.Eval.Jobs do
         )
       end
 
-      Enum.reduce(1..to_spawn, state, fn _, acc_state ->
-        case :queue.out(acc_state.queue) do
-          {{:value, request}, new_queue} ->
-            task =
-              Task.Supervisor.async(acc_state.supervisor, fn ->
-                evaluate_request(request, acc_state.memory_limit_kb)
-              end)
+      # Dequeue all needed requests at once
+      requests = Nix.Eval.Queue.dequeue(state.queue, to_spawn)
 
-            %{
-              acc_state
-              | queue: new_queue,
-                running: Map.put(acc_state.running, task.ref, request)
-            }
+      # Spawn workers for dequeued requests
+      running =
+        Enum.reduce(requests, state.running, fn request, acc_running ->
+          task =
+            Task.Supervisor.async(state.supervisor, fn ->
+              evaluate_request(request, state.memory_limit_kb)
+            end)
 
-          {:empty, _} ->
-            acc_state
-        end
-      end)
+          Map.put(acc_running, task.ref, request)
+        end)
+
+      %{state | running: running}
     else
       state
     end
@@ -151,7 +141,7 @@ defmodule Nix.Eval.Jobs do
     state = drain_mailbox(state, 50)
 
     state =
-      if :queue.is_empty(state.queue) and map_size(state.running) == 0 do
+      if Nix.Eval.Queue.empty?(state.queue) and map_size(state.running) == 0 do
         Logger.info(msg: "All work complete", total_results: length(state.results))
         end_time = DateTime.utc_now()
         results = Enum.reverse(state.results)
@@ -178,11 +168,31 @@ defmodule Nix.Eval.Jobs do
     Logger.info(
       msg: "Flush requested",
       running: map_size(state.running),
-      queue: :queue.len(state.queue),
+      queue: Nix.Eval.Queue.size(state.queue),
       max_workers: state.max_workers
     )
 
     {:noreply, spawn_workers(state)}
+  end
+
+  def handle_info(:tick, state) do
+    available_slots = state.max_workers - map_size(state.running)
+    queue_size = Nix.Eval.Queue.size(state.queue)
+
+    case Process.info(self(), :message_queue_len) do
+      {:message_queue_len, len} ->
+        Logger.info(
+          msg: "Messages in queue",
+          max_workers: state.max_workers,
+          queue_size: queue_size,
+          available_slots: available_slots,
+          message_queue_len: len,
+          processed: length(state.results)
+        )
+    end
+
+    Process.send_after(self(), :tick, @tick_interval)
+    {:noreply, state}
   end
 
   def handle_info(msg, state) do
@@ -201,16 +211,13 @@ defmodule Nix.Eval.Jobs do
       {request, running} ->
         state =
           case result do
-            {:leaf, _eval} ->
-              state
+            {:leaf, result} ->
+              %{state | results: [result | state.results]}
 
             {:branch, new_targets} ->
-              new_queue =
-                Enum.reduce(new_targets, state.queue, fn request, q ->
-                  :queue.in(request, q)
-                end)
-
-              %{state | queue: new_queue}
+              # Bulk enqueue - now fast with ETS!
+              Nix.Eval.Queue.enqueue(state.queue, state.queue_counter, new_targets)
+              state
 
             unexpected ->
               Logger.error(
@@ -274,7 +281,7 @@ defmodule Nix.Eval.Jobs do
           request: request,
           reason: reason,
           running_count: map_size(running),
-          queue_size: :queue.len(state.queue)
+          queue_size: Nix.Eval.Queue.size(state.queue)
         )
 
         error_eval = %Nix.Eval{
@@ -301,6 +308,9 @@ defmodule Nix.Eval.Jobs do
     if state.supervisor && Process.alive?(state.supervisor) do
       Supervisor.stop(state.supervisor, :shutdown)
     end
+
+    # Clean up ETS queue
+    Nix.Eval.Queue.delete(state.queue)
 
     :ok
   end

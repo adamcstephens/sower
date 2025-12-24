@@ -57,7 +57,7 @@ defmodule Nix.Eval do
     if (!(builtins.isAttrs x)) then
       null
     else
-      if (x?type && x.type == "derivation") then
+      if (x.type or null == "derivation") then
         { drvPath = x.drvPath; storePath = x.outPath; meta = x.meta or {}; }
       else
         builtins.attrNames x
