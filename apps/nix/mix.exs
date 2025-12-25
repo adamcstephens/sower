@@ -26,6 +26,7 @@ defmodule Nix.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:cuid2_ex, "~> 0.2"},
       {:erlexec, "~> 2.0"},
       {:igniter, only: [:dev, :test]},
       {:jason, "~> 1.0"},

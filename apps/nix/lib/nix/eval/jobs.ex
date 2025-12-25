@@ -15,9 +15,15 @@ defmodule Nix.Eval.Jobs do
     field :max_workers, integer()
     field :memory_limit_kb, integer()
     field :from, {pid(), term()}
+    field :supervisor, pid()
+    field :start_time, DateTime.t()
+  end
+
+  typedstruct module: Result do
+    field :request, Nix.Eval.Request.t()
     field :start_time, DateTime.t()
     field :end_time, DateTime.t()
-    field :supervisor, pid()
+    field :results, list()
   end
 
   def run(target, opts \\ [])
@@ -27,16 +33,14 @@ defmodule Nix.Eval.Jobs do
   end
 
   def run(%Nix.Eval.Request{} = request, opts) do
-    {:ok, pid} = GenServer.start_link(__MODULE__, {request, opts})
+    {:ok, pid} = GenServer.start(__MODULE__, {request, opts})
 
     GenServer.call(pid, :run, 10 * 60 * 60 * 1000)
   end
 
   def init({request, opts}) do
-    # Start a task supervisor for this evaluation job
     {:ok, supervisor} = Task.Supervisor.start_link()
 
-    # Create ETS-backed queue
     {queue, counter} = Nix.Eval.Queue.new()
     Nix.Eval.Queue.enqueue(queue, counter, request)
 
@@ -49,8 +53,12 @@ defmodule Nix.Eval.Jobs do
       memory_limit_kb: Keyword.get(opts, :memory_limit_kb, 4_000_000),
       from: nil,
       request: request,
-      supervisor: supervisor
+      supervisor: supervisor,
+      start_time: DateTime.utc_now()
     }
+
+    state = spawn_workers(state)
+    Process.send_after(self(), :tick, 100)
 
     {:ok, state}
   end
@@ -133,30 +141,30 @@ defmodule Nix.Eval.Jobs do
   Result of the evaluation
   """
   def handle_info({ref, result}, state) when is_reference(ref) do
-    # Process.demonitor(ref, [:flush])
-
     state = process_task_result(ref, result, state)
 
     # Drain additional messages from mailbox to reduce processing overhead
     state = drain_mailbox(state, 50)
 
-    state =
-      if Nix.Eval.Queue.empty?(state.queue) and map_size(state.running) == 0 do
-        Logger.info(msg: "All work complete", total_results: length(state.results))
-        end_time = DateTime.utc_now()
-        results = Enum.reverse(state.results)
+    if Nix.Eval.Queue.empty?(state.queue) and map_size(state.running) == 0 do
+      Logger.info(msg: "All work complete", total_results: length(state.results))
+      results = Enum.reverse(state.results)
 
-        GenServer.reply(
-          state.from,
-          {check_ok(results), %{state | results: results, end_time: end_time}}
-        )
+      GenServer.reply(
+        state.from,
+        {check_ok(results),
+         %Nix.Eval.Jobs.Result{
+           results: results,
+           end_time: DateTime.utc_now(),
+           start_time: state.start_time,
+           request: state.request
+         }}
+      )
 
-        state
-      else
-        spawn_workers(state)
-      end
-
-    {:noreply, state}
+      {:stop, :normal, state}
+    else
+      {:noreply, spawn_workers(state)}
+    end
   end
 
   # Just ignore the down events, we get everything we need from the result

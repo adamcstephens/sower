@@ -2,54 +2,60 @@ defmodule Nix.Eval do
   use GenServer
   use TypedStruct
 
+  alias Nix.Eval
+
   require Logger
 
   @default_memory_limit_kb 4_000_000
   @tick_interval 200
 
   typedstruct do
-    field :request, Nix.Eval.Request.t()
-    field :from, pid()
-    field :pid, pid()
-    field :ospid, integer()
+    field :request, Eval.Request.t()
     field :start_time, DateTime.t()
     field :end_time, DateTime.t()
     field :mem_samples, list(integer()), default: []
     field :output, list(binary()) | map() | nil, default: []
     field :errors, list(binary()) | binary(), default: []
     field :memory_limit_kb, integer()
-    field :extra_args, list(binary), default: []
     field :status, :ok | :error | :memory_limit_exceeded
+  end
+
+  typedstruct module: Exec do
+    field :eval, Nix.Eval.t()
+    field :from, pid()
+    field :pid, pid()
+    field :ospid, integer()
   end
 
   def run(target, opts \\ [])
 
   def run(target, opts) when is_binary(target) do
-    run(Nix.Eval.Request.parse(target, Keyword.get(opts, :attr)), opts)
+    run(Eval.Request.parse(target, Keyword.get(opts, :attr)), opts)
   end
 
-  def run(%Nix.Eval.Request{} = req, opts) do
-    {:ok, pid} = GenServer.start_link(__MODULE__, {req, opts})
+  def run(%Eval.Request{} = req, opts) do
+    {:ok, pid} = GenServer.start_link(Eval, {req, opts})
 
     # set a 10 hour timeout for the genserver
     # if this timeout is exceeded the child process may not be killed
     GenServer.call(pid, :run_process, 10 * 60 * 60 * 1000)
   end
 
-  def init({%Nix.Eval.Request{} = req, opts}) do
+  def init({%Eval.Request{} = req, opts}) do
     Process.flag(:trap_exit, true)
 
     state =
-      %__MODULE__{
-        request: req,
-        memory_limit_kb: Keyword.get(opts, :memory_limit_kb, @default_memory_limit_kb),
-        extra_args: Keyword.get(opts, :extra_args, [])
+      %Eval.Exec{
+        eval: %Eval{
+          request: req,
+          memory_limit_kb: Keyword.get(opts, :memory_limit_kb, @default_memory_limit_kb)
+        }
       }
 
     {:ok, state}
   end
 
-  def handle_call(:run_process, from, %__MODULE__{} = state) do
+  def handle_call(:run_process, from, %Eval.Exec{} = state) do
     start_time = DateTime.utc_now()
 
     # we can't name the attribute outPath, or nix will only return that in the json
@@ -64,13 +70,13 @@ defmodule Nix.Eval do
     """
 
     cmd =
-      case state.request.type do
+      case state.eval.request.type do
         :flake ->
           [
             System.find_executable("nix"),
             "eval",
             "--json",
-            Nix.Eval.Request.to_flake_uri(state.request),
+            Eval.Request.to_flake_uri(state.eval.request),
             "--no-eval-cache",
             "--apply",
             """
@@ -90,7 +96,7 @@ defmodule Nix.Eval do
             "--expr",
             """
             let
-              x = #{Nix.Eval.Request.to_import(state.request)};
+              x = #{Eval.Request.to_import(state.eval.request)};
             in
             #{expr_body}
             """
@@ -108,40 +114,46 @@ defmodule Nix.Eval do
         ]
       )
 
-    state = %{state | pid: pid, ospid: ospid, from: from, start_time: start_time}
+    state = %{
+      state
+      | pid: pid,
+        ospid: ospid,
+        from: from,
+        eval: %{state.eval | start_time: start_time}
+    }
 
     Process.send_after(self(), :tick, @tick_interval)
     {:noreply, state}
   end
 
-  def handle_info({:stdout, ospid, stdout}, %__MODULE__{} = state) when ospid == state.ospid do
-    {:noreply, %{state | output: [stdout | state.output]}}
+  def handle_info({:stdout, ospid, stdout}, %Eval.Exec{} = state) when ospid == state.ospid do
+    {:noreply, %{state | eval: %{state.eval | output: [stdout | state.eval.output]}}}
   end
 
-  def handle_info({:stderr, ospid, stderr}, %__MODULE__{} = state) when ospid == state.ospid do
-    {:noreply, %{state | errors: [stderr | state.errors]}}
+  def handle_info({:stderr, ospid, stderr}, %Eval.Exec{} = state) when ospid == state.ospid do
+    {:noreply, %{state | eval: %{state.eval | errors: [stderr | state.eval.errors]}}}
   end
 
-  def handle_info(:tick, %__MODULE__{} = state) do
+  def handle_info(:tick, %Eval.Exec{} = state) do
     mem = get_mem(state.ospid)
 
     if not is_nil(mem) do
       cond do
-        mem > state.memory_limit_kb ->
+        mem > state.eval.memory_limit_kb ->
           Logger.warning(
             msg: "Memory has exceeded limit, killing",
             ospid: state.ospid,
-            memory_limit_kb: state.memory_limit_kb,
+            memory_limit_kb: state.eval.memory_limit_kb,
             active_memory_kb: mem
           )
 
           :exec.kill(state.pid, :sigterm)
 
-        mem > state.memory_limit_kb * 0.75 ->
+        mem > state.eval.memory_limit_kb * 0.75 ->
           Logger.debug(
             msg: "Memory above 1/2 of limit",
             ospid: state.ospid,
-            memory_limit_kb: state.memory_limit_kb,
+            memory_limit_kb: state.eval.memory_limit_kb,
             active_memory_kb: mem
           )
 
@@ -154,15 +166,15 @@ defmodule Nix.Eval do
 
     mem_samples =
       if is_nil(mem) do
-        state.mem_samples
+        state.eval.mem_samples
       else
-        [mem | state.mem_samples]
+        [mem | state.eval.mem_samples]
       end
 
-    {:noreply, %{state | mem_samples: mem_samples}}
+    {:noreply, %{state | eval: %{state.eval | mem_samples: mem_samples}}}
   end
 
-  def handle_info({:EXIT, pid, reason}, %__MODULE__{} = state) when pid == state.pid do
+  def handle_info({:EXIT, pid, reason}, %Eval.Exec{} = state) when pid == state.pid do
     end_time = DateTime.utc_now()
 
     status =
@@ -170,7 +182,8 @@ defmodule Nix.Eval do
         reason == :normal ->
           :ok
 
-        length(state.mem_samples) > 0 and Enum.max(state.mem_samples) >= state.memory_limit_kb ->
+        length(state.eval.mem_samples) > 0 and
+            Enum.max(state.eval.mem_samples) >= state.eval.memory_limit_kb ->
           :memory_limit_exceeded
 
         true ->
@@ -179,18 +192,21 @@ defmodule Nix.Eval do
 
     state = %{
       state
-      | output: finalize_output(state),
-        errors: finalize_errors(state.errors),
-        end_time: end_time,
-        status: status
+      | eval: %{
+          state.eval
+          | output: finalize_output(state.eval),
+            errors: finalize_errors(state.eval.errors),
+            end_time: end_time,
+            status: status
+        }
     }
 
     log = [
       msg: "Evaluation complete",
-      request: state.request,
+      request: state.eval.request,
       reason: reason,
       status: status,
-      errors: state.errors
+      errors: state.eval.errors
     ]
 
     if status == :ok do
@@ -199,12 +215,12 @@ defmodule Nix.Eval do
       Logger.warning(log)
     end
 
-    GenServer.reply(state.from, {status, state})
+    GenServer.reply(state.from, {status, state.eval})
 
     {:stop, :normal, state}
   end
 
-  def finalize_output(%__MODULE__{request: req, output: output}) do
+  def finalize_output(%Eval{request: %Eval.Request{} = req, output: output}) do
     case output |> Enum.reverse() |> Enum.join() |> Jason.decode() do
       {:ok, json} when is_list(json) ->
         Enum.map(json, fn child ->
@@ -215,7 +231,7 @@ defmodule Nix.Eval do
               "#{req.attr}.#{child}"
             end
 
-          %{req | attr: attr}
+          %{req | attr: attr, id: Eval.Request.new_id(), root_id: req.root_id || req.id}
         end)
 
       {:ok, json} ->
@@ -226,7 +242,7 @@ defmodule Nix.Eval do
     end
   end
 
-  def finalize_errors(errors) do
+  def finalize_errors(errors) when is_list(errors) do
     errors
     |> Enum.reverse()
     |> Enum.map(&String.split(&1, "\n"))

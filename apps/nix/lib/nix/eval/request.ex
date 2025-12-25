@@ -4,9 +4,11 @@ defmodule Nix.Eval.Request do
   require Logger
 
   typedstruct do
+    field :id, String.t()
     field :type, :flake | :path
     field :path, String.t()
     field :attr, String.t() | nil, default: nil
+    field :root_id, String.t() | nil, default: nil
   end
 
   def parse(path, attr \\ nil) do
@@ -15,11 +17,14 @@ defmodule Nix.Eval.Request do
     {path, attribute} = parse_path(type, path, attr)
 
     %__MODULE__{
+      id: new_id(),
       type: type,
       path: path,
       attr: attribute
     }
   end
+
+  def new_id(), do: "eval_#{Cuid2Ex.create()}"
 
   def detect_type(path) do
     cond do
