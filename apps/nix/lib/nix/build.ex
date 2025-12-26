@@ -51,6 +51,11 @@ defmodule Nix.Build do
     GenServer.call(pid, :run, timeout)
   end
 
+  def run!(eval, opts \\ []) do
+    {:ok, eval} = run(eval, opts)
+    eval
+  end
+
   def init({%Nix.Eval{} = eval, opts}) do
     Process.flag(:trap_exit, true)
 

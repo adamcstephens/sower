@@ -41,6 +41,11 @@ defmodule Nix.Eval do
     GenServer.call(pid, :run_process, 10 * 60 * 60 * 1000)
   end
 
+  def run!(target, opts \\ []) do
+    {:ok, eval} = run(target, opts)
+    eval
+  end
+
   def init({%Eval.Request{} = req, opts}) do
     Process.flag(:trap_exit, true)
 
