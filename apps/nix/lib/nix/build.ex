@@ -18,7 +18,7 @@ defmodule Nix.Build do
     field :start_time, DateTime.t()
     field :end_time, DateTime.t()
     field :status, :ok | :error | :timeout
-    field :errors, list(binary()), default: []
+    field :log, list(binary()), default: []
   end
 
   typedstruct module: Exec do
@@ -130,7 +130,7 @@ defmodule Nix.Build do
 
     build = %{
       state.build
-      | errors: finalize_output(state.stderr),
+      | log: if(length(state.stderr) == 0, do: nil, else: finalize_output(state.stderr)),
         end_time: end_time,
         status: status,
         store_path: if(store_path != "", do: store_path, else: nil)
@@ -161,8 +161,7 @@ defmodule Nix.Build do
   defp finalize_output(output) when is_list(output) do
     output
     |> Enum.reverse()
-    |> Enum.join()
-    |> String.split("\n", trim: true)
+    |> Enum.join("\n")
   end
 
   defp finalize_output(output), do: output

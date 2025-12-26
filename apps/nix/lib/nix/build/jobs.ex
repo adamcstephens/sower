@@ -144,7 +144,7 @@ defmodule Nix.Build.Jobs do
   defp build_from_crash(reason) do
     %Build{
       status: :error,
-      errors: [format_crash_reason(reason)],
+      log: [format_crash_reason(reason)],
       start_time: DateTime.utc_now(),
       end_time: DateTime.utc_now()
     }
