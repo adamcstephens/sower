@@ -32,7 +32,9 @@ defmodule SowerCli.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:optimus, "~> 0.5"}
+      {:nix, in_umbrella: true},
+      {:optimus, "~> 0.5"},
+      {:typedstruct, "~> 0.5.4"}
     ]
   end
 end

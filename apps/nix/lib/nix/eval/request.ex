@@ -1,7 +1,15 @@
 defmodule Nix.Eval.Request do
+  @moduledoc """
+  Represents a Nix evaluation request.
+
+  Supports both flake and path-based evaluation targets.
+  """
+
   use TypedStruct
 
   require Logger
+
+  alias Nix.Eval.Type
 
   typedstruct do
     field :id, String.t()
@@ -11,43 +19,57 @@ defmodule Nix.Eval.Request do
     field :root_id, String.t() | nil, default: nil
   end
 
-  def parse(path, attr \\ nil) do
-    type = detect_type(path)
+  @doc """
+  Parse a path into an evaluation request.
 
-    {path, attribute} = parse_path(type, path, attr)
+  ## Options
+  - `:attr` - Attribute path to evaluate (e.g., "packages.x86_64-linux")
+  - `:type` - Explicit type (:flake, :path, or :auto for auto-detection). Default: :auto
+
+  ## Examples
+
+      iex> Nix.Eval.Request.parse(".")
+      %Nix.Eval.Request{type: :flake, path: ".", ...}
+
+      iex> Nix.Eval.Request.parse("./default.nix", type: :path)
+      %Nix.Eval.Request{type: :path, path: "/absolute/path/default.nix", ...}
+  """
+  def parse(path, opts \\ [])
+
+  def parse(path, opts) when is_list(opts) do
+    attr = Keyword.get(opts, :attr)
+    explicit_type = Keyword.get(opts, :type, :auto)
+
+    type = resolve_type(path, explicit_type)
+    {parsed_path, attribute} = parse_path(type, path, attr)
 
     %__MODULE__{
       id: new_id(),
       type: type,
-      path: path,
+      path: parsed_path,
       attr: attribute
     }
   end
 
-  def new_id(), do: "eval_#{Cuid2Ex.create()}"
+  # Backwards compatibility: parse(path, attr) where attr is a string
+  def parse(path, attr) when is_binary(attr) or is_nil(attr) do
+    parse(path, attr: attr)
+  end
 
-  def detect_type(path) do
-    cond do
-      String.match?(path, ~r{#}) ->
-        :flake
+  def new_id, do: "eval_#{Cuid2Ex.create()}"
 
-      String.match?(path, ~r{://}) ->
-        :flake
-
-      String.ends_with?(path, ".nix") ->
-        :path
-
-      File.exists?(Path.expand("flake.nix", path)) ->
-        :flake
-
-      File.exists?(Path.expand("flake.nix", path)) ->
-        :path
-
-      true ->
+  defp resolve_type(path, :auto) do
+    case Type.detect(path) do
+      {:error, :unknown_type} ->
         Logger.error(msg: "Failed to detect type", path: path)
         raise RuntimeError
+
+      type ->
+        type
     end
   end
+
+  defp resolve_type(_path, type) when type in [:flake, :path], do: type
 
   def parse_path(:flake, path, nil) do
     case String.split(path, "#") do

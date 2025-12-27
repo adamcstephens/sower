@@ -29,7 +29,8 @@ defmodule Nix.Eval.Jobs do
   def run(target, opts \\ [])
 
   def run(target, opts) when is_binary(target) do
-    run(Nix.Eval.Request.parse(target, Keyword.get(opts, :attr)), opts)
+    request_opts = Keyword.take(opts, [:attr, :type])
+    run(Nix.Eval.Request.parse(target, request_opts), opts)
   end
 
   def run(%Nix.Eval.Request{} = request, opts) do

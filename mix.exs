@@ -14,6 +14,14 @@ defmodule SowerUmbrella.MixProject do
           runtime_config_path: "config/runtime_agent.exs",
           include_executables_for: [:unix]
         ],
+        cli: [
+          version: version,
+          applications: [sower_cli: :permanent],
+          config_path: "./apps/sower_cli/config/config.exs",
+          runtime_config_path: "./apps/sower_cli/config/runtime.exs",
+          include_executables_for: [:unix],
+          steps: [:assemble]
+        ],
         server: [
           version: version,
           applications: [sower: :permanent],

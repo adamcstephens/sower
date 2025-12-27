@@ -1,9 +1,9 @@
 defmodule Nix.Eval.RequestTest do
   use ExUnit.Case
 
-  test "detect_type/1" do
-    assert Nix.Eval.Request.detect_type("/tmp#") == :flake
-    assert Nix.Eval.Request.detect_type(Path.expand("../../../../..", __DIR__)) == :flake
+  test "Nix.Eval.Type.detect/1" do
+    assert Nix.Eval.Type.detect("/tmp#") == :flake
+    assert Nix.Eval.Type.detect(Path.expand("../../../../..", __DIR__)) == :flake
   end
 
   test "parse_path/3" do
