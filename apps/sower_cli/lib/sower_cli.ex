@@ -3,6 +3,8 @@ defmodule SowerCli do
   Sower CLI - Build and deploy Nix flakes.
   """
 
+  require Logger
+
   def main(argv) do
     config()
     |> Optimus.parse!(argv)
@@ -10,6 +12,8 @@ defmodule SowerCli do
   end
 
   defp run({[:build], %{args: args, flags: flags, options: options}}) do
+    # Set log level after all apps have started
+    set_log_level(if flags.debug, do: :debug, else: :error)
     SowerCli.Build.run(args.flake, flags, options)
   end
 
@@ -23,6 +27,15 @@ defmodule SowerCli do
     config()
     |> Optimus.help()
     |> IO.puts()
+  end
+
+  defp set_log_level(level) do
+    Logger.configure(level: level)
+    :logger.set_primary_config(:level, level)
+
+    for %{id: id} <- :logger.get_handler_config() do
+      :logger.set_handler_config(id, :level, level)
+    end
   end
 
   defp columns() do
@@ -49,6 +62,11 @@ defmodule SowerCli do
             ]
           ],
           flags: [
+            debug: [
+              short: "-d",
+              long: "--debug",
+              help: "Enable debug logging"
+            ],
             eval_only: [
               short: "-e",
               long: "--eval-only",
