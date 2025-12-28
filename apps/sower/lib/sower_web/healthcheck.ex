@@ -3,11 +3,11 @@ defmodule SowerWeb.Plug.HealthCheck do
 
   def init(opts), do: opts
 
-  def call(%Plug.Conn{request_path: "/healthy"} = conn, _opts) do
+  def call(%Plug.Conn{request_path: "/health"} = conn, _opts) do
     {:ok, _} = Sower.Repo.query("SELECT 1")
 
     conn
-    |> send_resp(200, "")
+    |> send_resp(200, ":ok")
     |> halt()
   end
 

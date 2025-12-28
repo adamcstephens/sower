@@ -30,7 +30,6 @@ defmodule SowerWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
-    get "/health", PageController, :health
 
     scope "/client" do
       get "/bootstrap", BootstrapController, :client_script

@@ -35,7 +35,7 @@ defmodule Nix.Eval do
   end
 
   def run(%Eval.Request{} = req, opts) do
-    {:ok, pid} = GenServer.start_link(Eval, {req, opts} |> dbg())
+    {:ok, pid} = GenServer.start_link(Eval, {req, opts})
 
     # set a 10 hour timeout for the genserver
     # if this timeout is exceeded the child process may not be killed
