@@ -12,17 +12,15 @@ defmodule Nix.Profile do
     caller = __CALLER__.module
 
     quote do
-      use Xema
+      use TypedStruct
 
       @derive Jason.Encoder
 
-      xema_struct do
-        field :current, Nix.Profile.Generation
+      typedstruct do
+        field :current, Nix.Profile.Generation, enforce: true
         field :latest, Nix.Profile.Generation
-        field :profiles, :list, items: Nix.Profile.Generation
-        field :tags, :map
-
-        required [:current]
+        field :profiles, list(Nix.Profile.Generation), default: []
+        field :tags, map(), default: %{}
       end
 
       @behaviour Nix.Profile

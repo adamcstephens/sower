@@ -250,23 +250,6 @@ let
         in
         drv;
 
-      conv_case =
-        let
-          version = "0.2.3";
-          drv = buildMix {
-            inherit version;
-            name = "conv_case";
-            appConfigPath = ../../config;
-
-            src = fetchHex {
-              inherit version;
-              pkg = "conv_case";
-              sha256 = "88f29a3d97d1742f9865f7e394ed3da011abb7c5e8cc104e676fdef6270d4b4a";
-            };
-          };
-        in
-        drv;
-
       crontab =
         let
           version = "1.2.0";
@@ -1459,28 +1442,6 @@ let
               bandit
               plug
               websock
-            ];
-          };
-        in
-        drv;
-
-      xema =
-        let
-          version = "0.17.5";
-          drv = buildMix {
-            inherit version;
-            name = "xema";
-            appConfigPath = ../../config;
-
-            src = fetchHex {
-              inherit version;
-              pkg = "xema";
-              sha256 = "b49bffe49a565ceeb6dcecbbed7044ccdea934d0716c77206e7f055f41d550b4";
-            };
-
-            beamDeps = [
-              conv_case
-              decimal
             ];
           };
         in

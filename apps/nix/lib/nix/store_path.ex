@@ -1,9 +1,7 @@
 defmodule Nix.StorePath do
-  use Xema
+  use TypedStruct
 
-  xema_struct do
-    field :path, :string
-
-    required [:path]
+  typedstruct do
+    field :path, String.t(), enforce: true
   end
 end
