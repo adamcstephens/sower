@@ -15,6 +15,7 @@ defmodule SowerCli.Build do
 
   typedstruct do
     field :flake, String.t()
+    field :flags, map()
     field :options, map()
     field :evals, [Nix.Eval.t()]
     field :builds, [Nix.Build.t()]
@@ -22,23 +23,13 @@ defmodule SowerCli.Build do
     field :cache_config, map()
   end
 
-  @doc """
-  Run the build pipeline based on flags.
-
-  ## Options
-  - `:cache` - Cache URL (required for push/seed)
-  - `:jobs` - Number of parallel workers
-  - `:tag` - Metadata tags (for seed)
-  - `:fail_fast` - Exit immediately if any step fails (default: false, continue with successful items)
-  """
   def run(flake, flags, options) do
-    steps = build_steps(flags)
-
-    options = Map.put(options, :fail_fast, flags[:fail_fast] || false)
+    steps = build_steps(flags, options)
 
     state = %__MODULE__{
       flake: flake,
-      options: options
+      options: options,
+      flags: flags
     }
 
     case validate_options(steps, options) do
@@ -50,10 +41,10 @@ defmodule SowerCli.Build do
     end
   end
 
-  defp build_steps(%{eval_only: true}), do: [:eval]
-  defp build_steps(%{push: true}), do: [:eval, :build, :push]
-  defp build_steps(%{seed: true}), do: [:eval, :build, :push, :seed]
-  defp build_steps(_), do: [:eval, :build]
+  defp build_steps(%{eval_only: true}, _), do: [:eval]
+  defp build_steps(_, %{push: true}), do: [:eval, :build, :push]
+  defp build_steps(_, %{seed: true}), do: [:eval, :build, :push, :seed]
+  defp build_steps(_, _), do: [:eval, :build]
 
   defp validate_options(steps, options) do
     cond do
@@ -61,15 +52,9 @@ defmodule SowerCli.Build do
         Output.error("--cache is required for --push")
         {:error, :missing_cache}
 
-      :seed in steps and is_nil(options.cache) ->
-        Output.error("--cache is required for --seed")
-        {:error, :missing_cache}
-
-      not is_nil(options.cache) ->
-        case Cache.parse_url(options.cache) do
-          {:ok, _} -> :ok
-          {:error, msg} -> Output.error(msg) && {:error, :invalid_cache}
-        end
+      :seed in steps and is_nil(options.endpoint) ->
+        Output.error("--endpoint is required for --seed")
+        {:error, :missing_endpoint}
 
       true ->
         :ok
@@ -84,10 +69,11 @@ defmodule SowerCli.Build do
   defp run_steps([:eval | rest], %__MODULE__{} = state) do
     Output.step("Evaluating #{state.flake}")
 
-    workers = state.options.jobs || 8
-    eval_type = state.options.type || :auto
-
-    opts = [workers: workers, type: eval_type]
+    opts = [
+      workers: state.options.jobs,
+      type: state.options.eval_type,
+      use_eval_cache: state.flags.use_eval_cache
+    ]
 
     case Nix.Eval.Jobs.run(state.flake, opts) do
       {:ok, %{results: results}} ->
@@ -98,7 +84,7 @@ defmodule SowerCli.Build do
         Output.eval_summary(results)
         Output.eval_errors(results)
 
-        if state.options.fail_fast do
+        if state.flags.fail_fast do
           {:error, :eval_failed}
         else
           successful = Enum.filter(results, &(&1.status == :ok))
@@ -126,7 +112,7 @@ defmodule SowerCli.Build do
         builds = Output.build_summary(result)
         Output.build_errors(builds)
 
-        if state.options.fail_fast do
+        if state.flags.fail_fast do
           {:error, :build_failed}
         else
           successful = Enum.filter(builds, &(&1.status == :ok))

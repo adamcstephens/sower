@@ -14,6 +14,7 @@ defmodule Nix.Eval.Jobs do
     field :results, list()
     field :max_workers, integer()
     field :memory_limit_kb, integer()
+    field :use_eval_cache, boolean(), default: false
     field :from, {pid(), term()}
     field :supervisor, pid()
     field :start_time, DateTime.t()
@@ -52,6 +53,7 @@ defmodule Nix.Eval.Jobs do
       results: [],
       max_workers: Keyword.get(opts, :workers, 8),
       memory_limit_kb: Keyword.get(opts, :memory_limit_kb, 4_000_000),
+      use_eval_cache: Keyword.get(opts, :use_eval_cache, false),
       from: nil,
       request: request,
       supervisor: supervisor,
@@ -104,7 +106,7 @@ defmodule Nix.Eval.Jobs do
         Enum.reduce(requests, state.running, fn request, acc_running ->
           task =
             Task.Supervisor.async(state.supervisor, fn ->
-              evaluate_request(request, state.memory_limit_kb)
+              evaluate_request(request, state)
             end)
 
           Map.put(acc_running, task.ref, request)
@@ -117,8 +119,8 @@ defmodule Nix.Eval.Jobs do
   end
 
   # Evaluate a single request and return the result
-  defp evaluate_request(request, memory_limit_kb) do
-    case Nix.Eval.run(request, memory_limit_kb: memory_limit_kb) do
+  defp evaluate_request(request, %__MODULE__{memory_limit_kb: mem, use_eval_cache: cache}) do
+    case Nix.Eval.run(request, memory_limit_kb: mem, use_eval_cache: cache) do
       {_, %{output: output} = eval} when is_map(output) or is_nil(output) ->
         # This is a derivation (returns map with drvPath, outPath, meta)
         {:leaf, eval}

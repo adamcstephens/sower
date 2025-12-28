@@ -68,7 +68,6 @@ defmodule SowerCli do
               help: "Enable debug logging"
             ],
             eval_only: [
-              short: "-e",
               long: "--eval-only",
               help: "Only evaluate, don't build"
             ],
@@ -81,6 +80,11 @@ defmodule SowerCli do
               short: "-s",
               long: "--seed",
               help: "Full pipeline: build, push, and register with server"
+            ],
+            use_eval_cache: [
+              long: "--use-eval-cache",
+              help:
+                "Enable evaluation caching. This is disabled by default, unlike standard commands."
             ],
             fail_fast: [
               short: "-f",
@@ -111,8 +115,8 @@ defmodule SowerCli do
               help: "Add metadata tag (can be repeated)",
               multiple: true
             ],
-            type: [
-              long: "--type",
+            eval_type: [
+              long: "--eval-type",
               value_name: "TYPE",
               help: "Evaluation type: auto, flake, or path (default: auto)",
               parser: &parse_nix_type/1,

@@ -25,6 +25,7 @@ defmodule Nix.Eval do
     field :from, pid()
     field :pid, pid()
     field :ospid, integer()
+    field :use_eval_cache, boolean()
   end
 
   def run(target, opts \\ [])
@@ -34,7 +35,7 @@ defmodule Nix.Eval do
   end
 
   def run(%Eval.Request{} = req, opts) do
-    {:ok, pid} = GenServer.start_link(Eval, {req, opts})
+    {:ok, pid} = GenServer.start_link(Eval, {req, opts} |> dbg())
 
     # set a 10 hour timeout for the genserver
     # if this timeout is exceeded the child process may not be killed
@@ -51,6 +52,7 @@ defmodule Nix.Eval do
 
     state =
       %Eval.Exec{
+        use_eval_cache: Keyword.get(opts, :use_eval_cache, false),
         eval: %Eval{
           request: req,
           memory_limit_kb: Keyword.get(opts, :memory_limit_kb, @default_memory_limit_kb)
@@ -79,33 +81,35 @@ defmodule Nix.Eval do
         :flake ->
           [
             System.find_executable("nix"),
-            "eval",
-            "--json",
-            Eval.Request.to_flake_uri(state.eval.request),
-            "--no-eval-cache",
-            "--apply",
-            """
-            x: #{expr_body}
-            """
-          ]
+            "eval"
+          ] ++
+            if(state.use_eval_cache, do: [], else: ["--no-eval-cache"]) ++
+            [
+              "--json",
+              Eval.Request.to_flake_uri(state.eval.request),
+              "--apply",
+              """
+              x: #{expr_body}
+              """
+            ]
 
         :path ->
           [
             System.find_executable("nix-instantiate"),
             "--eval",
             "--strict",
-            "--json",
-            "--option",
-            "eval-cache",
-            "false",
-            "--expr",
-            """
-            let
-              x = #{Eval.Request.to_import(state.eval.request)};
-            in
-            #{expr_body}
-            """
-          ]
+            "--json"
+          ] ++
+            if(state.use_eval_cache, do: [], else: ["--option", "eval-cache", "false"]) ++
+            [
+              "--expr",
+              """
+              let
+                x = #{Eval.Request.to_import(state.eval.request)};
+              in
+              #{expr_body}
+              """
+            ]
       end
 
     Logger.debug(msg: "Running command", cmd: Enum.join(cmd, " "))
@@ -147,20 +151,13 @@ defmodule Nix.Eval do
         mem > state.eval.memory_limit_kb ->
           Logger.warning(
             msg: "Memory has exceeded limit, killing",
+            eval_id: state.eval.request.id,
             ospid: state.ospid,
             memory_limit_kb: state.eval.memory_limit_kb,
             active_memory_kb: mem
           )
 
           :exec.kill(state.pid, :sigterm)
-
-        mem > state.eval.memory_limit_kb * 0.75 ->
-          Logger.debug(
-            msg: "Memory above 1/2 of limit",
-            ospid: state.ospid,
-            memory_limit_kb: state.eval.memory_limit_kb,
-            active_memory_kb: mem
-          )
 
         true ->
           :ok
