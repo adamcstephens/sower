@@ -42,19 +42,33 @@ defmodule SowerCli.Build do
   end
 
   defp build_steps(%{eval_only: true}), do: [:eval]
-  defp build_steps(%{push: true}), do: [:eval, :build, :push]
   defp build_steps(%{seed: true}), do: [:eval, :build, :push, :seed]
+  defp build_steps(%{push: true}), do: [:eval, :build, :push]
   defp build_steps(_), do: [:eval, :build]
 
   defp validate_options(steps, options) do
     cond do
       :push in steps and is_nil(options.cache) ->
-        Output.error("--cache is required for --push")
-        {:error, :missing_cache}
+        config = SowerCli.Config.get()
 
-      :seed in steps and is_nil(options.endpoint) ->
-        Output.error("--endpoint is required for --seed")
-        {:error, :missing_endpoint}
+        if is_nil(config.cache) do
+          Output.error("--cache is required for --push")
+          {:error, :missing_cache}
+        else
+          :ok
+        end
+
+      :seed in steps ->
+        config = SowerCli.Config.get()
+
+        try do
+          SowerCli.Config.require_server_connection!(config)
+          :ok
+        rescue
+          e in ArgumentError ->
+            Output.error("#{e.message}")
+            {:error, :missing_server_config}
+        end
 
       true ->
         :ok
@@ -129,7 +143,8 @@ defmodule SowerCli.Build do
   defp run_steps([:push | rest], %__MODULE__{} = state) do
     Output.step("Pushing to cache")
 
-    {:ok, {cache_module, cache_config}} = Cache.parse_url(state.options.cache)
+    cache_url = state.options.cache || SowerCli.Config.get().cache
+    {:ok, {cache_module, cache_config}} = Cache.parse_url(cache_url)
 
     store_paths =
       state.builds

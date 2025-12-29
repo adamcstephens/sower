@@ -31,7 +31,8 @@ defmodule SowerClient.MixProject do
       {:jason, "~> 1.0"},
       {:open_api_spex, "~> 3.22"},
       {:req, "~> 0.5.14"},
-      {:slipstream, "~> 1.0"}
+      {:slipstream, "~> 1.0"},
+      {:typedstruct, "~> 0.5", runtime: false}
     ]
   end
 end

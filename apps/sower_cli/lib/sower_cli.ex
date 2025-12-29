@@ -6,6 +6,11 @@ defmodule SowerCli do
   require Logger
 
   def main(argv) do
+    # Load config at startup
+    SowerCli.Config.load()
+
+    Application.get_all_env(:sower_cli)
+
     config()
     |> Optimus.parse!(argv)
     |> run()
