@@ -77,17 +77,12 @@ defmodule SowerAgent.Config do
           Logger.error(msg: "Failed to read configuration", errors: errors)
           Kernel.exit(1)
       end
-
-    # process side effects
-    cfg =
-      cfg
+      # pull apart and put back together
       |> Map.to_list()
-      |> Enum.map(&external_config/1)
-      |> Enum.reject(&is_nil/1)
+      # process side effects
+      |> Enum.reduce([], fn config, acc -> process_side_effects(config, acc) end)
       |> Map.new()
-
-    # cast back into a struct
-    cfg = struct(__MODULE__, cfg)
+      |> then(&struct(__MODULE__, &1))
 
     Application.put_env(@app, :config, cfg)
   end
@@ -96,7 +91,7 @@ defmodule SowerAgent.Config do
   external_config is processed for each child in the config.
   It allows for mapping from a config file format to elixir native config manually.
   """
-  def external_config({:endpoint, endpoint}) do
+  def process_side_effects({:endpoint, endpoint}, acc) do
     uri = URI.parse(endpoint)
 
     uri =
@@ -119,14 +114,14 @@ defmodule SowerAgent.Config do
     Application.put_env(SowerAgent.Client, :uri, uri)
     Application.put_env(SowerAgent.Client, :reconnect_after_msec, [200, 500, 1_000, 2_000])
 
-    nil
+    acc
   end
 
-  def external_config({:state_directory, dir}) do
-    {:state_directory, Path.expand(dir)}
+  def process_side_effects({:state_directory, dir}, acc) do
+    Keyword.put(acc, :state_directory, Path.expand(dir))
   end
 
-  def external_config({:subscriptions, subscriptions})
+  def process_side_effects({:subscriptions, subscriptions}, acc)
       when is_list(subscriptions) do
     normalized_subscriptions =
       Enum.map(subscriptions, fn subscription ->
@@ -146,12 +141,11 @@ defmodule SowerAgent.Config do
         end
       end)
 
-    {:subscriptions, normalized_subscriptions}
+    Keyword.put(acc, :subscriptions, normalized_subscriptions)
   end
 
-  def external_config({:__struct__, _}), do: nil
-
-  def external_config(cfg), do: cfg
+  def process_side_effects({:__struct__, _}, acc), do: acc
+  def process_side_effects({key, val}, acc), do: Keyword.put(acc, key, val)
 
   def add_config_file(cfg) do
     cfg
