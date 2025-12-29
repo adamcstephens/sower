@@ -129,12 +129,10 @@ defmodule SowerCli.Build do
         if state.flags.fail_fast do
           {:error, :build_failed}
         else
-          successful = Enum.filter(builds, &(&1.status == :ok))
-
-          if Enum.empty?(successful) do
+          if not Enum.all?(builds, &(&1.status == :ok)) do
             {:error, :build_failed}
           else
-            run_steps(rest, %{state | builds: successful})
+            run_steps(rest, %{state | builds: builds})
           end
         end
     end
@@ -146,9 +144,12 @@ defmodule SowerCli.Build do
     cache_url = state.options.cache || SowerCli.Config.get().cache
     {:ok, {cache_module, cache_config}} = Cache.parse_url(cache_url)
 
-    store_paths =
+    builds =
       state.builds
       |> Enum.filter(&(&1.status == :ok))
+
+    store_paths =
+      builds
       |> Enum.map(& &1.store_path)
       |> Enum.reject(&is_nil/1)
 
@@ -161,7 +162,16 @@ defmodule SowerCli.Build do
 
       case result do
         {:ok, _} ->
-          run_steps(rest, %{state | cache_module: cache_module, cache_config: cache_config})
+          # we're batch uploading, so don't get individual results
+          # mark all builds as cached
+          builds = builds |> Enum.map(fn build -> %{build | cached: true} end)
+
+          run_steps(rest, %{
+            state
+            | cache_module: cache_module,
+              cache_config: cache_config,
+              builds: builds
+          })
 
         {:error, _reason} ->
           {:error, :push_failed}
@@ -171,13 +181,28 @@ defmodule SowerCli.Build do
 
   defp run_steps([:seed | rest], %__MODULE__{} = state) do
     Output.step("Registering seed")
-    Output.info("TODO: seed registration not yet implemented")
 
-    # Show what would be registered
-    if state.options.tag do
-      Output.info("Tags: #{inspect(state.options.tag)}")
-    end
+    load_tags(state)
+    |> dbg()
 
     run_steps(rest, state)
+  end
+
+  defp load_tags(%__MODULE__{} = state) do
+    state.options.tag
+    |> Enum.map(&SowerClient.Schemas.SeedTag.from_string/1)
+    |> add_env_tags()
+  end
+
+  defp add_env_tags(tags) do
+    [
+      tag_git_branch()
+      | tags
+    ]
+  end
+
+  defp tag_git_branch() do
+    # TODO put something real here
+    %SowerClient.Schemas.SeedTag{key: "git_branch", value: "main"}
   end
 end

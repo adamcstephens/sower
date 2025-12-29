@@ -21,4 +21,13 @@ defmodule SowerClient.Schemas.SeedTag do
       "value" => "production"
     }
   })
+
+  def from_string(tag) when is_binary(tag) do
+    [key, val] = String.split(tag, "=")
+
+    %__MODULE__{
+      key: key,
+      value: val
+    }
+  end
 end

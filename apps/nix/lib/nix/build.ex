@@ -19,6 +19,7 @@ defmodule Nix.Build do
     field :end_time, DateTime.t()
     field :status, :ok | :error | :timeout
     field :log, list(binary()), default: []
+    field :cached, boolean(), default: false
   end
 
   typedstruct module: Exec do
