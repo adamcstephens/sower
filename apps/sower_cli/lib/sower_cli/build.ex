@@ -24,7 +24,7 @@ defmodule SowerCli.Build do
   end
 
   def run(flake, flags, options) do
-    steps = build_steps(flags, options)
+    steps = build_steps(flags)
 
     state = %__MODULE__{
       flake: flake,
@@ -41,10 +41,10 @@ defmodule SowerCli.Build do
     end
   end
 
-  defp build_steps(%{eval_only: true}, _), do: [:eval]
-  defp build_steps(_, %{push: true}), do: [:eval, :build, :push]
-  defp build_steps(_, %{seed: true}), do: [:eval, :build, :push, :seed]
-  defp build_steps(_, _), do: [:eval, :build]
+  defp build_steps(%{eval_only: true}), do: [:eval]
+  defp build_steps(%{push: true}), do: [:eval, :build, :push]
+  defp build_steps(%{seed: true}), do: [:eval, :build, :push, :seed]
+  defp build_steps(_), do: [:eval, :build]
 
   defp validate_options(steps, options) do
     cond do
