@@ -40,7 +40,7 @@ defmodule SowerAgent.Config do
       },
       subscriptions: %Schema{
         type: :array,
-        items: SowerAgent.Subscription,
+        items: SowerClient.Schemas.Orchestration.Subscription,
         default: []
       }
     },
@@ -119,29 +119,6 @@ defmodule SowerAgent.Config do
 
   def process_side_effects({:state_directory, dir}, acc) do
     Keyword.put(acc, :state_directory, Path.expand(dir))
-  end
-
-  def process_side_effects({:subscriptions, subscriptions}, acc)
-      when is_list(subscriptions) do
-    normalized_subscriptions =
-      Enum.map(subscriptions, fn subscription ->
-        case subscription do
-          %{schedule: schedule} when is_binary(schedule) ->
-            case Crontab.CronExpression.Parser.parse(schedule) do
-              {:ok, cron} ->
-                %{subscription | schedule: cron}
-
-              {:error, error} ->
-                Logger.error(msg: "Failed to parse schedule", error: error)
-                subscription
-            end
-
-          subscription ->
-            subscription
-        end
-      end)
-
-    Keyword.put(acc, :subscriptions, normalized_subscriptions)
   end
 
   def process_side_effects({:__struct__, _}, acc), do: acc

@@ -20,24 +20,21 @@ defmodule SowerAgent.Client do
   def handle_cast(:register_subscriptions, socket) do
     subscriptions =
       SowerAgent.Config.get().subscriptions
-      |> Enum.map(fn agent_sub ->
-        # Convert to client schema before sending to server
-        client_sub = SowerAgent.Subscription.to_client_schema(agent_sub)
-
-        with {:ok, ref} <- push_message(socket, client_sub),
+      |> Enum.map(fn sub ->
+        with {:ok, ref} <- push_message(socket, sub),
              {:ok, response} <- await_reply(ref),
              {:ok, registered} <-
                SowerClient.Schemas.Orchestration.Subscription.cast(response) do
           Logger.debug(registered)
 
-          # Merge server-assigned sid back into agent subscription
-          %{agent_sub | sid: registered.sid}
+          # Merge server-assigned sid back into subscription
+          %{sub | sid: registered.sid}
         else
           {:error, error} ->
             Logger.error(
               msg: "Failed to register subscription",
               error: error,
-              subscription: agent_sub
+              subscription: sub
             )
 
             nil
@@ -45,7 +42,7 @@ defmodule SowerAgent.Client do
           :error ->
             Logger.error(
               msg: "Failed to register subscription with unknown error",
-              subscription: agent_sub
+              subscription: sub
             )
 
             nil
@@ -53,7 +50,7 @@ defmodule SowerAgent.Client do
       end)
       |> Enum.reject(&is_nil/1)
 
-    :ok = Enum.each(subscriptions, &SowerAgent.Subscription.start_schedule/1)
+    :ok = Enum.each(subscriptions, &start_schedule/1)
 
     SowerAgent.Storage.put(:subscriptions, subscriptions)
 
@@ -205,4 +202,37 @@ defmodule SowerAgent.Client do
   def private_channel(_socket) do
     "agent:#{Storage.read().agent_sid}"
   end
+
+  defp start_schedule(%SowerClient.Schemas.Orchestration.Subscription{
+         sid: sid,
+         schedule: schedule
+       })
+       when not is_nil(sid) and not is_nil(schedule) do
+    case Crontab.CronExpression.Parser.parse(schedule) do
+      {:ok, cron} ->
+        SowerAgent.Scheduler.new_job()
+        |> Quantum.Job.set_name(:"sub_#{sid}")
+        |> Quantum.Job.set_schedule(cron)
+        |> Quantum.Job.set_task(fn ->
+          Logger.debug(
+            msg: "Running subscription schedule",
+            subscription_sid: sid,
+            schedule: schedule
+          )
+        end)
+        |> SowerAgent.Scheduler.add_job()
+
+      {:error, error} ->
+        Logger.error(
+          msg: "Failed to parse schedule",
+          error: error,
+          schedule: schedule,
+          subscription_sid: sid
+        )
+
+        nil
+    end
+  end
+
+  defp start_schedule(_), do: nil
 end

@@ -28,6 +28,16 @@ defmodule SowerClient.Schemas.Orchestration.Subscription do
         items: __MODULE__.Rule,
         default: [],
         description: "Tag-based rules to filter seeds"
+      },
+      schedule: %Schema{
+        type: :string,
+        description: "Cron expression for polling schedule (agent-only)",
+        nullable: true
+      },
+      poll_on_connect: %Schema{
+        type: :boolean,
+        description: "Whether to request deployment immediately on connect (agent-only)",
+        default: false
       }
     },
     required: [],
