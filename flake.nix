@@ -17,8 +17,7 @@
       {
         imports = [
           ./nix/lib.nix
-          ./nix/flake/module.nix
-          ./nix/legacy-flake-module.nix
+          ./nix/flake/part.nix
           inputs.process-compose-flake.flakeModule
         ];
 
