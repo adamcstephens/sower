@@ -48,7 +48,8 @@ defmodule Nix.Eval.Queue do
       :ordered_set,
       :public,
       {:read_concurrency, true},
-      {:write_concurrency, false}  # Single writer (GenServer) is fine
+      # Single writer (GenServer) is fine
+      {:write_concurrency, false}
     ]
 
     table_name = Keyword.get(opts, :name, __MODULE__)
@@ -83,7 +84,8 @@ defmodule Nix.Eval.Queue do
 
     # Atomically reserve a range of sequence numbers
     start_seq = :atomics.add_get(counter, 1, count)
-    start_seq = start_seq - count + 1  # Adjust to get first number in range
+    # Adjust to get first number in range
+    start_seq = start_seq - count + 1
 
     # Build list of {key, value} tuples
     records =
@@ -180,7 +182,8 @@ defmodule Nix.Eval.Queue do
     case :ets.take(table, key) do
       [{^key, item}] ->
         # Successfully took item, get next key and continue
-        next_key = :ets.first(table)  # After take, first is now the next item
+        # After take, first is now the next item
+        next_key = :ets.first(table)
         dequeue_loop(table, count - 1, next_key, [item | acc])
 
       [] ->

@@ -232,11 +232,12 @@ defmodule Nix.Eval.QueueTest do
       Queue.enqueue(table, counter, Enum.to_list(1..100))
 
       # Spawn multiple processes to read size
-      tasks = for _ <- 1..10 do
-        Task.async(fn ->
-          Queue.size(table)
-        end)
-      end
+      tasks =
+        for _ <- 1..10 do
+          Task.async(fn ->
+            Queue.size(table)
+          end)
+        end
 
       results = Task.await_many(tasks)
       assert Enum.all?(results, &(&1 == 100))
@@ -249,12 +250,13 @@ defmodule Nix.Eval.QueueTest do
       # This should complete quickly due to read_concurrency
       start = System.monotonic_time(:millisecond)
 
-      tasks = for _ <- 1..100 do
-        Task.async(fn ->
-          Queue.size(table)
-          Queue.empty?(table)
-        end)
-      end
+      tasks =
+        for _ <- 1..100 do
+          Task.async(fn ->
+            Queue.size(table)
+            Queue.empty?(table)
+          end)
+        end
 
       Task.await_many(tasks)
       elapsed = System.monotonic_time(:millisecond) - start
