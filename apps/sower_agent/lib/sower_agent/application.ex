@@ -12,7 +12,8 @@ defmodule SowerAgent.Application do
       {SowerAgent.Client, []},
       {SowerAgent.Storage, []},
       {Task.Supervisor, name: SowerAgent.TaskSupervisor},
-      SowerAgent.Scheduler
+      SowerAgent.Scheduler,
+      :systemd.ready()
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

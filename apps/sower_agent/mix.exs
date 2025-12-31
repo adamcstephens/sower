@@ -35,7 +35,9 @@ defmodule SowerAgent.MixProject do
       {:slipstream, "~> 1.0"},
       # load typedstruct before typed_struct_ecto_changeset
       {:typedstruct, "~> 0.5", runtime: false},
-      {:sower_client, in_umbrella: true}
+      {:sower_client, in_umbrella: true},
+      {:systemd,
+       github: "hauleth/erlang-systemd", ref: "62723b2a99afca491cc5c8f15c7f72d108e84f4b"}
     ]
   end
 end

@@ -156,9 +156,7 @@ defmodule SowerClient.Config do
   def xdg_config_path(app_name, filename) do
     case System.get_env("USER") do
       user when user != "root" ->
-        System.get_env("XDG_CONFIG_HOME", Path.join(System.fetch_env!("HOME"), ".config"))
-        |> Path.join(app_name)
-        |> Path.join(filename)
+        xdg_path_file(:config, app_name, filename)
 
       _ ->
         Path.join(["/etc", app_name, filename])
@@ -168,11 +166,46 @@ defmodule SowerClient.Config do
   def xdg_state_path(app_name) do
     case System.get_env("USER") do
       user when user != "root" ->
-        System.get_env("XDG_STATE_HOME", Path.join(System.fetch_env!("HOME"), ".local/state"))
-        |> Path.join(app_name)
+        case System.get_env("STATE_DIRECTORY") do
+          nil ->
+            xdg_path_file(:state, app_name, nil)
+
+          state ->
+            state
+        end
 
       _ ->
         Path.join("/var/lib", app_name)
+    end
+  end
+
+  defp xdg_path_file(:config, app_name, filename) do
+    case System.get_env("XDG_CONFIG_HOME", home_default(".config")) do
+      nil ->
+        nil
+
+      path ->
+        path
+        |> Path.join(app_name)
+        |> Path.join(filename)
+    end
+  end
+
+  defp xdg_path_file(:state, app_name, _filename) do
+    case System.get_env("XDG_STATE_HOME", home_default(".local/state")) do
+      nil ->
+        nil
+
+      path ->
+        path
+        |> Path.join(app_name)
+    end
+  end
+
+  defp home_default(subdir) do
+    case System.get_env("HOME") do
+      nil -> nil
+      home -> Path.join(home, subdir)
     end
   end
 

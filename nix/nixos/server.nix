@@ -53,7 +53,7 @@ in
         type = lib.types.bool;
         default = true;
         description = ''
-          Whether to initialise non-existent secrets with random values.
+          Whether to initialise release cookie and secret key base with random values on first start.
         '';
       };
 
@@ -63,6 +63,7 @@ in
 
   config = lib.mkIf cfg.enable {
     assertions = [
+      # TODO assertions for setting secrets that initSecrets sets
       {
         assertion = builtins.hasAttr "RELEASE_COOKIE_FILE" cfg.environment;
         message = ''
