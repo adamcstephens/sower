@@ -37,7 +37,6 @@ testers.runNixOSTest {
           ];
 
           environment.systemPackages = [
-            flake.packages.${pkgs.stdenv.hostPlatform.system}.seed-ci
             flake.packages.${pkgs.stdenv.hostPlatform.system}.cli
           ];
 

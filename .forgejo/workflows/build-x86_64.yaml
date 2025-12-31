@@ -8,23 +8,14 @@ env:
   SOWER_ENDPOINT: ${{ vars.SOWER_ENDPOINT }}
 
 jobs:
-  build-and-seed-x86_64:
-    runs-on: local/x86_64-linux
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - run: |
-          export HOME=$PWD
-          nix develop .# --command seed-ci --attic-upload=true --nom=false --sower-seed=true --system x86_64-linux --cache-build-deps=true
-
   sower:
     runs-on: local/x86_64-linux
 
     steps:
       - uses: actions/checkout@v4
 
-      - run: |
+      - name: go cli
+        run: |
           export HOME=$PWD
 
           nix develop .#ci --command attic login main $ATTIC_URL --set-default $ATTIC_KEY

@@ -80,7 +80,6 @@
                   pkgs.oapi-codegen
 
                   pkgs.attic-client
-                  self'.packages.seed-ci
                   pkgs.nushell
 
                   pkgs.just
@@ -122,8 +121,6 @@
             };
 
             packages = rec {
-              seed-ci = pkgs.callPackage ./nix/packages/seed-ci.nix { };
-
               cli = pkgs.callPackage ./nix/packages/cli.nix {
                 inherit version;
               };
