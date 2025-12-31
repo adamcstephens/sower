@@ -1,6 +1,6 @@
 {
   imports = [
-    ./client.nix
+    # ./client.nix
     ./server.nix
   ];
 }

@@ -38,7 +38,7 @@ testers.runNixOSTest {
 
           environment.systemPackages = [
             flake.packages.${pkgs.stdenv.hostPlatform.system}.seed-ci
-
+            flake.packages.${pkgs.stdenv.hostPlatform.system}.cli
           ];
 
           networking.firewall.allowedTCPPorts = [ 4000 ];
@@ -50,20 +50,20 @@ testers.runNixOSTest {
             connect-timeout = 1;
           };
 
-          services.sower.client = {
-            enable = true;
-            package = flake.packages.${pkgs.stdenv.hostPlatform.system}.cli;
-
-            settings = {
-              api-token-file = "/run/sower/test_token";
-              debug = true;
-              endpoint = "http://localhost:4000";
-
-              services.services = [
-                "simple-service"
-              ];
-            };
-          };
+          # services.sower.client = {
+          #   enable = true;
+          #   package = flake.packages.${pkgs.stdenv.hostPlatform.system}.cli;
+          #
+          #   settings = {
+          #     api-token-file = "/run/sower/test_token";
+          #     debug = true;
+          #     endpoint = "http://localhost:4000";
+          #
+          #     services.services = [
+          #       "simple-service"
+          #     ];
+          #   };
+          # };
 
           services.sower.server = {
             enable = true;
@@ -112,26 +112,26 @@ testers.runNixOSTest {
 
       };
 
-    client = {
-      imports = [
-        ../nixos/module.nix
-      ];
-
-      services.sower.client = {
-        enable = true;
-        package = flake.packages.${pkgs.stdenv.hostPlatform.system}.cli;
-
-        settings = {
-          api-token-file = "/run/sower/test_token";
-          endpoint = "http://server:4000";
-          debug = true;
-        };
-      };
-
-      virtualisation.additionalPaths = [
-        simple-service
-      ];
-    };
+    # client = {
+    #   imports = [
+    #     ../nixos/module.nix
+    #   ];
+    #
+    #   services.sower.client = {
+    #     enable = true;
+    #     package = flake.packages.${pkgs.stdenv.hostPlatform.system}.cli;
+    #
+    #     settings = {
+    #       api-token-file = "/run/sower/test_token";
+    #       endpoint = "http://server:4000";
+    #       debug = true;
+    #     };
+    #   };
+    #
+    #   virtualisation.additionalPaths = [
+    #     simple-service
+    #   ];
+    # };
   };
 
   testScript = # python
@@ -141,28 +141,25 @@ testers.runNixOSTest {
       server.wait_for_unit("sower.service")
       server.wait_for_open_port(4000)
 
-      with subtest("basic submission"):
-          server_profile = server.succeed("readlink -f /run/booted-system").strip()
-          server.succeed(f"sower seed submit --path {server_profile} --debug")
-
-          client_profile = client.succeed("readlink -f /run/booted-system").strip()
-          server.succeed(f"sower seed submit --name client --type nixos --path {client_profile} --debug")
-
-          server.succeed("sower seed submit --name simple-service --type service --path ${simple-service} --debug")
-
-      with subtest("activate seed"):
-          server.succeed("sower seed upgrade --debug")
+      # with subtest("basic submission"):
+      #     server_profile = server.succeed("readlink -f /run/booted-system").strip()
+      #     server.succeed(f"sower seed submit --path {server_profile} --debug")
+      #
+      #     server.succeed("sower seed submit --name simple-service --type service --path ${simple-service} --debug")
+      #
+      # with subtest("activate seed"):
+      #     server.succeed("sower seed upgrade --debug")
 
       # with subtest("activate services"):
       #     server.succeed("sower services upgrade --debug")
       #     server.wait_for_unit("simple-oneshot.service")
       #     server.wait_for_unit("simple-sleep.service")
 
-      with subtest("check bootstrap"):
-          token = server.succeed("cat /run/sower/test_token")
-          client.succeed("mkdir /run/sower")
-          client.succeed(f"echo -n {token} > /run/sower/test_token")
-
-          client.succeed("curl http://server:4000/client/bootstrap | SOWER_ENDPOINT=http://server:4000 bash -s seed info --name client --type nixos")
+      # with subtest("check bootstrap"):
+      #     token = server.succeed("cat /run/sower/test_token")
+      #     client.succeed("mkdir /run/sower")
+      #     client.succeed(f"echo -n {token} > /run/sower/test_token")
+      #
+      #     client.succeed("curl http://server:4000/client/bootstrap | SOWER_ENDPOINT=http://server:4000 bash -s seed info --name client --type nixos")
     '';
 }

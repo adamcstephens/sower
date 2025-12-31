@@ -116,8 +116,10 @@ in
       environment = {
         HOME = "%S/sower";
         PHX_SERVER = "true";
+        SHELL = lib.getExe pkgs.bash;
         SOWER_SERVER_CONFIG_FILE = config-file;
-      } // cfg.environment;
+      }
+      // cfg.environment;
     };
 
     systemd.services.sower-init-secrets = lib.mkIf cfg.initSecrets {
