@@ -190,7 +190,7 @@ defmodule SowerCli.Build do
 
   defp load_tags(%__MODULE__{} = state) do
     state.options.tag
-    |> Enum.map(&SowerClient.Schemas.SeedTag.from_string/1)
+    |> Enum.map(&SowerClient.SeedTag.from_string/1)
     |> add_env_tags()
   end
 
@@ -203,6 +203,6 @@ defmodule SowerCli.Build do
 
   defp tag_git_branch() do
     # TODO put something real here
-    %SowerClient.Schemas.SeedTag{key: "git_branch", value: "main"}
+    %SowerClient.SeedTag{key: "git_branch", value: "main"}
   end
 end

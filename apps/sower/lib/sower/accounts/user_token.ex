@@ -16,7 +16,7 @@ defmodule Sower.Accounts.UserToken do
   @derive {Phoenix.Param, key: :sid}
 
   schema "users_tokens" do
-    field :sid, SowerClient.Schemas.Sid, autogenerate: true
+    field :sid, SowerClient.Sid, autogenerate: true
     field :token, :binary
     field :context, :string
     field :sent_to, :string

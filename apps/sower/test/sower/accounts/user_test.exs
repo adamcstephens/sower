@@ -13,7 +13,7 @@ defmodule Sower.AccountsTest do
   describe "get_by_id!/1" do
     test "raises if id is invalid" do
       assert_raise Ecto.NoResultsError, fn ->
-        User.get_by_sid!(SowerClient.Schemas.Sid.generate())
+        User.get_by_sid!(SowerClient.Sid.generate())
       end
     end
 

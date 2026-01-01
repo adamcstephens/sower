@@ -11,10 +11,10 @@ defmodule Sower.Seed do
 
   @derive {Phoenix.Param, key: :sid}
 
-  @seed_types SowerClient.Schemas.Seed.seed_types()
+  @seed_types SowerClient.Seed.seed_types()
 
   schema "seeds" do
-    field :sid, SowerClient.Schemas.Sid, autogenerate: true
+    field :sid, SowerClient.Sid, autogenerate: true
     field :org_id, Ecto.UUID
 
     field :name, :string
@@ -80,10 +80,10 @@ defmodule Sower.Seed do
   end
 
   @doc """
-  Get a seed from a SowerClient.Schemas.Seed struct.
+  Get a seed from a SowerClient.Seed struct.
   Returns `{:ok, seed}` or `nil` if not found.
   """
-  def get_by_request(%SowerClient.Schemas.Seed{name: name, seed_type: seed_type}) do
+  def get_by_request(%SowerClient.Seed{name: name, seed_type: seed_type}) do
     case get(name, seed_type) do
       nil -> nil
       seed -> {:ok, seed}

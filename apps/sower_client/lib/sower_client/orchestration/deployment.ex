@@ -1,4 +1,4 @@
-defmodule SowerClient.Schemas.Orchestration.Deployment do
+defmodule SowerClient.Orchestration.Deployment do
   use SowerClient.Schema
 
   OpenApiSpex.schema(%{
@@ -25,7 +25,7 @@ defmodule SowerClient.Schemas.Orchestration.Deployment do
       },
       seeds: %Schema{
         type: :array,
-        items: SowerClient.Schemas.Seed.schema()
+        items: SowerClient.Seed.schema()
       },
       deployed_at: %Schema{
         type: :string,

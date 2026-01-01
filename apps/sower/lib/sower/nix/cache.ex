@@ -7,7 +7,7 @@ defmodule Sower.Nix.Cache do
   @derive {Phoenix.Param, key: :sid}
 
   schema "nix_caches" do
-    field :sid, SowerClient.Schemas.Sid, autogenerate: true
+    field :sid, SowerClient.Sid, autogenerate: true
     field :public_key, :string
     field :url, :string
     field :org_id, Ecto.UUID

@@ -1,4 +1,4 @@
-defmodule SowerClient.Schemas.AgentHello do
+defmodule SowerClient.AgentHello do
   use SowerClient.Schema
   use SowerClient.ChannelMessage, event: "agent:hello", topic_type: :lobby
 

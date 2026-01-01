@@ -13,7 +13,7 @@ defmodule SowerWeb.AgentSocket do
           socket =
             socket
             |> assign(:access_token, access_token)
-            |> assign(:conn_sid, SowerClient.Schemas.Sid.generate("conn"))
+            |> assign(:conn_sid, SowerClient.Sid.generate("conn"))
 
           {:ok, socket}
         else

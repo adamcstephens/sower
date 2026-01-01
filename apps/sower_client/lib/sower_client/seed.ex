@@ -1,4 +1,4 @@
-defmodule SowerClient.Schemas.Seed do
+defmodule SowerClient.Seed do
   use SowerClient.Schema
   use SowerClient.ChannelMessage, event: "get:seed"
 
@@ -30,7 +30,7 @@ defmodule SowerClient.Schemas.Seed do
       tags: %Schema{
         type: :array,
         description: "Tags associated with the seed",
-        items: SowerClient.Schemas.SeedTag
+        items: SowerClient.SeedTag
       }
     },
     required: [:name, :seed_type, :artifact],

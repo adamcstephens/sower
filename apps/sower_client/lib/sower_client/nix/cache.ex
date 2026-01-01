@@ -1,4 +1,4 @@
-defmodule SowerClient.Schemas.Nix.Cache do
+defmodule SowerClient.Nix.Cache do
   use SowerClient.Schema
 
   OpenApiSpex.schema(%{

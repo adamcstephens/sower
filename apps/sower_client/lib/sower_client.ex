@@ -10,11 +10,11 @@ defmodule SowerClient do
     }
     |> OpenApiSpex.resolve_schema_modules()
     |> OpenApiSpex.add_schemas([
-      SowerClient.Schemas.AgentHello,
-      SowerClient.Schemas.Orchestration.Deployment,
-      SowerClient.Schemas.Orchestration.DeploymentResult,
-      SowerClient.Schemas.Orchestration.DeploymentRequest,
-      SowerClient.Schemas.Orchestration.Subscription
+      SowerClient.AgentHello,
+      SowerClient.Orchestration.Deployment,
+      SowerClient.Orchestration.DeploymentResult,
+      SowerClient.Orchestration.DeploymentRequest,
+      SowerClient.Orchestration.Subscription
     ])
   end
 end

@@ -11,7 +11,7 @@ defmodule Sower.Accounts.User do
   @derive {Phoenix.Param, key: :sid}
 
   schema "users" do
-    field :sid, SowerClient.Schemas.Sid, autogenerate: true
+    field :sid, SowerClient.Sid, autogenerate: true
     field :email, :string
     field :name, :string
     field :oidc_id, Ecto.UUID

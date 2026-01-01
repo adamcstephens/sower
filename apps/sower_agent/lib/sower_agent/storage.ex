@@ -10,7 +10,7 @@ defmodule SowerAgent.Storage do
     field :local_sid, String.t()
     field :agent_sid, String.t()
 
-    field :subscriptions, list(SowerClient.Schemas.Orchestration.Subscription)
+    field :subscriptions, list(SowerClient.Orchestration.Subscription)
   end
 
   # client
@@ -72,7 +72,7 @@ defmodule SowerAgent.Storage do
 
   defp default() do
     %__MODULE__{
-      local_sid: SowerClient.Schemas.Sid.generate("lsid")
+      local_sid: SowerClient.Sid.generate("lsid")
     }
   end
 end

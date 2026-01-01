@@ -1,4 +1,4 @@
-defmodule SowerClient.Schemas.Orchestration.Subscription do
+defmodule SowerClient.Orchestration.Subscription do
   use SowerClient.Schema
   use SowerClient.ChannelMessage, event: "subscription:register"
 
@@ -20,7 +20,7 @@ defmodule SowerClient.Schemas.Orchestration.Subscription do
       seed_type: %Schema{
         type: :string,
         description: "Type of the seed",
-        enum: SowerClient.Schemas.Seed.seed_types(),
+        enum: SowerClient.Seed.seed_types(),
         example: "nixos"
       },
       rules: %Schema{

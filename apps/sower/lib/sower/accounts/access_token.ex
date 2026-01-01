@@ -12,7 +12,7 @@ defmodule Sower.Accounts.AccessToken do
   @derive {Phoenix.Param, key: :sid}
 
   schema "access_tokens" do
-    field :sid, SowerClient.Schemas.Sid, autogenerate: true
+    field :sid, SowerClient.Sid, autogenerate: true
     field :expires_at, :date
     field :description, :string
     field :regenerate, :boolean, virtual: true
@@ -95,7 +95,7 @@ defmodule Sower.Accounts.AccessToken do
         sid =
           case get_field(changeset, :sid) do
             nil ->
-              SowerClient.Schemas.Sid.generate()
+              SowerClient.Sid.generate()
 
             sid ->
               sid

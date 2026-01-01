@@ -25,7 +25,7 @@ defmodule Sower.Orchestration do
   end
 
   def get_agent(
-        %SowerClient.Schemas.AgentHello{agent_sid: nil, name: name, local_sid: local_sid},
+        %SowerClient.AgentHello{agent_sid: nil, name: name, local_sid: local_sid},
         socket
       ) do
     case get_agent_local_sid(local_sid) do
@@ -55,7 +55,7 @@ defmodule Sower.Orchestration do
   end
 
   def get_agent(
-        %SowerClient.Schemas.AgentHello{agent_sid: agent_sid, name: name, local_sid: local_sid},
+        %SowerClient.AgentHello{agent_sid: agent_sid, name: name, local_sid: local_sid},
         socket
       ) do
     case get_agent_sid(agent_sid) do
@@ -375,19 +375,19 @@ defmodule Sower.Orchestration do
   end
 
   @doc """
-  Register a subscription from a SowerClient.Schemas.Orchestration.Subscription struct.
+  Register a subscription from a SowerClient.Orchestration.Subscription struct.
 
   ## Examples
 
       iex> register_subscription(req, agent_id)
-      {:ok, %SowerClient.Schemas.Orchestration.Subscription{}}
+      {:ok, %SowerClient.Orchestration.Subscription{}}
 
       iex> register_subscription(req, agent_id)
       {:error, %Ecto.Changeset{}}
 
   """
   def register_subscription(
-        %SowerClient.Schemas.Orchestration.Subscription{
+        %SowerClient.Orchestration.Subscription{
           seed_name: seed_name,
           seed_type: seed_type,
           rules: rules
@@ -401,7 +401,7 @@ defmodule Sower.Orchestration do
            rules: rules
          }) do
       {:ok, subscription} ->
-        {:ok, SowerClient.Schemas.Orchestration.Subscription.cast!(subscription)}
+        {:ok, SowerClient.Orchestration.Subscription.cast!(subscription)}
 
       {:error, _} = error ->
         error
@@ -612,7 +612,7 @@ defmodule Sower.Orchestration do
   @doc """
   Request and create a deployment for a subscription
   """
-  def request_deployment(%SowerClient.Schemas.Orchestration.DeploymentRequest{} = request) do
+  def request_deployment(%SowerClient.Orchestration.DeploymentRequest{} = request) do
     with subs when subs != [] <- get_subscription_sids(request.subscription_sids),
          seeds <-
            subs |> Enum.map(&match_seed/1),
@@ -622,7 +622,7 @@ defmodule Sower.Orchestration do
              subscriptions: subs
            }) do
       {:ok,
-       %SowerClient.Schemas.Orchestration.Deployment{
+       %SowerClient.Orchestration.Deployment{
          request_id: request.request_id,
          subscription_sids: Enum.map(subs, & &1.sid),
          sid: deploy.sid,
@@ -638,7 +638,7 @@ defmodule Sower.Orchestration do
     end
   end
 
-  def record_deployment(%SowerClient.Schemas.Orchestration.DeploymentResult{} = result) do
+  def record_deployment(%SowerClient.Orchestration.DeploymentResult{} = result) do
     case get_deployment_sid(result.deployment_sid) do
       nil ->
         {:error, :deployment_not_found}

@@ -5,7 +5,6 @@ defmodule SowerWeb.Api.Nix.CacheController do
   require Logger
 
   alias OpenApiSpex.Schema
-  alias SowerClient.Schemas
   import Sower.Authorization
 
   plug OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true
@@ -18,7 +17,7 @@ defmodule SowerWeb.Api.Nix.CacheController do
     responses: [
       ok:
         {"Nix Cache response", "application/json",
-         %Schema{type: :array, items: Schemas.Nix.Cache}},
+         %Schema{type: :array, items: SowerClient.Nix.Cache}},
       unauthorized:
         {"Unauthorized", "application/json",
          %Schema{type: :object, properties: %{error: %Schema{type: :string}}}}

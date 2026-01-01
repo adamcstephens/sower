@@ -5,7 +5,6 @@ defmodule SowerWeb.Api.SeedController do
   require Logger
 
   alias OpenApiSpex.Schema
-  alias SowerClient.Schemas
   import Sower.Authorization
 
   plug OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true
@@ -16,9 +15,9 @@ defmodule SowerWeb.Api.SeedController do
     operation_id: "NewSeed",
     summary: "New Seed",
     parameters: [],
-    request_body: {"Seed params", "application/json", Schemas.Seed},
+    request_body: {"Seed params", "application/json", SowerClient.Seed},
     responses: %{
-      created: {"Seed response", "application/json", Schemas.Seed},
+      created: {"Seed response", "application/json", SowerClient.Seed},
       conflict:
         {"Seed conflict response", "application/json",
          %Schema{type: :object, properties: %{error: %Schema{type: :string}}}},
@@ -30,7 +29,7 @@ defmodule SowerWeb.Api.SeedController do
 
   def new(
         %Plug.Conn{
-          body_params: %Schemas.Seed{
+          body_params: %SowerClient.Seed{
             name: name,
             seed_type: seed_type,
             artifact: artifact,
@@ -85,7 +84,7 @@ defmodule SowerWeb.Api.SeedController do
       ]
     ],
     responses: %{
-      ok: {"Seed response", "application/json", Schemas.Seed},
+      ok: {"Seed response", "application/json", SowerClient.Seed},
       not_found:
         {"Seed error response", "application/json",
          %Schema{type: :object, properties: %{error: %Schema{type: :string}}}},
@@ -122,7 +121,7 @@ defmodule SowerWeb.Api.SeedController do
       ]
     ],
     responses: [
-      ok: {"Seed response", "application/json", Schemas.Seed},
+      ok: {"Seed response", "application/json", SowerClient.Seed},
       not_found:
         {"Seed error response", "application/json",
          %Schema{type: :object, properties: %{error: %Schema{type: :string}}}},
@@ -167,13 +166,13 @@ defmodule SowerWeb.Api.SeedController do
         example: "host1"
       ],
       seed_type: [
-        description: "Seed type, one of [#{Schemas.Seed.seed_types() |> Enum.join(", ")}]",
+        description: "Seed type, one of [#{SowerClient.Seed.seed_types() |> Enum.join(", ")}]",
         type: :string,
         example: "nixos"
       ]
     ],
     responses: [
-      ok: {"Seed response", "application/json", %Schema{type: :array, items: Schemas.Seed}},
+      ok: {"Seed response", "application/json", %Schema{type: :array, items: SowerClient.Seed}},
       unauthorized:
         {"Unauthorized", "application/json",
          %Schema{type: :object, properties: %{error: %Schema{type: :string}}}},

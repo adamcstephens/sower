@@ -7,7 +7,7 @@ defmodule SowerAgent.Client do
 
   def handle_call({:deployment_request, %{sid: sid}}, _from, socket) do
     {:ok, upgrade_request} =
-      SowerClient.Schemas.Orchestration.DeploymentRequest.new(%{
+      SowerClient.Orchestration.DeploymentRequest.new(%{
         subscription_sids: [sid]
       })
 
@@ -24,7 +24,7 @@ defmodule SowerAgent.Client do
         with {:ok, ref} <- push_message(socket, sub),
              {:ok, response} <- await_reply(ref),
              {:ok, registered} <-
-               SowerClient.Schemas.Orchestration.Subscription.cast(response) do
+               SowerClient.Orchestration.Subscription.cast(response) do
           Logger.debug(registered)
 
           # Merge server-assigned sid back into subscription
@@ -98,7 +98,7 @@ defmodule SowerAgent.Client do
     {:ok, hello_ref} =
       push_message(
         socket,
-        SowerClient.Schemas.AgentHello.cast!(%{
+        SowerClient.AgentHello.cast!(%{
           name: SowerAgent.Config.get().name,
           local_sid: SowerAgent.Storage.read().local_sid,
           agent_sid: SowerAgent.Storage.read().agent_sid
@@ -163,7 +163,7 @@ defmodule SowerAgent.Client do
     # TODO error handling
     {:ok, response} = response
 
-    case SowerClient.Schemas.Orchestration.Deployment.cast(response) do
+    case SowerClient.Orchestration.Deployment.cast(response) do
       {:ok, deployment} ->
         Logger.debug(
           msg: "Received deployment",
@@ -174,7 +174,7 @@ defmodule SowerAgent.Client do
         result = SowerAgent.Deployer.run(deployment)
 
         {:ok, result} =
-          SowerClient.Schemas.Orchestration.DeploymentResult.cast(%{
+          SowerClient.Orchestration.DeploymentResult.cast(%{
             request_id: deployment.request_id,
             deployment_sid: deployment.sid,
             result: result,
@@ -203,7 +203,7 @@ defmodule SowerAgent.Client do
     "agent:#{Storage.read().agent_sid}"
   end
 
-  defp start_schedule(%SowerClient.Schemas.Orchestration.Subscription{
+  defp start_schedule(%SowerClient.Orchestration.Subscription{
          sid: sid,
          schedule: schedule
        })

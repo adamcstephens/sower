@@ -1,5 +1,5 @@
 defmodule SowerAgent.Seed do
-  alias SowerClient.Schemas.Seed
+  alias SowerClient.Seed
 
   require Logger
 

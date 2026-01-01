@@ -49,7 +49,7 @@ defmodule SowerClient.Config do
       },
       subscriptions: %Schema{
         type: :array,
-        items: SowerClient.Schemas.Orchestration.Subscription,
+        items: SowerClient.Orchestration.Subscription,
         default: [],
         description: "Agent subscriptions (agent-only)"
       }

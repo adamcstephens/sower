@@ -36,7 +36,7 @@
         ],
         "title": "Nix Cache",
         "type": "object",
-        "x-struct": "Elixir.SowerClient.Schemas.Nix.Cache",
+        "x-struct": "Elixir.SowerClient.Nix.Cache",
         "x-validate": null
       },
       "Seed": {
@@ -97,7 +97,7 @@
         ],
         "title": "Seed",
         "type": "object",
-        "x-struct": "Elixir.SowerClient.Schemas.Seed",
+        "x-struct": "Elixir.SowerClient.Seed",
         "x-validate": null
       },
       "SeedTag": {
@@ -126,7 +126,7 @@
         ],
         "title": "SeedTag",
         "type": "object",
-        "x-struct": "Elixir.SowerClient.Schemas.SeedTag",
+        "x-struct": "Elixir.SowerClient.SeedTag",
         "x-validate": null
       }
     },

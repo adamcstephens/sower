@@ -1,4 +1,4 @@
-defmodule SowerClient.Schemas.Orchestration.DeploymentRequest do
+defmodule SowerClient.Orchestration.DeploymentRequest do
   use SowerClient.Schema
   use SowerClient.ChannelMessage, event: "deployment:request"
 
@@ -27,7 +27,7 @@ defmodule SowerClient.Schemas.Orchestration.DeploymentRequest do
   """
   def new(map) do
     map
-    |> Map.put_new_lazy(:request_id, fn -> SowerClient.Schemas.Sid.generate("req") end)
+    |> Map.put_new_lazy(:request_id, fn -> SowerClient.Sid.generate("req") end)
     |> cast()
   end
 end

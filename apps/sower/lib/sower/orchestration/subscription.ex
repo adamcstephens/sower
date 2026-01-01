@@ -8,7 +8,7 @@ defmodule Sower.Orchestration.Subscription do
   alias Sower.Orchestration.{Agent, Deployment, SubscriptionDeployment}
 
   schema "subscriptions" do
-    field :sid, SowerClient.Schemas.Sid, autogenerate: true
+    field :sid, SowerClient.Sid, autogenerate: true
     field :org_id, Ecto.UUID
 
     belongs_to :agent, Agent
@@ -42,7 +42,7 @@ defmodule Sower.Orchestration.Subscription do
       field :value, :string
     end
 
-    def changeset(rule, %SowerClient.Schemas.Orchestration.Subscription.Rule{} = attrs) do
+    def changeset(rule, %SowerClient.Orchestration.Subscription.Rule{} = attrs) do
       changeset(rule, Map.from_struct(attrs))
     end
 

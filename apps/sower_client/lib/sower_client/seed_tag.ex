@@ -1,4 +1,4 @@
-defmodule SowerClient.Schemas.SeedTag do
+defmodule SowerClient.SeedTag do
   use SowerClient.Schema
 
   OpenApiSpex.schema(%{

@@ -1,7 +1,7 @@
 defmodule SowerAgent.Deployer do
   require Logger
 
-  alias SowerClient.Schemas.Orchestration.Deployment
+  alias SowerClient.Orchestration.Deployment
 
   def run(%Deployment{} = deploy) do
     deploy_result = upgrade(deploy.seeds)

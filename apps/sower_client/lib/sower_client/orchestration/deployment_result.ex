@@ -1,4 +1,4 @@
-defmodule SowerClient.Schemas.Orchestration.DeploymentResult do
+defmodule SowerClient.Orchestration.DeploymentResult do
   use SowerClient.Schema
   use SowerClient.ChannelMessage, event: "deployment:result"
 

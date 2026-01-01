@@ -87,7 +87,7 @@ defmodule SowerWeb.AgentChannel do
 
   def handle_in("agent:hello", payload, socket) do
     case payload
-         |> SowerClient.Schemas.AgentHello.cast!()
+         |> SowerClient.AgentHello.cast!()
          |> Sower.Orchestration.get_agent(socket) do
       {:ok, agent} ->
         Logger.debug(msg: "Replying to hello", agent: agent)
@@ -99,19 +99,19 @@ defmodule SowerWeb.AgentChannel do
     end
   end
 
-  handle_schema(SowerClient.Schemas.Seed, &Sower.Seed.get_by_request/1)
+  handle_schema(SowerClient.Seed, &Sower.Seed.get_by_request/1)
 
-  handle_schema(SowerClient.Schemas.Orchestration.Subscription, fn req, socket ->
+  handle_schema(SowerClient.Orchestration.Subscription, fn req, socket ->
     Sower.Orchestration.register_subscription(req, socket.assigns.agent.id)
   end)
 
   handle_schema(
-    SowerClient.Schemas.Orchestration.DeploymentRequest,
+    SowerClient.Orchestration.DeploymentRequest,
     &Sower.Orchestration.request_deployment/1
   )
 
   handle_schema(
-    SowerClient.Schemas.Orchestration.DeploymentResult,
+    SowerClient.Orchestration.DeploymentResult,
     &Sower.Orchestration.record_deployment/1
   )
 
@@ -128,7 +128,7 @@ defmodule SowerWeb.AgentChannel do
   end
 
   def handle_info(:ping, socket) do
-    ref = SowerClient.Schemas.Sid.generate()
+    ref = SowerClient.Sid.generate()
     Logger.debug(msg: "Sending ping", ref: ref, component: :server, topic: socket.topic)
     push(socket, "ping", %{ref: ref})
     {:noreply, socket}

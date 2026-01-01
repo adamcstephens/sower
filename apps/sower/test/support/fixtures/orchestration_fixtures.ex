@@ -11,7 +11,7 @@ defmodule Sower.OrchestrationFixtures do
     {:ok, agent} =
       attrs
       |> Enum.into(%{
-        name: SowerClient.Schemas.Sid.generate("agent"),
+        name: SowerClient.Sid.generate("agent"),
         local_sid: "some local_sid",
         sid: "some sid"
       })

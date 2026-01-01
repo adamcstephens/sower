@@ -1,4 +1,4 @@
-defmodule SowerClient.Schemas.Sid do
+defmodule SowerClient.Sid do
   use Ecto.Type
 
   @type t :: :string
