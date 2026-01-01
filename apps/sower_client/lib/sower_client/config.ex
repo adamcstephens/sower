@@ -67,30 +67,28 @@ defmodule SowerClient.Config do
 
     config_path = resolve_config_path(opts)
 
-    config =
-      Keyword.get(opts, :defaults, %{})
-      |> Map.merge(read_config_file(config_path))
-      |> then(fn cfg ->
-        if File.exists?(config_path) do
-          Map.put(cfg, :config_path, config_path)
-        else
-          cfg
-        end
-      end)
-      |> normalize_subscription_rules()
-      |> Map.merge(overrides)
-      |> parse_file_values()
-      |> OpenApiSpex.cast_value(spec.components.schemas["Config"], spec)
-      |> case do
-        {:ok, cfg} ->
-          cfg
-
-        {:error, errors} ->
-          Logger.error(msg: "Failed to read configuration", errors: errors)
-          Kernel.exit(1)
+    Keyword.get(opts, :defaults, %{})
+    |> Map.merge(read_config_file(config_path))
+    |> then(fn cfg ->
+      if File.exists?(config_path) do
+        Map.put(cfg, :config_path, config_path)
+      else
+        cfg
       end
+    end)
+    |> normalize_subscription_rules()
+    |> Map.merge(overrides)
+    |> parse_file_values()
+    |> OpenApiSpex.cast_value(spec.components.schemas["Config"], spec)
+    |> case do
+      {:ok, cfg} ->
+        cfg
 
-    config
+      {:error, errors} ->
+        Logger.error(msg: "Failed to read configuration", errors: errors)
+        Kernel.exit(1)
+    end
+    |> process_side_effects()
   end
 
   def build_spec do
@@ -265,4 +263,33 @@ defmodule SowerClient.Config do
   end
 
   defp normalize_subscription_rules(config), do: config
+
+  defp process_side_effects(%SowerClient.Config{} = config) do
+    # Configure websocket client
+    uri = URI.parse(config.endpoint)
+
+    uri =
+      Map.put(
+        uri,
+        :path,
+        case uri.path do
+          nil ->
+            "/api/v1"
+
+          p when is_binary(p) ->
+            if String.ends_with?(p, "api/v1") do
+              p
+            else
+              p <> "/api/v1"
+            end
+        end
+      )
+
+    Application.put_env(SowerClient.ApiClient, :uri, uri)
+    Application.put_env(SowerClient.ApiClient, :token, config.access_token)
+    Application.put_env(SowerClient.ApiClient, :reconnect_after_msec, [200, 500, 1_000, 2_000])
+
+    # Expand state_directory path
+    %{config | state_directory: Path.expand(config.state_directory)}
+  end
 end
