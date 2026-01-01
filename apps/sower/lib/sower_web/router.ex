@@ -102,7 +102,7 @@ defmodule SowerWeb.Router do
     get "/openapi", OpenApiSpex.Plug.RenderSpec, []
   end
 
-  scope "/api", SowerWeb.Api do
+  scope "/api/v1", SowerWeb.Api do
     pipe_through [:api, :ensure_token_authenticated]
 
     get "/nix/caches", Nix.CacheController, :list

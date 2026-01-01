@@ -145,7 +145,7 @@
   },
   "openapi": "3.0.0",
   "paths": {
-    "/api/nix/caches": {
+    "/api/v1/nix/caches": {
       "get": {
         "callbacks": {},
         "operationId": "ListNixCaches",
@@ -190,7 +190,7 @@
         "tags": []
       }
     },
-    "/api/seeds": {
+    "/api/v1/seeds": {
       "get": {
         "callbacks": {},
         "operationId": "ListSeeds",
@@ -347,7 +347,7 @@
         "tags": []
       }
     },
-    "/api/seeds/latest": {
+    "/api/v1/seeds/latest": {
       "get": {
         "callbacks": {},
         "operationId": "LatestSeed",
@@ -431,7 +431,7 @@
         "tags": []
       }
     },
-    "/api/seeds/{sid}": {
+    "/api/v1/seeds/{sid}": {
       "get": {
         "callbacks": {},
         "operationId": "GetSeed",
