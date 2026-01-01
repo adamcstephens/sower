@@ -6,15 +6,17 @@ defmodule SowerClient do
         version: to_string(Application.spec(:sower, :vsn))
       },
       paths: %{},
-      components: nil
+      components: %OpenApiSpex.Components{schemas: %{}}
     }
-    |> OpenApiSpex.resolve_schema_modules()
     |> OpenApiSpex.add_schemas([
       SowerClient.AgentHello,
       SowerClient.Orchestration.Deployment,
       SowerClient.Orchestration.DeploymentResult,
       SowerClient.Orchestration.DeploymentRequest,
-      SowerClient.Orchestration.Subscription
+      SowerClient.Orchestration.Subscription,
+      SowerClient.Seed,
+      SowerClient.SeedTag
     ])
+    |> OpenApiSpex.resolve_schema_modules()
   end
 end

@@ -109,7 +109,7 @@ defmodule SowerWeb.Router do
     get "/seeds", SeedController, :list
     get "/seeds/latest", SeedController, :latest
     get "/seeds/:sid", SeedController, :get
-    post "/seeds", SeedController, :new
+    post "/seeds", SeedController, :create
   end
 
   scope "/auth" do

@@ -75,12 +75,14 @@
           },
           "sid": {
             "description": "sid of the seed set by the server",
+            "nullable": true,
             "readOnly": true,
             "type": "string",
             "x-struct": null,
             "x-validate": null
           },
           "tags": {
+            "default": [],
             "description": "Tags associated with the seed",
             "items": {
               "$ref": "#/components/schemas/SeedTag"

@@ -11,7 +11,7 @@ defmodule SowerWeb.Api.SeedController do
 
   action_fallback SowerWeb.Api.FallbackController
 
-  operation(:new,
+  operation(:create,
     operation_id: "NewSeed",
     summary: "New Seed",
     parameters: [],
@@ -27,7 +27,7 @@ defmodule SowerWeb.Api.SeedController do
     }
   )
 
-  def new(
+  def create(
         %Plug.Conn{
           body_params: %SowerClient.Seed{
             name: name,
@@ -191,12 +191,8 @@ defmodule SowerWeb.Api.SeedController do
         nil ->
           conn |> put_status(:not_found) |> render(:not_found)
 
-        seed ->
-          if can(conn.assigns.access_token) |> read?(seed) do
-            render(conn, :list, seeds: [seed])
-          else
-            conn |> put_status(:unauthorized) |> render(:unauthorized)
-          end
+        seeds ->
+          render(conn, :list, seeds: seeds)
       end
     else
       conn |> put_status(401) |> render(:error, error: "unauthorized")
