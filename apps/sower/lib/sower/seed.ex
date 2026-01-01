@@ -14,7 +14,7 @@ defmodule Sower.Seed do
   @seed_types SowerClient.Seed.seed_types()
 
   schema "seeds" do
-    field :sid, SowerClient.Sid, autogenerate: true
+    field :sid, SowerClient.Sid
     field :org_id, Ecto.UUID
 
     field :name, :string
@@ -28,7 +28,12 @@ defmodule Sower.Seed do
 
   def create(attrs) do
     Multi.new()
-    |> Multi.insert(:seed, changeset(%Seed{org_id: Sower.Repo.get_org_id()}, attrs),
+    |> Multi.insert(
+      :seed,
+      changeset(
+        %Seed{org_id: Sower.Repo.get_org_id(), sid: SowerClient.Sid.generate("seed")},
+        attrs
+      ),
       on_conflict: {:replace, [:updated_at]},
       conflict_target: [:name, :seed_type, :artifact, :org_id],
       returning: true
@@ -52,7 +57,7 @@ defmodule Sower.Seed do
     end)
     |> Repo.transact()
     |> case do
-      {:ok, %{seed: seed}} -> {:ok, Repo.preload(seed, :tags)}
+      {:ok, %{seed: seed}} -> {:ok, Repo.preload(seed, [:tags])}
       {:error, _} = error -> error
     end
   end
@@ -76,7 +81,13 @@ defmodule Sower.Seed do
   end
 
   def get(name, seed_type) do
-    Repo.get_by(Seed, name: name, seed_type: seed_type)
+    query =
+      from s in Seed,
+        where: s.name == ^name and s.seed_type == ^seed_type,
+        order_by: [desc: s.updated_at]
+
+    Repo.all(query)
+    |> Repo.preload([:tags])
   end
 
   @doc """
@@ -91,16 +102,18 @@ defmodule Sower.Seed do
   end
 
   def get_sid(sid) do
-    Repo.get_by(Seed, sid: sid)
+    Repo.get_by(Seed, sid: sid) |> Repo.preload([:tags])
   end
 
   def get_sid!(sid) do
-    Repo.get_by!(Seed, sid: sid)
+    Repo.get_by!(Seed, sid: sid) |> Repo.preload([:tags])
   end
 
   def list() do
     query = from s in Seed, order_by: [desc: s.updated_at]
+
     Repo.all(query)
+    |> Repo.preload([:tags])
   end
 
   def latest(name, seed_type) do
@@ -110,6 +123,7 @@ defmodule Sower.Seed do
         order_by: [desc: s.updated_at],
         limit: 1
     )
+    |> Repo.preload([:tags])
   end
 
   def latest_artifact(%__MODULE__{id: id}) do
@@ -118,6 +132,7 @@ defmodule Sower.Seed do
         where: s.id == ^id,
         order_by: [desc: s.updated_at]
     )
+    |> Repo.preload([:tags])
   end
 
   def latest_artifact_by_sid(sid) do
@@ -126,6 +141,7 @@ defmodule Sower.Seed do
         where: s.sid == ^sid,
         order_by: [desc: s.updated_at]
     )
+    |> Repo.preload([:tags])
   end
 
   defp changeset(seed, attrs) do
