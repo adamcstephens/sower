@@ -27,6 +27,8 @@ beamPackages.mixRelease {
 
   mixNixDeps = callPackages ./umbrella-deps.nix { inherit beamPackages; };
 
+  removeCookie = false;
+
   nativeBuildInputs = [
     makeWrapper
   ];

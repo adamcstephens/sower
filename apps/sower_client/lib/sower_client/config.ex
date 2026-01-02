@@ -60,7 +60,7 @@ defmodule SowerClient.Config do
   @doc """
   Load configuration from file and overrides.
   """
-  def load(overrides \\ %{}, opts \\ []) do
+  def load(opts \\ []) do
     Application.ensure_all_started(:logger)
 
     spec = build_spec()
@@ -77,7 +77,8 @@ defmodule SowerClient.Config do
       end
     end)
     |> normalize_subscription_rules()
-    |> Map.merge(overrides)
+    |> Map.merge(Keyword.get(opts, :overrides, %{}))
+    |> override_with_env()
     |> parse_file_values()
     |> OpenApiSpex.cast_value(spec.components.schemas["Config"], spec)
     |> case do
@@ -89,6 +90,13 @@ defmodule SowerClient.Config do
         Kernel.exit(1)
     end
     |> process_side_effects()
+  end
+
+  def defaults do
+    %{
+      "name" => default_agent_name(),
+      "state_directory" => default_state_dir()
+    }
   end
 
   def build_spec do
@@ -149,6 +157,14 @@ defmodule SowerClient.Config do
       "SOWER_CONFIG_FILE",
       xdg_config_path("sower", "client.json")
     )
+  end
+
+  def default_agent_name do
+    :inet.gethostname() |> then(fn {:ok, hostname} -> to_string(hostname) end)
+  end
+
+  def default_state_dir do
+    SowerClient.Config.xdg_state_path("sower_agent")
   end
 
   def xdg_config_path(app_name, filename) do
@@ -292,4 +308,25 @@ defmodule SowerClient.Config do
     # Expand state_directory path
     %{config | state_directory: Path.expand(config.state_directory)}
   end
+
+  defp override_with_env(%{} = config) do
+    sower_envs =
+      System.get_env() |> Enum.filter(fn {key, _} -> String.starts_with?(key, "SOWER_") end)
+
+    Enum.reduce(sower_envs, config, &override_env/2)
+  end
+
+  defp override_env({"SOWER_ACCESS_TOKEN_FILE", token}, acc) do
+    Map.put(acc, "access_token_file", token)
+  end
+
+  defp override_env({"SOWER_ACCESS_TOKEN", token}, acc) do
+    Map.put(acc, "access_token", token)
+  end
+
+  defp override_env({"SOWER_ENDPOINT", token}, acc) do
+    Map.put(acc, "endpoint", token)
+  end
+
+  defp override_env(_, acc), do: acc
 end

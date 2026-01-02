@@ -10,7 +10,8 @@ defmodule SowerCli.Config do
 
   def load(overrides \\ %{}) do
     config =
-      SowerClient.Config.load(overrides,
+      SowerClient.Config.load(
+        overrides: overrides,
         config_path_env: "SOWER_CLI_CONFIG"
       )
 

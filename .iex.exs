@@ -1,4 +1,4 @@
-if Application.started_applications() |> Enum.find(&(elem(&1, 0) == :ecto)) do
+if Code.loaded?(Sower.Accounts.Organization) do
   Sower.Accounts.Organization.list()
   |> List.first()
   |> Map.get(:org_id)

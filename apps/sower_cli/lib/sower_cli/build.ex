@@ -208,8 +208,12 @@ defmodule SowerCli.Build do
              |> Map.put("tags", tags)
              |> Map.put("artifact", build.store_path)
              |> SowerClient.Seed.cast() do
-          {:ok, seed} -> SowerClient.Seed.create(client, seed)
-          {:error, _} -> :error
+          {:ok, seed} ->
+            SowerClient.Seed.create(client, seed)
+
+          {:error, error} ->
+            Logger.error(msg: "Failed to submit seed", error: error, seed_meta: seed_meta)
+            :error
         end
 
       %Nix.Build{eval: eval} ->

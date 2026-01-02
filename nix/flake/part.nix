@@ -29,6 +29,8 @@
   };
 
   config = {
+    flake.flakeModules.sower = ./part.nix;
+
     flake.nixosConfigurations = {
       example = inputs.nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
@@ -94,7 +96,7 @@
           (lib.filterAttrs (_: homeConfig: homeConfig.pkgs.stdenv.hostPlatform.system == system))
           (lib.mapAttrs' (
             name: homeConfig:
-            lib.nameValuePair "nixos/${name}" (
+            lib.nameValuePair "home-manager/${name}" (
               homeConfig.activationPackage.overrideAttrs (old: {
                 meta = (old.meta or { }) // {
                   sower.seed = {

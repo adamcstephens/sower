@@ -13,29 +13,12 @@ defmodule SowerAgent.Config do
 
   def load(config_map \\ %{}) do
     cfg =
-      SowerClient.Config.load(config_map,
-        defaults: defaults()
-      )
+      SowerClient.Config.load(overrides: config_map)
       |> validate_required!()
       |> process_side_effects()
 
     Application.put_env(@app, :config, cfg)
     cfg
-  end
-
-  def defaults do
-    %{
-      "name" => default_agent_name(),
-      "state_directory" => default_state_dir()
-    }
-  end
-
-  def default_agent_name do
-    :inet.gethostname() |> then(fn {:ok, hostname} -> to_string(hostname) end)
-  end
-
-  def default_state_dir do
-    SowerClient.Config.xdg_state_path("sower_agent")
   end
 
   def reload do
