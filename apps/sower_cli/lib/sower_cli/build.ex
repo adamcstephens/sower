@@ -90,7 +90,8 @@ defmodule SowerCli.Build do
     opts = [
       workers: state.options.jobs,
       type: state.options.eval_type,
-      use_eval_cache: state.flags.use_eval_cache
+      use_eval_cache: state.flags.use_eval_cache,
+      memory_limit_kb: state.options.memory_limit * 1_000
     ]
 
     case Nix.Eval.Jobs.run(state.flake, opts) do
@@ -133,10 +134,12 @@ defmodule SowerCli.Build do
         if state.flags.fail_fast do
           {:error, :build_failed}
         else
-          if not Enum.all?(builds, &(&1.status == :ok)) do
+          successful = Enum.filter(builds, &(&1.status == :ok))
+
+          if Enum.empty?(successful) do
             {:error, :build_failed}
           else
-            run_steps(rest, %{state | builds: builds})
+            run_steps(rest, %{state | builds: successful})
           end
         end
     end
@@ -190,38 +193,61 @@ defmodule SowerCli.Build do
 
     client = SowerClient.ApiClient.new()
 
-    Enum.each(state.builds, fn
-      %Nix.Build{
-        eval: %Nix.Eval{
-          output: %{
-            "meta" => %{
-              "sower" => %{
-                "seed" => seed_meta
+    results =
+      Enum.map(state.builds, fn
+        %Nix.Build{
+          eval: %Nix.Eval{
+            output: %{
+              "meta" => %{
+                "sower" => %{
+                  "seed" => seed_meta
+                }
               }
             }
           }
-        }
-      } = build ->
-        tags = load_tags(state) ++ Map.get(seed_meta, "tags", []) ++ SowerCli.Repo.get_tags()
+        } = build ->
+          tags = load_tags(state) ++ Map.get(seed_meta, "tags", []) ++ SowerCli.Repo.get_tags()
 
-        case seed_meta
-             |> Map.put("tags", tags)
-             |> Map.put("artifact", build.store_path)
-             |> SowerClient.Seed.cast() do
-          {:ok, seed} ->
-            SowerClient.Seed.create(client, seed)
+          case seed_meta
+               |> Map.put("tags", tags)
+               |> Map.put("artifact", build.store_path)
+               |> SowerClient.Seed.cast() do
+            {:ok, seed} ->
+              case SowerClient.Seed.create(client, seed) do
+                {:ok, _} = result ->
+                  result
 
-          {:error, error} ->
-            Logger.error(msg: "Failed to submit seed", error: error, seed_meta: seed_meta)
-            :error
-        end
+                {:error, reason} = error ->
+                  Output.error("Failed to register seed: #{inspect(reason)}")
+                  error
+              end
 
-      %Nix.Build{eval: eval} ->
-        Logger.debug(msg: "Eval is missing sower seed metadata", eval: eval)
-        :skip
-    end)
+            {:error, error} ->
+              Output.error("Failed to cast seed: #{inspect(error)}")
+              {:error, {:cast_failed, error}}
+          end
 
-    run_steps(rest, state)
+        %Nix.Build{eval: eval} ->
+          Logger.debug(msg: "Eval is missing sower seed metadata", eval: eval)
+          :skip
+      end)
+
+    errors =
+      results
+      |> Enum.filter(fn
+        {:error, _} -> true
+        _ -> false
+      end)
+
+    if Enum.empty?(errors) do
+      run_steps(rest, state)
+    else
+      if state.flags.fail_fast do
+        {:error, :seed_failed}
+      else
+        run_steps(rest, state)
+      end
+    end
   end
 
   defp load_tags(%__MODULE__{} = state) do

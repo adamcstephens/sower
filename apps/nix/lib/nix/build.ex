@@ -162,7 +162,7 @@ defmodule Nix.Build do
   defp finalize_output(output) when is_list(output) do
     output
     |> Enum.reverse()
-    |> Enum.join("\n")
+    |> Enum.flat_map(&String.split(&1, "\n"))
   end
 
   defp finalize_output(output), do: output

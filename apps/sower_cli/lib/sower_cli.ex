@@ -128,6 +128,14 @@ defmodule SowerCli do
               help: "Evaluation type: auto, flake, or path (default: auto)",
               parser: &parse_nix_type/1,
               default: :auto
+            ],
+            memory_limit: [
+              short: "-m",
+              long: "--memory-limit",
+              value_name: "MB",
+              help: "Memory limit per evaluation in MB (default: 4000)",
+              parser: :integer,
+              default: 4_000
             ]
           ]
         ]

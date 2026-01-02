@@ -97,7 +97,7 @@ defmodule SowerCli.Repo do
 
   defp git_rev(git) do
     case System.cmd(git, ["rev-parse", "HEAD"], stderr_to_stdout: true) do
-      {rev, 0} ->
+      {rev, 0} when rev != "HEAD" ->
         rev = String.trim(rev)
 
         if git_dirty?(git), do: rev <> "-dirty", else: rev
