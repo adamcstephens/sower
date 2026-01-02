@@ -15,6 +15,7 @@ defmodule SowerClient do
       SowerClient.Orchestration.DeploymentRequest,
       SowerClient.Orchestration.Subscription,
       SowerClient.Seed,
+      SowerClient.SeedMeta,
       SowerClient.SeedTag
     ])
     |> OpenApiSpex.resolve_schema_modules()

@@ -52,11 +52,6 @@ defmodule SowerWeb.AgentLive.Show do
     {:noreply, assign(socket, :current_generation, generation)}
   end
 
-  # def handle_info(broadcast, socket) do
-  #   dbg(broadcast)
-  #   {:noreply, socket}
-  # end
-
   defp add_online_status(%{assigns: %{agent: agent}} = socket) do
     online_agents = Presence.list("agent:presence") |> Map.keys()
     assign(socket, :online, agent.sid in online_agents)

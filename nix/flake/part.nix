@@ -38,6 +38,14 @@
         ];
       };
 
+      example2 = inputs.nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          "${inputs.nixpkgs}/nixos/maintainers/scripts/incus/incus-container-image.nix"
+          { system.stateVersion = "25.11"; }
+        ];
+      };
+
       example-aarch64 = inputs.nixpkgs.lib.nixosSystem {
         system = "aarch64-linux";
         modules = [
@@ -72,7 +80,8 @@
             lib.nameValuePair "nixos/${name}" (
               nixosConfig.config.system.build.toplevel.overrideAttrs (old: {
                 meta = (old.meta or { }) // {
-                  sower = {
+                  # TODO add a nixos module that can be included in the nixosConfig for setting values, e.g. seed.tags
+                  sower.seed = {
                     inherit name;
                     seed_type = "nixos";
                   };
@@ -88,7 +97,7 @@
             lib.nameValuePair "nixos/${name}" (
               homeConfig.activationPackage.overrideAttrs (old: {
                 meta = (old.meta or { }) // {
-                  sower = {
+                  sower.seed = {
                     inherit name;
                     seed_type = "home-manager";
                   };

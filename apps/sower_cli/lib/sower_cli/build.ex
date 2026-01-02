@@ -11,6 +11,8 @@ defmodule SowerCli.Build do
 
   use TypedStruct
 
+  require Logger
+
   alias SowerCli.{Cache, Output}
 
   typedstruct do
@@ -182,8 +184,36 @@ defmodule SowerCli.Build do
   defp run_steps([:seed | rest], %__MODULE__{} = state) do
     Output.step("Registering seed")
 
-    load_tags(state)
-    |> dbg()
+    Application.ensure_all_started([:req])
+
+    client = SowerClient.ApiClient.new()
+
+    Enum.each(state.builds, fn
+      %Nix.Build{
+        eval: %Nix.Eval{
+          output: %{
+            "meta" => %{
+              "sower" => %{
+                "seed" => seed_meta
+              }
+            }
+          }
+        }
+      } = build ->
+        tags = load_tags(state) ++ Map.get(seed_meta, "tags", [])
+
+        case seed_meta
+             |> Map.put("tags", tags)
+             |> Map.put("artifact", build.store_path)
+             |> SowerClient.Seed.cast() do
+          {:ok, seed} -> SowerClient.Seed.create(client, seed)
+          {:error, _} -> :error
+        end
+
+      %Nix.Build{eval: eval} ->
+        Logger.debug(msg: "Eval is missing sower seed metadata", eval: eval)
+        :skip
+    end)
 
     run_steps(rest, state)
   end
