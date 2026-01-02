@@ -5,6 +5,8 @@ defmodule SowerCli do
 
   require Logger
 
+  @version Path.expand("../../../VERSION", __DIR__) |> File.read!() |> String.trim()
+
   def main(argv) do
     # Load config at startup
     SowerCli.Config.load()
@@ -134,9 +136,7 @@ defmodule SowerCli do
   end
 
   defp version do
-    Path.expand("../../../VERSION", __DIR__)
-    |> File.read!()
-    |> String.trim()
+    @version
   end
 
   defp parse_nix_type("auto"), do: {:ok, :auto}
