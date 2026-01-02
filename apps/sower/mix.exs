@@ -36,7 +36,7 @@ defmodule Sower.MixProject do
       {:deps_nix, "~> 2.0", only: [:dev]},
       {:ecto_sql, "~> 3.11"},
       {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
-      {:ex_json_schema, "~> 0.11.1"},
+      {:open_api_spex, "~> 3.22"},
       {:faker, "~> 0.18", only: :test},
       {:finch, "~> 0.13"},
       {:floki, ">= 0.30.0", only: :test},

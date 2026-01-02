@@ -426,27 +426,6 @@ let
         in
         drv;
 
-      ex_json_schema =
-        let
-          version = "0.11.1";
-          drv = buildMix {
-            inherit version;
-            name = "ex_json_schema";
-            appConfigPath = ../../config;
-
-            src = fetchHex {
-              inherit version;
-              pkg = "ex_json_schema";
-              sha256 = "32d651a575a6ce2fd613f140b0fef8dd0acc7cf8e8bcd29a3a1be5c945700dd5";
-            };
-
-            beamDeps = [
-              decimal
-            ];
-          };
-        in
-        drv;
-
       expo =
         let
           version = "1.1.1";

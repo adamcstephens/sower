@@ -2,136 +2,72 @@ defmodule Sower.Config do
   import Config
   require Logger
 
-  @schema %{
-    "type" => "object",
-    "required" => ["auth", "database"],
-    "properties" => %{
-      "auth" => %{
-        "type" => "object",
-        "required" => ["oidc_base_url", "oidc_client_id"],
-        "properties" => %{
-          "oidc_base_url" => %{
-            "type" => "string"
+  alias OpenApiSpex.Schema
+
+  @client_schema %Schema{
+    type: :object,
+    properties: %{
+      path: %Schema{type: :string}
+    }
+  }
+
+  @schema %Schema{
+    type: :object,
+    required: [:auth, :database],
+    properties: %{
+      auth: %Schema{
+        type: :object,
+        required: [:oidc_base_url, :oidc_client_id],
+        properties: %{
+          oidc_base_url: %Schema{type: :string},
+          oidc_client_id: %Schema{type: :string},
+          oidc_client_secret_file: %Schema{type: :string},
+          oidc_redirect_uri: %Schema{type: :string}
+        }
+      },
+      clients: %Schema{
+        type: :object,
+        properties: %{
+          "x86_64-linux": @client_schema,
+          "aarch64-linux": @client_schema,
+          "x86_64-darwin": @client_schema,
+          "aarch64-darwin": @client_schema
+        }
+      },
+      database: %Schema{
+        type: :object,
+        properties: %{
+          host: %Schema{type: :string},
+          database: %Schema{type: :string},
+          port: %Schema{type: :integer, minimum: 80, maximum: 65535},
+          socket: %Schema{type: :string},
+          ssl: %Schema{
+            type: :boolean,
+            description: "enable ssl and verification with system cacerts",
+            default: false
           },
-          "oidc_client_id" => %{
-            "type" => "string"
-          },
-          "oidc_client_secret_file" => %{
-            "type" => "string"
-          },
-          "oidc_redirect_uri" => %{
-            "type" => "string"
+          user: %Schema{type: :string},
+          password_file: %Schema{type: :string},
+          encryption_key_file: %Schema{
+            type: :string,
+            description: "base64 encoded secret key used for encrypted database items"
           }
         }
       },
-      "clients" => %{
-        "type" => "object",
-        "properties" => %{
-          "x86_64-linux" => %{
-            "type" => "object",
-            "properties" => %{
-              "path" => %{
-                "type" => "string"
-              }
-            }
-          },
-          "aarch64-linux" => %{
-            "type" => "object",
-            "properties" => %{
-              "path" => %{
-                "type" => "string"
-              }
-            }
-          },
-          "x86_64-darwin" => %{
-            "type" => "object",
-            "properties" => %{
-              "path" => %{
-                "type" => "string"
-              }
-            }
-          },
-          "aarch64-darwin" => %{
-            "type" => "object",
-            "properties" => %{
-              "path" => %{
-                "type" => "string"
-              }
-            }
-          }
-        }
-      },
-      "database" => %{
-        "type" => "object",
-        "properties" => %{
-          "host" => %{
-            "type" => "string"
-          },
-          "database" => %{
-            "type" => "string"
-          },
-          "port" => %{
-            "type" => "integer",
-            "minimum" => 80,
-            "maximum" => 65535
-          },
-          "socket" => %{
-            "type" => "string"
-          },
-          "ssl" => %{
-            "type" => "boolean",
-            "description" => "enable ssl and verification with system cacerts",
-            "default" => false
-          },
-          "user" => %{
-            "type" => "string"
-          },
-          "password_file" => %{
-            "type" => "string"
-          },
-          "encryption_key_file" => %{
-            "type" => "string",
-            "description" => "base64 encoded secret key used for encrypted database items"
-          }
-        }
-      },
-      "listen_address" => %{
-        "oneOf " => [
-          %{"type" => "string", "format" => "ipv4"},
-          %{"type" => "string", "format" => "ipv6"}
+      listen_address: %Schema{
+        anyOf: [
+          %Schema{type: :string, format: :ipv4},
+          %Schema{type: :string, format: :ipv6}
         ]
       },
-      "listen_port" => %{
-        "default" => 4000,
-        "type" => "integer",
-        "minimum" => 80,
-        "maximum" => 65535
+      listen_port: %Schema{
+        type: :integer,
+        minimum: 80,
+        maximum: 65535,
+        default: 4000
       },
-      # this isn't actually supported yet
-      # "organization" => %{
-      #   "type" => "object",
-      #   "properties" => %{
-      #     "mode" => %{
-      #       "type" => "string",
-      #       "enum" => ["single", "multi"],
-      #       "default" => "single",
-      #       "description" =>
-      #         "Whether to run in single or multiple organization mode. Will create all new resources in a default organization if set to single."
-      #     },
-      #     "name" => %{
-      #       "type" => "string",
-      #       "default" => "default organization",
-      #       "description" => "Name of the default organization in single org mode"
-      #     }
-      #   }
-      # },
-      "public_url" => %{
-        "type" => "string",
-        "format" => "uri"
-      },
-      "secret_key_base_file" => %{
-        "type" => "string"
-      }
+      public_url: %Schema{type: :string, format: :uri},
+      secret_key_base_file: %Schema{type: :string}
     }
   }
 
@@ -213,7 +149,11 @@ defmodule Sower.Config do
         |> Keyword.put(:auth, auth |> Keyword.put(:oidc_client_secret, oidc_client_secret))
       else
         {:error, err} ->
-          Logger.warning("Failed to load oidc_client_secret from secret file, #{err}.")
+          Logger.warning(
+            msg: "Failed to load oidc_client_secret from secret file",
+            error: err
+          )
+
           Kernel.exit(1)
 
         :error ->
@@ -284,9 +224,19 @@ defmodule Sower.Config do
       |> File.read!()
       |> Jason.decode!()
 
-    :ok = ExJsonSchema.Validator.validate(ExJsonSchema.Schema.resolve(@schema), json)
+    case OpenApiSpex.Cast.cast(@schema, json) do
+      {:ok, _} ->
+        {:ok, defaults |> Map.merge(json) |> atomize()}
 
-    {:ok, defaults |> Map.merge(json) |> atomize()}
+      {:error, errors} ->
+        Logger.error("Configuration validation failed:")
+
+        Enum.each(errors, fn error ->
+          Logger.error("  #{OpenApiSpex.Cast.Error.message(error)}")
+        end)
+
+        Kernel.exit(1)
+    end
   end
 
   def set_logger_config(json_config) do
