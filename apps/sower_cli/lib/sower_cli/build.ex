@@ -85,6 +85,8 @@ defmodule SowerCli.Build do
   defp run_steps([:eval | rest], %__MODULE__{} = state) do
     Output.step("Evaluating #{state.flake}")
 
+    Application.ensure_all_started([:erlexec])
+
     opts = [
       workers: state.options.jobs,
       type: state.options.eval_type,
