@@ -1,12 +1,90 @@
 {
   inputs,
-  ...
+  lib,
+  supportedSystems ? [
+    "x86_64-linux"
+    "aarch64-linux"
+  ],
 }:
-{
-  # generateUnitFiles creates a derivatioon with systemd units
+rec {
+  addSowerMeta =
+    { name, package }:
+    lib.addMetaAttrs {
+      # TODO add a nixos module that can be included in the nixosConfig for setting values, e.g. seed.tags
+      sower.seed = {
+        inherit name;
+        seed_type = "nixos";
+      };
+    } package;
+
+  genNixosPackages =
+    nixosConfigurations:
+    let
+      nixos =
+        system:
+        lib.pipe nixosConfigurations [
+          (lib.filterAttrs (_: nixosConfig: nixosConfig.pkgs.stdenv.hostPlatform.system == system))
+          (lib.mapAttrs' (
+            name: nixosConfig:
+            lib.nameValuePair "nixos/${name}" (addSowerMeta {
+              inherit name;
+              package = nixosConfigurations.${name}.config.system.build.toplevel;
+            })
+          ))
+        ];
+    in
+    lib.listToAttrs (
+      lib.map (system: {
+        name = system;
+        value = nixos system;
+      }) supportedSystems
+    );
+
+  genHomeManagerPackages =
+    homeConfigurations:
+    let
+      home =
+        system:
+        lib.pipe homeConfigurations [
+          (lib.filterAttrs (_: homeConfig: homeConfig.pkgs.stdenv.hostPlatform.system == system))
+          (lib.mapAttrs' (
+            name: homeConfig:
+            lib.nameValuePair "home/${name}" (addSowerMeta {
+              inherit name;
+              package = homeConfigurations.${name}.activationPackage;
+            })
+          ))
+        ];
+    in
+    lib.listToAttrs (
+      lib.map (system: {
+        name = system;
+        value = home system;
+      }) supportedSystems
+    );
+
+  prefixFlakeSystemOutputs =
+    prefix: output:
+    lib.pipe output [
+      lib.attrNames
+      (lib.foldl (
+        acc: system:
+        acc
+        // (
+          let
+            finalOutput = lib.mapAttrs' (name: p: lib.nameValuePair "${prefix}/${name}" p) output.${system};
+          in
+          {
+            "${system}" = finalOutput;
+          }
+        )
+      ) { })
+    ];
+
+  # generateUnitFiles creates a derivation with systemd units
   # using the nixos module structure, but intended for using in
   # a sower service along with sowerServicesHook
-  flake.lib.generateUnitFiles =
+  generateUnitFiles =
     {
       pkgs,
       config,
