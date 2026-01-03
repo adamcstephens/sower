@@ -15,6 +15,7 @@ defmodule Nix.Build.Jobs do
   typedstruct do
     field :evals, list(Nix.Eval.t())
     field :max_workers, integer(), default: @default_max_workers
+    field :notify_pid, pid()
     field :supervisor, pid()
     field :from, {pid(), term()}
   end
@@ -56,6 +57,7 @@ defmodule Nix.Build.Jobs do
     state = %__MODULE__{
       evals: evals,
       max_workers: Keyword.get(opts, :max_workers, @default_max_workers),
+      notify_pid: Keyword.get(opts, :notify_pid),
       supervisor: supervisor
     }
 
@@ -76,7 +78,7 @@ defmodule Nix.Build.Jobs do
       Task.Supervisor.async_stream_nolink(
         state.supervisor,
         state.evals,
-        fn eval -> run_build(eval) end,
+        fn eval -> run_build(eval, state.notify_pid) end,
         max_concurrency: state.max_workers,
         ordered: false,
         timeout: :infinity
@@ -128,8 +130,11 @@ defmodule Nix.Build.Jobs do
     :ok
   end
 
-  defp run_build(eval) do
+  defp run_build(eval, notify_pid) do
+    drv_path = eval.output["drvPath"]
+    notify(notify_pid, {:build_started, drv_path})
     {_status, build} = Build.run(eval)
+    notify(notify_pid, {:build_completed, drv_path, build.status})
     build
   end
 
@@ -152,4 +157,7 @@ defmodule Nix.Build.Jobs do
 
   defp format_crash_reason(:normal), do: "Task exited normally without result"
   defp format_crash_reason(reason), do: Exception.format_exit(reason)
+
+  defp notify(nil, _event), do: :ok
+  defp notify(pid, event), do: send(pid, event)
 end

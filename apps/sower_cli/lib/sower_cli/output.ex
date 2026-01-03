@@ -32,6 +32,27 @@ defmodule SowerCli.Output do
   end
 
   @doc """
+  Print an item starting message.
+  """
+  def item_start(action, name) do
+    IO.puts("  #{IO.ANSI.yellow()}⋯#{IO.ANSI.reset()} #{action} #{name}")
+  end
+
+  @doc """
+  Print an item completed message.
+  """
+  def item_done(action, name) do
+    IO.puts("  #{IO.ANSI.green()}✓#{IO.ANSI.reset()} #{action} #{name}")
+  end
+
+  @doc """
+  Print an item error message.
+  """
+  def item_error(action, name) do
+    IO.puts("  #{IO.ANSI.red()}✗#{IO.ANSI.reset()} #{action} #{name}")
+  end
+
+  @doc """
   Print eval results summary.
   """
   def eval_summary(results) do

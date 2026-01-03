@@ -15,6 +15,7 @@ defmodule Nix.Eval.Jobs do
     field :max_workers, integer()
     field :memory_limit_kb, integer()
     field :use_eval_cache, boolean(), default: false
+    field :notify_pid, pid()
     field :from, {pid(), term()}
     field :supervisor, pid()
     field :start_time, DateTime.t()
@@ -54,6 +55,7 @@ defmodule Nix.Eval.Jobs do
       max_workers: Keyword.get(opts, :workers, 8),
       memory_limit_kb: Keyword.get(opts, :memory_limit_kb, 4_000_000),
       use_eval_cache: Keyword.get(opts, :use_eval_cache, false),
+      notify_pid: Keyword.get(opts, :notify_pid),
       from: nil,
       request: request,
       supervisor: supervisor,
@@ -104,6 +106,8 @@ defmodule Nix.Eval.Jobs do
       # Spawn workers for dequeued requests
       running =
         Enum.reduce(requests, state.running, fn request, acc_running ->
+          notify(state, {:eval_started, request.attr})
+
           task =
             Task.Supervisor.async(state.supervisor, fn ->
               evaluate_request(request, state)
@@ -222,11 +226,13 @@ defmodule Nix.Eval.Jobs do
       {request, running} ->
         state =
           case result do
-            {:leaf, result} ->
-              %{state | results: [result | state.results]}
+            {:leaf, %Nix.Eval{status: status} = eval_result} ->
+              notify(state, {:eval_completed, request.attr, status})
+              %{state | results: [eval_result | state.results]}
 
             {:branch, new_targets} ->
               # Bulk enqueue - now fast with ETS!
+              notify(state, {:eval_completed, request.attr, :branch})
               Nix.Eval.Queue.enqueue(state.queue, state.queue_counter, new_targets)
               state
 
@@ -236,6 +242,8 @@ defmodule Nix.Eval.Jobs do
                 result: unexpected,
                 request: request
               )
+
+              notify(state, {:eval_completed, request.attr, :error})
 
               error_eval = %Nix.Eval{
                 request: request,
@@ -328,4 +336,7 @@ defmodule Nix.Eval.Jobs do
 
   defp format_crash_reason(:normal), do: "Task exited normally without result"
   defp format_crash_reason(reason), do: Exception.format_exit(reason)
+
+  defp notify(%__MODULE__{notify_pid: nil}, _event), do: :ok
+  defp notify(%__MODULE__{notify_pid: pid}, event), do: send(pid, event)
 end

@@ -91,10 +91,28 @@ defmodule SowerCli.Build do
       workers: state.options.eval_jobs,
       type: state.options.eval_type,
       use_eval_cache: state.flags.use_eval_cache,
-      memory_limit_kb: state.options.memory_limit * 1_000
+      memory_limit_kb: state.options.memory_limit * 1_000,
+      notify_pid: self()
     ]
 
-    case Nix.Eval.Jobs.run(state.flake, opts) do
+    task = Task.async(fn -> Nix.Eval.Jobs.run(state.flake, opts) end)
+
+    result =
+      receive_progress(task, fn
+        {:eval_started, attr} ->
+          Output.item_start("Evaluating", attr || "(root)")
+
+        {:eval_completed, attr, :ok} ->
+          Output.item_done("Evaluated", attr || "(root)")
+
+        {:eval_completed, attr, :branch} ->
+          Output.item_done("Discovered", attr || "(root)")
+
+        {:eval_completed, attr, _error} ->
+          Output.item_error("Eval failed", attr || "(root)")
+      end)
+
+    case result do
       {:ok, %{results: results}} ->
         Output.eval_summary(results)
         run_steps(rest, %{state | evals: results})
@@ -120,13 +138,32 @@ defmodule SowerCli.Build do
   defp run_steps([:build | rest], %__MODULE__{} = state) do
     Output.step("Building #{length(state.evals)} derivation(s)")
 
-    case Nix.Build.Jobs.run(state.evals, max_workers: state.options.build_jobs) do
-      {:ok, result} ->
-        builds = Output.build_summary(result)
+    opts = [
+      max_workers: state.options.build_jobs,
+      notify_pid: self()
+    ]
+
+    task = Task.async(fn -> Nix.Build.Jobs.run(state.evals, opts) end)
+
+    result =
+      receive_progress(task, fn
+        {:build_started, drv_path} ->
+          Output.item_start("Building", drv_path || "(unknown)")
+
+        {:build_completed, drv_path, :ok} ->
+          Output.item_done("Built", drv_path || "(unknown)")
+
+        {:build_completed, drv_path, _error} ->
+          Output.item_error("Build failed", drv_path || "(unknown)")
+      end)
+
+    case result do
+      {:ok, job_result} ->
+        builds = Output.build_summary(job_result)
         run_steps(rest, %{state | builds: builds})
 
-      {:error, result} ->
-        builds = Output.build_summary(result)
+      {:error, job_result} ->
+        builds = Output.build_summary(job_result)
         Output.build_errors(builds)
 
         if state.flags.fail_fast do
@@ -204,6 +241,8 @@ defmodule SowerCli.Build do
             }
           }
         } = build ->
+          seed_name = Map.get(seed_meta, "name", build.store_path)
+          Output.item_start("Registering", seed_name)
           tags = load_tags(state) ++ Map.get(seed_meta, "tags", []) ++ SowerCli.Repo.get_tags()
 
           case seed_meta
@@ -213,14 +252,17 @@ defmodule SowerCli.Build do
             {:ok, seed} ->
               case SowerClient.Seed.create(client, seed) do
                 {:ok, _} = result ->
+                  Output.item_done("Registered", seed_name)
                   result
 
                 {:error, reason} = error ->
+                  Output.item_error("Failed", seed_name)
                   Output.error("Failed to register seed: #{inspect(reason)}")
                   error
               end
 
             {:error, error} ->
+              Output.item_error("Failed", seed_name)
               Output.error("Failed to cast seed: #{inspect(error)}")
               {:error, {:cast_failed, error}}
           end
@@ -251,5 +293,20 @@ defmodule SowerCli.Build do
   defp load_tags(%__MODULE__{} = state) do
     state.options.tag
     |> Enum.map(&SowerClient.SeedTag.from_string/1)
+  end
+
+  defp receive_progress(task, handler) do
+    receive do
+      {ref, result} when ref == task.ref ->
+        Process.demonitor(ref, [:flush])
+        result
+
+      {:DOWN, ref, :process, _pid, reason} when ref == task.ref ->
+        {:error, {:task_crashed, reason}}
+
+      msg ->
+        handler.(msg)
+        receive_progress(task, handler)
+    end
   end
 end
