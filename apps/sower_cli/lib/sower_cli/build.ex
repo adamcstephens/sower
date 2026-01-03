@@ -85,7 +85,7 @@ defmodule SowerCli.Build do
   defp run_steps([:eval | rest], %__MODULE__{} = state) do
     Output.step("Evaluating #{state.flake}")
 
-    Application.ensure_all_started([:erlexec])
+    Application.ensure_all_started([:erlexec, :owl])
 
     opts = [
       workers: state.options.eval_jobs,
@@ -98,19 +98,29 @@ defmodule SowerCli.Build do
     task = Task.async(fn -> Nix.Eval.Jobs.run(state.flake, opts) end)
 
     result =
-      receive_progress(task, fn
-        {:eval_started, attr} ->
-          Output.item_start("Evaluating", attr || "(root)")
+      receive_progress(task, %{}, fn msg, blocks ->
+        case msg do
+          {:eval_started, attr} ->
+            name = attr || "(root)"
+            block_id = {:eval, name}
+            Output.live_item_start(block_id, "Evaluating", name)
+            Map.put(blocks, name, block_id)
 
-        {:eval_completed, attr, :ok} ->
-          Output.item_done("Evaluated", attr || "(root)")
+          {:eval_completed, attr, status} ->
+            name = attr || "(root)"
+            block_id = Map.get(blocks, name, {:eval, name})
 
-        {:eval_completed, attr, :branch} ->
-          Output.item_done("Discovered", attr || "(root)")
+            case status do
+              :ok -> Output.live_item_done(block_id, "Evaluated", name)
+              :branch -> Output.live_item_done(block_id, "Discovered", name)
+              _ -> Output.live_item_error(block_id, "Eval failed", name)
+            end
 
-        {:eval_completed, attr, _error} ->
-          Output.item_error("Eval failed", attr || "(root)")
+            blocks
+        end
       end)
+
+    Output.live_flush()
 
     case result do
       {:ok, %{results: results}} ->
@@ -146,16 +156,28 @@ defmodule SowerCli.Build do
     task = Task.async(fn -> Nix.Build.Jobs.run(state.evals, opts) end)
 
     result =
-      receive_progress(task, fn
-        {:build_started, drv_path} ->
-          Output.item_start("Building", drv_path || "(unknown)")
+      receive_progress(task, %{}, fn msg, blocks ->
+        case msg do
+          {:build_started, drv_path} ->
+            name = drv_path || "(unknown)"
+            block_id = {:build, name}
+            Output.live_item_start(block_id, "Building", name)
+            Map.put(blocks, name, block_id)
 
-        {:build_completed, drv_path, :ok} ->
-          Output.item_done("Built", drv_path || "(unknown)")
+          {:build_completed, drv_path, status} ->
+            name = drv_path || "(unknown)"
+            block_id = Map.get(blocks, name, {:build, name})
 
-        {:build_completed, drv_path, _error} ->
-          Output.item_error("Build failed", drv_path || "(unknown)")
+            case status do
+              :ok -> Output.live_item_done(block_id, "Built", name)
+              _ -> Output.live_item_error(block_id, "Build failed", name)
+            end
+
+            blocks
+        end
       end)
+
+    Output.live_flush()
 
     case result do
       {:ok, job_result} ->
@@ -229,48 +251,56 @@ defmodule SowerCli.Build do
     client = SowerClient.ApiClient.new()
 
     results =
-      Enum.map(state.builds, fn
-        %Nix.Build{
-          eval: %Nix.Eval{
-            output: %{
-              "meta" => %{
-                "sower" => %{
-                  "seed" => seed_meta
-                }
-              }
-            }
-          }
-        } = build ->
+      state.builds
+      |> Enum.with_index()
+      |> Enum.map(fn
+        {%Nix.Build{
+           eval: %Nix.Eval{
+             output: %{
+               "meta" => %{
+                 "sower" => %{
+                   "seed" => seed_meta
+                 }
+               }
+             }
+           }
+         } = build, idx} ->
           seed_name = Map.get(seed_meta, "name", build.store_path)
-          Output.item_start("Registering", seed_name)
+          block_id = {:seed, idx}
+          Output.live_item_start(block_id, "Registering", seed_name)
           tags = load_tags(state) ++ Map.get(seed_meta, "tags", []) ++ SowerCli.Repo.get_tags()
 
-          case seed_meta
-               |> Map.put("tags", tags)
-               |> Map.put("artifact", build.store_path)
-               |> SowerClient.Seed.cast() do
-            {:ok, seed} ->
-              case SowerClient.Seed.create(client, seed) do
-                {:ok, _} = result ->
-                  Output.item_done("Registered", seed_name)
-                  result
+          result =
+            case seed_meta
+                 |> Map.put("tags", tags)
+                 |> Map.put("artifact", build.store_path)
+                 |> SowerClient.Seed.cast() do
+              {:ok, seed} ->
+                case SowerClient.Seed.create(client, seed) do
+                  {:ok, _} = result ->
+                    Output.live_item_done(block_id, "Registered", seed_name)
+                    result
 
-                {:error, reason} = error ->
-                  Output.item_error("Failed", seed_name)
-                  Output.error("Failed to register seed: #{inspect(reason)}")
-                  error
-              end
+                  {:error, reason} = error ->
+                    Output.live_item_error(block_id, "Failed", seed_name)
+                    Output.error("Failed to register seed: #{inspect(reason)}")
+                    error
+                end
 
-            {:error, error} ->
-              Output.item_error("Failed", seed_name)
-              Output.error("Failed to cast seed: #{inspect(error)}")
-              {:error, {:cast_failed, error}}
-          end
+              {:error, error} ->
+                Output.live_item_error(block_id, "Failed", seed_name)
+                Output.error("Failed to cast seed: #{inspect(error)}")
+                {:error, {:cast_failed, error}}
+            end
 
-        %Nix.Build{eval: eval} ->
+          result
+
+        {%Nix.Build{eval: eval}, _idx} ->
           Logger.debug(msg: "Eval is missing sower seed metadata", eval: eval)
           :skip
       end)
+
+    Output.live_flush()
 
     errors =
       results
@@ -295,7 +325,7 @@ defmodule SowerCli.Build do
     |> Enum.map(&SowerClient.SeedTag.from_string/1)
   end
 
-  defp receive_progress(task, handler) do
+  defp receive_progress(task, blocks, handler) do
     receive do
       {ref, result} when ref == task.ref ->
         Process.demonitor(ref, [:flush])
@@ -305,8 +335,8 @@ defmodule SowerCli.Build do
         {:error, {:task_crashed, reason}}
 
       msg ->
-        handler.(msg)
-        receive_progress(task, handler)
+        blocks = handler.(msg, blocks)
+        receive_progress(task, blocks, handler)
     end
   end
 end

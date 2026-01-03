@@ -4,6 +4,13 @@ defmodule SowerCli.Output do
   """
 
   @doc """
+  Ensure Owl.LiveScreen is started.
+  """
+  def ensure_live_screen do
+    Application.ensure_all_started(:owl)
+  end
+
+  @doc """
   Print a step header.
   """
   def step(name) do
@@ -32,24 +39,52 @@ defmodule SowerCli.Output do
   end
 
   @doc """
-  Print an item starting message.
+  Add a live-updating item block. Returns the block_id for later updates.
   """
-  def item_start(action, name) do
-    IO.puts("  #{IO.ANSI.yellow()}⋯#{IO.ANSI.reset()} #{action} #{name}")
+  def live_item_start(block_id, action, name) do
+    Owl.LiveScreen.add_block(block_id,
+      state: {action, name, :pending},
+      render: &render_item/1
+    )
+
+    Owl.LiveScreen.await_render()
+    block_id
   end
 
   @doc """
-  Print an item completed message.
+  Update a live item to show completion.
   """
-  def item_done(action, name) do
-    IO.puts("  #{IO.ANSI.green()}✓#{IO.ANSI.reset()} #{action} #{name}")
+  def live_item_done(block_id, action, name) do
+    Owl.LiveScreen.update(block_id, {action, name, :ok})
+    Owl.LiveScreen.await_render()
   end
 
   @doc """
-  Print an item error message.
+  Update a live item to show error.
   """
-  def item_error(action, name) do
-    IO.puts("  #{IO.ANSI.red()}✗#{IO.ANSI.reset()} #{action} #{name}")
+  def live_item_error(block_id, action, name) do
+    Owl.LiveScreen.update(block_id, {action, name, :error})
+    Owl.LiveScreen.await_render()
+  end
+
+  defp render_item({action, name, :pending}) do
+    ["  ", Owl.Data.tag("⋯", :yellow), " #{action} #{name}"]
+  end
+
+  defp render_item({action, name, :ok}) do
+    ["  ", Owl.Data.tag("✓", :green), " #{action} #{name}"]
+  end
+
+  defp render_item({action, name, :error}) do
+    ["  ", Owl.Data.tag("✗", :red), " #{action} #{name}"]
+  end
+
+  @doc """
+  Flush all live blocks and render final state.
+  """
+  def live_flush do
+    Owl.LiveScreen.await_render()
+    Owl.LiveScreen.flush()
   end
 
   @doc """

@@ -34,6 +34,7 @@ defmodule SowerCli.MixProject do
     [
       {:nix, in_umbrella: true},
       {:optimus, "~> 0.5"},
+      {:owl, "~> 0.13"},
       {:sower_client, in_umbrella: true},
       {:typedstruct, "~> 0.5.4"}
     ]

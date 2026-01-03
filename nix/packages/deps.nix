@@ -818,6 +818,23 @@ let
         in
         drv;
 
+      owl =
+        let
+          version = "0.13.0";
+          drv = buildMix {
+            inherit version;
+            name = "owl";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "owl";
+              sha256 = "59bf9d11ce37a4db98f57cb68fbfd61593bf419ec4ed302852b6683d3d2f7475";
+            };
+          };
+        in
+        drv;
+
       permit =
         let
           version = "0.3.0";
