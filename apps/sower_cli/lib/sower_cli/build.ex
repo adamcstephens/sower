@@ -88,7 +88,7 @@ defmodule SowerCli.Build do
     Application.ensure_all_started([:erlexec])
 
     opts = [
-      workers: state.options.jobs,
+      workers: state.options.eval_jobs,
       type: state.options.eval_type,
       use_eval_cache: state.flags.use_eval_cache,
       memory_limit_kb: state.options.memory_limit * 1_000
@@ -120,9 +120,7 @@ defmodule SowerCli.Build do
   defp run_steps([:build | rest], %__MODULE__{} = state) do
     Output.step("Building #{length(state.evals)} derivation(s)")
 
-    workers = state.options.jobs || 4
-
-    case Nix.Build.Jobs.run(state.evals, max_workers: workers) do
+    case Nix.Build.Jobs.run(state.evals, max_workers: state.options.build_jobs) do
       {:ok, result} ->
         builds = Output.build_summary(result)
         run_steps(rest, %{state | builds: builds})

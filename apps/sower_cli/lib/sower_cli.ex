@@ -107,11 +107,18 @@ defmodule SowerCli do
               help: "Cache destination (e.g., 'attic://server:cache', 'ssh://host')",
               required: false
             ],
-            jobs: [
-              short: "-j",
-              long: "--jobs",
+            eval_jobs: [
+              long: "--eval-jobs",
               value_name: "N",
-              help: "Number of parallel workers",
+              help: "Number of parallel eval workers",
+              parser: :integer,
+              default: 4
+            ],
+            build_jobs: [
+              short: "-j",
+              long: "--build-jobs",
+              value_name: "N",
+              help: "Number of parallel build workers",
               parser: :integer,
               default: 4
             ],
