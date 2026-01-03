@@ -159,14 +159,14 @@ defmodule SowerCli.Build do
     result =
       receive_progress(task, %{}, fn msg, blocks ->
         case msg do
-          {:build_started, drv_path} ->
-            name = drv_path || "(unknown)"
+          {:build_started, attr} ->
+            name = attr || "(unknown)"
             block_id = {:build, name}
             Output.live_item_start(block_id, "Building", name)
             Map.put(blocks, name, block_id)
 
-          {:build_completed, drv_path, status} ->
-            name = drv_path || "(unknown)"
+          {:build_completed, attr, status} ->
+            name = attr || "(unknown)"
             block_id = Map.get(blocks, name, {:build, name})
 
             case status do

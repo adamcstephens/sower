@@ -131,10 +131,10 @@ defmodule Nix.Build.Jobs do
   end
 
   defp run_build(eval, notify_pid) do
-    drv_path = eval.output["drvPath"]
-    notify(notify_pid, {:build_started, drv_path})
+    attr = eval.request.attr || "(root)"
+    notify(notify_pid, {:build_started, attr})
     {_status, build} = Build.run(eval)
-    notify(notify_pid, {:build_completed, drv_path, build.status})
+    notify(notify_pid, {:build_completed, attr, build.status})
     build
   end
 
