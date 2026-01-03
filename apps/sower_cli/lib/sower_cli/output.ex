@@ -179,19 +179,21 @@ defmodule SowerCli.Output do
 
     Enum.each(failed, fn %Nix.Eval{} = eval ->
       attr = eval.request.attr || "(root)"
-      reason = format_eval_error(eval)
-      error("#{attr}: #{reason}")
+      error("#{attr}:")
+      format_eval_error(eval)
     end)
   end
 
   defp format_eval_error(%Nix.Eval{status: :memory_limit_exceeded} = eval) do
     peak_mb = eval.mem_samples |> Enum.max(fn -> 0 end) |> Kernel./(1024) |> Float.round(1)
     limit_mb = (eval.memory_limit_kb / 1024) |> Float.round(1)
-    "memory limit exceeded (peak: #{peak_mb} MB, limit: #{limit_mb} MB)"
+    info("  memory limit exceeded (peak: #{peak_mb} MB, limit: #{limit_mb} MB)")
   end
 
   defp format_eval_error(%Nix.Eval{errors: errors}) do
-    Enum.join(errors, ", ")
+    Enum.each(errors, fn line ->
+      info("  #{line}")
+    end)
   end
 
   @doc """
