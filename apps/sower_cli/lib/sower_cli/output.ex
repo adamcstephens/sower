@@ -4,11 +4,19 @@ defmodule SowerCli.Output do
   """
 
   @doc """
-  Ensure Owl.LiveScreen is started.
+  Initialize output mode. When debug is true, uses simple line-by-line output.
+  When false, uses Owl.LiveScreen for in-place updates.
   """
-  def ensure_live_screen do
-    Application.ensure_all_started(:owl)
+  def init(opts \\ []) do
+    if opts[:debug] do
+      Process.put(:output_mode, :simple)
+    else
+      Application.ensure_all_started(:owl)
+      Process.put(:output_mode, :live)
+    end
   end
+
+  defp live_mode?, do: Process.get(:output_mode, :live) == :live
 
   @doc """
   Print a step header.
@@ -40,31 +48,46 @@ defmodule SowerCli.Output do
 
   @doc """
   Add a live-updating item block. Returns the block_id for later updates.
+  In simple mode, prints start message immediately.
   """
   def live_item_start(block_id, action, name) do
-    Owl.LiveScreen.add_block(block_id,
-      state: {action, name, :pending},
-      render: &render_item/1
-    )
+    if live_mode?() do
+      Owl.LiveScreen.add_block(block_id,
+        state: {action, name, :pending},
+        render: &render_item/1
+      )
+      Owl.LiveScreen.await_render()
+    else
+      IO.puts("  #{IO.ANSI.yellow()}⋯#{IO.ANSI.reset()} #{action} #{name}")
+    end
 
-    Owl.LiveScreen.await_render()
     block_id
   end
 
   @doc """
   Update a live item to show completion.
+  In simple mode, prints completion message.
   """
   def live_item_done(block_id, action, name) do
-    Owl.LiveScreen.update(block_id, {action, name, :ok})
-    Owl.LiveScreen.await_render()
+    if live_mode?() do
+      Owl.LiveScreen.update(block_id, {action, name, :ok})
+      Owl.LiveScreen.await_render()
+    else
+      IO.puts("  #{IO.ANSI.green()}✓#{IO.ANSI.reset()} #{action} #{name}")
+    end
   end
 
   @doc """
   Update a live item to show error.
+  In simple mode, prints error message.
   """
   def live_item_error(block_id, action, name) do
-    Owl.LiveScreen.update(block_id, {action, name, :error})
-    Owl.LiveScreen.await_render()
+    if live_mode?() do
+      Owl.LiveScreen.update(block_id, {action, name, :error})
+      Owl.LiveScreen.await_render()
+    else
+      IO.puts("  #{IO.ANSI.red()}✗#{IO.ANSI.reset()} #{action} #{name}")
+    end
   end
 
   defp render_item({action, name, :pending}) do
@@ -81,10 +104,13 @@ defmodule SowerCli.Output do
 
   @doc """
   Flush all live blocks and render final state.
+  No-op in simple mode.
   """
   def live_flush do
-    Owl.LiveScreen.await_render()
-    Owl.LiveScreen.flush()
+    if live_mode?() do
+      Owl.LiveScreen.await_render()
+      Owl.LiveScreen.flush()
+    end
   end
 
   @doc """
