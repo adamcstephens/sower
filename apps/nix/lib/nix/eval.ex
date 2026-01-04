@@ -249,7 +249,6 @@ defmodule Nix.Eval do
     |> Enum.reverse()
     |> Enum.map(&String.split(&1, "\n"))
     |> List.flatten()
-    |> Enum.map(&String.trim/1)
     |> Enum.reject(fn l ->
       Regex.match?(~r{(fetching git input|error \(ignored\): error: SQLite database|^$)}, l)
     end)

@@ -8,14 +8,20 @@
 }:
 rec {
   addSowerMeta =
-    { name, package }:
-    lib.addMetaAttrs {
-      # TODO add a nixos module that can be included in the nixosConfig for setting values, e.g. seed.tags
-      sower.seed = {
-        inherit name;
-        seed_type = "nixos";
-      };
-    } package;
+    {
+      name,
+      package,
+      meta ? { },
+    }:
+    lib.addMetaAttrs (
+      {
+        sower.seed = {
+          inherit name;
+          seed_type = "nixos";
+        };
+      }
+      // meta
+    ) package;
 
   genNixosPackages =
     nixosConfigurations:
@@ -29,6 +35,7 @@ rec {
             lib.nameValuePair "nixos/${name}" (addSowerMeta {
               inherit name;
               package = nixosConfigurations.${name}.config.system.build.toplevel;
+              meta = nixosConfigurations.${name}.config.sower.seed.meta or { };
             })
           ))
         ];

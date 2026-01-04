@@ -194,11 +194,6 @@
                 services.tempo.tempo1.enable = true;
               };
           };
-
-        flake = {
-          nixosModules.sower = ./nix/nixos/module.nix;
-          homeModules.sower = ./nix/home/module.nix;
-        };
       }
     );
 }

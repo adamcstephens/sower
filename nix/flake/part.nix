@@ -1,11 +1,21 @@
-{ inputs, lib, ... }:
+{
+  inputs,
+  lib,
+  self,
+  ...
+}:
 {
   imports = [
     ./sower.nix
   ];
 
-  flake.flakeModules.sower = ./sower.nix;
-  flake.lib = import ../sowerlib.nix { inherit inputs lib; };
+  flake = {
+    lib = import ../sowerlib.nix { inherit inputs lib; };
+
+    flakeModules.sower = ./sower.nix;
+    homeModules.sower = ../home/module.nix;
+    nixosModules.sower = ../nixos/module.nix;
+  };
 
   flake.nixosConfigurations = {
     example = inputs.nixpkgs.lib.nixosSystem {
@@ -13,6 +23,8 @@
       modules = [
         "${inputs.nixpkgs}/nixos/maintainers/scripts/incus/incus-container-image.nix"
         { system.stateVersion = "25.11"; }
+        { sower.seed.meta.broken = true; }
+        self.nixosModules.sower
       ];
     };
 
