@@ -39,13 +39,11 @@ defmodule SowerClient.Config do
       },
       name: %Schema{
         type: :string,
-        description: "Agent name (agent-only)",
-        default: "system hostname"
+        description: "Agent name (agent-only)"
       },
       state_directory: %Schema{
         type: :string,
-        description: "Directory where state files are written (agent-only)",
-        default: "/var/lib/sower_agent"
+        description: "Directory where state files are written (agent-only)"
       },
       subscriptions: %Schema{
         type: :array,
@@ -67,7 +65,8 @@ defmodule SowerClient.Config do
 
     config_path = resolve_config_path(opts)
 
-    Keyword.get(opts, :defaults, %{})
+    defaults()
+    |> Map.merge(Keyword.get(opts, :defaults, %{}))
     |> Map.merge(read_config_file(config_path))
     |> then(fn cfg ->
       if File.exists?(config_path) do
@@ -92,10 +91,11 @@ defmodule SowerClient.Config do
     |> process_side_effects()
   end
 
-  def defaults do
+  def defaults() do
     %{
-      "name" => default_agent_name(),
-      "state_directory" => default_state_dir()
+      "name" => default_client_name(),
+      "state_directory" => default_state_dir(),
+      "default" => "/var/lib/sower-agent"
     }
   end
 
@@ -159,7 +159,7 @@ defmodule SowerClient.Config do
     )
   end
 
-  def default_agent_name do
+  def default_client_name() do
     :inet.gethostname() |> then(fn {:ok, hostname} -> to_string(hostname) end)
   end
 
