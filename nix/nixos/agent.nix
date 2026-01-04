@@ -71,7 +71,6 @@ in
       path = [ config.nix.package ];
 
       environment = {
-        RELEASE_COOKIE = "%S/release-cookie";
         SHELL = lib.getExe pkgs.bash;
         SOWER_CONFIG_FILE = "/etc/sower/client.json";
       };
@@ -96,7 +95,12 @@ in
             ${lib.getExe pkgs.openssl} rand -hex 48 > release-cookie
           fi
         '';
-        ExecStart = "${lib.getExe cfg.package} start";
+        ExecStart = pkgs.writeShellScript "sower-agent-start" ''
+          RELEASE_COOKIE=$(cat release-cookie)
+          export RELEASE_COOKIE
+
+          exec ${lib.getExe cfg.package} start
+        '';
         ExecStop = "${lib.getExe cfg.package} stop";
       };
     };
