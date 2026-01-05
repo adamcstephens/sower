@@ -5,6 +5,10 @@ defmodule SowerAgent.Client do
 
   alias SowerAgent.Storage
 
+  def deploy(%SowerClient.Orchestration.Subscription{} = sub) do
+    send({:deployment_request, sub})
+  end
+
   def handle_call({:deployment_request, %{sid: sid}}, _from, socket) do
     {:ok, upgrade_request} =
       SowerClient.Orchestration.DeploymentRequest.new(%{
@@ -214,6 +218,7 @@ defmodule SowerAgent.Client do
         |> Quantum.Job.set_name(:"sub_#{sid}")
         |> Quantum.Job.set_schedule(cron)
         |> Quantum.Job.set_task(fn ->
+          # TODO make this actually run a subscription check and deployment
           Logger.debug(
             msg: "Running subscription schedule",
             subscription_sid: sid,
