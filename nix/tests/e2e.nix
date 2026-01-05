@@ -52,6 +52,7 @@ testers.runNixOSTest {
           services.sower.agent = {
             enable = true;
             package = flake.packages.${pkgs.stdenv.hostPlatform.system}.agent;
+            activationPackage = flake.packages.${pkgs.stdenv.hostPlatform.system}.activator;
 
             settings = {
               access_token_file = "/run/sower/test_token";
