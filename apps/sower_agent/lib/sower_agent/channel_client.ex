@@ -18,11 +18,11 @@ defmodule SowerAgent.ChannelClient do
       # client
       #
 
-      def send(message) do
+      def call(message) do
         GenServer.call(__MODULE__, message)
       end
 
-      def send(event, params) do
+      def call(event, params) do
         GenServer.call(__MODULE__, {event, params})
       end
 
