@@ -35,6 +35,7 @@ in
       };
 
       package = lib.mkOption { type = lib.types.package; };
+      activatorPackage = lib.mkOption { type = lib.types.package; };
 
       settings = lib.mkOption {
         type = lib.types.submodule {
@@ -68,7 +69,10 @@ in
         "network-online.target"
       ]
       ++ lib.optionals config.services.sower.server.enable [ "sower.service" ];
-      path = [ config.nix.package ];
+      path = [
+        config.nix.package
+        cfg.activatorPackage
+      ];
 
       environment = {
         SHELL = lib.getExe pkgs.bash;
@@ -102,6 +106,9 @@ in
           exec ${lib.getExe cfg.package} start
         '';
         ExecStop = "${lib.getExe cfg.package} stop";
+
+        MemoryAccounting = true;
+        MemoryMax = "200M";
       };
     };
 

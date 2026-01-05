@@ -3,9 +3,9 @@ defmodule SowerAgent.Seed do
 
   require Logger
 
-  def activate(%Seed{seed_type: "home-manager"} = seed) do
+  def run_activator(args) when is_list(args) do
     if Application.get_env(:sower_agent, :enable_activation, true) do
-      case System.cmd("#{seed.artifact}/activate", [],
+      case System.cmd(System.find_executable("sower-activator"), args,
              into: [],
              lines: 1024,
              stderr_to_stdout: true
@@ -21,44 +21,14 @@ defmodule SowerAgent.Seed do
     else
       {:ok, ["noop"]}
     end
+  end
+
+  def activate(%Seed{seed_type: "home-manager"} = seed) do
+    run_activator(["-path", seed.artifact, "-type", "home-manager"])
   end
 
   def activate(%Seed{seed_type: "nixos"} = seed) do
-    if Application.get_env(:sower_agent, :enable_activation, true) do
-      {_, 0} =
-        maybe_sudo_cmd(
-          "nix-env",
-          [
-            "--set",
-            "--profile",
-            Nix.NixOS.profile_path(),
-            seed.artifact
-          ]
-        )
-
-      case maybe_sudo_cmd("#{seed.artifact}/bin/switch-to-configuration", ["switch"],
-             into: [],
-             lines: 1024,
-             stderr_to_stdout: true
-           ) do
-        {output, 0} ->
-          Logger.debug(output: output)
-          {:ok, output}
-
-        {output, code} ->
-          Logger.error(msg: "Failed to activate", output: output, return_code: code)
-          {:error, code}
-      end
-    else
-      {:ok, ["noop"]}
-    end
-  end
-
-  defp maybe_sudo_cmd(command, args, opts \\ []) do
-    if Application.get_env(:sower_agent, :sudo, false) do
-      System.cmd("sudo", [command | args], opts)
-    else
-      System.cmd(command, args, opts)
-    end
+    mode = "switch"
+    run_activator(["-path", seed.artifact, "-type", "nixos", "-mode", mode])
   end
 end
