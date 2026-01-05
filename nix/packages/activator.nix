@@ -1,9 +1,6 @@
 {
   lib,
   buildGoModule,
-  makeWrapper,
-  nix-eval-jobs,
-  sd-switch,
   version,
 }:
 let
@@ -11,7 +8,7 @@ let
 in
 
 buildGoModule rec {
-  pname = "sower-cli";
+  pname = "sower-activator";
   inherit version;
 
   src =
@@ -19,17 +16,11 @@ buildGoModule rec {
     toSource {
       root = ../..;
       fileset = unions [
-        ../../client-go
-        ../../cmd/cli
+        ../../cmd/sower-activator
         ../../go.mod
         ../../go.sum
-        ../../openapi.json
       ];
     };
-
-  nativeBuildInputs = [
-    makeWrapper
-  ];
 
   env.CGO_ENABLED = 0;
 
@@ -37,20 +28,6 @@ buildGoModule rec {
     "-X main.version=${version}"
     "-X main.nixpkgsref=${nixpkgsref}"
   ];
-
-  postInstall = ''
-    mv $out/bin/cli $out/bin/sower
-
-    wrapProgram $out/bin/sower --prefix PATH : ${
-      lib.makeBinPath [
-        nix-eval-jobs
-        sd-switch
-      ]
-    }
-  '';
-
-  # disable checks for now until better fleshed out
-  doCheck = false;
 
   vendorHash = "sha256-Ct7urD4IrXEcvNEqGUtaKqyr4M6S7ZEpuQQIUb91dIM=";
 

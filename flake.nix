@@ -120,6 +120,10 @@
             };
 
             packages = rec {
+              activator = pkgs.callPackage ./nix/packages/activator.nix {
+                inherit version;
+              };
+
               cli = pkgs.callPackage ./nix/packages/cli.nix {
                 inherit beamPackages version;
               };

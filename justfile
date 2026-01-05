@@ -118,13 +118,14 @@ update-go-hash:
     set -eou pipefail
 
     setKV() {
-      sed -i "s|$1 = \".*\"|$1 = \"${2:-}\"|" ./nix/packages/cli.nix
+      sed -i "s|$1 = \".*\"|$1 = \"${2:-}\"|" ./nix/packages/activator.nix
+      sed -i "s|$1 = \".*\"|$1 = \"${2:-}\"|" ./nix/packages/go-cli.nix
     }
 
     setKV vendorHash "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=" # Necessary to force clean build.
 
     set +e
-    VENDOR_HASH=$(nix build --no-link .#cli 2>&1 >/dev/null | grep "got:" | cut -d':' -f2 | sed 's| ||g')
+    VENDOR_HASH=$(nix build --no-link .#activator 2>&1 >/dev/null | grep "got:" | cut -d':' -f2 | sed 's| ||g')
     set -e
 
     if [ -n "${VENDOR_HASH:-}" ]; then
