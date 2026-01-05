@@ -5,14 +5,26 @@ defmodule SowerCli.Output do
 
   @doc """
   Initialize output mode. When debug is true, uses simple line-by-line output.
-  When false, uses Owl.LiveScreen for in-place updates.
+  When false, uses Owl.LiveScreen for in-place updates (if TTY is available).
   """
   def init(opts \\ []) do
-    if opts[:debug] do
+    if opts[:debug] or not tty?() do
       Process.put(:output_mode, :simple)
     else
       Application.ensure_all_started(:owl)
       Process.put(:output_mode, :live)
+    end
+  end
+
+  defp tty? do
+    # Check if stdout is a TTY
+    case :io.getopts(:standard_io) do
+      {:ok, _} ->
+        # Also check if we're in a CI environment
+        System.get_env("CI") not in ["true", "1"]
+
+      _ ->
+        false
     end
   end
 
@@ -56,6 +68,7 @@ defmodule SowerCli.Output do
         state: {action, name, :pending},
         render: &render_item/1
       )
+
       Owl.LiveScreen.await_render()
     else
       IO.puts("  #{IO.ANSI.yellow()}⋯#{IO.ANSI.reset()} #{action} #{name}")

@@ -40,5 +40,5 @@ beamPackages.mixRelease {
 
   doCheck = true;
 
-  meta.mainProgram = "sower-cli";
+  meta.mainProgram = "sower";
 }
