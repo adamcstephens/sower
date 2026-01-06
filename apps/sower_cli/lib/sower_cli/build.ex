@@ -204,14 +204,14 @@ defmodule SowerCli.Build do
   end
 
   defp run_steps([:push | rest], %__MODULE__{} = state) do
-    Output.step("Pushing to cache")
-
-    cache_url = state.options.cache || SowerCli.Config.get().cache
-    {:ok, {cache_module, cache_config}} = Cache.parse_url(cache_url)
-
     builds =
       state.builds
       |> Enum.filter(&(&1.status == :ok))
+
+    Output.step("Pushing #{length(builds)} path(s) to cache")
+
+    cache_url = state.options.cache || SowerCli.Config.get().cache
+    {:ok, {cache_module, cache_config}} = Cache.parse_url(cache_url)
 
     store_paths =
       builds
@@ -245,7 +245,7 @@ defmodule SowerCli.Build do
   end
 
   defp run_steps([:seed | rest], %__MODULE__{} = state) do
-    Output.step("Registering seed")
+    Output.step("Registering #{length(state.builds)} seed(s)")
 
     Application.ensure_all_started([:req])
 
