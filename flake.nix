@@ -157,6 +157,8 @@
 
         flake = {
           nixosModules.sower = ./nix/nixos/module.nix;
+          nixosModules.client = ./nix/nixos/client.nix;
+          nixosModules.server = ./nix/nixos/server.nix;
           homeModules.sower = ./nix/home/module.nix;
         };
       }
