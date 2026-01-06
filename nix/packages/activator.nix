@@ -29,7 +29,7 @@ buildGoModule rec {
     "-X main.nixpkgsref=${nixpkgsref}"
   ];
 
-  vendorHash = "sha256-Ct7urD4IrXEcvNEqGUtaKqyr4M6S7ZEpuQQIUb91dIM=";
+  vendorHash = "sha256-+sHF3EMkTD7tPnD9DkbYCMMbbHl3urWSzRaA6KENBog=";
 
   meta.mainProgram = "sower";
 }

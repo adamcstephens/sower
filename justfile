@@ -110,7 +110,7 @@ update-go:
     go mod edit -go=$(go version | awk '{print $3}' | sed 's/go//')
     go mod tidy
     just update-go-hash
-    jj commit -m 'server(chore): update go deps' go.mod go.sum nix/packages/cli.nix
+    jj commit -m 'server(chore): update go deps' go.mod go.sum nix/packages/activator.nix nix/packages/gocli.nix
 
 update-go-hash:
     #!/usr/bin/env bash
