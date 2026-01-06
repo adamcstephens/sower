@@ -31,5 +31,5 @@ buildGoModule rec {
 
   vendorHash = "sha256-+sHF3EMkTD7tPnD9DkbYCMMbbHl3urWSzRaA6KENBog=";
 
-  meta.mainProgram = "sower";
+  meta.mainProgram = "sower-activator";
 }

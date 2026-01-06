@@ -51,6 +51,13 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = !config.security.sudo-rs.enable;
+        messages = "sudo-rs is not supported";
+      }
+    ];
+
     boot.extraSystemdUnitPaths = lib.optionals manageServices [
       "/etc/sower/systemd/system"
     ];
@@ -89,7 +96,15 @@ in
 
         LoadCredential = cfg.credentials;
 
-        DynamicUser = true;
+        # DynamicUser = true;
+        ProtectSystem = "full";
+        ProtectHome = true;
+        PrivateTmp = true;
+        NoNewPrivileges = false;
+        SupplementaryGroups = [ "wheel" ];
+        User = "sower-agent";
+        Group = "sower-agent";
+
         StateDirectory = "sower-agent";
         WorkingDirectory = "%S/sower-agent";
 
@@ -112,9 +127,27 @@ in
       };
     };
 
+    security.sudo.extraRules = [
+      {
+        groups = [ "wheel" ];
+        commands = [
+          {
+            command = lib.getExe cfg.activatorPackage;
+            options = [ "NOPASSWD" ];
+          }
+        ];
+      }
+    ];
+
     systemd.tmpfiles.rules = lib.optionals manageServices [
       "d /etc/sower 0755 root root"
       "L /etc/sower/systemd - - - - /nix/var/nix/profiles/sower/services-units/systemd"
     ];
+
+    users.groups.sower-agent = { };
+    users.users.sower-agent = {
+      isSystemUser = true;
+      group = "sower-agent";
+    };
   };
 }
