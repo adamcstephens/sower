@@ -10,6 +10,7 @@ rec {
   addSowerMeta =
     {
       name,
+      type,
       package,
       meta ? { },
     }:
@@ -17,7 +18,7 @@ rec {
       {
         sower.seed = {
           inherit name;
-          seed_type = "nixos";
+          seed_type = type;
         };
       }
       // meta
@@ -35,6 +36,7 @@ rec {
             lib.nameValuePair "nixos/${name}" (addSowerMeta {
               inherit name;
               package = nixosConfigurations.${name}.config.system.build.toplevel;
+              type = "nixos";
               meta = nixosConfigurations.${name}.config.sower.seed.meta or { };
             })
           ))
@@ -58,6 +60,7 @@ rec {
             name: homeConfig:
             lib.nameValuePair "home/${name}" (addSowerMeta {
               inherit name;
+              type = "home-manager";
               package = homeConfigurations.${name}.activationPackage;
             })
           ))
