@@ -23,6 +23,7 @@ defmodule SowerCli.Build do
     field :builds, [Nix.Build.t()]
     field :cache_module, module()
     field :cache_config, map()
+    field :status, :ok | :error, default: :ok
   end
 
   def run(flake, flags, options) do
@@ -79,7 +80,7 @@ defmodule SowerCli.Build do
 
   defp run_steps([], %__MODULE__{} = state) do
     Output.success("Done")
-    {:ok, state}
+    {state.status, state}
   end
 
   defp run_steps([:eval | rest], %__MODULE__{} = state) do
@@ -140,7 +141,7 @@ defmodule SowerCli.Build do
           if Enum.empty?(successful) do
             {:error, :eval_failed}
           else
-            run_steps(rest, %{state | evals: successful})
+            run_steps(rest, %{state | evals: successful, status: :error})
           end
         end
     end
@@ -197,7 +198,7 @@ defmodule SowerCli.Build do
           if Enum.empty?(successful) do
             {:error, :build_failed}
           else
-            run_steps(rest, %{state | builds: successful})
+            run_steps(rest, %{state | builds: successful, status: :error})
           end
         end
     end
@@ -239,6 +240,7 @@ defmodule SowerCli.Build do
           })
 
         {:error, _reason} ->
+          # TODO add fail fast handling for push
           {:error, :push_failed}
       end
     end
@@ -316,7 +318,7 @@ defmodule SowerCli.Build do
       if state.flags.fail_fast do
         {:error, :seed_failed}
       else
-        run_steps(rest, state)
+        run_steps(rest, %{state | status: :error})
       end
     end
   end

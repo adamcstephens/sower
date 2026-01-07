@@ -27,6 +27,7 @@ defmodule SowerCli do
   defp run({[:build], %{args: args, flags: flags, options: options}}) do
     # Set log level after all apps have started
     set_log_level(if flags.debug, do: :debug, else: :error)
+
     SowerCli.Build.run(args.flake, flags, options)
   end
 
