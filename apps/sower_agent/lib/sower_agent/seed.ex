@@ -5,18 +5,25 @@ defmodule SowerAgent.Seed do
 
   def run_activator(args) when is_list(args) do
     if Application.get_env(:sower_agent, :enable_activation, true) do
-      case System.cmd(System.find_executable("sower-activator"), args,
-             into: [],
-             lines: 1024,
-             stderr_to_stdout: true
-           ) do
-        {output, 0} ->
-          Logger.debug(output: output)
-          {:ok, output}
+      with activator when not is_nil(activator) <- System.find_executable("sower-activator"),
+           sudo when not is_nil(sudo) <- System.find_executable("sudo") do
+        case System.cmd(sudo, [activator | args],
+               into: [],
+               lines: 1024,
+               stderr_to_stdout: true
+             ) do
+          {output, 0} ->
+            Logger.debug(output: output)
+            {:ok, output}
 
-        {output, code} ->
-          Logger.error(msg: "Failed to activate", output: output, return_code: code)
-          {:error, code}
+          {output, code} ->
+            Logger.error(msg: "Failed to activate", output: output, return_code: code)
+            {:error, code}
+        end
+      else
+        nil ->
+          Logger.error(msg: "Failed to find required executables sudo and sower-activator")
+          {:error, :cmd_not_found}
       end
     else
       {:ok, ["noop"]}

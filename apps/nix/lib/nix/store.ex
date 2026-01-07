@@ -4,6 +4,8 @@ defmodule Nix.Store do
   def realize(path) do
     Logger.debug(msg: "Realizing path", path: path)
 
+    {:ok, _} = Application.ensure_all_started(:erlexec)
+
     cmd = ~c"nix-store --realize #{path}"
 
     Process.flag(:trap_exit, true)

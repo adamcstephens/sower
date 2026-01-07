@@ -77,6 +77,7 @@ in
       ]
       ++ lib.optionals config.services.sower.server.enable [ "sower.service" ];
       path = [
+        "/run/wrappers"
         config.nix.package
         cfg.activatorPackage
       ];
@@ -98,7 +99,7 @@ in
 
         # DynamicUser = true;
         ProtectSystem = "full";
-        ProtectHome = true;
+        ProtectHome = "tmpfs";
         PrivateTmp = true;
         NoNewPrivileges = false;
         SupplementaryGroups = [ "wheel" ];
