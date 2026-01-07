@@ -20,7 +20,7 @@ defmodule SowerCli do
 
     case result do
       {:error, _reason} -> System.halt(1)
-      _ -> :ok
+      _ -> System.halt(0)
     end
   end
 
