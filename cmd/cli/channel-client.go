@@ -24,7 +24,7 @@ func (c *channelClient) connect() error {
 	if err != nil {
 		return fmt.Errorf("failed to parse endpoint: %v", err)
 	}
-	endpoint.RawQuery = fmt.Sprintf("token=%s", url.QueryEscape(c.config.ApiToken))
+	endpoint.RawQuery = fmt.Sprintf("token=%s", url.QueryEscape(c.config.AccessToken))
 
 	socket := phx.NewSocket(endpoint)
 	socket.Logger = &logger{}

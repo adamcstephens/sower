@@ -16,13 +16,13 @@ type SeedClient struct {
 
 func NewSowerClient(endpoint, token string) (*SeedClient, error) {
 	if token == "" {
-		return nil, fmt.Errorf("API token missing")
+		return nil, fmt.Errorf("access token missing")
 	}
 	hc := http.Client{}
 
 	bearerAuth, err := securityprovider.NewSecurityProviderBearerToken(token)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load API token, %s", err)
+		return nil, fmt.Errorf("failed to load access token, %s", err)
 	}
 
 	newClient, err := NewClientWithResponses(endpoint, WithRequestEditorFn(bearerAuth.Intercept), WithHTTPClient(&hc))

@@ -27,12 +27,12 @@ type config struct {
 	Seed     *seedCmd     `arg:"subcommand:seed"`
 	Services *servicesCmd `arg:"subcommand:services"`
 
-	ApiTokenFile string   `arg:"--api-token-file,env:SOWER_API_TOKEN_FILE" json:"api-token-file"`
-	ApiToken     string   `arg:"--api-token,env:SOWER_API_TOKEN"`
-	ConfigFiles  []string `arg:"--config-file,-c,separate,env:SOWER_CONFIG_FILE" help:"Can be repeated. Defaults are root:/etc/sower/client.json, non-root:$XDG_CONFIG_HOME/sower/client.json"`
-	Debug        bool     `arg:"--debug"`
-	Endpoint     string   `arg:"--endpoint,-e,env:SOWER_ENDPOINT"`
-	Version      bool     `arg:"--version"`
+	AccessTokenFile string   `arg:"--access-token-file,env:SOWER_ACCESS_TOKEN_FILE" json:"access_token_file"`
+	AccessToken     string   `arg:"--access-token,env:SOWER_ACCESS_TOKEN"`
+	ConfigFiles     []string `arg:"--config-file,-c,separate,env:SOWER_CONFIG_FILE" help:"Can be repeated. Defaults are root:/etc/sower/client.json, non-root:$XDG_CONFIG_HOME/sower/client.json"`
+	Debug           bool     `arg:"--debug"`
+	Endpoint        string   `arg:"--endpoint,-e,env:SOWER_ENDPOINT"`
+	Version         bool     `arg:"--version"`
 }
 
 type builderCmd struct {
@@ -159,16 +159,16 @@ func main() {
 	// re-initialize logging in case level is only set in config
 	initLogger(cfg.Debug)
 
-	if cfg.ApiToken == "" && cfg.ApiTokenFile != "" {
-		slog.Debug("Reading api-token file", "file", cfg.ApiTokenFile)
+	if cfg.AccessToken == "" && cfg.AccessTokenFile != "" {
+		slog.Debug("Reading access-token file", "file", cfg.AccessTokenFile)
 
-		token, err := os.ReadFile(cfg.ApiTokenFile)
+		token, err := os.ReadFile(cfg.AccessTokenFile)
 		if err != nil {
-			slog.Error("Failed to read token file", "file", cfg.ApiTokenFile)
+			slog.Error("Failed to read token file", "file", cfg.AccessTokenFile)
 			os.Exit(1)
 		}
 
-		cfg.ApiToken = strings.TrimSpace(string(token))
+		cfg.AccessToken = strings.TrimSpace(string(token))
 	}
 
 	if cfg.Endpoint == "" {
@@ -176,8 +176,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if cfg.ApiToken == "" {
-		slog.Warn("Missing API token. Add to configuration file or environment.")
+	if cfg.AccessToken == "" {
+		slog.Warn("Missing access token. Add to configuration file or environment.")
 	}
 
 	switch {
@@ -270,7 +270,7 @@ func daemonCommand(cfg config) {
 func seedSubcommand(cfg config) error {
 	switch {
 	case cfg.Seed.Download != nil:
-		seedClient, err := client.NewSowerClient(cfg.Endpoint, cfg.ApiToken)
+		seedClient, err := client.NewSowerClient(cfg.Endpoint, cfg.AccessToken)
 		if err != nil {
 			slog.Error("Failed to initialize seed client")
 			os.Exit(1)
@@ -296,7 +296,7 @@ func seedSubcommand(cfg config) error {
 		slog.Info("Downloaded seed", "name", seed.Name, "type", seed.SeedType, "artifact", seed.Artifact)
 
 	case cfg.Seed.Info != nil:
-		seedClient, err := client.NewSowerClient(cfg.Endpoint, cfg.ApiToken)
+		seedClient, err := client.NewSowerClient(cfg.Endpoint, cfg.AccessToken)
 		if err != nil {
 			slog.Error("Failed to initialize seed client", "error", err)
 			os.Exit(1)
@@ -326,7 +326,7 @@ func seedSubcommand(cfg config) error {
 			os.Exit(1)
 		}
 
-		seedClient, err := client.NewSowerClient(cfg.Endpoint, cfg.ApiToken)
+		seedClient, err := client.NewSowerClient(cfg.Endpoint, cfg.AccessToken)
 		if err != nil {
 			slog.Error("Failed to initialize seed client", "error", err)
 			os.Exit(1)
@@ -363,7 +363,7 @@ func seedSubcommand(cfg config) error {
 			os.Exit(1)
 		}
 
-		seedClient, err := client.NewSowerClient(cfg.Endpoint, cfg.ApiToken)
+		seedClient, err := client.NewSowerClient(cfg.Endpoint, cfg.AccessToken)
 		if err != nil {
 			slog.Error("Failed to initialize seed client")
 			os.Exit(1)
@@ -415,7 +415,7 @@ func servicesCommand(cfg config) {
 
 	switch {
 	case cfg.Services.List != nil:
-		seedClient, err := client.NewSowerClient(cfg.Endpoint, cfg.ApiToken)
+		seedClient, err := client.NewSowerClient(cfg.Endpoint, cfg.AccessToken)
 		if err != nil {
 			slog.Error("Failed to initialize seed client")
 			os.Exit(1)
@@ -431,7 +431,7 @@ func servicesCommand(cfg config) {
 			slog.Info("Found service", "service", service, "artifact", seed.Artifact)
 		}
 	case cfg.Services.Upgrade != nil:
-		seedClient, err := client.NewSowerClient(cfg.Endpoint, cfg.ApiToken)
+		seedClient, err := client.NewSowerClient(cfg.Endpoint, cfg.AccessToken)
 		if err != nil {
 			slog.Error("Failed to initialize seed client")
 			os.Exit(1)
