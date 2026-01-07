@@ -281,27 +281,30 @@ defmodule SowerClient.Config do
   defp normalize_subscription_rules(config), do: config
 
   defp process_side_effects(%SowerClient.Config{} = config) do
-    # Configure websocket client
-    uri = URI.parse(config.endpoint)
+    # Configure websocket client (only if endpoint is set)
+    if config.endpoint do
+      uri = URI.parse(config.endpoint)
 
-    uri =
-      Map.put(
-        uri,
-        :path,
-        case uri.path do
-          nil ->
-            "/api/v1"
+      uri =
+        Map.put(
+          uri,
+          :path,
+          case uri.path do
+            nil ->
+              "/api/v1"
 
-          p when is_binary(p) ->
-            if String.ends_with?(p, "api/v1") do
-              p
-            else
-              p <> "/api/v1"
-            end
-        end
-      )
+            p when is_binary(p) ->
+              if String.ends_with?(p, "api/v1") do
+                p
+              else
+                p <> "/api/v1"
+              end
+          end
+        )
 
-    Application.put_env(SowerClient.ApiClient, :uri, uri)
+      Application.put_env(SowerClient.ApiClient, :uri, uri)
+    end
+
     Application.put_env(SowerClient.ApiClient, :token, config.access_token)
     Application.put_env(SowerClient.ApiClient, :reconnect_after_msec, [200, 500, 1_000, 2_000])
 

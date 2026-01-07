@@ -120,7 +120,7 @@ defmodule SowerClient.ConfigTest do
     test "loads config with defaults and overrides", %{config_file: config_file} do
       config =
         Config.load(
-          %{"name" => "override-host"},
+          overrides: %{"name" => "override-host"},
           config_path: config_file,
           defaults: %{"state_directory" => "/var/lib/test"}
         )
@@ -137,7 +137,6 @@ defmodule SowerClient.ConfigTest do
         capture_log(fn ->
           config =
             Config.load(
-              %{},
               config_path: "/nonexistent/path.json",
               defaults: %{"endpoint" => "https://default.com"}
             )

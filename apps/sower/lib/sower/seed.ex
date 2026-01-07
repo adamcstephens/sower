@@ -120,7 +120,7 @@ defmodule Sower.Seed do
     Repo.one(
       from s in Seed,
         where: s.name == ^name and s.seed_type == ^seed_type,
-        order_by: [desc: s.updated_at],
+        order_by: [desc: s.updated_at, desc: s.id],
         limit: 1
     )
     |> Repo.preload([:tags])
@@ -142,7 +142,7 @@ defmodule Sower.Seed do
     base_query =
       from(s in Seed,
         where: s.name == ^name and s.seed_type == ^seed_type,
-        order_by: [desc: s.updated_at],
+        order_by: [desc: s.updated_at, desc: s.id],
         limit: 1
       )
 

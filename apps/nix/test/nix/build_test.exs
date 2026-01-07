@@ -32,8 +32,9 @@ defmodule Nix.BuildTest do
         assert status == :error
         assert build.status == :error
         assert build.store_path == nil
-        assert String.contains?(build.log, "error")
-        assert String.contains?(build.log, "No such file or directory")
+        log = Enum.join(build.log, "\n")
+        assert String.contains?(log, "error")
+        assert String.contains?(log, "No such file or directory")
       end)
     end
   end
