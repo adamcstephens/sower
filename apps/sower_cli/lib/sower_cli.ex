@@ -13,9 +13,15 @@ defmodule SowerCli do
 
     Application.get_all_env(:sower_cli)
 
-    config()
-    |> Optimus.parse!(argv)
-    |> run()
+    result =
+      config()
+      |> Optimus.parse!(argv)
+      |> run()
+
+    case result do
+      {:error, _reason} -> System.halt(1)
+      _ -> :ok
+    end
   end
 
   defp run({[:build], %{args: args, flags: flags, options: options}}) do
