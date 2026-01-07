@@ -30,4 +30,8 @@ defmodule SowerClient.SeedTag do
       value: val
     }
   end
+
+  def to_query_string(%__MODULE__{key: key, value: value}) do
+    "#{key}=#{value}"
+  end
 end

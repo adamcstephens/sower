@@ -31,6 +31,11 @@ defmodule SowerCli do
     SowerCli.Build.run(args.flake, flags, options)
   end
 
+  defp run({[:seed, :download], %{flags: flags, options: options}}) do
+    set_log_level(if flags.debug, do: :debug, else: :error)
+    SowerCli.Seed.Download.run(flags, options)
+  end
+
   defp run({subcommand_path, _}) when is_list(subcommand_path) do
     config()
     |> Optimus.Help.help(subcommand_path, columns())
@@ -152,6 +157,47 @@ defmodule SowerCli do
               default: 4_000
             ]
           ]
+        ],
+        seed: [
+          name: "seed",
+          about: "Manage seeds",
+          subcommands: [
+            download: [
+              name: "download",
+              about: "Download and realize a seed from the server",
+              flags: [
+                debug: [
+                  short: "-d",
+                  long: "--debug",
+                  help: "Enable debug logging"
+                ]
+              ],
+              options: [
+                type: [
+                  short: "-t",
+                  long: "--type",
+                  value_name: "TYPE",
+                  help: "Seed type (nixos, home-manager, nix-darwin, service)",
+                  required: true,
+                  parser: &parse_seed_type/1
+                ],
+                name: [
+                  short: "-n",
+                  long: "--name",
+                  value_name: "NAME",
+                  help: "Seed name",
+                  required: true
+                ],
+                tag: [
+                  short: "-T",
+                  long: "--tag",
+                  value_name: "KEY=VALUE",
+                  help: "Filter by tag (can be repeated)",
+                  multiple: true
+                ]
+              ]
+            ]
+          ]
         ]
       ]
     )
@@ -167,5 +213,13 @@ defmodule SowerCli do
 
   defp parse_nix_type(other) do
     {:error, "invalid type '#{other}', expected: auto, flake, or path"}
+  end
+
+  defp parse_seed_type(type) do
+    if type in SowerClient.Seed.seed_types() do
+      {:ok, type}
+    else
+      {:error, "invalid seed type '#{type}', expected: #{Enum.join(SowerClient.Seed.seed_types(), ", ")}"}
+    end
   end
 end

@@ -100,11 +100,12 @@ defmodule SowerClient.Seed do
 
   def latest(%Req.Request{} = req, name, seed_type, tags)
       when is_seed_type?(seed_type) and is_list(tags) do
-    tag_params = Enum.map(tags, fn %{key: key, value: value} -> "#{key}=#{value}" end)
+    tag_params = Enum.map(tags, &{:"tags[]", SowerClient.SeedTag.to_query_string(&1)})
+    params = [name: name, seed_type: seed_type] ++ tag_params
 
     case Req.get(req,
            url: "/seeds/latest",
-           params: [name: name, seed_type: seed_type, tags: tag_params]
+           params: params
          ) do
       {:ok, %{status: 200, body: body}} ->
         __MODULE__.cast(body)
