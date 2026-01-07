@@ -72,6 +72,12 @@ defmodule SowerWeb.Api.SeedController do
     operation_id: "LatestSeed",
     summary: "Find latest Seed",
     parameters: [
+      OpenApiSpex.Operation.parameter(
+        :tags,
+        :query,
+        %Schema{type: :array, items: %Schema{type: :string}},
+        "Filter by tags (key=value format, can repeat)"
+      ),
       name: [
         description: "Seed name",
         type: :string,
@@ -94,10 +100,12 @@ defmodule SowerWeb.Api.SeedController do
     }
   )
 
-  def latest(conn, %{name: name, seed_type: seed_type}) do
+  def latest(conn, %{name: name, seed_type: seed_type} = params) do
     if can(conn.assigns.access_token)
        |> read?(%Sower.Seed{org_id: conn.assigns.access_token.org_id}) do
-      case Sower.Seed.latest(name, seed_type) do
+      tags = parse_tags(params[:tags])
+
+      case Sower.Seed.latest(name, seed_type, tags) do
         nil ->
           conn |> put_status(404) |> render(:not_found)
 
@@ -107,6 +115,15 @@ defmodule SowerWeb.Api.SeedController do
     else
       conn |> put_status(401) |> render(:error, error: "unauthorized")
     end
+  end
+
+  defp parse_tags(nil), do: []
+
+  defp parse_tags(tags) when is_list(tags) do
+    Enum.map(tags, fn tag ->
+      [key, value] = String.split(tag, "=", parts: 2)
+      %{key: key, value: value}
+    end)
   end
 
   operation(:get,

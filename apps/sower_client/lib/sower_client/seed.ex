@@ -94,6 +94,32 @@ defmodule SowerClient.Seed do
     end
   end
 
+  def latest(name, seed_type, tags) when is_seed_type?(seed_type) and is_list(tags) do
+    latest(SowerClient.ApiClient.new(), name, seed_type, tags)
+  end
+
+  def latest(%Req.Request{} = req, name, seed_type, tags)
+      when is_seed_type?(seed_type) and is_list(tags) do
+    tag_params = Enum.map(tags, fn %{key: key, value: value} -> "#{key}=#{value}" end)
+
+    case Req.get(req,
+           url: "/seeds/latest",
+           params: [name: name, seed_type: seed_type, tags: tag_params]
+         ) do
+      {:ok, %{status: 200, body: body}} ->
+        __MODULE__.cast(body)
+
+      {:ok, %{body: %{"error" => error}}} ->
+        {:error, error}
+
+      {:ok, response} ->
+        {:error, response}
+
+      {:error, _} = err ->
+        err
+    end
+  end
+
   def list(name, seed_type) when is_seed_type?(seed_type) do
     list(SowerClient.ApiClient.new(), name, seed_type)
   end

@@ -43,4 +43,97 @@ defmodule Sower.SeedTest do
       assert Repo.all(Sower.Seed) |> Enum.count() == 1
     end
   end
+
+  describe "latest/3 with tag filtering" do
+    test "returns nil when no seed matches the tags" do
+      seed_fixture(%{tags: [%{key: "env", value: "prod"}]})
+
+      refute Seed.latest("unknown", "nixos", [%{key: "env", value: "prod"}])
+    end
+
+    test "returns nil when seed exists but tags don't match" do
+      name = unique_seed_name()
+      seed_fixture(%{name: name, tags: [%{key: "env", value: "prod"}]})
+
+      refute Seed.latest(name, "nixos", [%{key: "env", value: "staging"}])
+    end
+
+    test "returns the seed when all tags match" do
+      name = unique_seed_name()
+      %{id: id} = seed_fixture(%{name: name, tags: [%{key: "env", value: "prod"}]})
+
+      assert %Seed{id: ^id} = Seed.latest(name, "nixos", [%{key: "env", value: "prod"}])
+    end
+
+    test "returns the seed when multiple tags all match" do
+      name = unique_seed_name()
+
+      %{id: id} =
+        seed_fixture(%{
+          name: name,
+          tags: [
+            %{key: "env", value: "prod"},
+            %{key: "git_branch", value: "main"}
+          ]
+        })
+
+      assert %Seed{id: ^id} =
+               Seed.latest(name, "nixos", [
+                 %{key: "env", value: "prod"},
+                 %{key: "git_branch", value: "main"}
+               ])
+    end
+
+    test "returns nil when only some tags match" do
+      name = unique_seed_name()
+
+      seed_fixture(%{
+        name: name,
+        tags: [
+          %{key: "env", value: "prod"}
+        ]
+      })
+
+      refute Seed.latest(name, "nixos", [
+               %{key: "env", value: "prod"},
+               %{key: "git_branch", value: "main"}
+             ])
+    end
+
+    test "returns the seed when querying with subset of tags" do
+      name = unique_seed_name()
+
+      %{id: id} =
+        seed_fixture(%{
+          name: name,
+          tags: [
+            %{key: "env", value: "prod"},
+            %{key: "git_branch", value: "main"}
+          ]
+        })
+
+      # Seed has more tags than we query for - should still match
+      assert %Seed{id: ^id} = Seed.latest(name, "nixos", [%{key: "env", value: "prod"}])
+    end
+
+    test "returns latest seed when multiple seeds match tags" do
+      name = unique_seed_name()
+      tags = [%{key: "env", value: "prod"}]
+
+      # Create first seed
+      seed_fixture(%{name: name, tags: tags})
+
+      # Create second seed with same name and tags but different artifact
+      %{id: latest_id} = seed_fixture(%{name: name, tags: tags})
+
+      assert %Seed{id: ^latest_id} = Seed.latest(name, "nixos", tags)
+    end
+
+    test "delegates to latest/2 when tags list is empty" do
+      name = unique_seed_name()
+      %{id: id} = seed_fixture(%{name: name})
+
+      assert %Seed{id: ^id} = Seed.latest(name, "nixos", [])
+    end
+  end
 end
