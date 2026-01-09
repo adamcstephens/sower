@@ -6,11 +6,17 @@
 }:
 let
   cfg = config.services.sower.agent;
+  activatorCfg = config.services.sower.activator;
   json = pkgs.formats.json { };
   jsonType = json.type;
-  jsonConfig = json.generate "sower-client.json" (
-    cfg.settings // (lib.optionalAttrs cfg.autoreboot { reboot = true; })
-  );
+
+  # Build agent settings, optionally including activator socket path
+  agentSettings =
+    cfg.settings
+    // (lib.optionalAttrs cfg.autoreboot { reboot = true; })
+    // (lib.optionalAttrs activatorCfg.enable { activator_socket = activatorCfg.socketPath; });
+
+  jsonConfig = json.generate "sower-client.json" agentSettings;
 
   # TODO re-enable services support
   manageServices = false;
@@ -35,7 +41,6 @@ in
       };
 
       package = lib.mkOption { type = lib.types.package; };
-      activatorPackage = lib.mkOption { type = lib.types.package; };
 
       settings = lib.mkOption {
         type = lib.types.submodule {
@@ -66,20 +71,26 @@ in
 
     environment.systemPackages = [ cfg.package ];
 
+    services.sower.activator.enable = lib.mkDefault true;
+
     systemd.services.sower-agent = {
       wantedBy = [ "multi-user.target" ];
       after = [
         "network-online.target"
       ]
-      ++ lib.optionals config.services.sower.server.enable [ "sower.service" ];
+      ++ lib.optionals config.services.sower.server.enable [ "sower.service" ]
+      ++ lib.optionals activatorCfg.enable [ "sower-activator.service" ];
       requires = [
         "network-online.target"
       ]
-      ++ lib.optionals config.services.sower.server.enable [ "sower.service" ];
+      ++ lib.optionals config.services.sower.server.enable [ "sower.service" ]
+      ++ lib.optionals activatorCfg.enable [ "sower-activator.service" ];
       path = [
         "/run/wrappers"
         config.nix.package
-        cfg.activatorPackage
+      ]
+      ++ lib.optionals activatorCfg.enable [
+        activatorCfg.package
       ];
 
       environment = {
@@ -105,6 +116,7 @@ in
         SupplementaryGroups = [ "wheel" ];
         User = "sower-agent";
         Group = "sower-agent";
+        BindPaths = lib.optionals activatorCfg.enable [ activatorCfg.socketPath ];
 
         StateDirectory = "sower-agent";
         WorkingDirectory = "%S/sower-agent";
@@ -128,12 +140,13 @@ in
       };
     };
 
-    security.sudo.extraRules = [
+    # Only add sudo rule when activator socket mode is not enabled
+    security.sudo.extraRules = lib.mkIf (!activatorCfg.enable) [
       {
         groups = [ "wheel" ];
         commands = [
           {
-            command = lib.getExe cfg.activatorPackage;
+            command = lib.getExe activatorCfg.package;
             options = [ "NOPASSWD" ];
           }
         ];

@@ -49,14 +49,17 @@ testers.runNixOSTest {
             connect-timeout = 1;
           };
 
-          services.sower.agent = {
-            enable = true;
-            package = flake.packages.${pkgs.stdenv.hostPlatform.system}.agent;
-            activatorPackage = flake.packages.${pkgs.stdenv.hostPlatform.system}.activator;
+          services.sower = {
+            activator.package = flake.packages.${pkgs.stdenv.hostPlatform.system}.activator;
 
-            settings = {
-              access_token_file = "/run/sower/test_token";
-              endpoint = "http://localhost:4000";
+            agent = {
+              enable = true;
+              package = flake.packages.${pkgs.stdenv.hostPlatform.system}.agent;
+
+              settings = {
+                access_token_file = "/run/sower/test_token";
+                endpoint = "http://localhost:4000";
+              };
             };
           };
           # if agent fails to start, fail immediately
@@ -136,6 +139,7 @@ testers.runNixOSTest {
       start_all()
       server.wait_for_unit("postgresql.service")
       server.wait_for_unit("sower.service")
+      server.wait_for_unit("sower-activator.service")
       server.wait_for_unit("sower-agent.service")
       server.wait_for_open_port(4000)
 
