@@ -52,7 +52,7 @@ buildGoModule rec {
   # disable checks for now until better fleshed out
   doCheck = false;
 
-  vendorHash = "sha256-+sHF3EMkTD7tPnD9DkbYCMMbbHl3urWSzRaA6KENBog=";
+  vendorHash = "sha256-tnNWr+YA78mLdhUbq2G1Cv/GUdEYs5fkiPgIkTgoG1o=";
 
   meta.mainProgram = "sower";
 }

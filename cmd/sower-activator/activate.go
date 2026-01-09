@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
+	"sync"
 )
 
 // Seed type constants
@@ -69,4 +72,88 @@ func runCommand(cmd *exec.Cmd) error {
 	}
 
 	return nil
+}
+
+// OutputCallback is called for each line of output during streaming execution.
+type OutputCallback func(line string, isError bool)
+
+// activateStreaming activates a seed with streaming output.
+// Returns the exit code (0 for success) and any error that occurred.
+func activateStreaming(seedType, storePath, mode string, callback OutputCallback) (int, error) {
+	switch seedType {
+	case SeedTypeHomeManager:
+		cmd := exec.Command(fmt.Sprintf("%s/activate", storePath))
+		return runCommandStreaming(cmd, callback)
+
+	case SeedTypeNixOS:
+		// First set the profile
+		profileCmd := exec.Command("nix-env", "--set", "--profile", "/nix/var/nix/profiles/system", storePath)
+		exitCode, err := runCommandStreaming(profileCmd, callback)
+		if err != nil || exitCode != 0 {
+			return exitCode, err
+		}
+
+		// Then run switch-to-configuration
+		switchCmd := exec.Command(fmt.Sprintf("%s/bin/switch-to-configuration", storePath), mode)
+		return runCommandStreaming(switchCmd, callback)
+
+	default:
+		return 1, fmt.Errorf("unsupported seed type: %s", seedType)
+	}
+}
+
+// runCommandStreaming executes a command and streams output via callback.
+// Returns the exit code and any error that occurred.
+func runCommandStreaming(cmd *exec.Cmd, callback OutputCallback) (int, error) {
+	slog.Debug("Running command (streaming)", "cmd", cmd.String())
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return 1, fmt.Errorf("stdout pipe: %w", err)
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return 1, fmt.Errorf("stderr pipe: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return 1, fmt.Errorf("start: %w", err)
+	}
+
+	// Stream output from both pipes concurrently
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		streamLines(stdout, callback, false)
+	}()
+
+	go func() {
+		defer wg.Done()
+		streamLines(stderr, callback, true)
+	}()
+
+	wg.Wait()
+
+	err = cmd.Wait()
+	exitCode := 0
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		} else {
+			return 1, fmt.Errorf("wait: %w", err)
+		}
+	}
+
+	return exitCode, nil
+}
+
+// streamLines reads lines from a reader and calls the callback for each.
+func streamLines(r io.Reader, callback OutputCallback, isError bool) {
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		callback(scanner.Text(), isError)
+	}
 }

@@ -43,4 +43,4 @@ data/
 /sower
 dev-server.json
 .erlang-history/
-sower-activator
+/sower-activator
