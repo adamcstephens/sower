@@ -60,7 +60,8 @@ rec {
               type = "home-manager";
               package = homeConfigurations.${name}.activationPackage;
               meta = {
-                home-manager = {
+                # TODO convert this to tags
+                sower.seed.tags = {
                   inherit (homeConfig.config.home) username homeDirectory version;
                 };
               };

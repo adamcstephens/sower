@@ -92,11 +92,13 @@ in
               ${debugFlag}
           '';
 
-        # Security hardening (limited since we need root for activation)
-        NoNewPrivileges = false;
-        ProtectSystem = "full";
-        ProtectHome = true;
-        PrivateTmp = true;
+        # TODO security hardening is limited, but we could probably turn on some things
+        # NoNewPrivileges = false;
+        # ProtectSystem = "full";
+        # ProtectHome = false;
+        # PrivateTmp = true;
+        # BindPaths = [ "/usr" ];
+        # ReadWritePaths = [ "/usr" ];
       };
     };
 
