@@ -164,31 +164,34 @@ defmodule SowerAgent.Client do
   def handle_reply(ref, response, %{upgrade_ref: ref} = socket) do
     socket = Map.delete(socket, :upgrade_ref)
 
-    # TODO error handling
-    {:ok, response} = response
+    case response do
+      {:ok, response} ->
+        case SowerClient.Orchestration.Deployment.cast(response) do
+          {:ok, deployment} ->
+            Logger.debug(
+              msg: "Received deployment",
+              request_id: deployment.request_id,
+              deployment_sid: deployment.sid
+            )
 
-    case SowerClient.Orchestration.Deployment.cast(response) do
-      {:ok, deployment} ->
-        Logger.debug(
-          msg: "Received deployment",
-          request_id: deployment.request_id,
-          deployment_sid: deployment.sid
-        )
+            result = SowerAgent.Deployer.run(deployment)
 
-        result = SowerAgent.Deployer.run(deployment)
+            {:ok, result} =
+              SowerClient.Orchestration.DeploymentResult.cast(%{
+                request_id: deployment.request_id,
+                deployment_sid: deployment.sid,
+                result: result,
+                deployed_at: DateTime.utc_now() |> DateTime.to_iso8601()
+              })
 
-        {:ok, result} =
-          SowerClient.Orchestration.DeploymentResult.cast(%{
-            request_id: deployment.request_id,
-            deployment_sid: deployment.sid,
-            result: result,
-            deployed_at: DateTime.utc_now() |> DateTime.to_iso8601()
-          })
+            {:ok, _result_ref} = push_message(socket, result)
 
-        {:ok, _result_ref} = push_message(socket, result)
+          {:error, error} ->
+            Logger.error(msg: "Error handling deployment", error: error)
+        end
 
       {:error, error} ->
-        Logger.error(msg: "Error handling deployment", error: error)
+        Logger.error(msg: "Error returned from server", error: error)
     end
 
     {:ok, socket}

@@ -615,19 +615,23 @@ defmodule Sower.Orchestration do
   def request_deployment(%SowerClient.Orchestration.DeploymentRequest{} = request) do
     with subs when subs != [] <- get_subscription_sids(request.subscription_sids),
          seeds <-
-           subs |> Enum.map(&match_seed/1),
+           subs |> Enum.map(&match_seed/1) |> Enum.reject(&is_nil/1),
          {:ok, deploy} <-
            create_deployment(%{
              seeds: seeds,
              subscriptions: subs
            }) do
-      {:ok,
-       %SowerClient.Orchestration.Deployment{
-         request_id: request.request_id,
-         subscription_sids: Enum.map(subs, & &1.sid),
-         sid: deploy.sid,
-         seeds: seeds
-       }}
+      if seeds == [] do
+        {:error, :seeds_not_found}
+      else
+        {:ok,
+         %SowerClient.Orchestration.Deployment{
+           request_id: request.request_id,
+           subscription_sids: Enum.map(subs, & &1.sid),
+           sid: deploy.sid,
+           seeds: seeds
+         }}
+      end
     else
       {:error, _} = err ->
         Logger.error(msg: "Failed to return deployment", error: IO.inspect(err))

@@ -25,7 +25,7 @@ defmodule SowerClient.Orchestration.Deployment do
       },
       seeds: %Schema{
         type: :array,
-        items: SowerClient.Seed.schema()
+        items: SowerClient.Seed
       },
       deployed_at: %Schema{
         type: :string,
