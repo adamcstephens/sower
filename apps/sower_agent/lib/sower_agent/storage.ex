@@ -72,7 +72,7 @@ defmodule SowerAgent.Storage do
 
   defp default() do
     %__MODULE__{
-      local_sid: SowerClient.Sid.generate("lsid")
+      local_sid: SowerClient.Sid.generate("loc_agent")
     }
   end
 end
