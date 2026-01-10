@@ -3,8 +3,8 @@ defmodule SowerAgent.Deployer do
 
   alias SowerClient.Orchestration.Deployment
 
-  def run(%Deployment{} = deploy) do
-    deploy_result = upgrade(deploy.seeds)
+  def run(%Deployment{} = deployment) do
+    deploy_result = upgrade(deployment)
 
     Enum.all?(deploy_result, fn r ->
       case r do
@@ -30,8 +30,8 @@ defmodule SowerAgent.Deployer do
     end
   end
 
-  def upgrade(seeds) do
-    seeds
+  def upgrade(%Deployment{} = deployment) do
+    deployment.seeds
     |> async_stream(fn seed ->
       Logger.debug(
         msg: "Realizing seed",
@@ -88,7 +88,20 @@ defmodule SowerAgent.Deployer do
           artifact: seed.artifact
         )
 
-        SowerAgent.Seed.activate(seed)
+        result = SowerAgent.Seed.activate(seed)
+
+        case result do
+          {:ok, output} ->
+            maybe_write_log(deployment, seed, output)
+
+          {:error, _code, output} ->
+            maybe_write_log(deployment, seed, output)
+
+          {:error, _reason} ->
+            :ok
+        end
+
+        result
 
       {:ok, {:error, _, _} = error} ->
         error
@@ -105,5 +118,28 @@ defmodule SowerAgent.Deployer do
       # 5 minutes
       timeout: 5 * 60_000
     )
+  end
+
+  defp maybe_write_log(_deployment, _seed, []), do: :ok
+
+  # TODO: when you write to disk, you should ensure it gets deleted
+  defp maybe_write_log(%Deployment{} = deployment, seed, output_lines) do
+    state_dir = SowerAgent.Config.get().state_directory
+    deployments_dir = Path.join(state_dir, "deployments")
+    File.mkdir_p!(deployments_dir)
+
+    date = DateTime.utc_now() |> DateTime.to_unix()
+    filename = "#{date}-#{deployment.sid}-#{seed.sid}.log"
+    path = Path.join(deployments_dir, filename)
+
+    cleaned_output = Enum.map(output_lines, &strip_ansi/1)
+    content = Enum.join(cleaned_output, "\n")
+    File.write!(path, content)
+
+    Logger.debug(msg: "Wrote deployment log", path: path)
+  end
+
+  defp strip_ansi(text) do
+    Regex.replace(~r/\x1b\[[0-9;]*[a-zA-Z]/, text, "")
   end
 end

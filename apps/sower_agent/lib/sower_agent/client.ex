@@ -52,6 +52,8 @@ defmodule SowerAgent.Client do
           []
       end
 
+    # TODO prune old schedules
+
     :ok = Enum.each(subscriptions, &start_schedule/1)
 
     SowerAgent.Storage.put(:subscriptions, subscriptions)

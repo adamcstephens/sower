@@ -89,7 +89,7 @@ defmodule SowerAgent.SeedTest do
 
       log =
         capture_log(fn ->
-          assert {:error, 1} = Seed.activate(seed)
+          assert {:error, 1, ["permission denied"]} = Seed.activate(seed)
         end)
 
       assert log =~ "Failed to activate via socket"

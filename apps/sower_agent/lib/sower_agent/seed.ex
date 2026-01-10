@@ -47,7 +47,7 @@ defmodule SowerAgent.Seed do
 
       {:error, {:activation_failed, code, output}} ->
         Logger.error(msg: "Failed to activate via socket", output: output, return_code: code)
-        {:error, code}
+        {:error, code, output}
 
       {:error, reason} ->
         Logger.error(msg: "Failed to activate via socket", reason: reason)
@@ -76,7 +76,7 @@ defmodule SowerAgent.Seed do
 
         {output, code} ->
           Logger.error(msg: "Failed to activate", output: output, return_code: code)
-          {:error, code}
+          {:error, code, output}
       end
     else
       nil ->
