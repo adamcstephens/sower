@@ -16,7 +16,7 @@ defmodule SowerCli.Build do
   alias SowerCli.{Cache, Output}
 
   typedstruct do
-    field :flake, String.t()
+    field :request, Nix.Eval.Request.t()
     field :flags, map()
     field :options, map()
     field :evals, [Nix.Eval.t()]
@@ -26,11 +26,13 @@ defmodule SowerCli.Build do
     field :status, :ok | :error, default: :ok
   end
 
-  def run(flake, flags, options) do
+  def run(target, flags, options) do
     steps = build_steps(flags)
+    request_opts = options |> Map.to_list() |> Keyword.take([:attr, :type])
+    request = Nix.Eval.Request.parse(target, request_opts)
 
     state = %__MODULE__{
-      flake: flake,
+      request: request,
       options: options,
       flags: flags
     }
@@ -84,7 +86,7 @@ defmodule SowerCli.Build do
   end
 
   defp run_steps([:eval | rest], %__MODULE__{} = state) do
-    Output.step("Evaluating #{state.flake}")
+    Output.step("Evaluating #{state.request.path}")
 
     Application.ensure_all_started([:erlexec])
     Output.init(debug: state.flags.debug)
@@ -97,7 +99,7 @@ defmodule SowerCli.Build do
       notify_pid: self()
     ]
 
-    task = Task.async(fn -> Nix.Eval.Jobs.run(state.flake, opts) end)
+    task = Task.async(fn -> Nix.Eval.Jobs.run(state.request, opts) end)
 
     result =
       receive_progress(task, %{}, fn msg, blocks ->
@@ -271,7 +273,10 @@ defmodule SowerCli.Build do
           seed_name = Map.get(seed_meta, "name", build.store_path)
           block_id = {:seed, idx}
           Output.live_item_start(block_id, "Registering", seed_name)
-          tags = load_tags(state) ++ Map.get(seed_meta, "tags", []) ++ SowerCli.Repo.get_tags()
+
+          tags =
+            load_tags(state) ++
+              Map.get(seed_meta, "tags", []) ++ SowerCli.Repo.get_tags(state.request)
 
           result =
             case seed_meta

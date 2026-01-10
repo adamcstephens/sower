@@ -71,17 +71,31 @@ defmodule Nix.Eval.Request do
 
   defp resolve_type(_path, type) when type in [:flake, :path], do: type
 
-  def parse_path(:flake, path, nil) do
-    case String.split(path, "#") do
-      [flake] -> {flake, nil}
-      [flake, ""] -> {flake, nil}
-      [flake, attr] -> {flake, attr}
+  def parse_path(:flake, path, attr) do
+    {flake, attr} =
+      case attr do
+        nil ->
+          case String.split(path, "#") do
+            [flake] -> {flake, nil}
+            [flake, ""] -> {flake, nil}
+            [flake, attr] -> {flake, attr}
+          end
+
+        attr ->
+          {path, attr}
+      end
+
+    expanded = Path.expand(flake)
+
+    # assume if it has a colon we shouldn't expand it
+    if not String.contains?(flake, ":") and File.exists?(expanded) do
+      {expanded, attr}
+    else
+      {flake, attr}
     end
   end
 
   def parse_path(:path, path, attr), do: {Path.expand(path), attr}
-
-  def parse_path(_, path, attr), do: {path, attr}
 
   def to_flake_uri(%{type: :flake, path: path, attr: attr}), do: "#{path}##{attr}"
 

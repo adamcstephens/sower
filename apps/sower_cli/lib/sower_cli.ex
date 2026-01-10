@@ -28,7 +28,7 @@ defmodule SowerCli do
     # Set log level after all apps have started
     set_log_level(if flags.debug, do: :debug, else: :error)
 
-    SowerCli.Build.run(args.flake, flags, options)
+    SowerCli.Build.run(args.target, flags, options)
   end
 
   defp run({[:seed, :download], %{flags: flags, options: options}}) do
@@ -67,16 +67,16 @@ defmodule SowerCli do
   def config do
     Optimus.new!(
       name: "sower",
-      description: "Build and deploy Nix flakes",
       version: version(),
       subcommands: [
         build: [
           name: "build",
-          about: "Build derivations from a Nix flake",
+          about: "Build derivations from a Nix attribute or flake",
           args: [
-            flake: [
-              value_name: "FLAKE",
-              help: "Flake reference (e.g., '.', '.#attr', 'github:owner/repo')",
+            target: [
+              value_name: "TARGET",
+              help:
+                "Path to Nix file or Flake reference (e.g., '.', '.#attr', 'github:owner/repo')",
               required: true
             ]
           ],
@@ -109,6 +109,11 @@ defmodule SowerCli do
               short: "-f",
               long: "--fail-fast",
               help: "Exit immediately if any step fails (default: continue with successful items)"
+            ],
+            attr: [
+              short: "-A",
+              long: "--attr",
+              help: "Attribute to evaluate for non-flakes, default is all attributes"
             ]
           ],
           options: [
