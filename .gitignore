@@ -41,6 +41,7 @@ data/
 
 # go bin
 /sower
+dev-client.json
 dev-server.json
 .erlang-history/
 /sower-activator
