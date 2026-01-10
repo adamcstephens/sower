@@ -40,6 +40,16 @@ defmodule SowerCli do
     SowerCli.Seed.Download.run(flags, options)
   end
 
+  defp run({[:seed, :info], %{flags: flags, options: options}}) do
+    set_log_level(if flags.debug, do: :debug, else: :error)
+    SowerCli.Seed.Info.run(flags, options)
+  end
+
+  defp run({[:seed, :upgrade], %{flags: flags, options: options}}) do
+    set_log_level(if flags.debug, do: :debug, else: :error)
+    SowerCli.Seed.Upgrade.run(flags, options)
+  end
+
   defp run({subcommand_path, _}) when is_list(subcommand_path) do
     config()
     |> Optimus.Help.help(subcommand_path, columns())
@@ -208,6 +218,83 @@ defmodule SowerCli do
                   value_name: "NAME",
                   help: "Seed name",
                   required: true
+                ],
+                tag: [
+                  short: "-T",
+                  long: "--tag",
+                  value_name: "KEY=VALUE",
+                  help: "Filter by tag (can be repeated)",
+                  multiple: true
+                ]
+              ]
+            ],
+            info: [
+              name: "info",
+              about: "Get information about latest seed",
+              flags: [
+                debug: [
+                  short: "-d",
+                  long: "--debug",
+                  help: "Enable debug logging"
+                ]
+              ],
+              options: [
+                type: [
+                  short: "-t",
+                  long: "--type",
+                  value_name: "TYPE",
+                  help: "Seed type (nixos, home-manager, nix-darwin, service)",
+                  required: true,
+                  parser: &parse_seed_type/1
+                ],
+                name: [
+                  short: "-n",
+                  long: "--name",
+                  value_name: "NAME",
+                  help: "Seed name",
+                  required: true
+                ],
+                tag: [
+                  short: "-T",
+                  long: "--tag",
+                  value_name: "KEY=VALUE",
+                  help: "Filter by tag (can be repeated)",
+                  multiple: true
+                ]
+              ]
+            ],
+            upgrade: [
+              name: "upgrade",
+              about: "Download and activate a seed",
+              flags: [
+                debug: [
+                  short: "-d",
+                  long: "--debug",
+                  help: "Enable debug logging"
+                ]
+              ],
+              options: [
+                type: [
+                  short: "-t",
+                  long: "--type",
+                  value_name: "TYPE",
+                  help: "Seed type (nixos, home-manager, nix-darwin, service)",
+                  required: true,
+                  parser: &parse_seed_type/1
+                ],
+                name: [
+                  short: "-n",
+                  long: "--name",
+                  value_name: "NAME",
+                  help: "Seed name",
+                  required: true
+                ],
+                mode: [
+                  short: "-m",
+                  long: "--mode",
+                  value_name: "MODE",
+                  help: "Activation mode (e.g., switch, boot, test)",
+                  required: false
                 ],
                 tag: [
                   short: "-T",

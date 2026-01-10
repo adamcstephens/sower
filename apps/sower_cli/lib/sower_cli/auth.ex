@@ -39,8 +39,7 @@ defmodule SowerCli.Auth do
 
   defp verify_token() do
     case SowerClient.Auth.verify() do
-      {:ok, %SowerClient.Auth.TokenInfo{} = token_info} ->
-        Output.info("Authenticated: #{token_info.description}")
+      {:ok, %SowerClient.Auth.TokenInfo{}} ->
         :ok
 
       {:error, :unauthorized} ->

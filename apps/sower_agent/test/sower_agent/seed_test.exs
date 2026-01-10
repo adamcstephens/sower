@@ -92,63 +92,10 @@ defmodule SowerAgent.SeedTest do
           assert {:error, 1, ["permission denied"]} = Seed.activate(seed)
         end)
 
-      assert log =~ "Failed to activate via socket"
+      assert log =~ "Failed to activate"
     end
   end
 
-  describe "run_via_socket/3" do
-    test "invokes on_output callback for each line" do
-      {socket_path, server_pid} =
-        start_mock_server(fn request_line, client_socket ->
-          request = Jason.decode!(request_line)
-
-          send_response(client_socket, %{id: request["id"], type: "output", data: "line 1"})
-          send_response(client_socket, %{id: request["id"], type: "output", data: "line 2"})
-          send_response(client_socket, %{id: request["id"], type: "complete", exit_code: 0})
-        end)
-
-      on_exit(fn ->
-        stop_mock_server(server_pid)
-        File.rm_rf!(Path.dirname(socket_path))
-      end)
-
-      {:ok, agent} = Agent.start_link(fn -> [] end)
-
-      on_output = fn line ->
-        Agent.update(agent, fn lines -> [line | lines] end)
-      end
-
-      result =
-        Seed.run_via_socket("nixos", "/nix/store/xyz",
-          socket_path: socket_path,
-          mode: "switch",
-          on_output: on_output
-        )
-
-      assert {:ok, ["line 1", "line 2"]} = result
-
-      collected = Agent.get(agent, fn lines -> Enum.reverse(lines) end)
-      assert collected == ["line 1", "line 2"]
-    end
-  end
-
-  describe "run_via_cli/3" do
-    test "returns error when executables not found" do
-      # Ensure the executables don't exist in PATH
-      original_path = System.get_env("PATH")
-      System.put_env("PATH", "/nonexistent")
-
-      on_exit(fn -> System.put_env("PATH", original_path) end)
-
-      log =
-        capture_log(fn ->
-          result = Seed.run_via_cli("nixos", "/nix/store/xyz", mode: "switch")
-          assert {:error, :cmd_not_found} = result
-        end)
-
-      assert log =~ "Failed to find required executables"
-    end
-  end
 
   # Helper functions for mock server
 

@@ -1,6 +1,6 @@
-defmodule SowerCli.Seed.Download do
+defmodule SowerCli.Seed.Upgrade do
   @moduledoc """
-  Download and realize a seed from the server.
+  Download and activate a seed.
   """
 
   require Logger
@@ -13,8 +13,9 @@ defmodule SowerCli.Seed.Download do
 
     with :ok <- Auth.verify_connection(),
          {:ok, seed} <- fetch_seed(options),
-         {:ok, _} <- ensure_realized(seed) do
-      Output.success("Seed available at #{seed.artifact}")
+         {:ok, _} <- realize_seed(seed),
+         {:ok, _} <- activate_seed(seed, options) do
+      Output.success("Successfully activated: #{seed.artifact}")
       :ok
     else
       {:error, reason} ->
@@ -52,7 +53,7 @@ defmodule SowerCli.Seed.Download do
     end
   end
 
-  defp ensure_realized(%SowerClient.Seed{} = seed) do
+  defp realize_seed(%SowerClient.Seed{} = seed) do
     artifact = seed.artifact
 
     if File.exists?(artifact) do
@@ -70,6 +71,49 @@ defmodule SowerCli.Seed.Download do
           Output.error("Failed to realize artifact (exit code: #{exit_code})")
           {:error, {:realize_failed, exit_code}}
       end
+    end
+  end
+
+  defp activate_seed(%SowerClient.Seed{} = seed, options) do
+    type = seed.seed_type
+    path = seed.artifact
+    mode = Map.get(options, :mode)
+
+    Output.step("Activating #{type} configuration")
+
+    on_output = fn line ->
+      Output.info("  #{line}")
+    end
+
+    opts = [on_output: on_output]
+    opts = if mode, do: Keyword.put(opts, :mode, mode), else: opts
+
+    case SowerClient.Activator.activate(type, path, opts) do
+      {:ok, _output} ->
+        {:ok, :activated}
+
+      {:error, :cmd_not_found} ->
+        Output.error("Required executables not found: sudo and/or sower-activator")
+        Output.error("Make sure sower-activator is installed and in PATH")
+        {:error, :cmd_not_found}
+
+      {:error, :socket_not_found} ->
+        Output.error("Activator socket not found and CLI fallback failed")
+        {:error, :activator_unavailable}
+
+      {:error, exit_code, output} when is_integer(exit_code) ->
+        Output.error("Activation failed with exit code #{exit_code}")
+
+        unless Enum.empty?(output) do
+          Output.error("Last output lines:")
+          Enum.take(output, -5) |> Enum.each(&Output.error("  #{&1}"))
+        end
+
+        {:error, {:activation_failed, exit_code}}
+
+      {:error, reason} ->
+        Output.error("Activation failed: #{inspect(reason)}")
+        {:error, {:activation_failed, reason}}
     end
   end
 

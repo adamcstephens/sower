@@ -1,6 +1,9 @@
-defmodule SowerCli.Seed.Download do
+defmodule SowerCli.Seed.Info do
   @moduledoc """
-  Download and realize a seed from the server.
+  Display information about the latest seed matching criteria.
+
+  Queries the server for a seed matching name, type, and optional tags,
+  then displays its metadata without downloading or activating.
   """
 
   require Logger
@@ -12,9 +15,8 @@ defmodule SowerCli.Seed.Download do
     Application.ensure_all_started([:req])
 
     with :ok <- Auth.verify_connection(),
-         {:ok, seed} <- fetch_seed(options),
-         {:ok, _} <- ensure_realized(seed) do
-      Output.success("Seed available at #{seed.artifact}")
+         {:ok, seed} <- fetch_seed(options) do
+      display_seed(seed)
       :ok
     else
       {:error, reason} ->
@@ -39,7 +41,6 @@ defmodule SowerCli.Seed.Download do
 
     case result do
       {:ok, %SowerClient.Seed{} = seed} ->
-        Output.success("Found seed: #{seed.artifact}")
         {:ok, seed}
 
       {:error, "not found"} ->
@@ -52,25 +53,23 @@ defmodule SowerCli.Seed.Download do
     end
   end
 
-  defp ensure_realized(%SowerClient.Seed{} = seed) do
-    artifact = seed.artifact
+  defp display_seed(%SowerClient.Seed{} = seed) do
+    Output.info("")
+    Output.info("Name:     #{seed.name}")
+    Output.info("Type:     #{seed.seed_type}")
+    Output.info("Artifact: #{seed.artifact}")
 
-    if File.exists?(artifact) do
-      Output.info("Artifact already exists locally")
-      {:ok, :already_exists}
-    else
-      Output.step("Realizing #{artifact}")
-
-      case Nix.Store.realize(artifact) do
-        {:ok, _lines} ->
-          Output.success("Successfully realized artifact")
-          {:ok, :realized}
-
-        {:error, exit_code} ->
-          Output.error("Failed to realize artifact (exit code: #{exit_code})")
-          {:error, {:realize_failed, exit_code}}
-      end
+    unless Enum.empty?(seed.tags) do
+      Output.info("Tags:     #{format_seed_tags(seed.tags)}")
     end
+
+    Output.info("")
+  end
+
+  defp format_seed_tags(tags) do
+    tags
+    |> Enum.map(fn tag -> "#{tag.key}=#{tag.value}" end)
+    |> Enum.join(", ")
   end
 
   defp parse_tags(tag_strings) do
