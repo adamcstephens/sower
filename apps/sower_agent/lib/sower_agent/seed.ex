@@ -21,9 +21,12 @@ defmodule SowerAgent.Seed do
       if ActivatorClient.socket_available?(socket_path) do
         run_via_socket(type, path, Keyword.put(opts, :socket_path, socket_path))
       else
+        Logger.info(msg: "Unable to connect to activator socket, falling back to CLI")
+
         run_via_cli(type, path, opts)
       end
     else
+      Logger.debug(msg: "Activation run in noop", type: type, path: path, opts: opts)
       {:ok, ["noop"]}
     end
   end

@@ -362,7 +362,10 @@ defmodule Sower.Orchestration do
 
   """
   def create_subscription(attrs \\ %{}) do
-    case %Subscription{org_id: Sower.Repo.get_org_id(), sid: SowerClient.Sid.generate("sub")}
+    case %Subscription{
+           org_id: Sower.Repo.get_org_id(),
+           sid: SowerClient.Sid.generate("sub")
+         }
          |> Subscription.changeset(attrs)
          |> Repo.insert(
            on_conflict: {:replace, [:updated_at, :rules]},
@@ -406,6 +409,32 @@ defmodule Sower.Orchestration do
       {:error, _} = error ->
         error
     end
+  end
+
+  @doc """
+  Sync subscriptions for an agent. Upserts all provided subscriptions
+  and deletes any existing subscriptions not in the list.
+  """
+  def sync_subscriptions(subscriptions, agent_id) do
+    Repo.transaction(fn ->
+      registered =
+        Enum.map(subscriptions, fn sub ->
+          case register_subscription(sub, agent_id) do
+            {:ok, s} -> s
+            {:error, reason} -> Repo.rollback(reason)
+          end
+        end)
+
+      registered_sids = Enum.map(registered, & &1.sid)
+
+      from(s in Subscription,
+        where: s.agent_id == ^agent_id,
+        where: s.sid not in ^registered_sids
+      )
+      |> Repo.delete_all()
+
+      registered
+    end)
   end
 
   @doc """
@@ -555,7 +584,8 @@ defmodule Sower.Orchestration do
   """
   def create_deployment(attrs \\ %{}) do
     %Deployment{
-      org_id: Sower.Repo.get_org_id()
+      org_id: Sower.Repo.get_org_id(),
+      sid: SowerClient.Sid.generate("deploy")
     }
     |> Deployment.changeset(attrs)
     |> Repo.insert()

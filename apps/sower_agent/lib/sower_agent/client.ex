@@ -21,38 +21,36 @@ defmodule SowerAgent.Client do
   end
 
   @impl Slipstream
-  def handle_cast(:register_subscriptions, socket) do
+  def handle_cast(:sync_subscriptions, socket) do
+    config_subscriptions = SowerAgent.Config.get().subscriptions
+    sync_payload = %{subscriptions: Enum.map(config_subscriptions, &Map.from_struct/1)}
+
+    topic = private_channel(socket)
+    {:ok, ref} = push(socket, topic, "subscriptions:sync", sync_payload)
+
     subscriptions =
-      SowerAgent.Config.get().subscriptions
-      |> Enum.map(fn sub ->
-        with {:ok, ref} <- push_message(socket, sub),
-             {:ok, response} <- await_reply(ref),
-             {:ok, registered} <-
-               SowerClient.Orchestration.Subscription.cast(response) do
-          Logger.debug(registered)
+      case await_reply(ref) do
+        {:ok, %{"subscriptions" => registered}} ->
+          # Build a map of (seed_name, seed_type) -> sid for quick lookup
+          sid_map =
+            registered
+            |> Enum.map(&SowerClient.Orchestration.Subscription.cast!/1)
+            |> Map.new(&{{&1.seed_name, &1.seed_type}, &1.sid})
 
-          # Merge server-assigned sid back into subscription
-          %{sub | sid: registered.sid}
-        else
-          {:error, error} ->
-            Logger.error(
-              msg: "Failed to register subscription",
-              error: error,
-              subscription: sub
-            )
+          # Merge server-assigned sids back into original subscriptions
+          # to preserve agent-only fields like schedule and poll_on_connect
+          Enum.map(config_subscriptions, fn sub ->
+            case Map.get(sid_map, {sub.seed_name, sub.seed_type}) do
+              nil -> nil
+              sid -> %{sub | sid: sid}
+            end
+          end)
+          |> Enum.reject(&is_nil/1)
 
-            nil
-
-          :error ->
-            Logger.error(
-              msg: "Failed to register subscription with unknown error",
-              subscription: sub
-            )
-
-            nil
-        end
-      end)
-      |> Enum.reject(&is_nil/1)
+        {:error, error} ->
+          Logger.error(msg: "Failed to sync subscriptions", error: error)
+          []
+      end
 
     :ok = Enum.each(subscriptions, &start_schedule/1)
 
@@ -121,7 +119,7 @@ defmodule SowerAgent.Client do
   def handle_join("agent:" <> _sid = topic, %{"conn_sid" => conn_sid}, socket) do
     Logger.info(msg: "Joined channel topic", topic: topic, conn_sid: conn_sid)
 
-    cast(:register_subscriptions)
+    cast(:sync_subscriptions)
 
     {:ok, assign(socket, :conn_sid, conn_sid)}
   end

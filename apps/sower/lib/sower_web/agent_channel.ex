@@ -105,6 +105,16 @@ defmodule SowerWeb.AgentChannel do
     Sower.Orchestration.register_subscription(req, socket.assigns.agent.id)
   end)
 
+  handle_schema(SowerClient.Orchestration.SubscriptionSync, fn req, socket ->
+    case Sower.Orchestration.sync_subscriptions(req.subscriptions, socket.assigns.agent.id) do
+      {:ok, subscriptions} ->
+        {:ok, %{subscriptions: subscriptions}}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end)
+
   handle_schema(
     SowerClient.Orchestration.DeploymentRequest,
     &Sower.Orchestration.request_deployment/1
