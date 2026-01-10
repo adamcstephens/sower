@@ -115,7 +115,7 @@ defmodule SowerClient.Config do
       |> File.read!()
       |> Jason.decode!()
     else
-      Logger.warning(msg: "Config file is missing, using defaults", file: path)
+      Logger.debug(msg: "Config file is missing, using defaults only", file: path)
       %{}
     end
   end
