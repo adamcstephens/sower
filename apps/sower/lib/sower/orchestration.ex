@@ -362,11 +362,10 @@ defmodule Sower.Orchestration do
 
   """
   def create_subscription(attrs \\ %{}) do
-    # TODO handle changing rules
     case %Subscription{org_id: Sower.Repo.get_org_id(), sid: SowerClient.Sid.generate("sub")}
          |> Subscription.changeset(attrs)
          |> Repo.insert(
-           on_conflict: {:replace, [:updated_at]},
+           on_conflict: {:replace, [:updated_at, :rules]},
            conflict_target: [:agent_id, :org_id, :seed_name, :seed_type],
            returning: true
          ) do

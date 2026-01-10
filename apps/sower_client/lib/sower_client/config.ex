@@ -257,7 +257,6 @@ defmodule SowerClient.Config do
       subscriptions
       |> Enum.map(&parse_subscription_rules/1)
       |> Enum.map(&fill_default_subscription_name/1)
-      |> dbg()
 
     Map.put(config, "subscriptions", normalized_subscriptions)
   end

@@ -219,7 +219,8 @@ defmodule SowerCli do
     if type in SowerClient.Seed.seed_types() do
       {:ok, type}
     else
-      {:error, "invalid seed type '#{type}', expected: #{Enum.join(SowerClient.Seed.seed_types(), ", ")}"}
+      {:error,
+       "invalid seed type '#{type}', expected: #{Enum.join(SowerClient.Seed.seed_types(), ", ")}"}
     end
   end
 end

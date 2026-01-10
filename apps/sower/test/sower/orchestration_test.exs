@@ -67,6 +67,46 @@ defmodule Sower.OrchestrationTest do
     end
   end
 
+  describe "subscriptions" do
+    import Sower.OrchestrationFixtures
+
+    test "create_subscription/1 updates rules on conflict" do
+      agent = agent_fixture()
+
+      # Create initial subscription with rules
+      {:ok, sub1} =
+        Orchestration.create_subscription(%{
+          agent_id: agent.id,
+          seed_name: "myhost",
+          seed_type: "nixos",
+          rules: [%{key: "branch", op: "eq", value: "main"}]
+        })
+
+      assert length(sub1.rules) == 1
+      assert hd(sub1.rules).value == "main"
+
+      # Re-create with different rules (same agent, seed_name, seed_type)
+      {:ok, sub2} =
+        Orchestration.create_subscription(%{
+          agent_id: agent.id,
+          seed_name: "myhost",
+          seed_type: "nixos",
+          rules: [%{key: "branch", op: "eq", value: "develop"}]
+        })
+
+      # Should be the same subscription (same id)
+      assert sub2.id == sub1.id
+
+      # Rules should be updated
+      assert length(sub2.rules) == 1
+      assert hd(sub2.rules).value == "develop"
+
+      # Verify by fetching fresh from DB
+      refreshed = Orchestration.get_subscription!(sub1.id)
+      assert hd(refreshed.rules).value == "develop"
+    end
+  end
+
   describe "match_seed/1" do
     import Sower.OrchestrationFixtures
 
