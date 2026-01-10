@@ -14,15 +14,12 @@ rec {
       package,
       meta ? { },
     }:
-    lib.addMetaAttrs (
-      {
-        sower.seed = {
-          inherit name;
-          seed_type = type;
-        };
-      }
-      // meta
-    ) package;
+    lib.addMetaAttrs (lib.recursiveUpdate {
+      sower.seed = {
+        inherit name;
+        seed_type = type;
+      };
+    } meta) package;
 
   genNixosPackages =
     nixosConfigurations:
@@ -62,6 +59,11 @@ rec {
               inherit name;
               type = "home-manager";
               package = homeConfigurations.${name}.activationPackage;
+              meta = {
+                home-manager = {
+                  inherit (homeConfig.config.home) username homeDirectory version;
+                };
+              };
             })
           ))
         ];
