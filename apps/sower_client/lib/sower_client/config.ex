@@ -75,7 +75,7 @@ defmodule SowerClient.Config do
         cfg
       end
     end)
-    |> normalize_subscription_rules()
+    |> preprocess_subscription_rules()
     |> Map.merge(Keyword.get(opts, :overrides, %{}))
     |> override_with_env()
     |> parse_file_values()
@@ -251,34 +251,41 @@ defmodule SowerClient.Config do
   end
 
   # parse subscriptions and rules
-  defp normalize_subscription_rules(%{"subscriptions" => subscriptions} = config)
+  defp preprocess_subscription_rules(%{"subscriptions" => subscriptions} = config)
        when is_list(subscriptions) do
     normalized_subscriptions =
-      Enum.map(subscriptions, fn subscription ->
-        case subscription do
-          %{"rules" => rules} when is_list(rules) ->
-            normalized_rules =
-              Enum.map(rules, fn rule ->
-                case rule do
-                  rule when is_binary(rule) ->
-                    SowerClient.SubscriptionRuleFormat.parse!(rule)
-
-                  rule when is_map(rule) ->
-                    rule
-                end
-              end)
-
-            Map.put(subscription, "rules", normalized_rules)
-
-          subscription ->
-            subscription
-        end
-      end)
+      subscriptions
+      |> Enum.map(&parse_subscription_rules/1)
+      |> Enum.map(&fill_default_subscription_name/1)
+      |> dbg()
 
     Map.put(config, "subscriptions", normalized_subscriptions)
   end
 
-  defp normalize_subscription_rules(config), do: config
+  defp preprocess_subscription_rules(config), do: config
+
+  defp parse_subscription_rules(%{"rules" => rules} = sub) when is_list(rules) do
+    normalized_rules =
+      Enum.map(rules, fn rule ->
+        case rule do
+          rule when is_binary(rule) ->
+            SowerClient.SubscriptionRuleFormat.parse!(rule)
+
+          rule when is_map(rule) ->
+            rule
+        end
+      end)
+
+    Map.put(sub, "rules", normalized_rules)
+  end
+
+  defp parse_subscription_rules(sub), do: sub
+
+  defp fill_default_subscription_name(%{"seed_type" => "nixos"} = sub) do
+    Map.put(sub, "seed_name", Map.get(sub, "seed_name", default_client_name()))
+  end
+
+  defp fill_default_subscription_name(sub), do: sub
 
   defp process_side_effects(%SowerClient.Config{} = config) do
     # Configure websocket client (only if endpoint is set)
