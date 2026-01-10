@@ -127,12 +127,12 @@ func runCommandStreaming(cmd *exec.Cmd, callback OutputCallback) (int, error) {
 
 	go func() {
 		defer wg.Done()
-		streamLines(stdout, callback, false)
+		streamLines(stdout, os.Stdout, callback, false)
 	}()
 
 	go func() {
 		defer wg.Done()
-		streamLines(stderr, callback, true)
+		streamLines(stderr, os.Stderr, callback, true)
 	}()
 
 	wg.Wait()
@@ -150,10 +150,13 @@ func runCommandStreaming(cmd *exec.Cmd, callback OutputCallback) (int, error) {
 	return exitCode, nil
 }
 
-// streamLines reads lines from a reader and calls the callback for each.
-func streamLines(r io.Reader, callback OutputCallback, isError bool) {
+// streamLines reads lines from a reader, writes them to the given writer,
+// and calls the callback for each line.
+func streamLines(r io.Reader, w io.Writer, callback OutputCallback, isError bool) {
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
-		callback(scanner.Text(), isError)
+		line := scanner.Text()
+		fmt.Fprintln(w, line)
+		callback(line, isError)
 	}
 }

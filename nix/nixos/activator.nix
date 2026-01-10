@@ -22,7 +22,7 @@ in
 
       socketGroup = lib.mkOption {
         type = lib.types.str;
-        default = "sower-agent";
+        default = "sower-activator";
         description = "Group that can access the activator socket";
       };
 
@@ -52,7 +52,11 @@ in
 
       path = [
         config.nix.package
+        pkgs.getent
       ];
+
+      # avoid restarting mid-switch
+      restartIfChanged = false;
 
       serviceConfig = {
         Type = "simple";
@@ -76,7 +80,7 @@ in
           in
           pkgs.writeShellScript "sower-activator-start" ''
             # Look up socket group GID at runtime
-            SOCKET_GID=$(${pkgs.coreutils}/bin/id -g ${cfg.socketGroup})
+            SOCKET_GID=$(getent group ${cfg.socketGroup} | cut -f 3 -d :)
 
             # Build comma-separated GID list
             ALLOWED_GIDS="$SOCKET_GID${lib.optionalString (additionalGIDsArg != "") ",${additionalGIDsArg}"}"
@@ -96,5 +100,6 @@ in
       };
     };
 
+    users.groups.sower-activator = { };
   };
 }
