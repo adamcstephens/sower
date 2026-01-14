@@ -53,10 +53,17 @@ defmodule SowerAgent.Client do
       end
 
     # TODO prune old schedules
-
     :ok = Enum.each(subscriptions, &start_schedule/1)
 
     SowerAgent.Storage.put(:subscriptions, subscriptions)
+
+    subscriptions
+    |> Enum.filter(& &1.poll_on_connect)
+    |> Enum.each(fn sub ->
+      Task.Supervisor.start_child(SowerAgent.TaskSupervisor, fn ->
+        deploy(sub)
+      end)
+    end)
 
     {:noreply, socket}
   end
@@ -218,15 +225,27 @@ defmodule SowerAgent.Client do
     case Crontab.CronExpression.Parser.parse(schedule) do
       {:ok, cron} ->
         SowerAgent.Scheduler.new_job()
-        |> Quantum.Job.set_name(:"sub_#{sid}")
+        |> Quantum.Job.set_name(:"subsched_#{sid}")
         |> Quantum.Job.set_schedule(cron)
         |> Quantum.Job.set_task(fn ->
-          # TODO make this actually run a subscription check and deployment
-          Logger.debug(
-            msg: "Running subscription schedule",
-            subscription_sid: sid,
-            schedule: schedule
-          )
+          subscriptions = SowerAgent.Storage.read().subscriptions || []
+
+          case Enum.find(subscriptions, &(&1.sid == sid)) do
+            nil ->
+              Logger.warning(
+                msg: "Subscription not found for scheduled deployment",
+                subscription_sid: sid
+              )
+
+            subscription ->
+              Logger.info(
+                msg: "Running scheduled deployment",
+                subscription_sid: sid,
+                schedule: schedule
+              )
+
+              SowerAgent.Client.deploy(subscription)
+          end
         end)
         |> SowerAgent.Scheduler.add_job()
 
