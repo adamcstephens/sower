@@ -268,7 +268,7 @@ defmodule SowerAgent.Client do
   defp maybe_trigger_reload(%SowerClient.Orchestration.Deployment{} = deployment) do
     if has_nixos_seed?(deployment) do
       Logger.info(msg: "NixOS seed in deployment, triggering reload check")
-      System.cmd("sudo", ["systemctl", "reload", "sower-agent.service"])
+      System.cmd("systemctl", ["reload", "sower-agent.service"])
     end
   end
 

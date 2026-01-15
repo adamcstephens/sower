@@ -26,10 +26,10 @@ in
         description = "Group that can access the activator socket";
       };
 
-      allowedGIDs = lib.mkOption {
-        type = lib.types.listOf lib.types.int;
+      allowedGroups = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
         default = [ ];
-        description = "Additional GIDs allowed to connect to the activator socket";
+        description = "Additional groups allowed to connect to the activator socket";
       };
 
       debug = lib.mkOption {
@@ -74,16 +74,19 @@ in
         # Build allowed GIDs list at runtime (group GIDs may not be known at eval time)
         ExecStart =
           let
-            additionalGIDs = map toString cfg.allowedGIDs;
-            additionalGIDsArg = lib.concatStringsSep "," additionalGIDs;
+            additionalGroups = cfg.allowedGroups;
+            additionalGroupsArg = lib.concatStringsSep " " additionalGroups;
             debugFlag = lib.optionalString cfg.debug "--debug";
           in
           pkgs.writeShellScript "sower-activator-start" ''
             # Look up socket group GID at runtime
             SOCKET_GID=$(getent group ${cfg.socketGroup} | cut -f 3 -d :)
 
+            # Resolve extra group GIDs at runtime
+            EXTRA_GIDS=$(for group in ${additionalGroupsArg}; do getent group "$group" | cut -f 3 -d :; done)
+
             # Build comma-separated GID list
-            ALLOWED_GIDS="$SOCKET_GID${lib.optionalString (additionalGIDsArg != "") ",${additionalGIDsArg}"}"
+            ALLOWED_GIDS="$SOCKET_GID${lib.optionalString (additionalGroupsArg != "") ",$EXTRA_GIDS"}"
 
             exec ${lib.getExe config.services.sower.activator.package} \
               --server \

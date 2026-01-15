@@ -71,7 +71,10 @@ in
 
     environment.systemPackages = [ cfg.package ];
 
-    services.sower.activator.enable = lib.mkDefault true;
+    services.sower.activator = {
+      enable = lib.mkDefault true;
+      allowedGroups = [ "sower-agent" ];
+    };
 
     systemd.services.sower-agent = {
       wantedBy = [ "multi-user.target" ];
@@ -82,18 +85,23 @@ in
       ++ lib.optionals activatorCfg.enable [ "sower-activator.service" ];
       requires = [
         "network-online.target"
-      ]
-      ++ lib.optionals config.services.sower.server.enable [ "sower.service" ]
-      ++ lib.optionals activatorCfg.enable [ "sower-activator.service" ];
+      ];
+      wants =
+        lib.optionals activatorCfg.enable [ "sower-activator.service" ]
+        ++ lib.optionals config.services.sower.server.enable [ "sower.service" ];
+
       path = [
-        "/run/wrappers"
         config.nix.package
+      ]
+      ++ lib.optionals (!activatorCfg.enable) [
+        "/run/wrappers"
       ]
       ++ lib.optionals activatorCfg.enable [
         activatorCfg.package
       ];
 
       environment = {
+        # erlexec needs a shell
         SHELL = lib.getExe pkgs.bash;
         SOWER_CONFIG_FILE = "/etc/sower/client.json";
       };
@@ -159,7 +167,7 @@ in
           if (action.id == "org.freedesktop.systemd1.manage-units" &&
               action.lookup("unit") == "sower-agent.service" &&
               action.lookup("verb") == "reload" &&
-              subject.system_unit == "sower-agent.service") &&
+              subject.system_unit == "sower-agent.service" &&
               subject.user == "sower-agent") {
             return polkit.Result.YES;
           }
