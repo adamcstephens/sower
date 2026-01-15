@@ -109,23 +109,23 @@ update-go:
     go get -u ./...
     go mod edit -go=$(go version | awk '{print $3}' | sed 's/go//')
     go mod tidy
-    just update-go-hash
-    jj commit -m 'server(chore): update go deps' go.mod go.sum nix/packages/activator.nix nix/packages/gocli.nix
+    just update-go-hash activator
+    just update-go-hash go-cli
+    jj commit -m 'server(chore): update go deps' go.mod go.sum nix/packages/activator.nix nix/packages/go-cli.nix
 
-update-go-hash:
+update-go-hash app:
     #!/usr/bin/env bash
 
     set -eou pipefail
 
     setKV() {
-      sed -i "s|$1 = \".*\"|$1 = \"${2:-}\"|" ./nix/packages/activator.nix
-      sed -i "s|$1 = \".*\"|$1 = \"${2:-}\"|" ./nix/packages/go-cli.nix
+      sed -i "s|$1 = \".*\"|$1 = \"${2:-}\"|" ./nix/packages/{{ app }}.nix
     }
 
     setKV vendorHash "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=" # Necessary to force clean build.
 
     set +e
-    VENDOR_HASH=$(nix build --no-link .#activator 2>&1 >/dev/null | grep "got:" | cut -d':' -f2 | sed 's| ||g')
+    VENDOR_HASH=$(nix build --no-link .#{{ app }} 2>&1 >/dev/null | grep "got:" | cut -d':' -f2 | sed 's| ||g')
     set -e
 
     if [ -n "${VENDOR_HASH:-}" ]; then
@@ -135,4 +135,4 @@ update-go-hash:
       exit 1
     fi
 
-    git diff ./nix/packages/cli.nix
+    git diff ./nix/packages/{{ app }}.nix
