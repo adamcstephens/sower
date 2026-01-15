@@ -113,7 +113,7 @@ in
         ProtectHome = "tmpfs";
         PrivateTmp = true;
         NoNewPrivileges = false;
-        SupplementaryGroups = [ "wheel" ];
+        SupplementaryGroups = lib.optionals activatorCfg.enable [ activatorCfg.socketGroup ];
         User = "sower-agent";
         Group = "sower-agent";
         BindPaths = lib.optionals activatorCfg.enable [ activatorCfg.socketPath ];
@@ -140,10 +140,9 @@ in
       };
     };
 
-    # Only add sudo rule when activator socket mode is not enabled
     security.sudo.extraRules = lib.mkIf (!activatorCfg.enable) [
       {
-        groups = [ "wheel" ];
+        users = [ "sower-agent" ];
         commands = [
           {
             command = lib.getExe activatorCfg.package;
