@@ -28,7 +28,6 @@ defmodule SowerAgent.MixProject do
     [
       {:quantum, "~> 3.0"},
       {:cuid2_ex, "~> 0.2"},
-      {:deps_nix, "~> 2.0", only: [:dev]},
       {:igniter, only: [:dev, :test]},
       {:jason, "~> 1.0"},
       {:nix, in_umbrella: true},

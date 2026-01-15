@@ -104,15 +104,23 @@ in
         # erlexec needs a shell
         SHELL = lib.getExe pkgs.bash;
         SOWER_CONFIG_FILE = "/etc/sower/client.json";
+        # load code on demand
+        RELEASE_MODE = "interactive";
       };
 
+      # reload is an async notification to the agent
+      reloadIfChanged = true;
       # avoid restarting mid-switch
       restartIfChanged = false;
+      restartTriggers = [
+        config.environment.etc."sower/client.json".source
+      ];
 
       serviceConfig = {
         Type = "notify";
         WatchdogSec = "10s";
-        Restart = lib.mkDefault "on-failure";
+        Restart = lib.mkDefault "always";
+        RestartSec = "5";
 
         LoadCredential = cfg.credentials;
 
@@ -141,7 +149,19 @@ in
 
           exec ${lib.getExe cfg.package} start
         '';
-        ExecStop = "${lib.getExe cfg.package} stop";
+        ExecStop = pkgs.writeShellScript "sower-agent-stop" ''
+          RELEASE_COOKIE=$(cat release-cookie)
+          export RELEASE_COOKIE
+
+          exec ${lib.getExe cfg.package} stop
+        '';
+        # Request reload via RPC - the agent will restart itself at end of deployment
+        ExecReload = pkgs.writeShellScript "sower-agent-reload" ''
+          RELEASE_COOKIE=$(cat release-cookie)
+          export RELEASE_COOKIE
+
+          ${lib.getExe cfg.package} rpc "SowerAgent.request_reload()"
+        '';
 
         MemoryAccounting = true;
         MemoryMax = "200M";
@@ -160,15 +180,29 @@ in
       }
     ];
 
+    # TODO this should really be guarded with an assertion
+    # to avoid setting this on users unaware
+    # and it seems to need a boot switch to apply cleanly
+    services.dbus.implementation = "broker";
+
     security.polkit = {
       enable = true;
+      debug = true;
       extraConfig = ''
         polkit.addRule(function(action, subject) {
+          # old dbus may not support system_unit, debugging is available if needed
+          # if (action.id == "org.freedesktop.systemd1.manage-units") {
+          #   polkit.log("sower polkit: unit=" + action.lookup("unit") +
+          #     " verb=" + action.lookup("verb") +
+          #     " user=" + subject.user +
+          #     " system_unit=" + subject.system_unit +
+          #     " pid=" + subject.pid);
+          # }
+
           if (action.id == "org.freedesktop.systemd1.manage-units" &&
               action.lookup("unit") == "sower-agent.service" &&
-              action.lookup("verb") == "reload" &&
-              subject.system_unit == "sower-agent.service" &&
-              subject.user == "sower-agent") {
+              action.lookup("verb") == "restart" &&
+              subject.system_unit == "sower-agent.service") {
             return polkit.Result.YES;
           }
         });

@@ -193,7 +193,7 @@ defmodule SowerAgent.Client do
 
             {:ok, _result_ref} = push_message(socket, result)
 
-            maybe_trigger_reload(deployment)
+            if SowerAgent.take_pending_reload(), do: reload_agent_service()
 
           {:error, error} ->
             Logger.error(msg: "Error handling deployment", error: error)
@@ -265,14 +265,30 @@ defmodule SowerAgent.Client do
 
   defp start_schedule(_), do: nil
 
-  defp maybe_trigger_reload(%SowerClient.Orchestration.Deployment{} = deployment) do
-    if has_nixos_seed?(deployment) do
-      Logger.info(msg: "NixOS seed in deployment, triggering reload check")
-      System.cmd("systemctl", ["reload", "sower-agent.service"])
-    end
-  end
+  def reload_agent_service do
+    Logger.info(msg: "Restarting sower-agent service")
 
-  defp has_nixos_seed?(%SowerClient.Orchestration.Deployment{seeds: seeds}) do
-    Enum.any?(seeds, &(&1.seed_type == "nixos"))
+    case System.cmd(
+           "busctl",
+           [
+             "call",
+             "org.freedesktop.systemd1",
+             "/org/freedesktop/systemd1",
+             "org.freedesktop.systemd1.Manager",
+             "RestartUnit",
+             "ss",
+             "sower-agent.service",
+             "replace"
+           ],
+           stderr_to_stdout: true
+         ) do
+      {output, 0} ->
+        Logger.debug(msg: "Successfully restarted sower-agent service")
+        {:ok, output}
+
+      {error, _code} ->
+        Logger.error(msg: "Failed to restart sower-agent via busctl", error: error)
+        {:error, error}
+    end
   end
 end

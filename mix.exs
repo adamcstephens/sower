@@ -43,7 +43,10 @@ defmodule SowerUmbrella.MixProject do
   defp deps do
     [
       {:dialyxir, "~> 1.0", only: [:dev]},
-      {:deps_nix, "~> 2.0", only: [:dev]},
+      {:deps_nix,
+       git: "https://github.com/adamcstephens/deps_nix.git",
+       ref: "e14eca58dfc433510ca61356efb169e04263feec",
+       only: [:dev]},
       {:igniter, "~> 0.7", only: [:dev, :test], override: true}
     ]
   end
