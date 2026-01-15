@@ -193,6 +193,8 @@ defmodule SowerAgent.Client do
 
             {:ok, _result_ref} = push_message(socket, result)
 
+            maybe_trigger_reload(deployment)
+
           {:error, error} ->
             Logger.error(msg: "Error handling deployment", error: error)
         end
@@ -262,4 +264,15 @@ defmodule SowerAgent.Client do
   end
 
   defp start_schedule(_), do: nil
+
+  defp maybe_trigger_reload(%SowerClient.Orchestration.Deployment{} = deployment) do
+    if has_nixos_seed?(deployment) do
+      Logger.info(msg: "NixOS seed in deployment, triggering reload check")
+      System.cmd("sudo", ["systemctl", "reload", "sower-agent.service"])
+    end
+  end
+
+  defp has_nixos_seed?(%SowerClient.Orchestration.Deployment{seeds: seeds}) do
+    Enum.any?(seeds, &(&1.seed_type == "nixos"))
+  end
 end

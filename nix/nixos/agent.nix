@@ -153,6 +153,21 @@ in
       }
     ];
 
+    security.polkit = {
+      enable = true;
+      extraConfig = ''
+        polkit.addRule(function(action, subject) {
+          if (action.id == "org.freedesktop.systemd1.manage-units" &&
+              action.lookup("unit") == "sower-agent.service" &&
+              action.lookup("verb") == "reload" &&
+              subject.system_unit == "sower-agent.service") &&
+              subject.user == "sower-agent") {
+            return polkit.Result.YES;
+          }
+        });
+      '';
+    };
+
     systemd.tmpfiles.rules = lib.optionals manageServices [
       "d /etc/sower 0755 root root"
       "L /etc/sower/systemd - - - - /nix/var/nix/profiles/sower/services-units/systemd"
