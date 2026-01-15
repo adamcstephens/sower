@@ -8,30 +8,25 @@
 callPackages ./deps.nix {
   inherit lib beamPackages;
   overrides = self: prev: {
-    argon2 = prev.argon2.override (
+    argon2id_elixir = prev.argon2id_elixir.override (
       old:
       let
-        version = "1.2.0"; # or old.version
+        inherit (old) version;
 
         native = rustPlatform.buildRustPackage {
           pname = "argon2";
           version = version;
-          src = "${old.src}/native";
-          cargoHash = "sha256-D7mONUH6f/RmFwfx51sLr6XWlIELNTFPvFm9TrbEMl4=";
+          src = "${old.src}/native/argon2";
+          cargoHash = "sha256-VOtvGETrErqX3ph1Hk73RcaFcvgXiwQs70kHxwqC5SY=";
         };
       in
       {
-        # pre-build the make target
         preBuild = ''
-          mkdir -p priv/
-          substituteInPlace native/Makefile --replace-fail '$(PROJECT)' 'argon2'
-          cp ${native}/lib/libargon2.so priv/argon2.so
-        '';
+          substituteInPlace lib/argon2_elixir/native.ex --replace-fail 'crate: "argon2"' 'crate: "argon2", skip_compilation?: true'
 
-        # move native into expected location
-        # postInstall = ''
-        #   mv $out/lib/erlang/lib/argon2/priv/argon2.so $out/lib/erlang/lib/argon2/priv/argon2.so
-        # '';
+          mkdir -p priv/native/
+          cp ${native}/lib/libargon2.so priv/native/
+        '';
       }
     );
 

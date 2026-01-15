@@ -26,10 +26,7 @@ defmodule Sower.MixProject do
 
   defp deps do
     [
-      # {:argon2, "~> 1.2"},
-      {:argon2,
-       git: "https://github.com/adamcstephens/erl_argon2.git",
-       ref: "699ff303d6866b0b61b73c11859fcab898a8badf"},
+      {:argon2id_elixir, "~> 1.1"},
       {:bandit, "~> 1.0"},
       {:cloak_ecto, "~> 1.3.0"},
       {:cuid2_ex, "~> 0.2.0"},

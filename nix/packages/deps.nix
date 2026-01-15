@@ -170,19 +170,23 @@ let
     with self;
     {
 
-      argon2 =
+      argon2id_elixir =
         let
-          version = "1.2.0";
-          drv = buildRebar3 {
+          version = "1.1.3";
+          drv = buildMix {
             inherit version;
-            name = "argon2";
+            name = "argon2id_elixir";
+            appConfigPath = ../../config;
 
-            src = pkgs.fetchFromGitHub {
-              owner = "adamcstephens";
-              repo = "erl_argon2";
-              rev = "699ff303d6866b0b61b73c11859fcab898a8badf";
-              hash = "sha256-1aY0VjkP6BwE9HhyaQT0CDj470D6AlaOBZQkbAaqs64=";
+            src = fetchHex {
+              inherit version;
+              pkg = "argon2id_elixir";
+              sha256 = "87ba6dec1580c0d4209741724f2821e330a8514ccfb9ed67564113f0382267de";
             };
+
+            beamDeps = [
+              rustler
+            ];
           };
         in
         drv;
@@ -1148,6 +1152,28 @@ let
         in
         drv;
 
+      rustler =
+        let
+          version = "0.36.2";
+          drv = buildMix {
+            inherit version;
+            name = "rustler";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "rustler";
+              sha256 = "93832a6dbc1166739a19cd0c25e110e4cf891f16795deb9361dfcae95f6c88fe";
+            };
+
+            beamDeps = [
+              jason
+              toml
+            ];
+          };
+        in
+        drv;
+
       shortuuid =
         let
           version = "4.1.0";
@@ -1322,6 +1348,23 @@ let
             beamDeps = [
               telemetry
             ];
+          };
+        in
+        drv;
+
+      toml =
+        let
+          version = "0.7.0";
+          drv = buildMix {
+            inherit version;
+            name = "toml";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "toml";
+              sha256 = "0690246a2478c1defd100b0c9b89b4ea280a22be9a7b313a8a058a2408a2fa70";
+            };
           };
         in
         drv;
