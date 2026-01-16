@@ -34,7 +34,11 @@
         rows={@subscription.deployments}
         row_click={fn deployment -> JS.navigate(~p"/deployments/#{deployment.sid}") end}
       >
+        <:col :let={deployment} label="Result">
+          <.result result={deployment.result} />
+        </:col>
         <:col :let={deployment}>{deployment.sid}</:col>
+        <:col :let={deployment}>{deployment.inserted_at}</:col>
       </.table>
     </:item>
   </.list>

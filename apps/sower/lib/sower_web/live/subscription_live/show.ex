@@ -2,6 +2,7 @@ defmodule SowerWeb.SubscriptionLive.Show do
   use SowerWeb, :live_view
 
   alias Sower.Orchestration
+  import SowerWeb.SowerComponents
 
   @impl true
   def mount(_params, _session, socket) do
@@ -10,13 +11,24 @@ defmodule SowerWeb.SubscriptionLive.Show do
 
   @impl true
   def handle_params(%{"sid" => sid}, _, socket) do
+    subscription = Orchestration.get_subscription_sid_with_deployments!(sid)
+
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Sower.PubSub, "deployments:subscription:#{sid}")
+    end
+
     {:noreply,
      socket
      |> assign(:page_title, page_title(socket.assigns.live_action))
-     |> assign(
-       :subscription,
-       Orchestration.get_subscription_sid!(sid) |> Sower.Repo.preload([:agent, :deployments])
-     )}
+     |> assign(:subscription, subscription)}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_info({:deployment, _event, _deployment}, socket) do
+    subscription =
+      Orchestration.get_subscription_sid_with_deployments!(socket.assigns.subscription.sid)
+
+    {:noreply, assign(socket, :subscription, subscription)}
   end
 
   defp page_title(:show), do: "Show Subscription"

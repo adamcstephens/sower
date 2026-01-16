@@ -5,6 +5,7 @@ defmodule Sower.Orchestration do
 
   alias Sower.Repo
   alias Sower.Orchestration.Agent
+  alias Sower.Orchestration.DeploymentPubSub
 
   import Ecto.Query, warn: false
   import Sower.Authorization
@@ -354,6 +355,36 @@ defmodule Sower.Orchestration do
     |> Repo.get_by(sid: sid)
   end
 
+  @doc """
+  Gets a single subscription by sid with deployments preloaded in reverse chronological order.
+
+  Raises `Ecto.NoResultsError` if the Subscription does not exist.
+
+  ## Examples
+
+      iex> get_subscription_sid_with_deployments!("123")
+      %Subscription{}
+
+      iex> get_subscription_sid_with_deployments!("456")
+      ** (Ecto.NoResultsError)
+
+  """
+  def get_subscription_sid_with_deployments!(sid) do
+    subscription = get_subscription_sid!(sid)
+
+    Repo.preload(subscription, [
+      :agent,
+      deployments:
+        from(d in Deployment,
+          order_by: [
+            desc: fragment("? IS NULL", d.deployed_at),
+            desc: d.deployed_at,
+            desc: d.inserted_at
+          ]
+        )
+    ])
+  end
+
   def get_subscription_sids(sids) when is_list(sids) and length(sids) > 0 do
     query = from sub in Subscription, where: sub.sid in ^sids
 
@@ -555,7 +586,14 @@ defmodule Sower.Orchestration do
 
   """
   def list_deployments do
-    query = from r in Deployment, order_by: [desc: r.deployed_at]
+    query =
+      from r in Deployment,
+        order_by: [
+          desc: fragment("? IS NULL", r.deployed_at),
+          desc: r.deployed_at,
+          desc: r.inserted_at
+        ]
+
     Repo.all(query)
   end
 
@@ -598,12 +636,21 @@ defmodule Sower.Orchestration do
 
   """
   def create_deployment(attrs \\ %{}) do
-    %Deployment{
-      org_id: Sower.Repo.get_org_id(),
-      sid: SowerClient.Sid.generate("deploy")
-    }
-    |> Deployment.changeset(attrs)
-    |> Repo.insert()
+    result =
+      %Deployment{
+        org_id: Sower.Repo.get_org_id(),
+        sid: SowerClient.Sid.generate("deploy")
+      }
+      |> Deployment.changeset(attrs)
+      |> Repo.insert()
+
+    case result do
+      {:ok, deployment} ->
+        DeploymentPubSub.broadcast_deployment_change(deployment, :created)
+
+      {:error, _} = error ->
+        error
+    end
   end
 
   @doc """
@@ -619,10 +666,19 @@ defmodule Sower.Orchestration do
 
   """
   def update_deployment(%Deployment{} = deployment, attrs) do
-    deployment
-    |> Repo.preload([:seeds, :subscriptions])
-    |> Deployment.changeset(attrs)
-    |> Repo.update()
+    result =
+      deployment
+      |> Repo.preload([:seeds, :subscriptions])
+      |> Deployment.changeset(attrs)
+      |> Repo.update()
+
+    case result do
+      {:ok, updated_deployment} ->
+        DeploymentPubSub.broadcast_deployment_change(updated_deployment, :updated)
+
+      {:error, _} = error ->
+        error
+    end
   end
 
   @doc """

@@ -36,9 +36,24 @@ defmodule SowerWeb.DeploymentLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Sower.PubSub, "deployments")
+    end
+
     {:ok,
      socket
      |> assign(:page_title, "Listing Deployments")
      |> stream(:deployments, Orchestration.list_deployments())}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_info({:deployment, :created, deployment}, socket) do
+    # Insert new deployment at the top of the stream
+    {:noreply, stream_insert(socket, :deployments, deployment, at: 0)}
+  end
+
+  def handle_info({:deployment, :updated, deployment}, socket) do
+    # Update existing deployment in the stream
+    {:noreply, stream_insert(socket, :deployments, deployment)}
   end
 end

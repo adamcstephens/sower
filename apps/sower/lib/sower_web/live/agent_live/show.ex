@@ -33,6 +33,7 @@ defmodule SowerWeb.AgentLive.Show do
 
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Sower.PubSub, "agent:view:#{sid}")
+      Phoenix.PubSub.subscribe(Sower.PubSub, "deployments:agent:#{sid}")
     end
 
     {:noreply, socket}
@@ -43,11 +44,13 @@ defmodule SowerWeb.AgentLive.Show do
     {:noreply, add_online_status(socket)}
   end
 
-  def handle_info(
-        %Nix.Profile.Generation{} = generation,
-        socket
-      ) do
+  def handle_info(%Nix.Profile.Generation{} = generation, socket) do
     {:noreply, assign(socket, :current_generation, generation)}
+  end
+
+  def handle_info({:deployment, _event, _deployment}, socket) do
+    deployments = Orchestration.list_deployments_for_agent(socket.assigns.agent, limit: 10)
+    {:noreply, assign(socket, :deployments, deployments)}
   end
 
   defp add_online_status(%{assigns: %{agent: agent}} = socket) do
