@@ -11,6 +11,8 @@ defmodule Sower.Orchestration.Deployment do
     field :sid, SowerClient.Sid, autogenerate: true
     field :org_id, Ecto.UUID
 
+    belongs_to :agent, Sower.Orchestration.Agent
+
     many_to_many :subscriptions, Sower.Orchestration.Subscription,
       join_through: Orchestration.SubscriptionDeployment
 
@@ -25,7 +27,7 @@ defmodule Sower.Orchestration.Deployment do
   @doc false
   def changeset(deployment, attrs) do
     deployment
-    |> cast(attrs, [:deployed_at, :result])
+    |> cast(attrs, [:deployed_at, :result, :agent_id])
     |> put_assoc(:seeds, Map.get(attrs, :seeds, deployment.seeds))
     |> put_assoc(:subscriptions, Map.get(attrs, :subscriptions, deployment.subscriptions))
     |> validate_required([])

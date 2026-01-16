@@ -276,13 +276,28 @@ defmodule Sower.Orchestration do
   end
 
   alias Sower.Orchestration.Subscription
+  alias Sower.Orchestration.Deployment
 
   @doc """
-  Find deployments for an agent
+  List deployments for a specific agent, ordered by most recent first.
+
+  ## Options
+    * `:limit` - Maximum number of deployments to return (default: 10)
+
+  ## Examples
+
+      iex> list_deployments_for_agent(agent, limit: 10)
+      [%Deployment{}, ...]
   """
-  def deployments_for_agent(%Agent{} = agent) do
-    agent.subscriptions
-    |> Enum.map(& &1.deployments)
+  def list_deployments_for_agent(%Agent{} = agent, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 10)
+
+    from(d in Deployment,
+      where: d.agent_id == ^agent.id,
+      order_by: [desc: d.inserted_at],
+      limit: ^limit
+    )
+    |> Repo.all()
   end
 
   @doc """
@@ -644,10 +659,13 @@ defmodule Sower.Orchestration do
   """
   def request_deployment(%SowerClient.Orchestration.DeploymentRequest{} = request) do
     with subs when subs != [] <- get_subscription_sids(request.subscription_sids),
+         subs <- Repo.preload(subs, :agent),
+         agent_id <- hd(subs).agent_id,
          seeds <-
            subs |> Enum.map(&match_seed/1) |> Enum.reject(&is_nil/1),
          {:ok, deploy} <-
            create_deployment(%{
+             agent_id: agent_id,
              seeds: seeds,
              subscriptions: subs
            }) do

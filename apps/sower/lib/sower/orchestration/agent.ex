@@ -12,6 +12,7 @@ defmodule Sower.Orchestration.Agent do
     field :org_id, Ecto.UUID
 
     has_many :subscriptions, Sower.Orchestration.Subscription
+    has_many :deployments, Sower.Orchestration.Deployment
 
     timestamps()
   end

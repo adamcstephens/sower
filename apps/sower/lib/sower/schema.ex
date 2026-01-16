@@ -6,6 +6,7 @@ defmodule Sower.Schema do
       # defaults
       @primary_key {:id, :id, autogenerate: true}
       @foreign_key_type :id
+      @timestamps_opts [type: :utc_datetime_usec]
     end
   end
 end

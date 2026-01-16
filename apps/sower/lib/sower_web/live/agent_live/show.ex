@@ -17,18 +17,16 @@ defmodule SowerWeb.AgentLive.Show do
 
   @impl true
   def handle_params(%{"sid" => sid}, _, socket) do
-    orchestration =
-      Orchestration.get_agent_sid!(sid) |> Sower.Repo.preload(subscriptions: [:deployments])
+    agent =
+      Orchestration.get_agent_sid!(sid)
+      |> Sower.Repo.preload(:subscriptions)
 
-    deployments =
-      Enum.reduce(orchestration.subscriptions, [], fn sub, acc ->
-        acc ++ sub.deployments
-      end)
+    deployments = Orchestration.list_deployments_for_agent(agent, limit: 10)
 
     socket =
       socket
       |> assign(:page_title, page_title(socket.assigns.live_action))
-      |> assign(:agent, orchestration)
+      |> assign(:agent, agent)
       |> assign(:deployments, deployments)
       |> add_online_status()
       |> assign(:current_generation, %{})

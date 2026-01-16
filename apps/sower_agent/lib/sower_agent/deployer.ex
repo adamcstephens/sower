@@ -85,16 +85,29 @@ defmodule SowerAgent.Deployer do
           name: seed.name,
           seed_sid: seed.sid,
           seed_type: seed.seed_type,
-          artifact: seed.artifact
+          artifact: seed.artifact,
+          deployment_sid: deployment.sid
         )
 
         result = SowerAgent.Seed.activate(seed)
 
         case result do
           {:ok, output} ->
+            Logger.info(
+              msg: "Completed activation",
+              deployment_sid: deployment.sid,
+              seed_sid: seed.sid
+            )
+
             maybe_write_log(deployment, seed, output)
 
           {:error, _code, output} ->
+            Logger.error(
+              msg: "Error during activation",
+              deployment_sid: deployment.sid,
+              seed_sid: seed.sid
+            )
+
             maybe_write_log(deployment, seed, output)
 
           {:error, _reason} ->
