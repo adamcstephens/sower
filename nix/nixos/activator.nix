@@ -83,7 +83,7 @@ in
             SOCKET_GID=$(getent group ${cfg.socketGroup} | cut -f 3 -d :)
 
             # Resolve extra group GIDs at runtime
-            EXTRA_GIDS=$(for group in ${additionalGroupsArg}; do getent group "$group" | cut -f 3 -d :; done)
+            EXTRA_GIDS=$(for group in ${additionalGroupsArg}; do getent group "$group" | cut -f 3 -d :; done | tr '\n' ',' | sed 's/,$//')
 
             # Build comma-separated GID list
             ALLOWED_GIDS="$SOCKET_GID${lib.optionalString (additionalGroupsArg != "") ",$EXTRA_GIDS"}"
