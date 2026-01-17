@@ -718,23 +718,27 @@ defmodule Sower.Orchestration do
          subs <- Repo.preload(subs, :agent),
          agent_id <- hd(subs).agent_id,
          seeds <-
-           subs |> Enum.map(&match_seed/1) |> Enum.reject(&is_nil/1),
-         {:ok, deploy} <-
-           create_deployment(%{
-             agent_id: agent_id,
-             seeds: seeds,
-             subscriptions: subs
-           }) do
+           subs |> Enum.map(&match_seed/1) |> Enum.reject(&is_nil/1) do
       if seeds == [] do
         {:error, :seeds_not_found}
       else
-        {:ok,
-         %SowerClient.Orchestration.Deployment{
-           request_id: request.request_id,
-           subscription_sids: Enum.map(subs, & &1.sid),
-           sid: deploy.sid,
-           seeds: seeds
-         }}
+        case create_deployment(%{
+               agent_id: agent_id,
+               seeds: seeds,
+               subscriptions: subs
+             }) do
+          {:ok, deploy} ->
+            {:ok,
+             %SowerClient.Orchestration.Deployment{
+               request_id: request.request_id,
+               subscription_sids: Enum.map(subs, & &1.sid),
+               sid: deploy.sid,
+               seeds: seeds
+             }}
+
+          other ->
+            other
+        end
       end
     else
       {:error, _} = err ->
