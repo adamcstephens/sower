@@ -6,8 +6,6 @@ defmodule SowerCli.Repo do
   end
 
   def get_tags(path, type) when is_binary(path) do
-    Output.step("Discovered repository tags")
-
     tags =
       if File.exists?(path) do
         {path, []}
@@ -21,7 +19,8 @@ defmodule SowerCli.Repo do
         []
       end
 
-    # output the found tags
+    Output.step("Discovered repository tags")
+
     tags
     |> Enum.map(&SowerClient.SeedTag.to_query_string/1)
     |> Enum.sort()
@@ -168,9 +167,16 @@ defmodule SowerCli.Repo do
 
   defp git_dirty?(git, dir) do
     case System.cmd(git, ["status", "--porcelain"], stderr_to_stdout: true, cd: dir) do
-      {"", 0} -> false
-      {_, 0} -> true
-      _ -> false
+      {"", 0} ->
+        false
+
+      {output, 0} ->
+        Output.error("git status is dirty")
+        IO.puts(output)
+        true
+
+      _ ->
+        false
     end
   end
 
