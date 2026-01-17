@@ -249,11 +249,13 @@ defmodule SowerCli.Build do
   end
 
   defp run_steps([:seed | rest], %__MODULE__{} = state) do
-    Output.step("Registering #{length(state.builds)} seed(s)")
-
     Application.ensure_all_started([:req])
 
     client = SowerClient.ApiClient.new()
+
+    repo_tags = SowerCli.Repo.get_tags(state.request)
+
+    Output.step("Registering #{length(state.builds)} seed(s)")
 
     results =
       state.builds
@@ -277,7 +279,7 @@ defmodule SowerCli.Build do
           tags =
             cli_tags(state) ++
               convert_meta_tags(seed_meta) ++
-              SowerCli.Repo.get_tags(state.request)
+              repo_tags
 
           result =
             case seed_meta

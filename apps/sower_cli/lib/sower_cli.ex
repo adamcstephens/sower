@@ -31,6 +31,10 @@ defmodule SowerCli do
     SowerCli.Build.run(args.target, flags, options)
   end
 
+  defp run({[:repo, :show_tags], _}) do
+    SowerCli.Repo.get_tags(".", :flake)
+  end
+
   defp run({[:seed, :download], %{flags: flags, options: options}}) do
     set_log_level(if flags.debug, do: :debug, else: :error)
     SowerCli.Seed.Download.run(flags, options)
@@ -160,6 +164,18 @@ defmodule SowerCli do
               help: "Memory limit per evaluation in MB (default: 4000)",
               parser: :integer,
               default: 4_000
+            ]
+          ]
+        ],
+        repo: [
+          name: "repo",
+          about: "repo management and information",
+          subcommands: [
+            show_tags: [
+              name: "show-tags",
+              about: "Show repository detected tags",
+              flags: [],
+              options: []
             ]
           ]
         ],
