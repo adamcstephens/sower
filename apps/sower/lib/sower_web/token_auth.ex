@@ -5,7 +5,11 @@ defmodule SowerWeb.TokenAuth do
   require Logger
 
   def ensure_token_authenticated(conn, _opts) do
-    ["Bearer " <> access_token] = get_req_header(conn, "authorization")
+    access_token =
+      case get_req_header(conn, "authorization") do
+        ["Bearer " <> access_token] -> access_token
+        _ -> send_unauthorized(conn)
+      end
 
     case Sower.Accounts.AccessToken.authenticate(access_token) do
       {:ok, access_token} ->

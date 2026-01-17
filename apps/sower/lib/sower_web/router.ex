@@ -105,6 +105,8 @@ defmodule SowerWeb.Router do
   scope "/api/v1", SowerWeb.Api do
     pipe_through [:api, :ensure_token_authenticated]
 
+    get "/auth/verify", AuthController, :verify
+
     get "/nix/caches", Nix.CacheController, :list
     get "/seeds", SeedController, :list
     get "/seeds/latest", SeedController, :latest

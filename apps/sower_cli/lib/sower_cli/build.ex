@@ -64,16 +64,8 @@ defmodule SowerCli.Build do
         end
 
       :seed in steps ->
-        config = SowerCli.Config.get()
-
-        try do
-          SowerCli.Config.require_server_connection!(config)
-          :ok
-        rescue
-          e in ArgumentError ->
-            Output.error("#{e.message}")
-            {:error, :missing_server_config}
-        end
+        Application.ensure_all_started([:req])
+        SowerCli.Auth.verify_connection()
 
       true ->
         :ok

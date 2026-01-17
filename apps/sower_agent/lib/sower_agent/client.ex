@@ -74,6 +74,22 @@ defmodule SowerAgent.Client do
 
   @impl Slipstream
   def init(_args) do
+    case verify_auth() do
+      {:ok, token_info} ->
+        Logger.info(msg: "Authenticated", description: token_info.description)
+        do_connect()
+
+      {:error, reason} ->
+        Logger.error(msg: "Authentication failed", reason: reason)
+        :ignore
+    end
+  end
+
+  defp verify_auth() do
+    SowerClient.Auth.verify()
+  end
+
+  defp do_connect() do
     config = Application.get_all_env(__MODULE__)
 
     uri =

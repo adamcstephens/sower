@@ -12,15 +12,13 @@ defmodule SowerCli.Seed.Download do
 
   require Logger
 
-  alias SowerCli.{Config, Output}
+  alias SowerCli.{Auth, Output}
 
   def run(flags, options) do
     Output.init(debug: flags.debug)
     Application.ensure_all_started([:req])
 
-    config = Config.get()
-
-    with :ok <- validate_config(config),
+    with :ok <- Auth.verify_connection(),
          {:ok, seed} <- fetch_seed(options),
          {:ok, _} <- ensure_realized(seed) do
       Output.success("Seed available at #{seed.artifact}")
@@ -28,17 +26,6 @@ defmodule SowerCli.Seed.Download do
     else
       {:error, reason} ->
         {:error, reason}
-    end
-  end
-
-  defp validate_config(%SowerClient.Config{} = config) do
-    try do
-      Config.require_server_connection!(config)
-      :ok
-    rescue
-      e in ArgumentError ->
-        Output.error(e.message)
-        {:error, :missing_server_config}
     end
   end
 

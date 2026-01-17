@@ -130,6 +130,60 @@
         "type": "object",
         "x-struct": "Elixir.SowerClient.SeedTag",
         "x-validate": null
+      },
+      "TokenInfo": {
+        "description": "Information about an authenticated access token",
+        "example": {
+          "description": "CI/CD token",
+          "expires_at": "2025-12-31",
+          "permissions": [
+            "seed:read",
+            "seed:write"
+          ],
+          "sid": "example4ser3adju75ddusbr"
+        },
+        "properties": {
+          "description": {
+            "description": "Human-readable token description",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "expires_at": {
+            "description": "Token expiration date",
+            "format": "date",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "permissions": {
+            "description": "Permission roles (e.g., seed:read, seed:write)",
+            "items": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            },
+            "type": "array",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "sid": {
+            "description": "Token identifier",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          }
+        },
+        "required": [
+          "sid",
+          "description",
+          "permissions",
+          "expires_at"
+        ],
+        "title": "TokenInfo",
+        "type": "object",
+        "x-struct": "Elixir.SowerClient.Auth.TokenInfo",
+        "x-validate": null
       }
     },
     "securitySchemes": {
@@ -147,6 +201,47 @@
   },
   "openapi": "3.0.0",
   "paths": {
+    "/api/v1/auth/verify": {
+      "get": {
+        "callbacks": {},
+        "description": "Validates the Bearer token and returns token metadata",
+        "operationId": "VerifyToken",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenInfo"
+                }
+              }
+            },
+            "description": "Token info response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Verify access token",
+        "tags": []
+      }
+    },
     "/api/v1/nix/caches": {
       "get": {
         "callbacks": {},
@@ -354,6 +449,22 @@
         "callbacks": {},
         "operationId": "LatestSeed",
         "parameters": [
+          {
+            "description": "Filter by tags (key=value format, can repeat)",
+            "in": "query",
+            "name": "tags",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "string",
+                "x-struct": null,
+                "x-validate": null
+              },
+              "type": "array",
+              "x-struct": null,
+              "x-validate": null
+            }
+          },
           {
             "description": "Seed name",
             "example": "host1",
