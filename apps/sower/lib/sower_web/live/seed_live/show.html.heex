@@ -9,13 +9,15 @@
     <:item title="artifact">{@seed.artifact}</:item>
     <:item title="tags">
       <%= if Enum.empty?(@seed.tags) do %>
-        <span class="text-gray-500">No tags</span>
+        <span class="text-zinc-500 dark:text-zinc-400">No tags</span>
       <% else %>
-        <%= for tag <- @seed.tags do %>
-          <span class="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10 mr-1">
-            {tag.key}={tag.value}
-          </span>
-        <% end %>
+        <ul class="list-disc list-inside space-y-0.5">
+          <%= for tag <- Enum.sort(@seed.tags) do %>
+            <li>
+              {tag.key}={tag.value}
+            </li>
+          <% end %>
+        </ul>
       <% end %>
     </:item>
     <:item title="created">{@seed.inserted_at}</:item>

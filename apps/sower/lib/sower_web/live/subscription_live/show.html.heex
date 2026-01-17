@@ -19,13 +19,15 @@
     <:item title="Seed Type">{@subscription.seed_type}</:item>
     <:item title="Rules">
       <%= if Enum.empty?(@subscription.rules) do %>
-        <span class="text-gray-500">No rules</span>
+        <span class="text-zinc-500 dark:text-zinc-400">No rules</span>
       <% else %>
-        <%= for rule <- @subscription.rules do %>
-          <span class="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10 mr-1">
-            {SowerClient.SubscriptionRuleFormat.print(rule)}
-          </span>
-        <% end %>
+        <ul class="list-disc list-inside space-y-0.5">
+          <%= for rule <- @subscription.rules do %>
+            <li>
+              {SowerClient.SubscriptionRuleFormat.print(rule)}
+            </li>
+          <% end %>
+        </ul>
       <% end %>
     </:item>
     <:item title="Deployments">
