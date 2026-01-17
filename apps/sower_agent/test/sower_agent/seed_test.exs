@@ -96,7 +96,6 @@ defmodule SowerAgent.SeedTest do
     end
   end
 
-
   # Helper functions for mock server
 
   defp start_mock_server(handler) do

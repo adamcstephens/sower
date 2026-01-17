@@ -9,7 +9,7 @@ defmodule SowerCli do
 
   def main(argv) do
     # Load config at startup
-    SowerCli.Config.load()
+    SowerCli.Config.load(config_path_env: "SOWER_CLI_CONFIG")
 
     Application.get_all_env(:sower_cli)
 

@@ -11,11 +11,21 @@ defmodule SowerAgent.Config do
     Application.get_env(@app, :config)
   end
 
-  def load(config_map \\ %{}) do
+  def load(config_map \\ %{}, opts \\ []) do
     cfg =
-      SowerClient.Config.load(overrides: config_map)
-      |> validate_required!()
-      |> process_side_effects()
+      SowerClient.Config.load(
+        overrides: config_map,
+        skip_config_file: Keyword.get(opts, :skip_config_file, false)
+      )
+
+    cfg =
+      if Keyword.get(opts, :validate, true) do
+        validate_required!(cfg)
+      else
+        cfg
+      end
+
+    cfg = process_side_effects(cfg)
 
     Application.put_env(@app, :config, cfg)
     cfg
@@ -55,28 +65,30 @@ defmodule SowerAgent.Config do
   end
 
   defp process_side_effects(%SowerClient.Config{} = config) do
-    # Configure websocket client
-    uri = URI.parse(config.endpoint)
+    # Configure websocket client (only if endpoint is set)
+    if config.endpoint do
+      uri = URI.parse(config.endpoint)
 
-    uri =
-      Map.put(uri, :scheme, String.replace(uri.scheme, "http", "ws"))
-      |> Map.put(
-        :path,
-        case uri.path do
-          nil ->
-            "/agent/websocket"
+      uri =
+        Map.put(uri, :scheme, String.replace(uri.scheme, "http", "ws"))
+        |> Map.put(
+          :path,
+          case uri.path do
+            nil ->
+              "/agent/websocket"
 
-          p when is_binary(p) ->
-            if String.ends_with?(p, "agent/websocket") do
-              p
-            else
-              p <> "/agent/websocket"
-            end
-        end
-      )
+            p when is_binary(p) ->
+              if String.ends_with?(p, "agent/websocket") do
+                p
+              else
+                p <> "/agent/websocket"
+              end
+          end
+        )
 
-    Application.put_env(SowerAgent.Client, :uri, uri)
-    Application.put_env(SowerAgent.Client, :reconnect_after_msec, [200, 500, 1_000, 2_000])
+      Application.put_env(SowerAgent.Client, :uri, uri)
+      Application.put_env(SowerAgent.Client, :reconnect_after_msec, [200, 500, 1_000, 2_000])
+    end
 
     # Expand state_directory path
     %{config | state_directory: Path.expand(config.state_directory)}

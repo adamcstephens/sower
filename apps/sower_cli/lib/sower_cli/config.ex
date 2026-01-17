@@ -8,11 +8,11 @@ defmodule SowerCli.Config do
 
   @app :sower_cli
 
-  def load(overrides \\ %{}) do
+  def load(opts \\ []) do
     config =
       SowerClient.Config.load(
-        overrides: overrides,
-        config_path_env: "SOWER_CLI_CONFIG"
+        overrides: Keyword.get(opts, :overrides, %{}),
+        skip_config_file: Keyword.get(opts, :skip_config_file, false)
       )
 
     Application.put_env(@app, :config, config)

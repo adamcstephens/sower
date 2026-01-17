@@ -1,8 +1,6 @@
 defmodule SowerClient.ConfigTest do
   use ExUnit.Case, async: true
 
-  import ExUnit.CaptureLog
-
   alias SowerClient.Config
 
   describe "xdg_config_path/2" do
@@ -88,14 +86,8 @@ defmodule SowerClient.ConfigTest do
     end
 
     test "returns empty map when file doesn't exist" do
-      log =
-        capture_log(fn ->
-          result = Config.read_config_file("/nonexistent/path.json")
-
-          assert result == %{}
-        end)
-
-      assert log =~ "Config file is missing, using defaults"
+      result = Config.read_config_file("/nonexistent/path.json")
+      assert result == %{}
     end
   end
 
@@ -133,19 +125,14 @@ defmodule SowerClient.ConfigTest do
     end
 
     test "returns struct when no config file exists" do
-      log =
-        capture_log(fn ->
-          config =
-            Config.load(
-              config_path: "/nonexistent/path.json",
-              defaults: %{"endpoint" => "https://default.com"}
-            )
+      config =
+        Config.load(
+          config_path: "/nonexistent/path.json",
+          defaults: %{"endpoint" => "https://default.com"}
+        )
 
-          assert %Config{} = config
-          assert config.endpoint == "https://default.com"
-        end)
-
-      assert log =~ "Config file is missing, using defaults"
+      assert %Config{} = config
+      assert config.endpoint == "https://default.com"
     end
   end
 

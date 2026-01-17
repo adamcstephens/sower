@@ -7,21 +7,25 @@ if config_env() == :dev do
     state_directory: Path.expand("../_build", __DIR__)
   })
 
-  SowerCli.Config.load()
-end
-
-if config_env() != :test do
   Sower.Config.load()
 end
 
 if config_env() == :test do
-  SowerAgent.Config.load(%{
-    access_token_file: Path.expand("../.dev-api-token", __DIR__),
-    endpoint: "http://localhost:7150",
-    state_directory: Path.expand("../_build", __DIR__),
-    subscriptions: [
-      %{seed_name: "test1", seed_type: "nixos"},
-      %{seed_name: "test1", seed_type: "home-manager"}
-    ]
-  })
+  if Code.loaded?(SowerAgent.Config) do
+    SowerAgent.Config.load(
+      %{
+        state_directory: Path.expand("../_build", __DIR__),
+        subscriptions: [
+          %{seed_name: "test1", seed_type: "nixos"},
+          %{seed_name: "test1", seed_type: "home-manager"}
+        ]
+      },
+      skip_config_file: true,
+      validate: false
+    )
+  end
+
+  if Code.loaded?(SowerCli.Config) do
+    SowerCli.Config.load(skip_config_file: true)
+  end
 end

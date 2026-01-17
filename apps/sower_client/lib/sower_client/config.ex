@@ -12,6 +12,8 @@ defmodule SowerClient.Config do
   require Logger
   require OpenApiSpex
 
+  @config_file_env "SOWER_CONFIG_FILE"
+
   OpenApiSpex.schema(%{
     title: "Config",
     type: :object,
@@ -62,17 +64,24 @@ defmodule SowerClient.Config do
     Application.ensure_all_started(:logger)
 
     spec = build_spec()
-
+    skip_config_file = Keyword.get(opts, :skip_config_file, false)
     config_path = resolve_config_path(opts)
 
     defaults()
     |> Map.merge(Keyword.get(opts, :defaults, %{}))
-    |> Map.merge(read_config_file(config_path))
     |> then(fn cfg ->
-      if File.exists?(config_path) do
-        Map.put(cfg, :config_path, config_path)
+      if skip_config_file do
+        cfg
       else
         cfg
+        |> Map.merge(read_config_file(config_path))
+        |> then(fn merged ->
+          if File.exists?(config_path) do
+            Map.put(merged, :config_path, config_path)
+          else
+            merged
+          end
+        end)
       end
     end)
     |> preprocess_subscription_rules()
@@ -125,20 +134,17 @@ defmodule SowerClient.Config do
 
   Config path resolution order:
   1. Explicit `:config_path` option
-  2. Environment variable (if `:config_path_env` option is set)
-  3. From env `$SOWER_CONFIG_FILE`
-  4. XDG path: `~/.config/sower/client.json` or `/etc/sower/client.json`
+  2. From env `$SOWER_CONFIG_FILE`
+  3. XDG path: `~/.config/sower/client.json` or `/etc/sower/client.json`
   """
   def resolve_config_path(opts) do
     explicit_path = Keyword.get(opts, :config_path)
-    env_var = Keyword.get(opts, :config_path_env)
-    default_path = default_config_path()
 
     path =
-      cond do
-        explicit_path -> explicit_path
-        env_var -> System.get_env(env_var, default_path)
-        true -> default_path
+      if explicit_path do
+        explicit_path
+      else
+        default_config_path()
       end
 
     Path.absname(path)
@@ -147,14 +153,14 @@ defmodule SowerClient.Config do
   @doc """
   Default config file path.
 
-  Uses `$SOWER_CONFIG_FILE` if set
+  Uses `$SOWER_CONFIG_FILE` if set.
 
   Otherwise, returns `~/.config/sower/client.json` for non-root users,
   `/etc/sower/client.json` for root.
   """
-  def default_config_path do
+  def default_config_path() do
     System.get_env(
-      "SOWER_CONFIG_FILE",
+      @config_file_env,
       xdg_config_path("sower", "client.json")
     )
   end

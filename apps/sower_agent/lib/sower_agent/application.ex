@@ -7,14 +7,25 @@ defmodule SowerAgent.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
-      # Starts a worker by calling: SowerAgent.Worker.start_link(arg)
-      {SowerAgent.Client, []},
-      {SowerAgent.Storage, []},
-      {Task.Supervisor, name: SowerAgent.TaskSupervisor},
-      SowerAgent.Scheduler,
-      :systemd.ready()
-    ]
+    config = SowerAgent.Config.get()
+
+    # Only start client-related processes if endpoint is configured
+    client_children =
+      if config && config.endpoint do
+        [
+          {SowerAgent.Client, []},
+          SowerAgent.Scheduler
+        ]
+      else
+        []
+      end
+
+    children =
+      [
+        {SowerAgent.Storage, []},
+        {Task.Supervisor, name: SowerAgent.TaskSupervisor},
+        :systemd.ready()
+      ] ++ client_children
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
