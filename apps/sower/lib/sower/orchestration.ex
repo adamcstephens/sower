@@ -535,45 +535,22 @@ defmodule Sower.Orchestration do
   alias Sower.Orchestration.Deployment
   alias Sower.Seed
 
-  def match_seed(%Subscription{rules: rules} = subscription) do
-    # Build subquery to find all matching seed IDs
-    base_query =
-      from s in Seed,
-        where: s.name == ^subscription.seed_name and s.seed_type == ^subscription.seed_type,
-        select: s.id
-
-    matching_seed_ids =
-      Enum.reduce(rules || [], base_query, fn rule, q ->
-        op =
-          case rule.op do
-            op when is_atom(op) -> op
-            op when is_binary(op) -> String.to_existing_atom(op)
-          end
-
-        case op do
-          :eq ->
-            from s in q,
-              join: t in assoc(s, :tags),
-              where: t.key == ^rule.key and t.value == ^rule.value
-        end
+  def match_seed(%Subscription{} = subscription) do
+    tags =
+      Enum.map(subscription.rules || [], fn rule ->
+        %{key: rule.key, value: rule.value}
       end)
-      |> distinct(true)
-      |> Repo.all()
 
-    # Now find the latest seed from the matching IDs
-    case matching_seed_ids do
-      [] ->
-        nil
+    Seed.latest(subscription.seed_name, subscription.seed_type, tags)
+  end
 
-      ids ->
-        from(s in Seed,
-          where: s.id in ^ids,
-          order_by: [desc: s.inserted_at, desc: s.id],
-          limit: 1
-        )
-        |> Repo.one()
-        |> Repo.preload(:tags)
-    end
+  def list_matching_seeds(%Subscription{} = subscription, limit \\ 10) do
+    tags =
+      Enum.map(subscription.rules || [], fn rule ->
+        %{key: rule.key, value: rule.value}
+      end)
+
+    Seed.list_matching(subscription.seed_name, subscription.seed_type, tags, limit: limit)
   end
 
   @doc """

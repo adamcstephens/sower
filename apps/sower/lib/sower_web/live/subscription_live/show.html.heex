@@ -30,6 +30,32 @@
         </ul>
       <% end %>
     </:item>
+    <:item title="Matching Seeds">
+      <%= if Enum.empty?(@matching_seeds) do %>
+        <span class="text-zinc-500 dark:text-zinc-400">No matching seeds found</span>
+      <% else %>
+        <.table
+          id="matching-seeds"
+          rows={@matching_seeds}
+          row_click={fn seed -> JS.navigate(~p"/seeds/#{seed}") end}
+        >
+          <:col :let={seed} label="Name">{seed.name}</:col>
+          <:col :let={seed} label="Type">{seed.seed_type}</:col>
+          <:col :let={seed} label="Tags">
+            <%= if Enum.empty?(seed.tags) do %>
+              <span class="text-zinc-500 dark:text-zinc-400">No tags</span>
+            <% else %>
+              <span class="text-xs">
+                <%= for tag <- Enum.sort(seed.tags) do %>
+                  {tag.key}={tag.value}{if tag != List.last(Enum.sort(seed.tags)), do: ", "}
+                <% end %>
+              </span>
+            <% end %>
+          </:col>
+          <:col :let={seed} label="Created">{seed.inserted_at}</:col>
+        </.table>
+      <% end %>
+    </:item>
     <:item title="Deployments">
       <.table
         id="deployments"

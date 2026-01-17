@@ -12,6 +12,7 @@ defmodule SowerWeb.SubscriptionLive.Show do
   @impl true
   def handle_params(%{"sid" => sid}, _, socket) do
     subscription = Orchestration.get_subscription_sid_with_deployments!(sid)
+    matching_seeds = Orchestration.list_matching_seeds(subscription, 5)
 
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Sower.PubSub, "deployments:subscription:#{sid}")
@@ -20,7 +21,8 @@ defmodule SowerWeb.SubscriptionLive.Show do
     {:noreply,
      socket
      |> assign(:page_title, page_title(socket.assigns.live_action))
-     |> assign(:subscription, subscription)}
+     |> assign(:subscription, subscription)
+     |> assign(:matching_seeds, matching_seeds)}
   end
 
   @impl Phoenix.LiveView
@@ -28,7 +30,12 @@ defmodule SowerWeb.SubscriptionLive.Show do
     subscription =
       Orchestration.get_subscription_sid_with_deployments!(socket.assigns.subscription.sid)
 
-    {:noreply, assign(socket, :subscription, subscription)}
+    matching_seeds = Orchestration.list_matching_seeds(subscription, 5)
+
+    {:noreply,
+     socket
+     |> assign(:subscription, subscription)
+     |> assign(:matching_seeds, matching_seeds)}
   end
 
   defp page_title(:show), do: "Show Subscription"

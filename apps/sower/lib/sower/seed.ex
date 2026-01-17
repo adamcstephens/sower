@@ -116,6 +116,59 @@ defmodule Sower.Seed do
     |> Repo.preload([:tags])
   end
 
+  @doc """
+  List seeds matching name, seed_type, and having ALL specified tags.
+
+  Tags should be a list of maps with :key and :value fields.
+
+  ## Options
+    * `:limit` - Maximum number of seeds to return (default: 1)
+  """
+  def list_matching(name, seed_type, tags, opts \\ [])
+
+  def list_matching(name, seed_type, [], opts) do
+    limit = Keyword.get(opts, :limit, 1)
+
+    query =
+      from(s in Seed,
+        where: s.name == ^name and s.seed_type == ^seed_type,
+        order_by: [desc: s.updated_at, desc: s.id],
+        limit: ^limit
+      )
+
+    Repo.all(query)
+    |> Repo.preload([:tags])
+  end
+
+  def list_matching(name, seed_type, tags, opts) when is_list(tags) do
+    limit = Keyword.get(opts, :limit, 1)
+
+    base_query =
+      from(s in Seed,
+        where: s.name == ^name and s.seed_type == ^seed_type,
+        order_by: [desc: s.updated_at, desc: s.id],
+        limit: ^limit
+      )
+
+    query =
+      Enum.reduce(tags, base_query, fn %{key: key, value: value}, query ->
+        from(s in query,
+          where:
+            exists(
+              from(st in SeedTag,
+                where: st.seed_id == parent_as(:seed).id,
+                where: st.key == ^key and st.value == ^value
+              )
+            )
+        )
+      end)
+
+    query = from(s in query, as: :seed)
+
+    Repo.all(query)
+    |> Repo.preload([:tags])
+  end
+
   def latest(name, seed_type) do
     Repo.one(
       from s in Seed,
@@ -132,38 +185,11 @@ defmodule Sower.Seed do
   Tags should be a list of maps with :key and :value fields.
   Returns nil if no seed matches all tags.
   """
-  def latest(name, seed_type, []) do
-    latest(name, seed_type)
-  end
-
   def latest(name, seed_type, tags) when is_list(tags) do
-    # Build a query that finds seeds having ALL the specified tags
-    # Using multiple EXISTS subqueries - one for each tag
-    base_query =
-      from(s in Seed,
-        where: s.name == ^name and s.seed_type == ^seed_type,
-        order_by: [desc: s.updated_at, desc: s.id],
-        limit: 1
-      )
-
-    query =
-      Enum.reduce(tags, base_query, fn %{key: key, value: value}, query ->
-        from(s in query,
-          where:
-            exists(
-              from(st in SeedTag,
-                where: st.seed_id == parent_as(:seed).id,
-                where: st.key == ^key and st.value == ^value
-              )
-            )
-        )
-      end)
-
-    # Add the parent_as binding
-    query = from(s in query, as: :seed)
-
-    Repo.one(query)
-    |> Repo.preload([:tags])
+    case list_matching(name, seed_type, tags, limit: 1) do
+      [seed] -> seed
+      [] -> nil
+    end
   end
 
   def latest_artifact(%__MODULE__{id: id}) do
