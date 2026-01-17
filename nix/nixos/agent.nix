@@ -58,8 +58,8 @@ in
   config = lib.mkIf cfg.enable {
     assertions = [
       {
-        assertion = !config.security.sudo-rs.enable;
-        messages = "sudo-rs is not supported";
+        assertion = activatorCfg.enable || !config.security.sudo-rs.enable;
+        message = "sudo-rs is not supported";
       }
     ];
 
