@@ -7,19 +7,42 @@
   ],
 }:
 rec {
-  addSowerMeta =
+  mkSeed =
     {
       name,
       type,
       package,
-      meta ? { },
+      extraSeedMeta ? { },
     }:
-    lib.addMetaAttrs (lib.recursiveUpdate {
-      sower.seed = {
+    lib.addMetaAttrs {
+      sower.seed = lib.recursiveUpdate {
         inherit name;
         seed_type = type;
+      } extraSeedMeta;
+    } package;
+
+  mkSeedNixos =
+    name: nixosConfig:
+    lib.nameValuePair "nixos/${name}" (mkSeed {
+      inherit name;
+      package = nixosConfig.config.system.build.toplevel;
+      type = "nixos";
+      extraSeedMeta = nixosConfig.config.sower.seed.meta or { };
+    });
+
+  mkSeedHomeManager =
+    name: homeConfig:
+    lib.nameValuePair "home/${name}" (mkSeed {
+      inherit name;
+      type = "home-manager";
+      package = homeConfig.activationPackage;
+      extraSeedMeta = {
+        tags = {
+          inherit (homeConfig.config.home) username homeDirectory;
+          inherit (homeConfig.config.home.version) release;
+        };
       };
-    } meta) package;
+    });
 
   genNixosPackages =
     nixosConfigurations:
@@ -28,15 +51,7 @@ rec {
         system:
         lib.pipe nixosConfigurations [
           (lib.filterAttrs (_: nixosConfig: nixosConfig.pkgs.stdenv.hostPlatform.system == system))
-          (lib.mapAttrs' (
-            name: nixosConfig:
-            lib.nameValuePair "nixos/${name}" (addSowerMeta {
-              inherit name;
-              package = nixosConfigurations.${name}.config.system.build.toplevel;
-              type = "nixos";
-              meta = nixosConfigurations.${name}.config.sower.seed.meta or { };
-            })
-          ))
+          (lib.mapAttrs' mkSeedNixos)
         ];
     in
     lib.listToAttrs (
@@ -53,20 +68,7 @@ rec {
         system:
         lib.pipe homeConfigurations [
           (lib.filterAttrs (_: homeConfig: homeConfig.pkgs.stdenv.hostPlatform.system == system))
-          (lib.mapAttrs' (
-            name: homeConfig:
-            lib.nameValuePair "home/${name}" (addSowerMeta {
-              inherit name;
-              type = "home-manager";
-              package = homeConfigurations.${name}.activationPackage;
-              meta = {
-                # TODO convert this to tags
-                sower.seed.tags = {
-                  inherit (homeConfig.config.home) username homeDirectory version;
-                };
-              };
-            })
-          ))
+          (lib.mapAttrs' mkSeedHomeManager)
         ];
     in
     lib.listToAttrs (

@@ -6,8 +6,16 @@ in
 {
   options = {
     sower.seed.meta = lib.mkOption {
-      # TODO add tags as explicit option
-      type = lib.types.submodule { freeformType = jsonType; };
+      type = lib.types.submodule {
+        freeformType = jsonType;
+        options = {
+          tags = lib.mkOption {
+            type = lib.types.attrsOf lib.types.str;
+            description = "key/value tags";
+            default = { };
+          };
+        };
+      };
       description = "meta to add to package meta";
       default = { };
     };

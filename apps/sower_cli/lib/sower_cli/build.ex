@@ -275,8 +275,9 @@ defmodule SowerCli.Build do
           Output.live_item_start(block_id, "Registering", seed_name)
 
           tags =
-            load_tags(state) ++
-              Map.get(seed_meta, "tags", []) ++ SowerCli.Repo.get_tags(state.request)
+            cli_tags(state) ++
+              convert_meta_tags(seed_meta) ++
+              SowerCli.Repo.get_tags(state.request)
 
           result =
             case seed_meta
@@ -328,9 +329,20 @@ defmodule SowerCli.Build do
     end
   end
 
-  defp load_tags(%__MODULE__{} = state) do
+  defp cli_tags(%__MODULE__{} = state) do
     state.options.tag
     |> Enum.map(&SowerClient.SeedTag.from_string/1)
+  end
+
+  defp convert_meta_tags(seed_meta) do
+    Map.get(seed_meta, "tags", {})
+    |> Map.to_list()
+    |> Enum.map(fn {key, value} when is_binary(value) ->
+      %SowerClient.SeedTag{
+        key: key,
+        value: value
+      }
+    end)
   end
 
   defp receive_progress(task, blocks, handler) do
