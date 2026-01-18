@@ -219,6 +219,98 @@ defmodule Sower.Seed do
     |> Repo.preload([:tags])
   end
 
+  @doc """
+  Finds an existing seed by artifact path, or registers a new one from agent-reported data.
+
+  When an agent reports a generation that doesn't match any known seed, this function
+  auto-registers it with the `agent_source` tag set to the agent's SID.
+
+  ## Parameters
+    - `agent` - The Agent struct reporting the generation
+    - `generation` - The AgentSeedGeneration with path, link, etc.
+    - `profile` - The AgentSeedProfile containing profile_path and tags
+
+  ## Returns
+    - `{:ok, seed}` on success (existing or newly created)
+    - `{:error, changeset}` on validation failure
+  """
+  def find_or_register_from_agent(
+        %Sower.Orchestration.Agent{} = agent,
+        %SowerClient.Orchestration.AgentSeedGeneration{} = generation,
+        %SowerClient.Orchestration.AgentSeedProfile{} = profile
+      ) do
+    case get_by_artifact(generation.path) do
+      nil ->
+        register_from_agent(agent, generation, profile)
+
+      seed ->
+        {:ok, seed}
+    end
+  end
+
+  defp register_from_agent(agent, generation, profile) do
+    name = extract_name_from_store_path(generation.path)
+    seed_type = seed_type_from_profile_path(profile.profile_path)
+
+    # Build tags: agent_source + any profile tags
+    tags =
+      [%{key: "agent_source", value: agent.sid}] ++
+        Enum.map(profile.tags || [], fn {k, v} -> %{key: to_string(k), value: to_string(v)} end)
+
+    create(%{
+      name: name,
+      seed_type: seed_type,
+      artifact: generation.path,
+      tags: tags
+    })
+  end
+
+  @doc """
+  Extracts the derivation name from a Nix store path.
+
+  The Nix store path format is `/nix/store/{hash}-{name}` where the hash
+  is 32 characters. This function extracts the name portion after the first hyphen.
+
+  ## Examples
+
+      iex> Sower.Seed.extract_name_from_store_path("/nix/store/abc123-nixos-system-myhost-24.05")
+      "nixos-system-myhost-24.05"
+
+      iex> Sower.Seed.extract_name_from_store_path("/nix/store/xyz789-home-manager-generation")
+      "home-manager-generation"
+  """
+  def extract_name_from_store_path(path) do
+    basename = Path.basename(path)
+
+    case String.split(basename, "-", parts: 2) do
+      [_hash, name] -> name
+      [name] -> name
+    end
+  end
+
+  @doc """
+  Determines the seed type from a Nix profile path.
+
+  ## Examples
+
+      iex> Sower.Seed.seed_type_from_profile_path("/nix/var/nix/profiles/system")
+      "nixos"
+
+      iex> Sower.Seed.seed_type_from_profile_path("/home/user/.local/state/nix/profiles/home-manager")
+      "home-manager"
+
+      iex> Sower.Seed.seed_type_from_profile_path("/run/current-system/sw")
+      "nixos"
+  """
+  def seed_type_from_profile_path(profile_path) do
+    cond do
+      String.contains?(profile_path, "home-manager") -> "home-manager"
+      String.contains?(profile_path, "/nix/var/nix/profiles/system") -> "nixos"
+      String.contains?(profile_path, "nix-darwin") -> "nix-darwin"
+      true -> "nixos"
+    end
+  end
+
   defp changeset(seed, attrs) do
     seed
     |> cast(attrs, [:name, :seed_type, :org_id, :artifact])

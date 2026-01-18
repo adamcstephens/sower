@@ -2,6 +2,7 @@ defmodule Sower.SeedTest do
   use Sower.DataCase
 
   import Sower.AccountsFixtures
+  import Sower.OrchestrationFixtures
   import Sower.SeedFixtures
 
   alias Sower.Seed
@@ -135,5 +136,163 @@ defmodule Sower.SeedTest do
 
       assert %Seed{id: ^id} = Seed.latest(name, "nixos", [])
     end
+  end
+
+  describe "extract_name_from_store_path/1" do
+    test "extracts the derivation name from a NixOS store path" do
+      assert Seed.extract_name_from_store_path("/nix/store/abc123def-nixos-system-myhost-24.05") ==
+               "nixos-system-myhost-24.05"
+    end
+
+    test "extracts name from home-manager store path" do
+      assert Seed.extract_name_from_store_path("/nix/store/xyz789abc-home-manager-generation") ==
+               "home-manager-generation"
+    end
+
+    test "handles paths with only hash prefix" do
+      assert Seed.extract_name_from_store_path("/nix/store/abc123-simple") == "simple"
+    end
+  end
+
+  describe "seed_type_from_profile_path/1" do
+    test "returns nixos for system profile path" do
+      assert Seed.seed_type_from_profile_path("/nix/var/nix/profiles/system") == "nixos"
+    end
+
+    test "returns home-manager for home-manager profile path" do
+      assert Seed.seed_type_from_profile_path("/home/user/.local/state/nix/profiles/home-manager") ==
+               "home-manager"
+    end
+
+    test "returns nix-darwin for nix-darwin profile path" do
+      assert Seed.seed_type_from_profile_path("/nix/var/nix/profiles/nix-darwin") == "nix-darwin"
+    end
+
+    test "defaults to nixos for unknown profile paths" do
+      assert Seed.seed_type_from_profile_path("/some/unknown/path") == "nixos"
+    end
+  end
+
+  describe "find_or_register_from_agent/3" do
+    test "returns existing seed when artifact already exists" do
+      existing = seed_fixture()
+      agent = agent_fixture()
+
+      generation = %SowerClient.Orchestration.AgentSeedGeneration{
+        path: existing.artifact,
+        link: "/nix/var/nix/profiles/system-1-link",
+        created: DateTime.to_iso8601(DateTime.utc_now()),
+        generation_number: 1,
+        is_current: true
+      }
+
+      profile = %SowerClient.Orchestration.AgentSeedProfile{
+        profile_path: "/nix/var/nix/profiles/system",
+        tags: [],
+        generations: [generation]
+      }
+
+      assert {:ok, seed} = Seed.find_or_register_from_agent(agent, generation, profile)
+      assert seed.id == existing.id
+    end
+
+    test "creates new seed when artifact is unknown" do
+      agent = agent_fixture()
+      artifact = "/nix/store/#{unique_hash()}-nixos-system-testhost-24.05"
+
+      generation = %SowerClient.Orchestration.AgentSeedGeneration{
+        path: artifact,
+        link: "/nix/var/nix/profiles/system-42-link",
+        created: DateTime.to_iso8601(DateTime.utc_now()),
+        generation_number: 42,
+        is_current: true
+      }
+
+      profile = %SowerClient.Orchestration.AgentSeedProfile{
+        profile_path: "/nix/var/nix/profiles/system",
+        tags: [],
+        generations: [generation]
+      }
+
+      assert {:ok, seed} = Seed.find_or_register_from_agent(agent, generation, profile)
+      assert seed.artifact == artifact
+      assert seed.name == "nixos-system-testhost-24.05"
+      assert seed.seed_type == "nixos"
+    end
+
+    test "adds agent_source tag when auto-registering" do
+      agent = agent_fixture()
+      artifact = "/nix/store/#{unique_hash()}-nixos-system-testhost-24.05"
+
+      generation = %SowerClient.Orchestration.AgentSeedGeneration{
+        path: artifact,
+        link: "/nix/var/nix/profiles/system-42-link",
+        created: DateTime.to_iso8601(DateTime.utc_now()),
+        generation_number: 42,
+        is_current: true
+      }
+
+      profile = %SowerClient.Orchestration.AgentSeedProfile{
+        profile_path: "/nix/var/nix/profiles/system",
+        tags: [],
+        generations: [generation]
+      }
+
+      assert {:ok, seed} = Seed.find_or_register_from_agent(agent, generation, profile)
+
+      assert Enum.any?(seed.tags, fn tag ->
+               tag.key == "agent_source" && tag.value == agent.sid
+             end)
+    end
+
+    test "includes profile tags when auto-registering" do
+      agent = agent_fixture()
+      artifact = "/nix/store/#{unique_hash()}-home-manager-generation"
+
+      generation = %SowerClient.Orchestration.AgentSeedGeneration{
+        path: artifact,
+        link: "/home/alice/.local/state/nix/profiles/home-manager-5-link",
+        created: DateTime.to_iso8601(DateTime.utc_now()),
+        generation_number: 5,
+        is_current: true
+      }
+
+      profile = %SowerClient.Orchestration.AgentSeedProfile{
+        profile_path: "/home/alice/.local/state/nix/profiles/home-manager",
+        tags: [{"user", "alice"}],
+        generations: [generation]
+      }
+
+      assert {:ok, seed} = Seed.find_or_register_from_agent(agent, generation, profile)
+      assert seed.seed_type == "home-manager"
+      assert Enum.any?(seed.tags, fn tag -> tag.key == "user" && tag.value == "alice" end)
+      assert Enum.any?(seed.tags, fn tag -> tag.key == "agent_source" end)
+    end
+
+    test "determines seed_type from home-manager profile path" do
+      agent = agent_fixture()
+      artifact = "/nix/store/#{unique_hash()}-home-manager-generation"
+
+      generation = %SowerClient.Orchestration.AgentSeedGeneration{
+        path: artifact,
+        link: "/home/alice/.local/state/nix/profiles/home-manager-5-link",
+        created: DateTime.to_iso8601(DateTime.utc_now()),
+        generation_number: 5,
+        is_current: true
+      }
+
+      profile = %SowerClient.Orchestration.AgentSeedProfile{
+        profile_path: "/home/alice/.local/state/nix/profiles/home-manager",
+        tags: [],
+        generations: [generation]
+      }
+
+      assert {:ok, seed} = Seed.find_or_register_from_agent(agent, generation, profile)
+      assert seed.seed_type == "home-manager"
+    end
+  end
+
+  defp unique_hash do
+    :crypto.strong_rand_bytes(16) |> Base.encode32(case: :lower) |> String.slice(0, 32)
   end
 end

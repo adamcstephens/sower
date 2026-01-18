@@ -748,8 +748,7 @@ defmodule Sower.Orchestration do
   - Upserts agent_seed_profile records for found seeds
   - Deletes agent_seed_profiles for seeds no longer reported by the agent
 
-  Phase 2: Only handles known seeds (by artifact). Unknown artifacts are skipped.
-  Phase 3 will add auto-registration of unknown seeds.
+  Unknown artifacts are automatically registered as seeds with `agent_source` tag.
   """
   def update_agent_seed_profiles(
         %SowerClient.Orchestration.AgentSeedsReport{} = report,
@@ -763,14 +762,19 @@ defmodule Sower.Orchestration do
         upserted_seed_ids =
           for gen <- profile.generations, reduce: [] do
             acc ->
-              case Seed.get_by_artifact(gen.path) do
-                nil ->
-                  # Phase 3 will auto-register unknown seeds
-                  acc
-
-                seed ->
+              case Seed.find_or_register_from_agent(agent, gen, profile) do
+                {:ok, seed} ->
                   upsert_agent_seed_profile(agent, nix_profile, seed, gen)
                   [seed.id | acc]
+
+                {:error, error} ->
+                  Logger.warning(
+                    msg: "Failed to auto-register seed from agent",
+                    artifact: gen.path,
+                    error: error
+                  )
+
+                  acc
               end
           end
 

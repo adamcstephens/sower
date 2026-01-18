@@ -588,4 +588,279 @@ defmodule Sower.OrchestrationTest do
       assert Sower.Repo.get(AgentSeedProfile, asp.id) == nil
     end
   end
+
+  describe "update_agent_seed_profiles/2 with auto-registration" do
+    alias Sower.Orchestration.{AgentSeedProfile, NixProfile}
+    alias Sower.Seed
+
+    import Sower.OrchestrationFixtures
+
+    test "auto-registers unknown artifacts as seeds" do
+      agent = agent_fixture()
+      artifact = "/nix/store/#{unique_hash()}-nixos-system-testhost-24.05"
+
+      report = %SowerClient.Orchestration.AgentSeedsReport{
+        profiles: [
+          %SowerClient.Orchestration.AgentSeedProfile{
+            profile_path: "/nix/var/nix/profiles/system",
+            tags: [],
+            generations: [
+              %SowerClient.Orchestration.AgentSeedGeneration{
+                path: artifact,
+                link: "/nix/var/nix/profiles/system-42-link",
+                created: DateTime.to_iso8601(DateTime.utc_now()),
+                generation_number: 42,
+                is_current: true
+              }
+            ]
+          }
+        ]
+      }
+
+      assert {:ok, :ok} = Orchestration.update_agent_seed_profiles(report, agent)
+
+      # Verify seed was auto-registered
+      seed = Seed.get_by_artifact(artifact)
+      assert seed != nil
+      assert seed.name == "nixos-system-testhost-24.05"
+      assert seed.seed_type == "nixos"
+
+      assert Enum.any?(seed.tags, fn tag ->
+               tag.key == "agent_source" && tag.value == agent.sid
+             end)
+
+      # Verify agent_seed_profile was created
+      profiles = AgentSeedProfile.list_for_agent(agent.id)
+      assert length(profiles) == 1
+      assert hd(profiles).seed_id == seed.id
+      assert hd(profiles).is_current == true
+    end
+
+    test "auto-registers multiple generations and sets is_current correctly" do
+      agent = agent_fixture()
+      artifact_current = "/nix/store/#{unique_hash()}-nixos-system-testhost-24.05"
+      artifact_previous = "/nix/store/#{unique_hash()}-nixos-system-testhost-24.04"
+
+      report = %SowerClient.Orchestration.AgentSeedsReport{
+        profiles: [
+          %SowerClient.Orchestration.AgentSeedProfile{
+            profile_path: "/nix/var/nix/profiles/system",
+            tags: [],
+            generations: [
+              %SowerClient.Orchestration.AgentSeedGeneration{
+                path: artifact_current,
+                link: "/nix/var/nix/profiles/system-42-link",
+                created: DateTime.to_iso8601(DateTime.utc_now()),
+                generation_number: 42,
+                is_current: true
+              },
+              %SowerClient.Orchestration.AgentSeedGeneration{
+                path: artifact_previous,
+                link: "/nix/var/nix/profiles/system-41-link",
+                created: DateTime.to_iso8601(DateTime.add(DateTime.utc_now(), -86400, :second)),
+                generation_number: 41,
+                is_current: false
+              }
+            ]
+          }
+        ]
+      }
+
+      assert {:ok, :ok} = Orchestration.update_agent_seed_profiles(report, agent)
+
+      # Both seeds should be auto-registered
+      assert Seed.get_by_artifact(artifact_current) != nil
+      assert Seed.get_by_artifact(artifact_previous) != nil
+
+      # Both should have agent_seed_profiles
+      profiles = AgentSeedProfile.list_for_agent(agent.id)
+      assert length(profiles) == 2
+
+      # Only one should be current
+      current_profiles = Enum.filter(profiles, & &1.is_current)
+      assert length(current_profiles) == 1
+      assert hd(current_profiles).generation_number == 42
+    end
+
+    test "includes profile tags in auto-registered seeds" do
+      agent = agent_fixture()
+      artifact = "/nix/store/#{unique_hash()}-home-manager-generation"
+
+      report = %SowerClient.Orchestration.AgentSeedsReport{
+        profiles: [
+          %SowerClient.Orchestration.AgentSeedProfile{
+            profile_path: "/home/alice/.local/state/nix/profiles/home-manager",
+            tags: [{"user", "alice"}],
+            generations: [
+              %SowerClient.Orchestration.AgentSeedGeneration{
+                path: artifact,
+                link: "/home/alice/.local/state/nix/profiles/home-manager-5-link",
+                created: DateTime.to_iso8601(DateTime.utc_now()),
+                generation_number: 5,
+                is_current: true
+              }
+            ]
+          }
+        ]
+      }
+
+      assert {:ok, :ok} = Orchestration.update_agent_seed_profiles(report, agent)
+
+      seed = Seed.get_by_artifact(artifact)
+      assert seed.seed_type == "home-manager"
+      assert Enum.any?(seed.tags, fn tag -> tag.key == "user" && tag.value == "alice" end)
+      assert Enum.any?(seed.tags, fn tag -> tag.key == "agent_source" end)
+    end
+
+    test "uses existing seed when artifact is already known" do
+      agent = agent_fixture()
+      existing = seed_fixture()
+
+      report = %SowerClient.Orchestration.AgentSeedsReport{
+        profiles: [
+          %SowerClient.Orchestration.AgentSeedProfile{
+            profile_path: "/nix/var/nix/profiles/system",
+            tags: [],
+            generations: [
+              %SowerClient.Orchestration.AgentSeedGeneration{
+                path: existing.artifact,
+                link: "/nix/var/nix/profiles/system-1-link",
+                created: DateTime.to_iso8601(DateTime.utc_now()),
+                generation_number: 1,
+                is_current: true
+              }
+            ]
+          }
+        ]
+      }
+
+      assert {:ok, :ok} = Orchestration.update_agent_seed_profiles(report, agent)
+
+      # Should use existing seed, not create a new one
+      profiles = AgentSeedProfile.list_for_agent(agent.id)
+      assert length(profiles) == 1
+      assert hd(profiles).seed_id == existing.id
+    end
+
+    test "deletes stale agent_seed_profiles for removed generations" do
+      agent = agent_fixture()
+      artifact1 = "/nix/store/#{unique_hash()}-nixos-system-testhost-1"
+      artifact2 = "/nix/store/#{unique_hash()}-nixos-system-testhost-2"
+
+      # First report with two generations
+      report1 = %SowerClient.Orchestration.AgentSeedsReport{
+        profiles: [
+          %SowerClient.Orchestration.AgentSeedProfile{
+            profile_path: "/nix/var/nix/profiles/system",
+            tags: [],
+            generations: [
+              %SowerClient.Orchestration.AgentSeedGeneration{
+                path: artifact1,
+                link: "/nix/var/nix/profiles/system-1-link",
+                created: DateTime.to_iso8601(DateTime.utc_now()),
+                generation_number: 1,
+                is_current: false
+              },
+              %SowerClient.Orchestration.AgentSeedGeneration{
+                path: artifact2,
+                link: "/nix/var/nix/profiles/system-2-link",
+                created: DateTime.to_iso8601(DateTime.utc_now()),
+                generation_number: 2,
+                is_current: true
+              }
+            ]
+          }
+        ]
+      }
+
+      assert {:ok, :ok} = Orchestration.update_agent_seed_profiles(report1, agent)
+      assert length(AgentSeedProfile.list_for_agent(agent.id)) == 2
+
+      # Second report with only one generation (simulating garbage collection)
+      report2 = %SowerClient.Orchestration.AgentSeedsReport{
+        profiles: [
+          %SowerClient.Orchestration.AgentSeedProfile{
+            profile_path: "/nix/var/nix/profiles/system",
+            tags: [],
+            generations: [
+              %SowerClient.Orchestration.AgentSeedGeneration{
+                path: artifact2,
+                link: "/nix/var/nix/profiles/system-2-link",
+                created: DateTime.to_iso8601(DateTime.utc_now()),
+                generation_number: 2,
+                is_current: true
+              }
+            ]
+          }
+        ]
+      }
+
+      assert {:ok, :ok} = Orchestration.update_agent_seed_profiles(report2, agent)
+
+      # Should only have one agent_seed_profile now
+      profiles = AgentSeedProfile.list_for_agent(agent.id)
+      assert length(profiles) == 1
+      assert hd(profiles).generation_number == 2
+    end
+
+    test "handles multiple profiles (NixOS + home-manager)" do
+      agent = agent_fixture()
+      nixos_artifact = "/nix/store/#{unique_hash()}-nixos-system-testhost"
+      hm_artifact = "/nix/store/#{unique_hash()}-home-manager-generation"
+
+      report = %SowerClient.Orchestration.AgentSeedsReport{
+        profiles: [
+          %SowerClient.Orchestration.AgentSeedProfile{
+            profile_path: "/nix/var/nix/profiles/system",
+            tags: [],
+            generations: [
+              %SowerClient.Orchestration.AgentSeedGeneration{
+                path: nixos_artifact,
+                link: "/nix/var/nix/profiles/system-42-link",
+                created: DateTime.to_iso8601(DateTime.utc_now()),
+                generation_number: 42,
+                is_current: true
+              }
+            ]
+          },
+          %SowerClient.Orchestration.AgentSeedProfile{
+            profile_path: "/home/user/.local/state/nix/profiles/home-manager",
+            tags: [{"user", "testuser"}],
+            generations: [
+              %SowerClient.Orchestration.AgentSeedGeneration{
+                path: hm_artifact,
+                link: "/home/user/.local/state/nix/profiles/home-manager-10-link",
+                created: DateTime.to_iso8601(DateTime.utc_now()),
+                generation_number: 10,
+                is_current: true
+              }
+            ]
+          }
+        ]
+      }
+
+      assert {:ok, :ok} = Orchestration.update_agent_seed_profiles(report, agent)
+
+      profiles = AgentSeedProfile.list_for_agent(agent.id)
+      assert length(profiles) == 2
+
+      nixos_seed = Seed.get_by_artifact(nixos_artifact)
+      hm_seed = Seed.get_by_artifact(hm_artifact)
+
+      assert nixos_seed.seed_type == "nixos"
+      assert hm_seed.seed_type == "home-manager"
+      assert Enum.any?(hm_seed.tags, fn tag -> tag.key == "user" && tag.value == "testuser" end)
+
+      # Verify correct nix_profiles were created
+      nixos_profile = NixProfile.get_by_path("/nix/var/nix/profiles/system")
+      hm_profile = NixProfile.get_by_path("/home/user/.local/state/nix/profiles/home-manager")
+
+      assert nixos_profile != nil
+      assert hm_profile != nil
+    end
+  end
+
+  defp unique_hash do
+    :crypto.strong_rand_bytes(16) |> Base.encode32(case: :lower) |> String.slice(0, 32)
+  end
 end
