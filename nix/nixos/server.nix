@@ -21,7 +21,7 @@ let
       + ''
         RELEASE_COOKIE=$(cat ${cfg.environment.RELEASE_COOKIE_FILE})
         export RELEASE_COOKIE
-        exec ${cfg.package}/bin/sower "$@"
+        exec ${cfg.package}/bin/sower-server "$@"
       '';
   };
 
