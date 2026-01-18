@@ -1,4 +1,4 @@
-defmodule Sower.Repo.Migrations.CreateAgentSeedProfiles do
+defmodule Sower.Repo.Migrations.CreateAgentSeedGenerations do
   use Ecto.Migration
 
   def change do
@@ -10,7 +10,7 @@ defmodule Sower.Repo.Migrations.CreateAgentSeedProfiles do
 
     create(unique_index(:nix_profiles, [:profile_path]))
 
-    create table(:agent_seed_profiles) do
+    create table(:agent_seed_generations) do
       add(:org_id, references(:organizations, column: :org_id, type: :uuid), null: false)
 
       add(:agent_id, references(:agents, on_delete: :delete_all), null: false)
@@ -24,12 +24,12 @@ defmodule Sower.Repo.Migrations.CreateAgentSeedProfiles do
       timestamps()
     end
 
-    create(index(:agent_seed_profiles, [:org_id]))
-    create(index(:agent_seed_profiles, [:agent_id]))
-    create(index(:agent_seed_profiles, [:seed_id]))
-    create(index(:agent_seed_profiles, [:profile_id]))
-    create(index(:agent_seed_profiles, [:agent_id, :is_current]))
-    create(index(:agent_seed_profiles, [:agent_id, :profile_id]))
-    create(unique_index(:agent_seed_profiles, [:agent_id, :seed_id]))
+    create(index(:agent_seed_generations, [:org_id]))
+    create(index(:agent_seed_generations, [:agent_id]))
+    create(index(:agent_seed_generations, [:seed_id]))
+    create(index(:agent_seed_generations, [:profile_id]))
+    create(index(:agent_seed_generations, [:agent_id, :is_current]))
+    create(index(:agent_seed_generations, [:agent_id, :profile_id]))
+    create(unique_index(:agent_seed_generations, [:agent_id, :seed_id]))
   end
 end

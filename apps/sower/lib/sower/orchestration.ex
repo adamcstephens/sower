@@ -737,20 +737,20 @@ defmodule Sower.Orchestration do
     end
   end
 
-  alias Sower.Orchestration.{NixProfile, AgentSeedProfile}
+  alias Sower.Orchestration.{NixProfile, AgentSeedGeneration}
 
   @doc """
-  Updates agent_seed_profiles from an agent's seeds report.
+  Updates agent_seed_generations from an agent's seeds report.
 
   For each profile in the report:
   - Finds or creates the nix_profile by path
   - For each generation, looks up the seed by artifact (store path)
-  - Upserts agent_seed_profile records for found seeds
-  - Deletes agent_seed_profiles for seeds no longer reported by the agent
+  - Upserts agent_seed_generation records for found seeds
+  - Deletes agent_seed_generations for seeds no longer reported by the agent
 
   Unknown artifacts are automatically registered as seeds with `agent_source` tag.
   """
-  def update_agent_seed_profiles(
+  def update_agent_seed_generations(
         %SowerClient.Orchestration.AgentSeedsReport{} = report,
         %Agent{} = agent
       ) do
@@ -764,7 +764,7 @@ defmodule Sower.Orchestration do
             acc ->
               case Seed.find_or_register_from_agent(agent, gen, profile) do
                 {:ok, seed} ->
-                  upsert_agent_seed_profile(agent, nix_profile, seed, gen)
+                  upsert_agent_seed_generation(agent, nix_profile, seed, gen)
                   [seed.id | acc]
 
                 {:error, error} ->
@@ -778,19 +778,19 @@ defmodule Sower.Orchestration do
               end
           end
 
-        # Delete agent_seed_profiles for this profile that are no longer in the report
-        delete_stale_agent_seed_profiles(agent.id, nix_profile.id, upserted_seed_ids)
+        # Delete agent_seed_generations for this profile that are no longer in the report
+        delete_stale_agent_seed_generations(agent.id, nix_profile.id, upserted_seed_ids)
       end
 
       :ok
     end)
   end
 
-  defp upsert_agent_seed_profile(%Agent{} = agent, nix_profile, seed, gen) do
+  defp upsert_agent_seed_generation(%Agent{} = agent, nix_profile, seed, gen) do
     # If this generation is_current, clear other is_current flags first
     if gen.is_current do
-      from(asp in AgentSeedProfile,
-        where: asp.agent_id == ^agent.id and asp.profile_id == ^nix_profile.id
+      from(asg in AgentSeedGeneration,
+        where: asg.agent_id == ^agent.id and asg.profile_id == ^nix_profile.id
       )
       |> Repo.update_all(set: [is_current: false])
     end
@@ -802,24 +802,24 @@ defmodule Sower.Orchestration do
         str when is_binary(str) -> DateTime.from_iso8601(str) |> elem(1)
       end
 
-    AgentSeedProfile.upsert_from_report(agent.id, nix_profile.id, seed.id, %{
+    AgentSeedGeneration.upsert_from_report(agent.id, nix_profile.id, seed.id, %{
       generation_number: gen.generation_number,
       is_current: gen.is_current,
       created_at_generation: created_at
     })
   end
 
-  defp delete_stale_agent_seed_profiles(agent_id, profile_id, keep_seed_ids) do
+  defp delete_stale_agent_seed_generations(agent_id, profile_id, keep_seed_ids) do
     query =
-      from(asp in AgentSeedProfile,
-        where: asp.agent_id == ^agent_id and asp.profile_id == ^profile_id
+      from(asg in AgentSeedGeneration,
+        where: asg.agent_id == ^agent_id and asg.profile_id == ^profile_id
       )
 
     query =
       if keep_seed_ids == [] do
         query
       else
-        from(asp in query, where: asp.seed_id not in ^keep_seed_ids)
+        from(asg in query, where: asg.seed_id not in ^keep_seed_ids)
       end
 
     Repo.delete_all(query)

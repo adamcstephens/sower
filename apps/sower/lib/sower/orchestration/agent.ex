@@ -13,7 +13,7 @@ defmodule Sower.Orchestration.Agent do
 
     has_many :subscriptions, Sower.Orchestration.Subscription
     has_many :deployments, Sower.Orchestration.Deployment
-    has_many :agent_seed_profiles, Sower.Orchestration.AgentSeedProfile
+    has_many :agent_seed_generations, Sower.Orchestration.AgentSeedGeneration
 
     timestamps()
   end

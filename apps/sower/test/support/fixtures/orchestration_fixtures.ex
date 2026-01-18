@@ -54,10 +54,10 @@ defmodule Sower.OrchestrationFixtures do
   end
 
   @doc """
-  Generate an agent_seed_profile.
+  Generate an agent_seed_generation.
   """
-  def agent_seed_profile_fixture(attrs \\ %{}) do
-    alias Sower.Orchestration.AgentSeedProfile
+  def agent_seed_generation_fixture(attrs \\ %{}) do
+    alias Sower.Orchestration.AgentSeedGeneration
 
     attrs =
       attrs
@@ -68,8 +68,8 @@ defmodule Sower.OrchestrationFixtures do
         created_at_generation: DateTime.utc_now()
       })
 
-    %AgentSeedProfile{}
-    |> AgentSeedProfile.changeset(attrs)
+    %AgentSeedGeneration{}
+    |> AgentSeedGeneration.changeset(attrs)
     |> Sower.Repo.insert!()
   end
 end

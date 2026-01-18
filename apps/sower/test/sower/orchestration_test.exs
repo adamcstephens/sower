@@ -349,13 +349,13 @@ defmodule Sower.OrchestrationTest do
     end
   end
 
-  describe "agent_seed_profiles" do
-    alias Sower.Orchestration.{AgentSeedProfile, NixProfile}
+  describe "agent_seed_generations" do
+    alias Sower.Orchestration.{AgentSeedGeneration, NixProfile}
 
     import Sower.OrchestrationFixtures
 
     test "changeset/2 validates required fields" do
-      changeset = AgentSeedProfile.changeset(%AgentSeedProfile{}, %{})
+      changeset = AgentSeedGeneration.changeset(%AgentSeedGeneration{}, %{})
       refute changeset.valid?
 
       errors = errors_on(changeset)
@@ -372,7 +372,7 @@ defmodule Sower.OrchestrationTest do
       profile = nix_profile_fixture()
 
       changeset =
-        AgentSeedProfile.changeset(%AgentSeedProfile{}, %{
+        AgentSeedGeneration.changeset(%AgentSeedGeneration{}, %{
           org_id: Sower.Repo.get_org_id(),
           agent_id: agent.id,
           seed_id: seed.id,
@@ -393,7 +393,7 @@ defmodule Sower.OrchestrationTest do
       now = DateTime.utc_now()
 
       asp1 =
-        agent_seed_profile_fixture(%{
+        agent_seed_generation_fixture(%{
           agent_id: agent.id,
           seed_id: seed1.id,
           profile_id: profile.id,
@@ -403,7 +403,7 @@ defmodule Sower.OrchestrationTest do
         })
 
       asp2 =
-        agent_seed_profile_fixture(%{
+        agent_seed_generation_fixture(%{
           agent_id: agent.id,
           seed_id: seed2.id,
           profile_id: profile.id,
@@ -412,7 +412,7 @@ defmodule Sower.OrchestrationTest do
           created_at_generation: now
         })
 
-      result = AgentSeedProfile.list_for_agent(agent.id)
+      result = AgentSeedGeneration.list_for_agent(agent.id)
 
       assert length(result) == 2
       assert Enum.at(result, 0).id == asp2.id
@@ -427,7 +427,7 @@ defmodule Sower.OrchestrationTest do
       now = DateTime.utc_now()
 
       _asp1 =
-        agent_seed_profile_fixture(%{
+        agent_seed_generation_fixture(%{
           agent_id: agent.id,
           seed_id: seed1.id,
           profile_id: profile.id,
@@ -437,7 +437,7 @@ defmodule Sower.OrchestrationTest do
         })
 
       asp2 =
-        agent_seed_profile_fixture(%{
+        agent_seed_generation_fixture(%{
           agent_id: agent.id,
           seed_id: seed2.id,
           profile_id: profile.id,
@@ -446,7 +446,7 @@ defmodule Sower.OrchestrationTest do
           created_at_generation: now
         })
 
-      result = AgentSeedProfile.list_current_for_agent(agent.id)
+      result = AgentSeedGeneration.list_current_for_agent(agent.id)
 
       assert length(result) == 1
       assert hd(result).id == asp2.id
@@ -461,7 +461,7 @@ defmodule Sower.OrchestrationTest do
       now = DateTime.utc_now()
 
       asp1 =
-        agent_seed_profile_fixture(%{
+        agent_seed_generation_fixture(%{
           agent_id: agent.id,
           seed_id: seed1.id,
           profile_id: profile1.id,
@@ -471,7 +471,7 @@ defmodule Sower.OrchestrationTest do
         })
 
       _asp2 =
-        agent_seed_profile_fixture(%{
+        agent_seed_generation_fixture(%{
           agent_id: agent.id,
           seed_id: seed2.id,
           profile_id: profile2.id,
@@ -480,7 +480,7 @@ defmodule Sower.OrchestrationTest do
           created_at_generation: now
         })
 
-      result = AgentSeedProfile.list_for_agent_profile(agent.id, profile1.id)
+      result = AgentSeedGeneration.list_for_agent_profile(agent.id, profile1.id)
 
       assert length(result) == 1
       assert hd(result).id == asp1.id
@@ -499,7 +499,7 @@ defmodule Sower.OrchestrationTest do
       }
 
       assert {:ok, asp} =
-               AgentSeedProfile.upsert_from_report(agent.id, profile.id, seed.id, attrs)
+               AgentSeedGeneration.upsert_from_report(agent.id, profile.id, seed.id, attrs)
 
       assert asp.generation_number == 42
       assert asp.is_current == true
@@ -517,7 +517,7 @@ defmodule Sower.OrchestrationTest do
         created_at_generation: now
       }
 
-      {:ok, asp1} = AgentSeedProfile.upsert_from_report(agent.id, profile.id, seed.id, attrs1)
+      {:ok, asp1} = AgentSeedGeneration.upsert_from_report(agent.id, profile.id, seed.id, attrs1)
       assert asp1.generation_number == 41
 
       attrs2 = %{
@@ -526,7 +526,7 @@ defmodule Sower.OrchestrationTest do
         created_at_generation: now
       }
 
-      {:ok, asp2} = AgentSeedProfile.upsert_from_report(agent.id, profile.id, seed.id, attrs2)
+      {:ok, asp2} = AgentSeedGeneration.upsert_from_report(agent.id, profile.id, seed.id, attrs2)
       assert asp2.id == asp1.id
       assert asp2.generation_number == 42
       assert asp2.is_current == true
@@ -539,7 +539,7 @@ defmodule Sower.OrchestrationTest do
       now = DateTime.utc_now()
 
       _asp1 =
-        agent_seed_profile_fixture(%{
+        agent_seed_generation_fixture(%{
           agent_id: agent.id,
           seed_id: seed.id,
           profile_id: profile.id,
@@ -550,8 +550,8 @@ defmodule Sower.OrchestrationTest do
 
       # Attempting to insert a duplicate should fail
       result =
-        %AgentSeedProfile{}
-        |> AgentSeedProfile.changeset(%{
+        %AgentSeedGeneration{}
+        |> AgentSeedGeneration.changeset(%{
           org_id: Sower.Repo.get_org_id(),
           agent_id: agent.id,
           seed_id: seed.id,
@@ -566,14 +566,14 @@ defmodule Sower.OrchestrationTest do
       assert "has already been taken" in errors_on(changeset).agent_id
     end
 
-    test "deleting agent cascades to agent_seed_profiles" do
+    test "deleting agent cascades to agent_seed_generations" do
       agent = agent_fixture()
       seed = seed_fixture()
       profile = nix_profile_fixture()
       now = DateTime.utc_now()
 
       asp =
-        agent_seed_profile_fixture(%{
+        agent_seed_generation_fixture(%{
           agent_id: agent.id,
           seed_id: seed.id,
           profile_id: profile.id,
@@ -584,13 +584,13 @@ defmodule Sower.OrchestrationTest do
 
       {:ok, _} = Orchestration.delete_agent(agent)
 
-      assert AgentSeedProfile.list_for_agent(agent.id) == []
-      assert Sower.Repo.get(AgentSeedProfile, asp.id) == nil
+      assert AgentSeedGeneration.list_for_agent(agent.id) == []
+      assert Sower.Repo.get(AgentSeedGeneration, asp.id) == nil
     end
   end
 
-  describe "update_agent_seed_profiles/2 with auto-registration" do
-    alias Sower.Orchestration.{AgentSeedProfile, NixProfile}
+  describe "update_agent_seed_generations/2 with auto-registration" do
+    alias Sower.Orchestration.{AgentSeedGeneration, NixProfile}
     alias Sower.Seed
 
     import Sower.OrchestrationFixtures
@@ -603,7 +603,7 @@ defmodule Sower.OrchestrationTest do
         profiles: [
           %SowerClient.Orchestration.AgentSeedProfile{
             profile_path: "/nix/var/nix/profiles/system",
-            tags: [],
+            tags: %{},
             generations: [
               %SowerClient.Orchestration.AgentSeedGeneration{
                 path: artifact,
@@ -617,7 +617,7 @@ defmodule Sower.OrchestrationTest do
         ]
       }
 
-      assert {:ok, :ok} = Orchestration.update_agent_seed_profiles(report, agent)
+      assert {:ok, :ok} = Orchestration.update_agent_seed_generations(report, agent)
 
       # Verify seed was auto-registered
       seed = Seed.get_by_artifact(artifact)
@@ -629,8 +629,8 @@ defmodule Sower.OrchestrationTest do
                tag.key == "agent_source" && tag.value == agent.sid
              end)
 
-      # Verify agent_seed_profile was created
-      profiles = AgentSeedProfile.list_for_agent(agent.id)
+      # Verify agent_seed_generation was created
+      profiles = AgentSeedGeneration.list_for_agent(agent.id)
       assert length(profiles) == 1
       assert hd(profiles).seed_id == seed.id
       assert hd(profiles).is_current == true
@@ -645,7 +645,7 @@ defmodule Sower.OrchestrationTest do
         profiles: [
           %SowerClient.Orchestration.AgentSeedProfile{
             profile_path: "/nix/var/nix/profiles/system",
-            tags: [],
+            tags: %{},
             generations: [
               %SowerClient.Orchestration.AgentSeedGeneration{
                 path: artifact_current,
@@ -666,14 +666,14 @@ defmodule Sower.OrchestrationTest do
         ]
       }
 
-      assert {:ok, :ok} = Orchestration.update_agent_seed_profiles(report, agent)
+      assert {:ok, :ok} = Orchestration.update_agent_seed_generations(report, agent)
 
       # Both seeds should be auto-registered
       assert Seed.get_by_artifact(artifact_current) != nil
       assert Seed.get_by_artifact(artifact_previous) != nil
 
-      # Both should have agent_seed_profiles
-      profiles = AgentSeedProfile.list_for_agent(agent.id)
+      # Both should have agent_seed_generations
+      profiles = AgentSeedGeneration.list_for_agent(agent.id)
       assert length(profiles) == 2
 
       # Only one should be current
@@ -690,7 +690,7 @@ defmodule Sower.OrchestrationTest do
         profiles: [
           %SowerClient.Orchestration.AgentSeedProfile{
             profile_path: "/home/alice/.local/state/nix/profiles/home-manager",
-            tags: [{"user", "alice"}],
+            tags: %{"user" => "alice"},
             generations: [
               %SowerClient.Orchestration.AgentSeedGeneration{
                 path: artifact,
@@ -704,7 +704,7 @@ defmodule Sower.OrchestrationTest do
         ]
       }
 
-      assert {:ok, :ok} = Orchestration.update_agent_seed_profiles(report, agent)
+      assert {:ok, :ok} = Orchestration.update_agent_seed_generations(report, agent)
 
       seed = Seed.get_by_artifact(artifact)
       assert seed.seed_type == "home-manager"
@@ -720,7 +720,7 @@ defmodule Sower.OrchestrationTest do
         profiles: [
           %SowerClient.Orchestration.AgentSeedProfile{
             profile_path: "/nix/var/nix/profiles/system",
-            tags: [],
+            tags: %{},
             generations: [
               %SowerClient.Orchestration.AgentSeedGeneration{
                 path: existing.artifact,
@@ -734,15 +734,15 @@ defmodule Sower.OrchestrationTest do
         ]
       }
 
-      assert {:ok, :ok} = Orchestration.update_agent_seed_profiles(report, agent)
+      assert {:ok, :ok} = Orchestration.update_agent_seed_generations(report, agent)
 
       # Should use existing seed, not create a new one
-      profiles = AgentSeedProfile.list_for_agent(agent.id)
+      profiles = AgentSeedGeneration.list_for_agent(agent.id)
       assert length(profiles) == 1
       assert hd(profiles).seed_id == existing.id
     end
 
-    test "deletes stale agent_seed_profiles for removed generations" do
+    test "deletes stale agent_seed_generations for removed generations" do
       agent = agent_fixture()
       artifact1 = "/nix/store/#{unique_hash()}-nixos-system-testhost-1"
       artifact2 = "/nix/store/#{unique_hash()}-nixos-system-testhost-2"
@@ -752,7 +752,7 @@ defmodule Sower.OrchestrationTest do
         profiles: [
           %SowerClient.Orchestration.AgentSeedProfile{
             profile_path: "/nix/var/nix/profiles/system",
-            tags: [],
+            tags: %{},
             generations: [
               %SowerClient.Orchestration.AgentSeedGeneration{
                 path: artifact1,
@@ -773,15 +773,15 @@ defmodule Sower.OrchestrationTest do
         ]
       }
 
-      assert {:ok, :ok} = Orchestration.update_agent_seed_profiles(report1, agent)
-      assert length(AgentSeedProfile.list_for_agent(agent.id)) == 2
+      assert {:ok, :ok} = Orchestration.update_agent_seed_generations(report1, agent)
+      assert length(AgentSeedGeneration.list_for_agent(agent.id)) == 2
 
       # Second report with only one generation (simulating garbage collection)
       report2 = %SowerClient.Orchestration.AgentSeedsReport{
         profiles: [
           %SowerClient.Orchestration.AgentSeedProfile{
             profile_path: "/nix/var/nix/profiles/system",
-            tags: [],
+            tags: %{},
             generations: [
               %SowerClient.Orchestration.AgentSeedGeneration{
                 path: artifact2,
@@ -795,10 +795,10 @@ defmodule Sower.OrchestrationTest do
         ]
       }
 
-      assert {:ok, :ok} = Orchestration.update_agent_seed_profiles(report2, agent)
+      assert {:ok, :ok} = Orchestration.update_agent_seed_generations(report2, agent)
 
-      # Should only have one agent_seed_profile now
-      profiles = AgentSeedProfile.list_for_agent(agent.id)
+      # Should only have one agent_seed_generation now
+      profiles = AgentSeedGeneration.list_for_agent(agent.id)
       assert length(profiles) == 1
       assert hd(profiles).generation_number == 2
     end
@@ -812,7 +812,7 @@ defmodule Sower.OrchestrationTest do
         profiles: [
           %SowerClient.Orchestration.AgentSeedProfile{
             profile_path: "/nix/var/nix/profiles/system",
-            tags: [],
+            tags: %{},
             generations: [
               %SowerClient.Orchestration.AgentSeedGeneration{
                 path: nixos_artifact,
@@ -824,12 +824,12 @@ defmodule Sower.OrchestrationTest do
             ]
           },
           %SowerClient.Orchestration.AgentSeedProfile{
-            profile_path: "/home/user/.local/state/nix/profiles/home-manager",
-            tags: [{"user", "testuser"}],
+            profile_path: "/home/testuser/.local/state/nix/profiles/home-manager",
+            tags: %{"user" => "testuser"},
             generations: [
               %SowerClient.Orchestration.AgentSeedGeneration{
                 path: hm_artifact,
-                link: "/home/user/.local/state/nix/profiles/home-manager-10-link",
+                link: "/home/testuser/.local/state/nix/profiles/home-manager-10-link",
                 created: DateTime.to_iso8601(DateTime.utc_now()),
                 generation_number: 10,
                 is_current: true
@@ -839,9 +839,9 @@ defmodule Sower.OrchestrationTest do
         ]
       }
 
-      assert {:ok, :ok} = Orchestration.update_agent_seed_profiles(report, agent)
+      assert {:ok, :ok} = Orchestration.update_agent_seed_generations(report, agent)
 
-      profiles = AgentSeedProfile.list_for_agent(agent.id)
+      profiles = AgentSeedGeneration.list_for_agent(agent.id)
       assert length(profiles) == 2
 
       nixos_seed = Seed.get_by_artifact(nixos_artifact)
@@ -853,7 +853,7 @@ defmodule Sower.OrchestrationTest do
 
       # Verify correct nix_profiles were created
       nixos_profile = NixProfile.get_by_path("/nix/var/nix/profiles/system")
-      hm_profile = NixProfile.get_by_path("/home/user/.local/state/nix/profiles/home-manager")
+      hm_profile = NixProfile.get_by_path("/home/testuser/.local/state/nix/profiles/home-manager")
 
       assert nixos_profile != nil
       assert hm_profile != nil

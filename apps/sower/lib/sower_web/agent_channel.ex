@@ -126,7 +126,7 @@ defmodule SowerWeb.AgentChannel do
   )
 
   handle_schema(SowerClient.Orchestration.AgentSeedsReport, fn report, socket ->
-    Orchestration.update_agent_seed_profiles(report, socket.assigns.agent)
+    Orchestration.update_agent_seed_generations(report, socket.assigns.agent)
   end)
 
   @impl Phoenix.Channel

@@ -1,4 +1,4 @@
-defmodule Sower.Orchestration.AgentSeedProfile do
+defmodule Sower.Orchestration.AgentSeedGeneration do
   use Sower.Schema
   import Ecto.Changeset
   import Ecto.Query
@@ -6,7 +6,7 @@ defmodule Sower.Orchestration.AgentSeedProfile do
   alias Sower.Repo
   alias Sower.Orchestration.{Agent, NixProfile}
 
-  schema "agent_seed_profiles" do
+  schema "agent_seed_generations" do
     field :org_id, Ecto.UUID
 
     belongs_to :agent, Agent
@@ -21,8 +21,8 @@ defmodule Sower.Orchestration.AgentSeedProfile do
   end
 
   @doc false
-  def changeset(%__MODULE__{} = agent_seed_profile, attrs) do
-    agent_seed_profile
+  def changeset(%__MODULE__{} = agent_seed_generation, attrs) do
+    agent_seed_generation
     |> cast(attrs, [
       :org_id,
       :agent_id,
@@ -41,13 +41,13 @@ defmodule Sower.Orchestration.AgentSeedProfile do
   end
 
   @doc """
-  Lists all agent_seed_profiles for an agent, ordered by generation_number descending.
+  Lists all agent_seed_generations for an agent, ordered by generation_number descending.
   Preloads seed and profile associations.
   """
   def list_for_agent(agent_id) do
-    from(asp in __MODULE__,
-      where: asp.agent_id == ^agent_id,
-      order_by: [desc: asp.generation_number],
+    from(asg in __MODULE__,
+      where: asg.agent_id == ^agent_id,
+      order_by: [desc: asg.generation_number],
       preload: [:seed, :profile]
     )
     |> Repo.all()
@@ -58,8 +58,8 @@ defmodule Sower.Orchestration.AgentSeedProfile do
   Preloads seed and profile associations.
   """
   def list_current_for_agent(agent_id) do
-    from(asp in __MODULE__,
-      where: asp.agent_id == ^agent_id and asp.is_current == true,
+    from(asg in __MODULE__,
+      where: asg.agent_id == ^agent_id and asg.is_current == true,
       preload: [:seed, :profile]
     )
     |> Repo.all()
@@ -70,16 +70,16 @@ defmodule Sower.Orchestration.AgentSeedProfile do
   Ordered by generation_number descending.
   """
   def list_for_agent_profile(agent_id, profile_id) do
-    from(asp in __MODULE__,
-      where: asp.agent_id == ^agent_id and asp.profile_id == ^profile_id,
-      order_by: [desc: asp.generation_number],
+    from(asg in __MODULE__,
+      where: asg.agent_id == ^agent_id and asg.profile_id == ^profile_id,
+      order_by: [desc: asg.generation_number],
       preload: [:seed, :profile]
     )
     |> Repo.all()
   end
 
   @doc """
-  Upserts an agent_seed_profile from report data.
+  Upserts an agent_seed_generation from report data.
   Uses the unique constraint on (agent_id, seed_id) for conflict resolution.
 
   ## Parameters
