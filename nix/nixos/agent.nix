@@ -20,6 +20,23 @@ let
 
   # TODO re-enable services support
   manageServices = false;
+
+  adminScript = pkgs.writeShellApplication {
+    name = "sower-server";
+
+    text =
+      (lib.concatStringsSep "\n" (
+        lib.mapAttrsToList (name: val: ''
+          ${name}="${val}"
+          export ${name}
+        '') cfg.environment
+      ))
+      + ''
+        RELEASE_COOKIE=$(cat release-cookie)
+        export RELEASE_COOKIE
+        exec ${lib.getExe cfg.package} "$@"
+      '';
+  };
 in
 {
   options = {
@@ -69,7 +86,9 @@ in
 
     environment.etc."sower/client.json".source = lib.mkIf (cfg.settings != null) jsonConfig;
 
-    environment.systemPackages = [ cfg.package ];
+    environment.systemPackages = [
+      adminScript
+    ];
 
     services.sower.activator = {
       enable = lib.mkDefault true;
