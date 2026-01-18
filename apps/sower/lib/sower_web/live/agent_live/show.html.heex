@@ -13,14 +13,49 @@
   </.header>
 
   <.list>
-    <:item title="sid">{@agent.sid}</:item>
-    <:item title="Local sid">{@agent.local_sid}</:item>
-    <:item title="Current Generation">
-      <%= if Map.has_key?(@current_generation, :path) do %>
-        {@current_generation.path}
-      <% end %>
+    <:item title="Local Sid">{@agent.local_sid}</:item>
+    <:item title="Seed Generations">
+      <div class="flex items-center space-x-2 mb-4">
+        <.link
+          patch={~p"/agents/#{@agent}?generations_filter=current"}
+          class={[
+            "px-3 py-1 rounded text-sm border",
+            @generations_filter == "current" &&
+              "bg-zinc-200 text-zinc-800 font-medium",
+            @generations_filter != "current" &&
+              "bg-zinc-800 text-zinc-200 border-zinc-200 hover:bg-orange-700 hover:text-zinc-50"
+          ]}
+        >
+          Current
+        </.link>
+        <.link
+          patch={~p"/agents/#{@agent}?generations_filter=all"}
+          class={[
+            "px-3 py-1 rounded text-sm border",
+            @generations_filter == "all" &&
+              "bg-zinc-200 text-zinc-800 font-medium",
+            @generations_filter != "all" &&
+              "bg-zinc-800 text-zinc-200 border-zinc-200 hover:bg-orange-700 hover:text-zinc-50"
+          ]}
+        >
+          All
+        </.link>
+      </div>
+      <.table
+        id="generations"
+        rows={@generations}
+        row_click={fn gen -> JS.navigate(~p"/seeds/#{gen.seed.sid}") end}
+      >
+        <:col :let={gen} label="Seed">{gen.seed.name}</:col>
+        <:col :let={gen} label="Profile">{gen.profile.profile_path}</:col>
+        <:col :let={gen} label="Gen">{gen.generation_number}</:col>
+        <:col :let={gen} label="Current">
+          {(gen.is_current && "✓") || ""}
+        </:col>
+        <:col :let={gen} label="Created">{gen.created_at_generation}</:col>
+      </.table>
     </:item>
-    <:item title="subscriptions">
+    <:item title="Subscriptions">
       <.table
         id="subscriptions"
         rows={@agent.subscriptions}
@@ -31,7 +66,7 @@
         <:col :let={subscription}>{subscription.updated_at}</:col>
       </.table>
     </:item>
-    <:item title="deployments">
+    <:item title="Deployments">
       <.table
         id="deployments"
         rows={@deployments}
