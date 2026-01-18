@@ -43,4 +43,33 @@ defmodule Sower.OrchestrationFixtures do
 
     deployment
   end
+
+  @doc """
+  Generate a nix_profile.
+  """
+  def nix_profile_fixture(attrs \\ %{}) do
+    profile_path = Map.get(attrs, :profile_path, "/nix/var/nix/profiles/system")
+
+    Sower.Orchestration.NixProfile.find_or_create!(profile_path)
+  end
+
+  @doc """
+  Generate an agent_seed_profile.
+  """
+  def agent_seed_profile_fixture(attrs \\ %{}) do
+    alias Sower.Orchestration.AgentSeedProfile
+
+    attrs =
+      attrs
+      |> Enum.into(%{
+        org_id: Sower.Repo.get_org_id(),
+        generation_number: 1,
+        is_current: true,
+        created_at_generation: DateTime.utc_now()
+      })
+
+    %AgentSeedProfile{}
+    |> AgentSeedProfile.changeset(attrs)
+    |> Sower.Repo.insert!()
+  end
 end
