@@ -21,6 +21,21 @@ defmodule SowerAgent.Client do
   end
 
   @impl Slipstream
+  def handle_cast(:report_seeds, socket) do
+    report = SowerAgent.Profile.collect_all_profiles()
+
+    Logger.debug(
+      msg: "Reporting seed profiles",
+      profile_count: length(report.profiles)
+    )
+
+    topic = private_channel(socket)
+    {:ok, _ref} = push(socket, topic, "agent:seeds:report", report)
+
+    {:noreply, socket}
+  end
+
+  @impl Slipstream
   def handle_cast(:sync_subscriptions, socket) do
     config_subscriptions = SowerAgent.Config.get().subscriptions
     sync_payload = %{subscriptions: Enum.map(config_subscriptions, &Map.from_struct/1)}
@@ -145,6 +160,7 @@ defmodule SowerAgent.Client do
     Logger.info(msg: "Joined channel topic", topic: topic, conn_sid: conn_sid)
 
     cast(:sync_subscriptions)
+    cast(:report_seeds)
 
     {:ok, assign(socket, :conn_sid, conn_sid)}
   end
@@ -208,6 +224,9 @@ defmodule SowerAgent.Client do
               })
 
             {:ok, _result_ref} = push_message(socket, result)
+
+            # Report updated seed profiles after deployment
+            cast(:report_seeds)
 
             if SowerAgent.take_pending_reload(), do: reload_agent_service()
 

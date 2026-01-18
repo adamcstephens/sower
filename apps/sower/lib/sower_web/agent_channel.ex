@@ -125,6 +125,10 @@ defmodule SowerWeb.AgentChannel do
     &Sower.Orchestration.record_deployment/1
   )
 
+  handle_schema(SowerClient.Orchestration.AgentSeedsReport, fn report, socket ->
+    Orchestration.update_agent_seed_profiles(report, socket.assigns.agent)
+  end)
+
   @impl Phoenix.Channel
   def handle_info(:track_presence, %Phoenix.Socket{assigns: %{agent: agent}} = socket) do
     Logger.debug(msg: "Tracking agent presence", agent_sid: agent.sid)

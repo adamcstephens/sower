@@ -109,6 +109,15 @@ defmodule Sower.Seed do
     Repo.get_by!(Seed, sid: sid) |> Repo.preload([:tags])
   end
 
+  @doc """
+  Gets a seed by its artifact (Nix store path).
+
+  Returns the seed or nil if not found.
+  """
+  def get_by_artifact(artifact) do
+    Repo.get_by(Seed, artifact: artifact) |> Repo.preload([:tags])
+  end
+
   def list() do
     query = from s in Seed, order_by: [desc: s.updated_at]
 

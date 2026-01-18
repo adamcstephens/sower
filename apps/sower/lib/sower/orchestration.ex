@@ -736,4 +736,88 @@ defmodule Sower.Orchestration do
         update_deployment(deploy, %{deployed_at: result.deployed_at, result: result.result})
     end
   end
+
+  alias Sower.Orchestration.{NixProfile, AgentSeedProfile}
+
+  @doc """
+  Updates agent_seed_profiles from an agent's seeds report.
+
+  For each profile in the report:
+  - Finds or creates the nix_profile by path
+  - For each generation, looks up the seed by artifact (store path)
+  - Upserts agent_seed_profile records for found seeds
+  - Deletes agent_seed_profiles for seeds no longer reported by the agent
+
+  Phase 2: Only handles known seeds (by artifact). Unknown artifacts are skipped.
+  Phase 3 will add auto-registration of unknown seeds.
+  """
+  def update_agent_seed_profiles(
+        %SowerClient.Orchestration.AgentSeedsReport{} = report,
+        %Agent{} = agent
+      ) do
+    Repo.transaction(fn ->
+      for profile <- report.profiles do
+        nix_profile = NixProfile.find_or_create!(profile.profile_path)
+
+        # Collect seed_ids we're upserting for this profile
+        upserted_seed_ids =
+          for gen <- profile.generations, reduce: [] do
+            acc ->
+              case Seed.get_by_artifact(gen.path) do
+                nil ->
+                  # Phase 3 will auto-register unknown seeds
+                  acc
+
+                seed ->
+                  upsert_agent_seed_profile(agent, nix_profile, seed, gen)
+                  [seed.id | acc]
+              end
+          end
+
+        # Delete agent_seed_profiles for this profile that are no longer in the report
+        delete_stale_agent_seed_profiles(agent.id, nix_profile.id, upserted_seed_ids)
+      end
+
+      :ok
+    end)
+  end
+
+  defp upsert_agent_seed_profile(%Agent{} = agent, nix_profile, seed, gen) do
+    # If this generation is_current, clear other is_current flags first
+    if gen.is_current do
+      from(asp in AgentSeedProfile,
+        where: asp.agent_id == ^agent.id and asp.profile_id == ^nix_profile.id
+      )
+      |> Repo.update_all(set: [is_current: false])
+    end
+
+    # Parse created timestamp
+    created_at =
+      case gen.created do
+        %DateTime{} = dt -> dt
+        str when is_binary(str) -> DateTime.from_iso8601(str) |> elem(1)
+      end
+
+    AgentSeedProfile.upsert_from_report(agent.id, nix_profile.id, seed.id, %{
+      generation_number: gen.generation_number,
+      is_current: gen.is_current,
+      created_at_generation: created_at
+    })
+  end
+
+  defp delete_stale_agent_seed_profiles(agent_id, profile_id, keep_seed_ids) do
+    query =
+      from(asp in AgentSeedProfile,
+        where: asp.agent_id == ^agent_id and asp.profile_id == ^profile_id
+      )
+
+    query =
+      if keep_seed_ids == [] do
+        query
+      else
+        from(asp in query, where: asp.seed_id not in ^keep_seed_ids)
+      end
+
+    Repo.delete_all(query)
+  end
 end

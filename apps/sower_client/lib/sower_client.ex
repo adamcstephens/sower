@@ -11,6 +11,9 @@ defmodule SowerClient do
     |> OpenApiSpex.add_schemas([
       SowerClient.AgentHello,
       SowerClient.Auth.TokenInfo,
+      SowerClient.Orchestration.AgentSeedGeneration,
+      SowerClient.Orchestration.AgentSeedProfile,
+      SowerClient.Orchestration.AgentSeedsReport,
       SowerClient.Orchestration.Deployment,
       SowerClient.Orchestration.DeploymentResult,
       SowerClient.Orchestration.DeploymentRequest,
