@@ -26,7 +26,7 @@ defmodule SowerWeb.AgentLive.Show do
 
       agent ->
         agent = Sower.Repo.preload(agent, :subscriptions)
-        deployments = Orchestration.list_deployments_for_agent(agent, limit: 10)
+        deployments = Orchestration.list_deployments(agent, limit: 10)
 
         generations_filter = Map.get(params, "generations_filter", "current")
         generations = load_generations(agent.id, generations_filter)
@@ -60,7 +60,7 @@ defmodule SowerWeb.AgentLive.Show do
   end
 
   def handle_info({:deployment, _event, _deployment}, socket) do
-    deployments = Orchestration.list_deployments_for_agent(socket.assigns.agent, limit: 10)
+    deployments = Orchestration.list_deployments(socket.assigns.agent, limit: 10)
     {:noreply, assign(socket, :deployments, deployments)}
   end
 
@@ -91,7 +91,7 @@ defmodule SowerWeb.AgentLive.Show do
   defp page_title(:edit), do: "Edit Agent"
 
   defp load_generations(agent_id, "all") do
-    Sower.Orchestration.AgentSeedGeneration.list_for_agent(agent_id)
+    Sower.Orchestration.list_agent_seed_generation(agent_id)
   end
 
   defp load_generations(agent_id, "current") do

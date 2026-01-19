@@ -287,10 +287,10 @@ defmodule Sower.Orchestration do
 
   ## Examples
 
-      iex> list_deployments_for_agent(agent, limit: 10)
+      iex> list_deployments(agent, limit: 10)
       [%Deployment{}, ...]
   """
-  def list_deployments_for_agent(%Agent{} = agent, opts \\ []) do
+  def list_deployments(%Agent{} = agent, opts \\ []) do
     limit = Keyword.get(opts, :limit, 10)
 
     from(d in Deployment,
@@ -769,6 +769,82 @@ defmodule Sower.Orchestration do
   alias Sower.Orchestration.{NixProfile, AgentSeedGeneration}
 
   @doc """
+  Lists all agent_seed_generations for an agent, ordered by generation_number descending.
+  Preloads seed and profile associations.
+  """
+  def list_agent_seed_generation(%Agent{id: agent_id}) do
+    from(asg in AgentSeedGeneration,
+      where: asg.agent_id == ^agent_id,
+      order_by: [desc: asg.generation_number],
+      preload: [:seed, :profile]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Lists only the current (active) generations for an agent.
+  Preloads seed and profile associations.
+  """
+  def list_current_seed_generation(%Agent{id: agent_id}) do
+    from(asg in AgentSeedGeneration,
+      where: asg.agent_id == ^agent_id and asg.is_current == true,
+      preload: [:seed, :profile]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Lists all generations for a specific agent and profile.
+  Ordered by generation_number descending.
+  """
+  def list_agent_seed_generation_profile(agent_id, profile_id) do
+    from(asg in AgentSeedGeneration,
+      where: asg.agent_id == ^agent_id and asg.profile_id == ^profile_id,
+      order_by: [desc: asg.generation_number],
+      preload: [:seed, :profile]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Upserts an agent_seed_generation from report data.
+  Uses the unique constraint on (agent_id, seed_id) for conflict resolution.
+
+  ## Parameters
+    - agent_id: The agent's ID
+    - profile_id: The nix_profile's ID
+    - seed_id: The seed's ID
+    - attrs: Map with :generation_number, :is_current, :created_at_generation
+  """
+  def upsert_agent_generation(agent_id, profile_id, seed_id, attrs) do
+    now = DateTime.utc_now()
+
+    changeset_attrs = %{
+      org_id: Repo.get_org_id(),
+      agent_id: agent_id,
+      seed_id: seed_id,
+      profile_id: profile_id,
+      generation_number: attrs.generation_number,
+      is_current: attrs.is_current,
+      created_at_generation: attrs.created_at_generation
+    }
+
+    %AgentSeedGeneration{}
+    |> AgentSeedGeneration.changeset(changeset_attrs)
+    |> Repo.insert(
+      on_conflict: [
+        set: [
+          profile_id: profile_id,
+          generation_number: attrs.generation_number,
+          is_current: attrs.is_current,
+          updated_at: now
+        ]
+      ],
+      conflict_target: [:agent_id, :seed_id]
+    )
+  end
+
+  @doc """
   Updates agent_seed_generations from an agent's seeds report.
 
   For each profile in the report:
@@ -831,7 +907,7 @@ defmodule Sower.Orchestration do
         str when is_binary(str) -> DateTime.from_iso8601(str) |> elem(1)
       end
 
-    AgentSeedGeneration.upsert_from_report(agent.id, nix_profile.id, seed.id, %{
+    upsert_agent_generation(agent.id, nix_profile.id, seed.id, %{
       generation_number: gen.generation_number,
       is_current: gen.is_current,
       created_at_generation: created_at

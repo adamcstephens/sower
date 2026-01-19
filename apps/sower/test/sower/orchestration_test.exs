@@ -412,7 +412,7 @@ defmodule Sower.OrchestrationTest do
           created_at_generation: now
         })
 
-      result = AgentSeedGeneration.list_for_agent(agent.id)
+      result = Orchestration.list_agent_seed_generation(agent)
 
       assert length(result) == 2
       assert Enum.at(result, 0).id == asp2.id
@@ -446,7 +446,7 @@ defmodule Sower.OrchestrationTest do
           created_at_generation: now
         })
 
-      result = AgentSeedGeneration.list_current_for_agent(agent.id)
+      result = Orchestration.list_current_seed_generation(agent)
 
       assert length(result) == 1
       assert hd(result).id == asp2.id
@@ -480,7 +480,7 @@ defmodule Sower.OrchestrationTest do
           created_at_generation: now
         })
 
-      result = AgentSeedGeneration.list_for_agent_profile(agent.id, profile1.id)
+      result = Orchestration.list_agent_seed_generation_profile(agent.id, profile1.id)
 
       assert length(result) == 1
       assert hd(result).id == asp1.id
@@ -499,7 +499,7 @@ defmodule Sower.OrchestrationTest do
       }
 
       assert {:ok, asp} =
-               AgentSeedGeneration.upsert_from_report(agent.id, profile.id, seed.id, attrs)
+               Orchestration.upsert_agent_generation(agent.id, profile.id, seed.id, attrs)
 
       assert asp.generation_number == 42
       assert asp.is_current == true
@@ -517,7 +517,7 @@ defmodule Sower.OrchestrationTest do
         created_at_generation: now
       }
 
-      {:ok, asp1} = AgentSeedGeneration.upsert_from_report(agent.id, profile.id, seed.id, attrs1)
+      {:ok, asp1} = Orchestration.upsert_agent_generation(agent.id, profile.id, seed.id, attrs1)
       assert asp1.generation_number == 41
 
       attrs2 = %{
@@ -526,7 +526,7 @@ defmodule Sower.OrchestrationTest do
         created_at_generation: now
       }
 
-      {:ok, asp2} = AgentSeedGeneration.upsert_from_report(agent.id, profile.id, seed.id, attrs2)
+      {:ok, asp2} = Orchestration.upsert_agent_generation(agent.id, profile.id, seed.id, attrs2)
       assert asp2.id == asp1.id
       assert asp2.generation_number == 42
       assert asp2.is_current == true
@@ -584,7 +584,7 @@ defmodule Sower.OrchestrationTest do
 
       {:ok, _} = Orchestration.delete_agent(agent)
 
-      assert AgentSeedGeneration.list_for_agent(agent.id) == []
+      assert Orchestration.list_agent_seed_generation(agent) == []
       assert Sower.Repo.get(AgentSeedGeneration, asp.id) == nil
     end
   end
@@ -634,7 +634,7 @@ defmodule Sower.OrchestrationTest do
              end)
 
       # Verify agent_seed_generation was created
-      profiles = AgentSeedGeneration.list_for_agent(agent.id)
+      profiles = Orchestration.list_agent_seed_generation(agent)
       assert length(profiles) == 1
       assert hd(profiles).seed_id == seed.id
       assert hd(profiles).is_current == true
@@ -677,7 +677,7 @@ defmodule Sower.OrchestrationTest do
       assert Seed.get_by_artifact(artifact_previous) != nil
 
       # Both should have agent_seed_generations
-      profiles = AgentSeedGeneration.list_for_agent(agent.id)
+      profiles = Orchestration.list_agent_seed_generation(agent)
       assert length(profiles) == 2
 
       # Only one should be current
@@ -741,7 +741,7 @@ defmodule Sower.OrchestrationTest do
       assert {:ok, :ok} = Orchestration.update_agent_seed_generations(report, agent)
 
       # Should use existing seed, not create a new one
-      profiles = AgentSeedGeneration.list_for_agent(agent.id)
+      profiles = Orchestration.list_agent_seed_generation(agent)
       assert length(profiles) == 1
       assert hd(profiles).seed_id == existing.id
     end
@@ -778,7 +778,7 @@ defmodule Sower.OrchestrationTest do
       }
 
       assert {:ok, :ok} = Orchestration.update_agent_seed_generations(report1, agent)
-      assert length(AgentSeedGeneration.list_for_agent(agent.id)) == 2
+      assert length(Orchestration.list_agent_seed_generation(agent)) == 2
 
       # Second report with only one generation (simulating garbage collection)
       report2 = %SowerClient.Orchestration.AgentSeedsReport{
@@ -802,7 +802,7 @@ defmodule Sower.OrchestrationTest do
       assert {:ok, :ok} = Orchestration.update_agent_seed_generations(report2, agent)
 
       # Should only have one agent_seed_generation now
-      profiles = AgentSeedGeneration.list_for_agent(agent.id)
+      profiles = Orchestration.list_agent_seed_generation(agent)
       assert length(profiles) == 1
       assert hd(profiles).generation_number == 2
     end
@@ -845,7 +845,7 @@ defmodule Sower.OrchestrationTest do
 
       assert {:ok, :ok} = Orchestration.update_agent_seed_generations(report, agent)
 
-      profiles = AgentSeedGeneration.list_for_agent(agent.id)
+      profiles = Orchestration.list_agent_seed_generation(agent)
       assert length(profiles) == 2
 
       nixos_seed = Seed.get_by_artifact(nixos_artifact)
