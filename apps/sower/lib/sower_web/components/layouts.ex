@@ -178,7 +178,7 @@ defmodule SowerWeb.Layouts do
       </nav>
     </header>
     <main class="px-4 py-8 sm:px-6 lg:px-8 relative">
-      <div class="mx-auto max-w-6xl">
+      <div class="mx-auto max-w-screen-xl">
         <.flash_group flash={@flash} />
         {render_slot(@inner_block)}
       </div>
