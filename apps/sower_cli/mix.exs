@@ -10,6 +10,7 @@ defmodule SowerCli.MixProject do
       deps: deps(),
       deps_path: "../../deps",
       elixir: "~> 1.19",
+      elixirc_options: [warnings_as_errors: Mix.env() == :prod],
       lockfile: "../../mix.lock",
       start_permanent: Mix.env() == :prod,
       version: String.trim(File.read!(Path.expand("../../VERSION", __DIR__)))

@@ -10,6 +10,7 @@ defmodule Nix.MixProject do
       deps_path: "../../deps",
       lockfile: "../../mix.lock",
       elixir: "~> 1.18",
+      elixirc_options: [warnings_as_errors: Mix.env() == :prod],
       start_permanent: Mix.env() == :prod,
       consolidate_protocols: Mix.env() != :dev,
       deps: deps()

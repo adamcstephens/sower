@@ -10,6 +10,7 @@ defmodule Sower.MixProject do
       deps: deps(),
       deps_path: "../../deps",
       elixir: "~> 1.18",
+      elixirc_options: [warnings_as_errors: Mix.env() == :prod],
       elixirc_paths: elixirc_paths(Mix.env()),
       lockfile: "../../mix.lock",
       start_permanent: Mix.env() == :prod,
