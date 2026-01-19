@@ -13,10 +13,14 @@ defmodule SowerCli do
 
     Application.get_all_env(:sower_cli)
 
-    result =
+    {subcommands, parsed} =
       config()
       |> Optimus.parse!(argv)
-      |> run()
+
+    # Set log level after all apps have started
+    set_log_level(if parsed.flags.debug, do: :debug, else: :error)
+
+    result = run({subcommands, parsed})
 
     case result do
       {:error, _reason} -> System.halt(1)
@@ -25,9 +29,6 @@ defmodule SowerCli do
   end
 
   defp run({[:build], %{args: args, flags: flags, options: options}}) do
-    # Set log level after all apps have started
-    set_log_level(if flags.debug, do: :debug, else: :error)
-
     SowerCli.Build.run(args.target, flags, options)
   end
 
@@ -36,17 +37,14 @@ defmodule SowerCli do
   end
 
   defp run({[:seed, :download], %{flags: flags, options: options}}) do
-    set_log_level(if flags.debug, do: :debug, else: :error)
     SowerCli.Seed.Download.run(flags, options)
   end
 
   defp run({[:seed, :info], %{flags: flags, options: options}}) do
-    set_log_level(if flags.debug, do: :debug, else: :error)
     SowerCli.Seed.Info.run(flags, options)
   end
 
   defp run({[:seed, :upgrade], %{flags: flags, options: options}}) do
-    set_log_level(if flags.debug, do: :debug, else: :error)
     SowerCli.Seed.Upgrade.run(flags, options)
   end
 
@@ -82,6 +80,14 @@ defmodule SowerCli do
     Optimus.new!(
       name: "sower",
       version: version(),
+      flags: [
+        debug: [
+          short: "-d",
+          long: "--debug",
+          help: "Enable debug logging",
+          global: true
+        ]
+      ],
       subcommands: [
         build: [
           name: "build",
@@ -95,10 +101,10 @@ defmodule SowerCli do
             ]
           ],
           flags: [
-            debug: [
-              short: "-d",
-              long: "--debug",
-              help: "Enable debug logging"
+            non_authoritative: [
+              long: "--non-authoritative",
+              help:
+                "By default cli builds are 'authoritative' and will rename seeds that match artifacts"
             ],
             eval_only: [
               long: "--eval-only",

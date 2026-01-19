@@ -14,7 +14,13 @@ defmodule SowerWeb.Api.SeedController do
   operation(:create,
     operation_id: "NewSeed",
     summary: "New Seed",
-    parameters: [],
+    parameters: [
+      rename: [
+        description: "Rename the seed if matching artifact found",
+        type: :boolean,
+        example: "true"
+      ]
+    ],
     request_body: {"Seed params", "application/json", SowerClient.Seed},
     responses: %{
       created: {"Seed response", "application/json", SowerClient.Seed},
@@ -34,10 +40,12 @@ defmodule SowerWeb.Api.SeedController do
             seed_type: seed_type,
             artifact: artifact,
             tags: tags
-          }
+          },
+          query_params: query_params
         } = conn,
         _params
       ) do
+    rename = Map.get(query_params, "rename") in ["true"]
     conn = Map.put(conn, :body_params, %{})
 
     if can(conn.assigns.access_token)
@@ -53,7 +61,7 @@ defmodule SowerWeb.Api.SeedController do
             Map.put(seed_attrs, :tags, Enum.map(tags, &Map.from_struct/1))
         end
 
-      case Sower.Seed.create(seed_attrs) do
+      case Sower.Seed.create(seed_attrs, rename: rename) do
         {:ok, %Sower.Seed{} = seed} ->
           conn
           |> put_status(:created)

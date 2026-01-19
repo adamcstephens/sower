@@ -867,7 +867,7 @@ defmodule Sower.Orchestration do
         upserted_seed_ids =
           for gen <- profile.generations, reduce: [] do
             acc ->
-              case Seed.find_or_register_from_agent(agent, gen, profile) do
+              case Seed.find_or_register(agent, gen, profile) do
                 {:ok, seed} ->
                   upsert_agent_seed_generation(agent, nix_profile, seed, gen)
                   [seed.id | acc]

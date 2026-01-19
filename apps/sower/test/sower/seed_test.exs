@@ -173,7 +173,7 @@ defmodule Sower.SeedTest do
     end
   end
 
-  describe "find_or_register_from_agent/3" do
+  describe "find_or_register/3" do
     test "returns existing seed when artifact already exists" do
       existing = seed_fixture()
       agent = agent_fixture()
@@ -192,7 +192,7 @@ defmodule Sower.SeedTest do
         generations: [generation]
       }
 
-      assert {:ok, seed} = Seed.find_or_register_from_agent(agent, generation, profile)
+      assert {:ok, seed} = Seed.find_or_register(agent, generation, profile)
       assert seed.id == existing.id
     end
 
@@ -214,7 +214,7 @@ defmodule Sower.SeedTest do
         generations: [generation]
       }
 
-      assert {:ok, seed} = Seed.find_or_register_from_agent(agent, generation, profile)
+      assert {:ok, seed} = Seed.find_or_register(agent, generation, profile)
       assert seed.artifact == artifact
       assert seed.name == "testhost"
       assert seed.seed_type == "nixos"
@@ -238,7 +238,7 @@ defmodule Sower.SeedTest do
         generations: [generation]
       }
 
-      assert {:ok, seed} = Seed.find_or_register_from_agent(agent, generation, profile)
+      assert {:ok, seed} = Seed.find_or_register(agent, generation, profile)
 
       assert Enum.any?(seed.tags, fn tag ->
                tag.key == "agent_source" && tag.value == agent.sid
@@ -263,7 +263,7 @@ defmodule Sower.SeedTest do
         generations: [generation]
       }
 
-      assert {:ok, seed} = Seed.find_or_register_from_agent(agent, generation, profile)
+      assert {:ok, seed} = Seed.find_or_register(agent, generation, profile)
       assert seed.seed_type == "home-manager"
       assert Enum.any?(seed.tags, fn tag -> tag.key == "user" && tag.value == "alice" end)
       assert Enum.any?(seed.tags, fn tag -> tag.key == "agent_source" end)
@@ -287,7 +287,7 @@ defmodule Sower.SeedTest do
         generations: [generation]
       }
 
-      assert {:ok, seed} = Seed.find_or_register_from_agent(agent, generation, profile)
+      assert {:ok, seed} = Seed.find_or_register(agent, generation, profile)
       assert seed.seed_type == "home-manager"
     end
   end

@@ -279,7 +279,7 @@ defmodule SowerCli.Build do
                  |> Map.put("artifact", build.store_path)
                  |> SowerClient.Seed.cast() do
               {:ok, seed} ->
-                case SowerClient.Seed.create(client, seed) do
+                case SowerClient.Seed.create(client, seed, rename: !state.flags.non_authoritative) do
                   {:ok, _} = result ->
                     Output.live_item_done(block_id, "Registered", seed_name)
                     result

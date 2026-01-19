@@ -144,21 +144,22 @@ defmodule SowerClient.Seed do
     end
   end
 
-  def create(%__MODULE__{} = seed) do
-    create(SowerClient.ApiClient.new(), seed)
+  def create(%__MODULE__{} = seed, opts) do
+    create(SowerClient.ApiClient.new(), seed, opts)
   end
 
-  def create(%{} = seed) do
+  def create(%{} = seed, opts) do
     case __MODULE__.cast(seed) do
-      {:ok, seed} -> create(seed)
+      {:ok, seed} -> create(seed, opts)
       error -> error
     end
   end
 
-  def create(%Req.Request{} = req, %__MODULE__{} = seed) do
+  def create(%Req.Request{} = req, %__MODULE__{} = seed, opts \\ []) do
     case Req.post(req,
            url: "/seeds",
-           json: seed
+           json: seed,
+           params: opts
          ) do
       {:ok, %{status: status, body: body}} when status in [200, 201] ->
         __MODULE__.cast(body)

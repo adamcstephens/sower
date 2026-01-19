@@ -26,7 +26,14 @@ defmodule Sower.Seed do
     timestamps()
   end
 
-  def create(attrs) do
+  def create(attrs, opts \\ []) do
+    replacements =
+      if Keyword.get(opts, :rename, false) do
+        [:name, :updated_at]
+      else
+        [:updated_at]
+      end
+
     Multi.new()
     |> Multi.insert(
       :seed,
@@ -34,8 +41,8 @@ defmodule Sower.Seed do
         %Seed{org_id: Sower.Repo.get_org_id(), sid: SowerClient.Sid.generate("seed")},
         attrs
       ),
-      on_conflict: {:replace, [:updated_at]},
-      conflict_target: [:name, :seed_type, :artifact, :org_id],
+      on_conflict: {:replace, replacements},
+      conflict_target: [:seed_type, :artifact, :org_id],
       returning: true
     )
     |> Multi.run(:tags, fn repo, %{seed: seed} ->
@@ -234,21 +241,21 @@ defmodule Sower.Seed do
     - `{:ok, seed}` on success (existing or newly created)
     - `{:error, changeset}` on validation failure
   """
-  def find_or_register_from_agent(
+  def find_or_register(
         %Sower.Orchestration.Agent{} = agent,
         %SowerClient.Orchestration.AgentSeedGeneration{} = generation,
         %SowerClient.Orchestration.AgentSeedProfile{} = profile
       ) do
     case get_by_artifact(generation.path) do
       nil ->
-        register_from_agent(agent, generation, profile)
+        register(agent, generation, profile)
 
       seed ->
         {:ok, seed}
     end
   end
 
-  defp register_from_agent(agent, generation, profile) do
+  defp register(agent, generation, profile) do
     {name, path_tags} = extract_info_from_store_path(generation.path)
     seed_type = seed_type_from_profile_path(profile.profile_path)
 
