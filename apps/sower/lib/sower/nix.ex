@@ -54,6 +54,22 @@ defmodule Sower.Nix do
   def get_cache_sid!(sid), do: Repo.get_by!(Cache, sid: sid)
 
   @doc """
+  Gets a single cache using sid.
+
+  Returns `nil` if the Cache does not exist.
+
+  ## Examples
+
+      iex> get_cache_sid("abc123")
+      %Cache{}
+
+      iex> get_cache_sid("nonexistent")
+      nil
+
+  """
+  def get_cache_sid(sid), do: Repo.get_by(Cache, sid: sid)
+
+  @doc """
   Creates a cache.
 
   ## Examples

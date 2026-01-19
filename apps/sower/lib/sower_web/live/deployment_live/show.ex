@@ -57,14 +57,23 @@ defmodule SowerWeb.DeploymentLive.Show do
   end
 
   @impl true
-  def mount(%{"sid" => sid}, _session, socket) do
-    {:ok,
-     socket
-     |> assign(:page_title, "Show Deployment")
-     |> assign(
-       :deployment,
-       Orchestration.get_deployment_sid!(sid)
-       |> Sower.Repo.preload([:seeds, subscriptions: [:agent]])
-     )}
+  def mount(_params, _session, socket) do
+    {:ok, assign(socket, :page_title, "Show Deployment")}
+  end
+
+  @impl true
+  def handle_params(%{"sid" => sid}, _, socket) do
+    case Orchestration.get_deployment_sid(sid) do
+      nil ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Deployment not found")
+         |> redirect(to: ~p"/deployments")}
+
+      deployment ->
+        deployment = Sower.Repo.preload(deployment, [:seeds, subscriptions: [:agent]])
+
+        {:noreply, assign(socket, :deployment, deployment)}
+    end
   end
 end

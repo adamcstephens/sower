@@ -385,6 +385,35 @@ defmodule Sower.Orchestration do
     ])
   end
 
+  @doc """
+  Gets a single subscription by sid with deployments preloaded in reverse chronological order.
+
+  Returns `nil` if the Subscription does not exist.
+
+  ## Examples
+
+      iex> get_subscription_sid_with_deployments("123")
+      %Subscription{}
+
+      iex> get_subscription_sid_with_deployments("456")
+      nil
+
+  """
+  def get_subscription_sid_with_deployments(sid) do
+    get_subscription_sid(sid)
+    |> Repo.preload([
+      :agent,
+      deployments:
+        from(d in Deployment,
+          order_by: [
+            desc: fragment("? IS NULL", d.deployed_at),
+            desc: d.deployed_at,
+            desc: d.inserted_at
+          ]
+        )
+    ])
+  end
+
   def get_subscription_sids(sids) when is_list(sids) and length(sids) > 0 do
     query = from sub in Subscription, where: sub.sid in ^sids
 

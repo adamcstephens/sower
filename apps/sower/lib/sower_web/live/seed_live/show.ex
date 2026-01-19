@@ -8,12 +8,21 @@ defmodule SowerWeb.SeedLive.Show do
 
   @impl true
   def handle_params(%{"sid" => sid}, _, socket) do
-    seed = Sower.Seed.get_sid!(sid) |> Sower.Repo.preload(:tags)
+    case Sower.Seed.get_sid(sid) do
+      nil ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Seed not found")
+         |> redirect(to: ~p"/seeds")}
 
-    {:noreply,
-     socket
-     |> assign(:page_title, page_title(socket.assigns.live_action))
-     |> assign(:seed, seed)}
+      seed ->
+        seed = Sower.Repo.preload(seed, :tags)
+
+        {:noreply,
+         socket
+         |> assign(:page_title, page_title(socket.assigns.live_action))
+         |> assign(:seed, seed)}
+    end
   end
 
   defp page_title(:show), do: "Show Seed"

@@ -10,10 +10,19 @@ defmodule SowerWeb.Settings.AccessTokenLive.Show do
 
   @impl true
   def handle_params(%{"sid" => sid}, _, socket) do
-    {:noreply,
-     socket
-     |> assign(:page_title, page_title(socket.assigns.live_action))
-     |> assign(:access_token, Accounts.AccessToken.get_sid!(sid))}
+    case Accounts.AccessToken.get_sid(sid) do
+      nil ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Access token not found")
+         |> redirect(to: ~p"/settings/access-tokens")}
+
+      access_token ->
+        {:noreply,
+         socket
+         |> assign(:page_title, page_title(socket.assigns.live_action))
+         |> assign(:access_token, access_token)}
+    end
   end
 
   defp page_title(:show), do: "Show Access token"

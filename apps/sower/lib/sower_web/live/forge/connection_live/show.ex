@@ -10,14 +10,23 @@ defmodule SowerWeb.Forge.ConnectionLive.Show do
 
   @impl true
   def handle_params(%{"sid" => sid}, _url, socket) do
-    forge = Forge.get_connection_sid!(sid) |> Sower.Repo.preload(:repositories)
+    case Forge.get_connection_sid(sid) do
+      nil ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Forge connection not found")
+         |> redirect(to: ~p"/forges")}
 
-    {:noreply,
-     socket
-     |> assign(:page_title, page_title(socket.assigns.live_action))
-     |> assign(:connection, forge)
-     |> assign(:logged_in, Forge.Oauth.logged_in?(forge, socket.assigns.current_user.id))
-     |> assign_repositories()}
+      forge ->
+        forge = Sower.Repo.preload(forge, :repositories)
+
+        {:noreply,
+         socket
+         |> assign(:page_title, page_title(socket.assigns.live_action))
+         |> assign(:connection, forge)
+         |> assign(:logged_in, Forge.Oauth.logged_in?(forge, socket.assigns.current_user.id))
+         |> assign_repositories()}
+    end
   end
 
   @impl true

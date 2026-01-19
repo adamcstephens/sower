@@ -17,31 +17,37 @@ defmodule SowerWeb.AgentLive.Show do
 
   @impl true
   def handle_params(%{"sid" => sid} = params, _, socket) do
-    agent =
-      Orchestration.get_agent_sid!(sid)
-      |> Sower.Repo.preload(:subscriptions)
+    case Orchestration.get_agent_sid(sid) do
+      nil ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Agent not found")
+         |> redirect(to: ~p"/agents")}
 
-    deployments = Orchestration.list_deployments_for_agent(agent, limit: 10)
+      agent ->
+        agent = Sower.Repo.preload(agent, :subscriptions)
+        deployments = Orchestration.list_deployments_for_agent(agent, limit: 10)
 
-    generations_filter = Map.get(params, "generations_filter", "current")
-    generations = load_generations(agent.id, generations_filter)
+        generations_filter = Map.get(params, "generations_filter", "current")
+        generations = load_generations(agent.id, generations_filter)
 
-    socket =
-      socket
-      |> assign(:page_title, page_title(socket.assigns.live_action))
-      |> assign(:agent, agent)
-      |> assign(:deployments, deployments)
-      |> add_online_status()
-      |> assign(:current_generation, %{})
-      |> assign(:generations_filter, generations_filter)
-      |> assign(:generations, generations)
+        socket =
+          socket
+          |> assign(:page_title, page_title(socket.assigns.live_action))
+          |> assign(:agent, agent)
+          |> assign(:deployments, deployments)
+          |> add_online_status()
+          |> assign(:current_generation, %{})
+          |> assign(:generations_filter, generations_filter)
+          |> assign(:generations, generations)
 
-    if connected?(socket) do
-      Phoenix.PubSub.subscribe(Sower.PubSub, "agent:view:#{sid}")
-      Phoenix.PubSub.subscribe(Sower.PubSub, "deployments:agent:#{sid}")
+        if connected?(socket) do
+          Phoenix.PubSub.subscribe(Sower.PubSub, "agent:view:#{sid}")
+          Phoenix.PubSub.subscribe(Sower.PubSub, "deployments:agent:#{sid}")
+        end
+
+        {:noreply, socket}
     end
-
-    {:noreply, socket}
   end
 
   @impl Phoenix.LiveView

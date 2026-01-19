@@ -54,6 +54,22 @@ defmodule Sower.Forge do
   def get_connection_sid!(sid), do: Repo.get_by!(Connection, sid: sid)
 
   @doc """
+  Gets a single connection by sid.
+
+  Returns `nil` if the Connection does not exist.
+
+  ## Examples
+
+      iex> get_connection_sid("abc123")
+      %Connection{}
+
+      iex> get_connection_sid("nonexistent")
+      nil
+
+  """
+  def get_connection_sid(sid), do: Repo.get_by(Connection, sid: sid)
+
+  @doc """
   Gets a single connection ignoring organization.
 
   Raises `Ecto.NoResultsError` if the Connection does not exist.
