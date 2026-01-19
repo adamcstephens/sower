@@ -29,7 +29,7 @@ defmodule SowerWeb.AgentLive.Show do
         deployments = Orchestration.list_deployments(agent, limit: 10)
 
         generations_filter = Map.get(params, "generations_filter", "current")
-        generations = load_generations(agent.id, generations_filter)
+        generations = load_generations(agent, generations_filter)
 
         socket =
           socket
@@ -66,8 +66,7 @@ defmodule SowerWeb.AgentLive.Show do
 
   @impl true
   def handle_event("set_generations_filter", %{"filter" => filter}, socket) do
-    agent_id = socket.assigns.agent.id
-    generations = load_generations(agent_id, filter)
+    generations = load_generations(socket.assigns.agent, filter)
 
     socket =
       socket
@@ -90,12 +89,12 @@ defmodule SowerWeb.AgentLive.Show do
   defp page_title(:show), do: "Show Agent"
   defp page_title(:edit), do: "Edit Agent"
 
-  defp load_generations(agent_id, "all") do
-    Sower.Orchestration.list_agent_seed_generation(agent_id)
+  defp load_generations(agent, "all") do
+    Sower.Orchestration.list_agent_seed_generation(agent)
   end
 
-  defp load_generations(agent_id, "current") do
-    Sower.Orchestration.AgentSeedGeneration.list_current_for_agent(agent_id)
+  defp load_generations(agent, "current") do
+    Sower.Orchestration.list_current_seed_generation(agent)
   end
 
   defp load_generations(agent_id, _), do: load_generations(agent_id, "current")

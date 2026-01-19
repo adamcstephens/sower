@@ -419,7 +419,7 @@ defmodule Sower.OrchestrationTest do
       assert Enum.at(result, 1).id == asp1.id
     end
 
-    test "list_current_for_agent/1 returns only current profiles" do
+    test "list_agent_seed_generation/1 returns only current profiles" do
       agent = agent_fixture()
       seed1 = seed_fixture()
       seed2 = seed_fixture()

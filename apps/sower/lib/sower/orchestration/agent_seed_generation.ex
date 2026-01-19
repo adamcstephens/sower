@@ -1,9 +1,7 @@
 defmodule Sower.Orchestration.AgentSeedGeneration do
   use Sower.Schema
   import Ecto.Changeset
-  import Ecto.Query
 
-  alias Sower.Repo
   alias Sower.Orchestration.{Agent, NixProfile}
 
   schema "agent_seed_generations" do
