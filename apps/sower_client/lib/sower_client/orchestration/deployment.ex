@@ -1,5 +1,6 @@
 defmodule SowerClient.Orchestration.Deployment do
   use SowerClient.Schema
+  use SowerClient.ChannelMessage, event: "deployment"
 
   OpenApiSpex.schema(%{
     title: "Deployment",

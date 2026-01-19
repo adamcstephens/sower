@@ -19,6 +19,7 @@ defmodule SowerAgent do
   """
   def request_reload() do
     :persistent_term.put(:sower_pending_reload, true)
+    send(SowerAgent.Client, :check_pending_reload)
     :ok
   end
 

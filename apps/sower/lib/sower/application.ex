@@ -16,6 +16,7 @@ defmodule Sower.Application do
       {Finch, name: Sower.Finch},
       {Phoenix.PubSub, name: Sower.PubSub},
       SowerWeb.Presence,
+      {Task.Supervisor, name: Sower.TaskSupervisor},
       SowerWeb.Endpoint,
       :systemd.ready()
     ]

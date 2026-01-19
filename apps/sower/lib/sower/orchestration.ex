@@ -756,6 +756,86 @@ defmodule Sower.Orchestration do
     end
   end
 
+  @doc """
+  Handle a deployment request from an agent channel.
+  Validates synchronously and processes asynchronously.
+  Returns {:ok, request_id} on successful validation, {:error, reason} otherwise.
+  """
+  def handle_deployment_request(payload, agent_id, agent_sid, org_id) do
+    with {:ok, request} <- SowerClient.Orchestration.DeploymentRequest.cast(payload),
+         {:ok, subscriptions} <- validate_deployment_request(request, agent_id) do
+      Task.Supervisor.start_child(Sower.TaskSupervisor, fn ->
+        Repo.put_org_id(org_id)
+
+        case process_deployment(request, subscriptions) do
+          {:ok, deployment} ->
+            SowerWeb.Endpoint.broadcast(
+              "agent:#{agent_sid}",
+              "deployment",
+              Map.from_struct(deployment)
+            )
+
+          {:error, reason} ->
+            SowerWeb.Endpoint.broadcast(
+              "agent:#{agent_sid}",
+              "deployment:error",
+              %{request_id: request.request_id, reason: to_string(reason)}
+            )
+        end
+      end)
+
+      {:ok, request.request_id}
+    end
+  end
+
+  defp validate_deployment_request(
+         %SowerClient.Orchestration.DeploymentRequest{} = request,
+         agent_id
+       ) do
+    subs = get_subscription_sids(request.subscription_sids)
+
+    cond do
+      subs == [] ->
+        {:error, :subscription_not_found}
+
+      not Enum.all?(subs, &(&1.agent_id == agent_id)) ->
+        {:error, :unauthorized}
+
+      true ->
+        {:ok, Repo.preload(subs, :agent)}
+    end
+  end
+
+  defp process_deployment(
+         %SowerClient.Orchestration.DeploymentRequest{} = request,
+         subscriptions
+       ) do
+    agent_id = hd(subscriptions).agent_id
+    seeds = subscriptions |> Enum.map(&match_seed/1) |> Enum.reject(&is_nil/1)
+
+    if seeds == [] do
+      {:error, :seeds_not_found}
+    else
+      case create_deployment(%{
+             agent_id: agent_id,
+             seeds: seeds,
+             subscriptions: subscriptions
+           }) do
+        {:ok, deploy} ->
+          {:ok,
+           %SowerClient.Orchestration.Deployment{
+             request_id: request.request_id,
+             subscription_sids: Enum.map(subscriptions, & &1.sid),
+             sid: deploy.sid,
+             seeds: seeds
+           }}
+
+        other ->
+          other
+      end
+    end
+  end
+
   def record_deployment(%SowerClient.Orchestration.DeploymentResult{} = result) do
     case get_deployment_sid(result.deployment_sid) do
       nil ->

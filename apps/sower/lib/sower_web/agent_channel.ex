@@ -115,10 +115,21 @@ defmodule SowerWeb.AgentChannel do
     end
   end)
 
-  handle_schema(
-    SowerClient.Orchestration.DeploymentRequest,
-    &Sower.Orchestration.request_deployment/1
-  )
+  def handle_in("deployment:request", payload, socket) do
+    case Orchestration.handle_deployment_request(
+           payload,
+           socket.assigns.agent.id,
+           socket.assigns.agent.sid,
+           socket.assigns.access_token.org_id
+         ) do
+      {:ok, request_id} ->
+        {:reply, {:ok, %{request_id: request_id}}, socket}
+
+      {:error, error} ->
+        Logger.error(msg: "Invalid deployment request", error: error)
+        {:reply, {:error, error}, socket}
+    end
+  end
 
   handle_schema(
     SowerClient.Orchestration.DeploymentResult,

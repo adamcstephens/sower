@@ -29,7 +29,7 @@ let
         lib.mapAttrsToList (name: val: ''
           ${name}="${val}"
           export ${name}
-        '') cfg.environment
+        '') config.systemd.services.sower-agent.environment
       ))
       + ''
         RELEASE_COOKIE=$(cat release-cookie)

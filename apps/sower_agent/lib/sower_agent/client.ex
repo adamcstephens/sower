@@ -6,18 +6,19 @@ defmodule SowerAgent.Client do
   alias SowerAgent.Storage
 
   def deploy(%SowerClient.Orchestration.Subscription{} = sub) do
-    call({:deployment_request, sub})
+    GenServer.cast(__MODULE__, {:deployment_request, sub})
   end
 
-  def handle_call({:deployment_request, %{sid: sid}}, _from, socket) do
+  @impl Slipstream
+  def handle_cast({:deployment_request, %{sid: sid}}, socket) do
     {:ok, upgrade_request} =
       SowerClient.Orchestration.DeploymentRequest.new(%{
         subscription_sids: [sid]
       })
 
-    {:ok, ref} = push_message(socket, upgrade_request)
+    {:ok, _ref} = push_message(socket, upgrade_request)
 
-    {:reply, :ok, Map.put(socket, :upgrade_ref, ref)}
+    {:noreply, socket}
   end
 
   @impl Slipstream
@@ -121,7 +122,7 @@ defmodule SowerAgent.Client do
     case connect(config) do
       {:ok, socket} ->
         Logger.debug(msg: "Connecting")
-        {:ok, socket}
+        {:ok, Map.put(socket, :active_deployments, %{})}
 
       {:error, reason} ->
         Logger.error(
@@ -171,6 +172,36 @@ defmodule SowerAgent.Client do
     {:noreply, socket}
   end
 
+  def handle_message(_topic, "deployment", payload, socket) do
+    case SowerClient.Orchestration.Deployment.cast(payload) do
+      {:ok, deployment} ->
+        Logger.debug(
+          msg: "Received deployment",
+          request_id: deployment.request_id,
+          deployment_sid: deployment.sid
+        )
+
+        socket = put_in(socket.active_deployments[deployment.sid], deployment)
+        send(self(), {:run_deployment, deployment.sid})
+
+        {:ok, socket}
+
+      {:error, error} ->
+        Logger.error(msg: "Error casting deployment", error: error)
+        {:ok, socket}
+    end
+  end
+
+  def handle_message(_topic, "deployment:error", payload, socket) do
+    Logger.error(
+      msg: "Deployment request failed",
+      request_id: payload["request_id"],
+      reason: payload["reason"]
+    )
+
+    {:ok, socket}
+  end
+
   def handle_message(topic, message, _params, socket) do
     Logger.debug(msg: "Received unknown message", topic: topic, message: message)
     {:noreply, socket}
@@ -198,55 +229,49 @@ defmodule SowerAgent.Client do
     {:ok, socket}
   end
 
-  # TODO: add multi-upgrade async support
-  # currently is last deploy wins
-  def handle_reply(ref, response, %{upgrade_ref: ref} = socket) do
-    socket = Map.delete(socket, :upgrade_ref)
-
-    case response do
-      {:ok, response} ->
-        case SowerClient.Orchestration.Deployment.cast(response) do
-          {:ok, deployment} ->
-            Logger.debug(
-              msg: "Received deployment",
-              request_id: deployment.request_id,
-              deployment_sid: deployment.sid
-            )
-
-            result = SowerAgent.Deployer.run(deployment)
-
-            {:ok, result} =
-              SowerClient.Orchestration.DeploymentResult.cast(%{
-                request_id: deployment.request_id,
-                deployment_sid: deployment.sid,
-                result: result,
-                deployed_at: DateTime.utc_now() |> DateTime.to_iso8601()
-              })
-
-            {:ok, _result_ref} = push_message(socket, result)
-
-            # Report updated seed profiles after deployment
-            cast(:report_seeds)
-
-            if SowerAgent.take_pending_reload(), do: reload_agent_service()
-
-          {:error, error} ->
-            Logger.error(msg: "Error handling deployment", error: error)
-        end
-
-      {:error, error} ->
-        Logger.error(msg: "Error returned from server", error: error)
-    end
-
-    {:ok, socket}
-  end
-
   def handle_reply(_ref, :ok, socket) do
     {:noreply, socket}
   end
 
   def handle_reply(ref, payload, socket) do
     Logger.debug(msg: "Received unknown reply", ref: ref, payload: payload)
+    {:noreply, socket}
+  end
+
+  @impl Slipstream
+  def handle_info({:run_deployment, sid}, socket) do
+    case Map.get(socket.active_deployments, sid) do
+      nil ->
+        Logger.warning(msg: "Deployment not found", sid: sid)
+        {:noreply, socket}
+
+      deployment ->
+        result = SowerAgent.Deployer.run(deployment)
+
+        {:ok, deployment_result} =
+          SowerClient.Orchestration.DeploymentResult.cast(%{
+            request_id: deployment.request_id,
+            deployment_sid: deployment.sid,
+            result: result,
+            deployed_at: DateTime.utc_now() |> DateTime.to_iso8601()
+          })
+
+        {:ok, _result_ref} = push_message(socket, deployment_result)
+
+        socket = update_in(socket.active_deployments, &Map.delete(&1, sid))
+
+        cast(:report_seeds)
+        send(self(), :check_pending_reload)
+
+        {:noreply, socket}
+    end
+  end
+
+  def handle_info(:check_pending_reload, socket) do
+    if map_size(socket.active_deployments) == 0 do
+      if SowerAgent.take_pending_reload(), do: reload_agent_service()
+    end
+
     {:noreply, socket}
   end
 
