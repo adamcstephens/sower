@@ -597,7 +597,7 @@ defmodule Sower.OrchestrationTest do
 
     test "auto-registers unknown artifacts as seeds" do
       agent = agent_fixture()
-      artifact = "/nix/store/#{unique_hash()}-nixos-system-testhost-24.05"
+      artifact = "/nix/store/#{unique_hash()}-nixos-system-testhost-25.11"
 
       report = %SowerClient.Orchestration.AgentSeedsReport{
         profiles: [
@@ -622,11 +622,15 @@ defmodule Sower.OrchestrationTest do
       # Verify seed was auto-registered
       seed = Seed.get_by_artifact(artifact)
       assert seed != nil
-      assert seed.name == "nixos-system-testhost-24.05"
+      assert seed.name == "testhost"
       assert seed.seed_type == "nixos"
 
       assert Enum.any?(seed.tags, fn tag ->
                tag.key == "agent_source" && tag.value == agent.sid
+             end)
+
+      assert Enum.any?(seed.tags, fn tag ->
+               tag.key == "nixos_version" && tag.value == "25.11"
              end)
 
       # Verify agent_seed_generation was created
@@ -638,7 +642,7 @@ defmodule Sower.OrchestrationTest do
 
     test "auto-registers multiple generations and sets is_current correctly" do
       agent = agent_fixture()
-      artifact_current = "/nix/store/#{unique_hash()}-nixos-system-testhost-24.05"
+      artifact_current = "/nix/store/#{unique_hash()}-nixos-system-testhost-25.11"
       artifact_previous = "/nix/store/#{unique_hash()}-nixos-system-testhost-24.04"
 
       report = %SowerClient.Orchestration.AgentSeedsReport{

@@ -27,7 +27,11 @@ rec {
       inherit name;
       package = nixosConfig.config.system.build.toplevel;
       type = "nixos";
-      extraSeedMeta = nixosConfig.config.sower.seed.meta or { };
+      extraSeedMeta = lib.recursiveUpdate {
+        tags = {
+          nixos_version = nixosConfig.config.system.nixos.version;
+        };
+      } (nixosConfig.config.sower.seed.meta or { });
     });
 
   mkSeedHomeManager =

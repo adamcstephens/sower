@@ -249,13 +249,27 @@ defmodule Sower.Seed do
   end
 
   defp register_from_agent(agent, generation, profile) do
-    name = extract_name_from_store_path(generation.path)
+    {name, path_tags} = extract_info_from_store_path(generation.path)
     seed_type = seed_type_from_profile_path(profile.profile_path)
 
     # Build tags: agent_source + any profile tags
     tags =
-      [%{key: "agent_source", value: agent.sid}] ++
+      path_tags ++
+        [%{key: "agent_source", value: agent.sid}] ++
         Enum.map(profile.tags || [], fn {k, v} -> %{key: to_string(k), value: to_string(v)} end)
+
+    name =
+      if seed_type == "home-manager" do
+        case Enum.find_value(profile.tags, fn
+               {"user", user_name} -> user_name
+               _ -> nil
+             end) do
+          nil -> name
+          user_name -> "#{user_name}@#{agent.name}"
+        end
+      else
+        name
+      end
 
     create(%{
       name: name,
@@ -266,25 +280,34 @@ defmodule Sower.Seed do
   end
 
   @doc """
-  Extracts the derivation name from a Nix store path.
+  Extracts the derivation name and tags from a Nix store path.
 
   The Nix store path format is `/nix/store/{hash}-{name}` where the hash
   is 32 characters. This function extracts the name portion after the first hyphen.
 
   ## Examples
 
-      iex> Sower.Seed.extract_name_from_store_path("/nix/store/abc123-nixos-system-myhost-24.05")
-      "nixos-system-myhost-24.05"
+      iex> Sower.Seed.extract_info_from_store_path("/nix/store/abc123-nixos-system-myhost-25.11")
+      {"myhost", [%{key: "nixos_version", value: "25.05"}]}
 
-      iex> Sower.Seed.extract_name_from_store_path("/nix/store/xyz789-home-manager-generation")
-      "home-manager-generation"
+      iex> Sower.Seed.extract_info_from_store_path("/nix/store/xyz789-home-manager-generation")
+      {"home-manager-generation", []}
   """
-  def extract_name_from_store_path(path) do
+  def extract_info_from_store_path(path) do
     basename = Path.basename(path)
 
     case String.split(basename, "-", parts: 2) do
-      [_hash, name] -> name
-      [name] -> name
+      [_hash, name] ->
+        case String.split(name, "-") do
+          ["nixos", "system", name, nixos_version] ->
+            {name, [%{key: "nixos_version", value: nixos_version}]}
+
+          _ ->
+            {name, []}
+        end
+
+      [name] ->
+        {name, []}
     end
   end
 

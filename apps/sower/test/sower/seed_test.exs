@@ -138,19 +138,19 @@ defmodule Sower.SeedTest do
     end
   end
 
-  describe "extract_name_from_store_path/1" do
+  describe "extract_info_from_store_path/1" do
     test "extracts the derivation name from a NixOS store path" do
-      assert Seed.extract_name_from_store_path("/nix/store/abc123def-nixos-system-myhost-24.05") ==
-               "nixos-system-myhost-24.05"
+      assert Seed.extract_info_from_store_path("/nix/store/abc123def-nixos-system-myhost-25.11") ==
+               {"myhost", [%{key: "nixos_version", value: "25.11"}]}
     end
 
     test "extracts name from home-manager store path" do
-      assert Seed.extract_name_from_store_path("/nix/store/xyz789abc-home-manager-generation") ==
-               "home-manager-generation"
+      assert Seed.extract_info_from_store_path("/nix/store/xyz789abc-home-manager-generation") ==
+               {"home-manager-generation", []}
     end
 
     test "handles paths with only hash prefix" do
-      assert Seed.extract_name_from_store_path("/nix/store/abc123-simple") == "simple"
+      assert Seed.extract_info_from_store_path("/nix/store/abc123-simple") == {"simple", []}
     end
   end
 
@@ -198,7 +198,7 @@ defmodule Sower.SeedTest do
 
     test "creates new seed when artifact is unknown" do
       agent = agent_fixture()
-      artifact = "/nix/store/#{unique_hash()}-nixos-system-testhost-24.05"
+      artifact = "/nix/store/#{unique_hash()}-nixos-system-testhost-25.11"
 
       generation = %SowerClient.Orchestration.AgentSeedGeneration{
         path: artifact,
@@ -216,13 +216,13 @@ defmodule Sower.SeedTest do
 
       assert {:ok, seed} = Seed.find_or_register_from_agent(agent, generation, profile)
       assert seed.artifact == artifact
-      assert seed.name == "nixos-system-testhost-24.05"
+      assert seed.name == "testhost"
       assert seed.seed_type == "nixos"
     end
 
     test "adds agent_source tag when auto-registering" do
       agent = agent_fixture()
-      artifact = "/nix/store/#{unique_hash()}-nixos-system-testhost-24.05"
+      artifact = "/nix/store/#{unique_hash()}-nixos-system-testhost-25.11"
 
       generation = %SowerClient.Orchestration.AgentSeedGeneration{
         path: artifact,
