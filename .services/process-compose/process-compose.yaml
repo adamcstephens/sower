@@ -1,0 +1,27 @@
+version: "0.5"
+
+processes:
+  epmd:
+    command: epmd -port 4369
+
+  postgres-init:
+    command: |
+      if [ ! -d "$PGDATA" ]; then
+        initdb --username=postgres --auth=trust
+      fi
+    # availability:
+    #   exit_on_end: true
+
+  postgres:
+    command: postgres -k "$PGDATA"
+    depends_on:
+      postgres-init:
+        condition: process_completed_successfully
+    readiness_probe:
+      exec:
+        command: pg_isready -h localhost
+      initial_delay_seconds: 2
+      period_seconds: 2
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 20

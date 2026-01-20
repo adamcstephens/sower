@@ -1,10 +1,7 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixpkgs-unstable";
-
     flake-parts.url = "github:hercules-ci/flake-parts";
-    process-compose-flake.url = "github:Platonic-Systems/process-compose-flake";
-    services-flake.url = "github:juspay/services-flake";
 
     expert.url = "github:elixir-lang/expert?ref=main";
     expert.inputs.nixpkgs.follows = "nixpkgs";
@@ -17,18 +14,15 @@
       {
         imports = [
           ./nix/flake/part.nix
-          inputs.process-compose-flake.flakeModule
         ];
 
         systems = [
           "x86_64-linux"
           "aarch64-linux"
-          # "aarch64-darwin"
         ];
 
         perSystem =
           {
-            config,
             inputs',
             lib,
             pkgs,
@@ -57,8 +51,6 @@
               };
 
               default = pkgs.mkShell {
-                inputsFrom = [ config.process-compose.devServices.services.outputs.devShell ];
-
                 packages = [
                   # elixir
                   beamPackages.erlang
@@ -86,8 +78,7 @@
                   pkgs.nix-eval-jobs
                   pkgs.nvfetcher
                   pkgs.process-compose
-                  config.process-compose.devServices.services.postgres.postgres1.package
-                  config.process-compose.devServices.outputs.package
+                  pkgs.postgresql
                   pkgs.sd-switch
                   pkgs.entr
                 ]
@@ -97,8 +88,6 @@
                 ];
 
                 shellHook = ''
-                  export PC_CONFIG_FILES=${config.process-compose.devServices.outputs.settingsFile}
-
                   mkdir -vp _build
 
                   ln -sf ${lib.getExe pkgs.tailwindcss_3} _build/tailwind-${os}-${arch}
@@ -153,50 +142,6 @@
                 sowerLib = self.lib;
               };
             };
-
-            process-compose.devServices =
-              { config, ... }:
-              {
-                imports = [
-                  inputs.services-flake.processComposeModules.default
-                  (inputs.services-flake.lib.multiService ./nix/dev-services/epmd.nix)
-                ];
-
-                services.epmd.epmd1 = {
-                  enable = true;
-                  package = beamPackages.erlang;
-                };
-
-                services.postgres.postgres1 = {
-                  enable = true;
-                  superuser = "postgres";
-                };
-
-                services.grafana.grafana1 = {
-                  enable = true;
-                  datasources = [
-                    {
-                      name = "Tempo";
-                      type = "tempo";
-                      access = "proxy";
-                      url = "http://${config.services.tempo.tempo1.httpAddress}:${builtins.toString config.services.tempo.tempo1.httpPort}";
-                    }
-                  ];
-
-                  # https://grafana.com/docs/grafana/latest/setup-grafana/configure-grafana
-                  extraConf = {
-                    "auth.anonymous" = {
-                      enabled = true;
-                      org_role = "Admin";
-                      hide_version = false;
-                    };
-
-                    "auth.basic".enabled = false;
-                    "auth".disable_login_form = true;
-                  };
-                };
-                services.tempo.tempo1.enable = true;
-              };
           };
       }
     );

@@ -34,9 +34,9 @@ npm-debug.log
 
 /.dev-*
 .secret.envrc
+.services/*/data/
 
 target/
-data/
 .nixos-test-history
 
 # go bin
