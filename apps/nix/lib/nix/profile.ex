@@ -79,10 +79,10 @@ defmodule Nix.Profile do
       def profiles(profile \\ profile_path()) do
         parent = Path.dirname(profile)
         profile_name = Path.basename(profile)
+        link_pattern = ~r/^#{Regex.escape(profile_name)}-\d+-link$/
 
         File.ls!(parent)
-        |> Enum.filter(&String.starts_with?(&1, profile_name))
-        |> Enum.reject(&(&1 == profile_name))
+        |> Enum.filter(&Regex.match?(link_pattern, &1))
         |> Enum.map(&Path.expand(&1, parent))
         |> Enum.sort()
         |> Enum.reverse()
