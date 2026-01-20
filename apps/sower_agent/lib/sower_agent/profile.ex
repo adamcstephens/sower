@@ -19,69 +19,54 @@ defmodule SowerAgent.Profile do
         collect_nixos(),
         collect_home_manager()
       ]
-      |> Enum.reject(&is_nil/1)
+      |> Enum.reject(fn {result, _} -> result == :error end)
+      |> Enum.map(fn {_, profile} -> profile end)
 
     AgentSeedsReport.cast!(%{profiles: profiles})
   end
 
-  @doc """
-  Collects NixOS system profile if available.
-  """
   def collect_nixos() do
     collect_profile(Nix.NixOS, "/nix/var/nix/profiles/system")
-  rescue
-    e ->
-      Logger.warning(msg: "Failed to collect NixOS profile", error: Exception.message(e))
-      nil
   end
 
-  @doc """
-  Collects HomeManager profile if available.
-  """
   def collect_home_manager() do
     collect_profile(Nix.HomeManager, home_manager_profile_path())
-  rescue
-    e ->
-      Logger.warning(msg: "Failed to collect HomeManager profile", error: Exception.message(e))
-      nil
   end
 
-  defp home_manager_profile_path() do
+  def home_manager_profile_path() do
     xdg_state = System.get_env("XDG_STATE_HOME", "#{System.get_env("HOME")}/.local/state")
     "#{xdg_state}/nix/profiles/home-manager"
   end
 
-  defp collect_profile(module, profile_path) do
-    # Check if profile directory exists
-    unless File.exists?(profile_path) do
+  def collect_profile(module, profile_path) do
+    if File.exists?(profile_path) do
+      do_collect_profile(module, profile_path)
+    else
       Logger.debug(msg: "Profile path does not exist", path: profile_path)
-      throw(:profile_not_found)
+      {:error, :profile_not_found}
     end
+  end
 
+  def do_collect_profile(module, profile_path) do
     state = module.get_state()
-
-    # Convert all available generations
-    current_path = state.current.path
 
     generations =
       state.profiles
-      |> Enum.map(&to_agent_seed_generation(&1, current_path))
+      |> Enum.map(&to_agent_seed_generation(&1, state.current.path))
 
-    # Add current generation if not already in profiles list
     generations =
-      if Enum.any?(generations, &(&1.path == current_path)) do
+      if Enum.any?(generations, &(&1.path == state.current.path)) do
         generations
       else
-        [to_agent_seed_generation(state.current, current_path) | generations]
+        [to_agent_seed_generation(state.current, state.current.path) | generations]
       end
 
-    AgentSeedProfile.cast!(%{
-      profile_path: profile_path,
-      tags: state.tags,
-      generations: generations
-    })
-  catch
-    :profile_not_found -> nil
+    {:ok,
+     AgentSeedProfile.cast!(%{
+       profile_path: profile_path,
+       tags: state.tags,
+       generations: generations
+     })}
   end
 
   defp to_agent_seed_generation(%Nix.Profile.Generation{} = gen, current_path) do
