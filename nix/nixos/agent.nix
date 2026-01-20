@@ -152,6 +152,7 @@ in
         User = "sower-agent";
         Group = "sower-agent";
         BindPaths = lib.optionals activatorCfg.enable [ activatorCfg.socketPath ];
+        UMask = "0077";
 
         StateDirectory = "sower-agent";
         WorkingDirectory = "%S/sower-agent";
