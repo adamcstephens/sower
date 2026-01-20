@@ -22,7 +22,7 @@ let
   manageServices = false;
 
   adminScript = pkgs.writeShellApplication {
-    name = "sower-server";
+    name = "sower-agent";
 
     text =
       (lib.concatStringsSep "\n" (
@@ -32,7 +32,7 @@ let
         '') config.systemd.services.sower-agent.environment
       ))
       + ''
-        RELEASE_COOKIE=$(cat release-cookie)
+        RELEASE_COOKIE=$(cat /var/lib/sower-agent/release-cookie)
         export RELEASE_COOKIE
         exec ${lib.getExe cfg.package} "$@"
       '';
