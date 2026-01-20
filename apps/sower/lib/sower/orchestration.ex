@@ -716,75 +716,103 @@ defmodule Sower.Orchestration do
     Deployment.changeset(deployment, attrs)
   end
 
+  # Deployment Request Handling
+  #
+  # Entry points for deployment requests with different behaviors:
+  #
+  # - handle_deployment_request/2: Main entry point from agent channel
+  #   Flow: validate request → validate subscriptions → spawn async task
+  #   Task: match seeds → create deployment → broadcast to agent
+  #
+  # - request_deployment/2: Synchronous deployment (no broadcast)
+  #   Used for internal synchronous requests without async behavior
+  #
+  # - deploy_subscription/1: Deploy a single subscription
+  #   Matches subscription against available seeds, used by other functions
+
   @doc """
-  Request and create a deployment for a subscription
+  Initiates an async deployment for a single subscription.
+
+  Looks up the subscription's agent, matches seeds, and spawns async task
+  to create deployment and broadcast results back to agent.
+
+  Returns {:ok, request_id} if async task starts successfully,
+  {:error, reason} otherwise.
+
+  ## Examples
+
+      iex> deploy_subscription(subscription)
+      {:ok, "request_abc123"}
+
+      iex> deploy_subscription(subscription_with_no_agent)
+      {:error, :agent_not_found}
+
   """
-  def request_deployment(%SowerClient.Orchestration.DeploymentRequest{} = request) do
-    with subs when subs != [] <- get_subscription_sids(request.subscription_sids),
-         subs <- Repo.preload(subs, :agent),
-         agent_id <- hd(subs).agent_id,
-         seeds <-
-           subs |> Enum.map(&match_seed/1) |> Enum.reject(&is_nil/1) do
-      if seeds == [] do
-        {:error, :seeds_not_found}
-      else
-        case create_deployment(%{
-               agent_id: agent_id,
-               seeds: seeds,
-               subscriptions: subs
-             }) do
-          {:ok, deploy} ->
-            {:ok,
-             %SowerClient.Orchestration.Deployment{
-               request_id: request.request_id,
-               subscription_sids: Enum.map(subs, & &1.sid),
-               sid: deploy.sid,
-               seeds: seeds
-             }}
+  def deploy_subscription(%Subscription{} = sub) do
+    subscription = Repo.preload(sub, :agent)
 
-          other ->
-            other
-        end
-      end
-    else
-      {:error, _} = err ->
-        Logger.error(msg: "Failed to return deployment", error: IO.inspect(err))
-        {:error, :unknown_error}
-
+    case subscription.agent do
       nil ->
-        {:error, :subscription_not_found}
+        {:error, :agent_not_found}
+
+      %Agent{} = agent ->
+        request_id = SowerClient.Sid.generate("request")
+        process_deployment(request_id, [subscription], agent)
     end
   end
 
   @doc """
+  Request and create a deployment for subscriptions (synchronous, no broadcast).
+
+  Used internally for synchronous deployment requests without async broadcast.
+  Validates subscriptions exist and match, then creates deployment record.
+
+  Returns the structured Deployment response.
+
+  ## Examples
+
+      iex> request_deployment(deployment_request)
+      {:ok, %SowerClient.Orchestration.Deployment{}}
+
+      iex> request_deployment(invalid_request)
+      {:error, :subscription_not_found}
+
+  """
+  def request_deployment(%SowerClient.Orchestration.DeploymentRequest{} = request) do
+    with {:ok, subs} <- validate_request_subscriptions(request.subscription_sids) do
+      do_deployment(request.request_id, subs)
+    else
+      {:error, _} = err ->
+        Logger.error(msg: "Failed to process deployment request", error: IO.inspect(err))
+        {:error, :unknown_error}
+    end
+  end
+
+  defp validate_request_subscriptions(sids) when is_list(sids) and length(sids) > 0 do
+    subs = get_subscription_sids(sids)
+    subs = Repo.preload(subs, :agent)
+
+    if subs == [] do
+      {:error, :subscription_not_found}
+    else
+      {:ok, subs}
+    end
+  end
+
+  defp validate_request_subscriptions(_), do: {:error, :subscription_not_found}
+
+  @doc """
   Handle a deployment request from an agent channel.
-  Validates synchronously and processes asynchronously.
+
+  Validates the deployment request and subscriptions synchronously,
+  then delegates to process_deployment/3 for async processing and broadcasting.
+
   Returns {:ok, request_id} on successful validation, {:error, reason} otherwise.
   """
-  def handle_deployment_request(payload, agent_id, agent_sid, org_id) do
+  def handle_deployment_request(payload, agent) do
     with {:ok, request} <- SowerClient.Orchestration.DeploymentRequest.cast(payload),
-         {:ok, subscriptions} <- validate_deployment_request(request, agent_id) do
-      Task.Supervisor.start_child(Sower.TaskSupervisor, fn ->
-        Repo.put_org_id(org_id)
-
-        case process_deployment(request, subscriptions) do
-          {:ok, deployment} ->
-            SowerWeb.Endpoint.broadcast(
-              "agent:#{agent_sid}",
-              "deployment",
-              Map.from_struct(deployment)
-            )
-
-          {:error, reason} ->
-            SowerWeb.Endpoint.broadcast(
-              "agent:#{agent_sid}",
-              "deployment:error",
-              %{request_id: request.request_id, reason: to_string(reason)}
-            )
-        end
-      end)
-
-      {:ok, request.request_id}
+         {:ok, subscriptions} <- validate_deployment_request(request, agent.id) do
+      process_deployment(request.request_id, subscriptions, agent)
     end
   end
 
@@ -806,10 +834,47 @@ defmodule Sower.Orchestration do
     end
   end
 
-  defp process_deployment(
-         %SowerClient.Orchestration.DeploymentRequest{} = request,
-         subscriptions
-       ) do
+  @doc """
+  Process a deployment request asynchronously.
+
+  Spawns an async task to match seeds, create deployment record, and broadcast
+  results back to agent via channel. Validation happens synchronously before
+  task spawn.
+
+  Returns {:ok, request_id} if async task starts successfully,
+  {:error, reason} if validation fails.
+
+  ## Examples
+
+      iex> process_deployment(request_id, subscriptions, agent)
+      {:ok, "request_123"}
+
+  """
+  def process_deployment(request_id, subscriptions, %Agent{} = agent) do
+    Task.Supervisor.start_child(Sower.TaskSupervisor, fn ->
+      Repo.put_org_id(agent.org_id)
+
+      case do_deployment(request_id, subscriptions) do
+        {:ok, deployment} ->
+          SowerWeb.Endpoint.broadcast(
+            "agent:#{agent.sid}",
+            "deployment",
+            Map.from_struct(deployment)
+          )
+
+        {:error, reason} ->
+          SowerWeb.Endpoint.broadcast(
+            "agent:#{agent.sid}",
+            "deployment:error",
+            %{request_id: request_id, reason: to_string(reason)}
+          )
+      end
+    end)
+
+    {:ok, request_id}
+  end
+
+  defp do_deployment(request_id, subscriptions) do
     agent_id = hd(subscriptions).agent_id
     seeds = subscriptions |> Enum.map(&match_seed/1) |> Enum.reject(&is_nil/1)
 
@@ -824,7 +889,7 @@ defmodule Sower.Orchestration do
         {:ok, deploy} ->
           {:ok,
            %SowerClient.Orchestration.Deployment{
-             request_id: request.request_id,
+             request_id: request_id,
              subscription_sids: Enum.map(subscriptions, & &1.sid),
              sid: deploy.sid,
              seeds: seeds

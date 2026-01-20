@@ -224,7 +224,10 @@ defmodule SowerAgent.Client do
     socket =
       socket
       |> join("agent:#{agent_sid}", %{local_sid: storage.local_sid})
-      |> Map.put(:assigns, Map.delete(socket.assigns, :hello_ref))
+      |> Map.put(
+        :assigns,
+        socket.assigns |> Map.delete(:hello_ref) |> Map.put(:agent_sid, agent_sid)
+      )
 
     {:ok, socket}
   end
