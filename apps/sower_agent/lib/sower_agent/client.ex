@@ -90,19 +90,7 @@ defmodule SowerAgent.Client do
 
   @impl Slipstream
   def init(_args) do
-    case verify_auth() do
-      {:ok, token_info} ->
-        Logger.info(msg: "Authenticated", description: token_info.description)
-        do_connect()
-
-      {:error, reason} ->
-        Logger.error(msg: "Authentication failed", reason: reason)
-        :ignore
-    end
-  end
-
-  defp verify_auth() do
-    SowerClient.Auth.verify()
+    do_connect()
   end
 
   defp do_connect() do
@@ -172,7 +160,13 @@ defmodule SowerAgent.Client do
     {:noreply, socket}
   end
 
-  def handle_message(_topic, "deployment", payload, socket) do
+  def handle_message(
+        "agent:" <> topic,
+        "deployment",
+        payload,
+        %{assigns: %{agent_sid: agent_sid}} = socket
+      )
+      when topic == agent_sid do
     case SowerClient.Orchestration.Deployment.cast(payload) do
       {:ok, deployment} ->
         Logger.debug(
@@ -192,7 +186,13 @@ defmodule SowerAgent.Client do
     end
   end
 
-  def handle_message(_topic, "deployment:error", payload, socket) do
+  def handle_message(
+        "agent:" <> topic,
+        "deployment:error",
+        payload,
+        %{assigns: %{agent_sid: agent_sid}} = socket
+      )
+      when topic == agent_sid do
     Logger.error(
       msg: "Deployment request failed",
       request_id: payload["request_id"],
