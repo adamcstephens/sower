@@ -33,11 +33,6 @@ defmodule SowerWeb.Layouts do
           <div class="items-center justify-between w-full md:flex md:w-auto md:order-1">
             <ul class="flex flex-col font-medium mt-4 md:space-x-8 rtl:space-x-reverse md:flex-row md:mt-0 md:border-0 ">
               <li>
-                <.link navigate={~p"/"} class="hover:text-orange-700 dark:hover:text-orange-300">
-                  Home
-                </.link>
-              </li>
-              <li>
                 <.link navigate={~p"/seeds"} class="hover:text-orange-700 dark:hover:text-orange-300">
                   Seeds
                 </.link>
