@@ -3,6 +3,7 @@ defmodule SowerAgent.Client do
 
   require Logger
 
+  alias SowerAgent.Scheduler
   alias SowerAgent.Storage
 
   def deploy(%SowerClient.Orchestration.Subscription{} = sub) do
@@ -68,8 +69,7 @@ defmodule SowerAgent.Client do
           []
       end
 
-    # TODO prune old schedules
-    :ok = Enum.each(subscriptions, &start_schedule/1)
+    Scheduler.refresh_subscriptions(subscriptions)
 
     SowerAgent.Storage.put(:subscriptions, subscriptions)
 
@@ -278,52 +278,6 @@ defmodule SowerAgent.Client do
   def private_channel(_socket) do
     "agent:#{Storage.read().agent_sid}"
   end
-
-  defp start_schedule(%SowerClient.Orchestration.Subscription{
-         sid: sid,
-         schedule: schedule
-       })
-       when not is_nil(sid) and not is_nil(schedule) do
-    case Crontab.CronExpression.Parser.parse(schedule) do
-      {:ok, cron} ->
-        SowerAgent.Scheduler.new_job()
-        |> Quantum.Job.set_name(:"subsched_#{sid}")
-        |> Quantum.Job.set_schedule(cron)
-        |> Quantum.Job.set_task(fn ->
-          subscriptions = SowerAgent.Storage.read().subscriptions || []
-
-          case Enum.find(subscriptions, &(&1.sid == sid)) do
-            nil ->
-              Logger.warning(
-                msg: "Subscription not found for scheduled deployment",
-                subscription_sid: sid
-              )
-
-            subscription ->
-              Logger.info(
-                msg: "Running scheduled deployment",
-                subscription_sid: sid,
-                schedule: schedule
-              )
-
-              SowerAgent.Client.deploy(subscription)
-          end
-        end)
-        |> SowerAgent.Scheduler.add_job()
-
-      {:error, error} ->
-        Logger.error(
-          msg: "Failed to parse schedule",
-          error: error,
-          schedule: schedule,
-          subscription_sid: sid
-        )
-
-        nil
-    end
-  end
-
-  defp start_schedule(_), do: nil
 
   def reload_agent_service do
     Logger.info(msg: "Restarting sower-agent service")

@@ -13,8 +13,8 @@ defmodule SowerAgent.Application do
     client_children =
       if config && config.endpoint do
         [
-          {SowerAgent.Client, []},
-          SowerAgent.Scheduler
+          SowerAgent.Scheduler,
+          {SowerAgent.Client, []}
         ]
       else
         []
