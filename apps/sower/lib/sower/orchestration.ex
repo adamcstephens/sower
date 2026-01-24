@@ -424,6 +424,33 @@ defmodule Sower.Orchestration do
     {:error, :no_sids_provided}
   end
 
+  def find_subscription(%Sower.Seed{} = seed) do
+    rules_filter =
+      Enum.map(seed.tags || [], fn tag ->
+        %{key: tag.key, value: tag.value}
+      end)
+
+    from(s in Sower.Orchestration.Subscription,
+      where: s.seed_name == ^seed.name,
+      where: s.seed_type == ^seed.seed_type,
+      where:
+        fragment(
+          """
+          NOT EXISTS (
+            SELECT 1 FROM jsonb_array_elements(?) AS r
+            WHERE NOT EXISTS (
+              SELECT 1 FROM jsonb_array_elements(?) AS t
+              WHERE t->>'key' = r->>'key' AND t->>'value' = r->>'value'
+            )
+          )
+          """,
+          s.rules,
+          ^rules_filter
+        )
+    )
+    |> Sower.Repo.all()
+  end
+
   @doc """
   Creates a subscription.
 
