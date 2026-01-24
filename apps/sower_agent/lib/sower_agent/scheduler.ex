@@ -86,6 +86,18 @@ defmodule SowerAgent.Scheduler do
     end
   end
 
+  def add_subscription_schedule(%SowerClient.Orchestration.Subscription{
+        sid: sid,
+        schedule: nil
+      }) do
+    Logger.info(
+      msg: "Subscription has no schedule, skipping schedule start",
+      subscription_sid: sid
+    )
+
+    nil
+  end
+
   def clean_sub_schedule(name) do
     Logger.info(msg: "Deleting stale job", job: to_string(name))
 
