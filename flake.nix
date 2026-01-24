@@ -8,12 +8,14 @@
   };
 
   outputs =
-    inputs@{ flake-parts, self, ... }:
+    inputs@{ flake-parts, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } (
       { ... }:
       {
         imports = [
           ./nix/flake/part.nix
+          ./nix/packages/part.nix
+          ./nix/tests/part.nix
         ];
 
         systems = [
@@ -42,6 +44,10 @@
             os = if pkgs.stdenv.isDarwin then "darwin" else "linux";
           in
           {
+            _module.args = {
+              inherit beamPackages version;
+            };
+
             devShells = {
               ci = pkgs.mkShell {
                 packages = [
@@ -96,50 +102,6 @@
 
                 # go delve fix
                 hardeningDisable = [ "fortify" ];
-              };
-            };
-
-            checks = lib.optionalAttrs pkgs.stdenv.isLinux {
-              default = pkgs.callPackage ./nix/tests/e2e.nix {
-                flake = self;
-              };
-              services = pkgs.callPackage ./nix/tests/services.nix {
-                flake = self;
-              };
-            };
-
-            packages = rec {
-              activator = pkgs.callPackage ./nix/packages/activator.nix {
-                inherit version;
-              };
-
-              cli = pkgs.callPackage ./nix/packages/cli.nix {
-                inherit beamPackages version;
-              };
-
-              go-cli = pkgs.callPackage ./nix/packages/go-cli.nix {
-                inherit version;
-              };
-
-              agent = pkgs.callPackage ./nix/packages/agent.nix {
-                inherit beamPackages version;
-              };
-
-              server = pkgs.callPackage ./nix/packages/server.nix {
-                inherit
-                  beamPackages
-                  version
-                  sowerServicesHook
-                  ;
-
-                sowerLib = self.lib;
-              };
-
-              sowerServicesHook = pkgs.callPackage ./nix/packages/services-hook.nix { };
-
-              tests-simple-service = pkgs.callPackage ./nix/tests/simple-service.nix {
-                inherit sowerServicesHook;
-                sowerLib = self.lib;
               };
             };
           };
