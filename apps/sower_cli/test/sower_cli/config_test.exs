@@ -20,13 +20,13 @@ defmodule SowerCli.ConfigTest do
     test "returns cached config from application env" do
       config =
         SowerCli.Config.load(
-          overrides: %{"cache" => "attic://server:cache", "access_token_file" => nil}
+          overrides: %{"caches" => ["attic://server:cache"], "access_token_file" => nil}
         )
 
       cached = SowerCli.Config.get()
 
       assert cached == config
-      assert cached.cache == "attic://server:cache"
+      assert cached.caches == ["attic://server:cache"]
     end
   end
 

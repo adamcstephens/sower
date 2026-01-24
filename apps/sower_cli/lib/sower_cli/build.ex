@@ -21,8 +21,6 @@ defmodule SowerCli.Build do
     field :options, map()
     field :evals, [Nix.Eval.t()]
     field :builds, [Nix.Build.t()]
-    field :cache_module, module()
-    field :cache_config, map()
     field :status, :ok | :error, default: :ok
   end
 
@@ -53,15 +51,9 @@ defmodule SowerCli.Build do
 
   defp validate_options(steps, options) do
     cond do
-      :push in steps and is_nil(options.cache) ->
-        config = SowerCli.Config.get()
-
-        if is_nil(config.cache) do
-          Output.error("--cache is required for --push")
-          {:error, :missing_cache}
-        else
-          :ok
-        end
+      :push in steps and effective_cache_urls(options) == [] ->
+        Output.error("--cache is required for --push")
+        {:error, :missing_cache}
 
       :seed in steps ->
         Application.ensure_all_started([:req])
@@ -70,6 +62,14 @@ defmodule SowerCli.Build do
       true ->
         :ok
     end
+  end
+
+  defp effective_cache_urls(options) do
+    cli_caches = options.cache || []
+    config_caches = SowerCli.Config.get().caches || []
+
+    (cli_caches ++ config_caches)
+    |> Enum.uniq()
   end
 
   defp run_steps([], %__MODULE__{} = state) do
@@ -203,10 +203,9 @@ defmodule SowerCli.Build do
       state.builds
       |> Enum.filter(&(&1.status == :ok))
 
-    Output.step("Pushing #{length(builds)} path(s) to cache")
+    cache_urls = effective_cache_urls(state.options)
 
-    cache_url = state.options.cache || SowerCli.Config.get().cache
-    {:ok, {cache_module, cache_config}} = Cache.parse_url(cache_url)
+    Output.step("Pushing #{length(builds)} path(s) to #{length(cache_urls)} cache(s)")
 
     store_paths =
       builds
@@ -217,25 +216,33 @@ defmodule SowerCli.Build do
       Output.info("No paths to push")
       run_steps(rest, state)
     else
-      result = cache_module.upload(store_paths, cache_config)
-      Output.push_summary(result)
+      results =
+        Enum.reduce_while(cache_urls, [], fn cache_url, acc ->
+          {:ok, {cache_module, cache_config}} = Cache.parse_url(cache_url)
+          result = cache_module.upload(store_paths, cache_config)
+          Output.push_summary(cache_url, result)
 
-      case result do
-        {:ok, _} ->
-          # we're batch uploading, so don't get individual results
-          # mark all builds as cached
-          builds = builds |> Enum.map(fn build -> %{build | cached: true} end)
+          case {result, state.flags.fail_fast} do
+            {{:error, _}, true} -> {:halt, [{cache_url, result} | acc]}
+            _ -> {:cont, [{cache_url, result} | acc]}
+          end
+        end)
+        |> Enum.reverse()
 
-          run_steps(rest, %{
-            state
-            | cache_module: cache_module,
-              cache_config: cache_config,
-              builds: builds
-          })
+      {successes, failures} =
+        Enum.split_with(results, fn {_url, r} -> match?({:ok, _}, r) end)
 
-        {:error, _reason} ->
-          # TODO add fail fast handling for push
+      cond do
+        failures != [] and state.flags.fail_fast ->
           {:error, :push_failed}
+
+        successes == [] ->
+          {:error, :push_failed}
+
+        true ->
+          builds = Enum.map(builds, fn build -> %{build | cached: true} end)
+          new_status = if failures == [], do: state.status, else: :error
+          run_steps(rest, %{state | builds: builds, status: new_status})
       end
     end
   end

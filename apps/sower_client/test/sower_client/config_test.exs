@@ -98,7 +98,7 @@ defmodule SowerClient.ConfigTest do
 
       config_data = %{
         "endpoint" => "https://my.sower.dev",
-        "cache" => "attic://server:cache",
+        "caches" => ["attic://server:cache"],
         "name" => "testhost"
       }
 
@@ -119,7 +119,7 @@ defmodule SowerClient.ConfigTest do
 
       assert %Config{} = config
       assert config.endpoint == "https://my.sower.dev"
-      assert config.cache == "attic://server:cache"
+      assert config.caches == ["attic://server:cache"]
       assert config.name == "override-host"
       assert config.state_directory == "/var/lib/test"
     end

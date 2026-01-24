@@ -161,18 +161,18 @@ defmodule SowerCli.Output do
   end
 
   @doc """
-  Print push results summary.
+  Print push results summary for a specific cache.
   """
-  def push_summary({:ok, %{uploaded: uploaded, failed: failed}}) do
+  def push_summary(cache_url, {:ok, %{uploaded: uploaded, failed: failed}}) do
     if length(failed) == 0 do
-      success("Pushed #{length(uploaded)} path(s) to cache")
+      success("Pushed #{length(uploaded)} path(s) to #{cache_url}")
     else
-      error("Pushed #{length(uploaded)} path(s), #{length(failed)} failed")
+      error("Pushed #{length(uploaded)} path(s) to #{cache_url}, #{length(failed)} failed")
     end
   end
 
-  def push_summary({:error, reason}) do
-    error("Push failed: #{inspect(reason)}")
+  def push_summary(cache_url, {:error, reason}) do
+    error("Push to #{cache_url} failed: #{inspect(reason)}")
   end
 
   @doc """

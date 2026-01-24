@@ -141,8 +141,10 @@ defmodule SowerCli do
               short: "-c",
               long: "--cache",
               value_name: "URL",
-              help: "Cache destination (e.g., 'attic://server:cache', 'ssh://host')",
-              required: false
+              help:
+                "Cache destination (can be repeated; e.g., 'attic://server:cache', 'ssh://host')",
+              required: false,
+              multiple: true
             ],
             eval_jobs: [
               long: "--eval-jobs",

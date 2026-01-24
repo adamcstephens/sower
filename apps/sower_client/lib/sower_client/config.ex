@@ -23,10 +23,11 @@ defmodule SowerClient.Config do
         description: "Sower access token",
         readOnly: true
       },
-      cache: %Schema{
-        type: :string,
-        description: "Default cache URL for pushing builds",
-        example: "attic://server:cache"
+      caches: %Schema{
+        type: :array,
+        items: %Schema{type: :string},
+        description: "Default cache URLs for pushing builds",
+        example: ["attic://server:cache"]
       },
       config_path: %Schema{
         type: :string,
