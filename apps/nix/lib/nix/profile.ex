@@ -58,10 +58,11 @@ defmodule Nix.Profile do
       def profile(profile \\ profile_path()) do
         with {:ok, latest} <- follow_link(profile),
              {:ok, %File.Stat{ctime: ctime}} <- File.lstat(profile),
-             {:ok, created} <- erl_local_to_utc(ctime) do
+             {:ok, ctime} <- NaiveDateTime.from_erl(ctime),
+             {:ok, ctime} <- DateTime.from_naive(ctime, "Etc/UTC") do
           {:ok,
            %Nix.Profile.Generation{
-             created: created,
+             created: ctime,
              path: latest,
              link: profile
            }}
@@ -90,24 +91,6 @@ defmodule Nix.Profile do
       end
 
       defoverridable(current_path: 0, tags: 0)
-    end
-  end
-
-  # avoid needing an entire tz library
-  def erl_local_to_utc(erl_time) do
-    with {:ok, ctime} <- NaiveDateTime.from_erl(erl_time),
-         {tz, 0} <-
-           System.cmd("date", ["+%z"]),
-         tz <-
-           tz
-           |> String.trim()
-           |> String.slice(0..2)
-           |> String.to_integer(),
-         {:ok, ctime} <- DateTime.from_naive(ctime, "Etc/UTC") do
-      {:ok, DateTime.add(ctime, tz * -1, :hour)}
-    else
-      {_, x} when is_integer(x) -> {:error, :date_cmd_failure}
-      _ -> {:error, :time_conversion_failure}
     end
   end
 
