@@ -69,6 +69,12 @@ defmodule Sower.Seed do
     end
   end
 
+  def create!(attrs, opts \\ []) do
+    {:ok, seed} = create(attrs, opts)
+
+    seed
+  end
+
   def update(seed, attrs) do
     seed
     |> changeset(attrs)
