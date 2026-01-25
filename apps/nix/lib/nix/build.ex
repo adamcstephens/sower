@@ -9,7 +9,7 @@ defmodule Nix.Build do
 
   require Logger
 
-  @default_timeout_ms 60 * 60 * 1000
+  @default_timeout_ms 10 * 60 * 60 * 1000
 
   typedstruct do
     field :eval, Nix.Eval.t()
@@ -49,7 +49,19 @@ defmodule Nix.Build do
   def run(%Nix.Eval{} = eval, opts \\ []) do
     timeout = Keyword.get(opts, :timeout, @default_timeout_ms)
     {:ok, pid} = GenServer.start_link(Build, {eval, opts})
-    GenServer.call(pid, :run, timeout)
+
+    try do
+      GenServer.call(pid, :run, timeout)
+    catch
+      :exit, {:timeout, {GenServer, :call, _}} ->
+        Logger.error(
+          msg: "Timed out building",
+          path: eval.request.path,
+          attr: eval.request.attr
+        )
+
+        {:error, build_error_result(:timeout)}
+    end
   end
 
   def run!(eval, opts \\ []) do
@@ -158,6 +170,18 @@ defmodule Nix.Build do
     Logger.warning(msg: "Unexpected message in Build GenServer", message: msg)
     {:noreply, state}
   end
+
+  def build_error_result(reason) do
+    %Build{
+      status: :error,
+      log: [format_crash_reason(reason)],
+      start_time: DateTime.utc_now(),
+      end_time: DateTime.utc_now()
+    }
+  end
+
+  defp format_crash_reason(:normal), do: "Task exited normally without result"
+  defp format_crash_reason(reason), do: Exception.format_exit(reason)
 
   defp finalize_output(output) when is_list(output) do
     output

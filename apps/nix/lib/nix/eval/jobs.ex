@@ -2,8 +2,11 @@ defmodule Nix.Eval.Jobs do
   use GenServer
   use TypedStruct
 
+  alias Nix.Eval
+
   require Logger
 
+  @default_timeout_ms 60 * 60 * 1000
   @tick_interval 5_000
 
   typedstruct do
@@ -36,9 +39,16 @@ defmodule Nix.Eval.Jobs do
   end
 
   def run(%Nix.Eval.Request{} = request, opts) do
+    timeout = Keyword.get(opts, :timeout, @default_timeout_ms)
     {:ok, pid} = GenServer.start(__MODULE__, {request, opts})
 
-    GenServer.call(pid, :run, 10 * 60 * 60 * 1000)
+    try do
+      GenServer.call(pid, :run, timeout)
+    catch
+      :exit, {:timeout, {GenServer, :call, _}} ->
+        Logger.error(msg: "Timed out running eval", path: request.path, attr: request.attr)
+        {:error, build_error_result(request)}
+    end
   end
 
   def init({request, opts}) do
@@ -303,12 +313,7 @@ defmodule Nix.Eval.Jobs do
           queue_size: Nix.Eval.Queue.size(state.queue)
         )
 
-        error_eval = %Nix.Eval{
-          request: request,
-          status: :error,
-          output: nil,
-          errors: [format_crash_reason(reason)]
-        }
+        error_eval = Eval.build_error_result(request, reason)
 
         %{state | running: running, results: [error_eval | state.results]}
     end
@@ -334,8 +339,14 @@ defmodule Nix.Eval.Jobs do
     :ok
   end
 
-  defp format_crash_reason(:normal), do: "Task exited normally without result"
-  defp format_crash_reason(reason), do: Exception.format_exit(reason)
+  def build_error_result(request) do
+    %Result{
+      request: request,
+      results: [],
+      start_time: DateTime.utc_now(),
+      end_time: DateTime.utc_now()
+    }
+  end
 
   defp notify(%__MODULE__{notify_pid: nil}, _event), do: :ok
   defp notify(%__MODULE__{notify_pid: pid}, event), do: send(pid, event)

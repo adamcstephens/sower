@@ -67,4 +67,19 @@ defmodule Nix.Build.JobsTest do
       end)
     end
   end
+
+  describe "timeout handling" do
+    test "returns error result when GenServer times out" do
+      {:ok, eval} = Nix.Eval.run(@project_root, attr: "packages.x86_64-linux.cli")
+
+      capture_log(fn ->
+        {status, result} = Jobs.run([eval], timeout: 1)
+
+        assert status == :error
+        assert %Jobs.Result{} = result
+        assert result.status == :error
+        assert result.results == []
+      end)
+    end
+  end
 end

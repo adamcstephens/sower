@@ -6,6 +6,7 @@ defmodule Nix.Eval do
 
   require Logger
 
+  @default_timeout_ms 60 * 60 * 1000
   @default_memory_limit_kb 4_000_000
   @tick_interval 200
 
@@ -34,12 +35,18 @@ defmodule Nix.Eval do
     run(Eval.Request.parse(target, Keyword.get(opts, :attr)), opts)
   end
 
-  def run(%Eval.Request{} = req, opts) do
-    {:ok, pid} = GenServer.start_link(Eval, {req, opts})
+  def run(%Eval.Request{} = request, opts) do
+    timeout = Keyword.get(opts, :timeout, @default_timeout_ms)
+    {:ok, pid} = GenServer.start_link(Eval, {request, opts})
 
-    # set a 10 hour timeout for the genserver
-    # if this timeout is exceeded the child process may not be killed
-    GenServer.call(pid, :run_process, 10 * 60 * 60 * 1000)
+    try do
+      # if this timeout is exceeded the child process may not be killed
+      GenServer.call(pid, :run, timeout)
+    catch
+      :exit, {:timeout, {GenServer, :call, _}} ->
+        Logger.error(msg: "Timed out running eval", path: request.path, attr: request.attr)
+        {:error, build_error_result(request, :timeout)}
+    end
   end
 
   def run!(target, opts \\ []) do
@@ -62,7 +69,7 @@ defmodule Nix.Eval do
     {:ok, state}
   end
 
-  def handle_call(:run_process, from, %Eval.Exec{} = state) do
+  def handle_call(:run, from, %Eval.Exec{} = state) do
     start_time = DateTime.utc_now()
 
     # we can't name the attribute outPath, or nix will only return that in the json
@@ -253,6 +260,20 @@ defmodule Nix.Eval do
       Regex.match?(~r{(fetching git input|error \(ignored\): error: SQLite database|^$)}, l)
     end)
   end
+
+  def build_error_result(request, reason) do
+    %Nix.Eval{
+      request: request,
+      status: :error,
+      output: nil,
+      errors: [format_error(reason)],
+      start_time: DateTime.utc_now(),
+      end_time: DateTime.utc_now()
+    }
+  end
+
+  defp format_error(:normal), do: "Task exited normally without result"
+  defp format_error(reason), do: Exception.format_exit(reason)
 
   defp get_mem(ospid) do
     case File.read("/proc/#{ospid}/status") do

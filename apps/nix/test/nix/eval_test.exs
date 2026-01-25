@@ -126,6 +126,19 @@ defmodule Nix.EvalTest do
         File.rm(tmp_path)
       end
     end
+
+    test "returns error result when GenServer times out" do
+      fixture_path = Path.join(@fixtures_path, "attrset.nix")
+
+      capture_log(fn ->
+        {status, eval} = Nix.Eval.run(fixture_path, timeout: 1)
+
+        assert status == :error
+        assert eval.status == :error
+        assert is_list(eval.errors)
+        assert Enum.any?(eval.errors, &String.contains?(&1, "timeout"))
+      end)
+    end
   end
 
   describe "timing" do

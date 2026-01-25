@@ -9,7 +9,7 @@ defmodule Nix.Build.Jobs do
 
   require Logger
 
-  @default_timeout_ms 60 * 60 * 1000
+  @default_timeout_ms 10 * 60 * 60 * 1000
   @default_max_workers 4
 
   typedstruct do
@@ -47,7 +47,15 @@ defmodule Nix.Build.Jobs do
   def run(evals, opts \\ []) when is_list(evals) do
     timeout = Keyword.get(opts, :timeout, @default_timeout_ms)
     {:ok, pid} = GenServer.start(__MODULE__, {evals, opts})
-    GenServer.call(pid, :run, timeout)
+
+    try do
+      GenServer.call(pid, :run, timeout)
+    catch
+      :exit, {:timeout, {GenServer, :call, _}} ->
+        Logger.error(msg: "Timed out building all jobs")
+
+        {:error, build_error_result()}
+    end
   end
 
   @impl true
@@ -89,7 +97,7 @@ defmodule Nix.Build.Jobs do
 
         {:exit, reason} ->
           Logger.warning(msg: "Build task crashed", reason: reason)
-          build_from_crash(reason)
+          Build.build_error_result(reason)
       end)
 
     end_time = DateTime.utc_now()
@@ -146,17 +154,14 @@ defmodule Nix.Build.Jobs do
     end
   end
 
-  defp build_from_crash(reason) do
-    %Build{
+  def build_error_result() do
+    %Result{
       status: :error,
-      log: [format_crash_reason(reason)],
+      results: [],
       start_time: DateTime.utc_now(),
       end_time: DateTime.utc_now()
     }
   end
-
-  defp format_crash_reason(:normal), do: "Task exited normally without result"
-  defp format_crash_reason(reason), do: Exception.format_exit(reason)
 
   defp notify(nil, _event), do: :ok
   defp notify(pid, event), do: send(pid, event)

@@ -37,5 +37,18 @@ defmodule Nix.BuildTest do
         assert String.contains?(log, "No such file or directory")
       end)
     end
+
+    test "returns error result when GenServer times out" do
+      {:ok, eval} = Nix.Eval.run(@project_root, attr: "packages.x86_64-linux.cli")
+
+      capture_log(fn ->
+        {status, build} = Build.run(eval, timeout: 1)
+
+        assert status == :error
+        assert build.status == :error
+        assert is_list(build.log)
+        assert Enum.any?(build.log, &String.contains?(&1, "timeout"))
+      end)
+    end
   end
 end

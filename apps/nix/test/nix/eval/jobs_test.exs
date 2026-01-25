@@ -40,4 +40,18 @@ defmodule Nix.Eval.JobsTest do
       assert Enum.all?(report.results, &match?(%Nix.Eval{status: :ok}, &1))
     end
   end
+
+  describe "timeout handling" do
+    test "returns error result when GenServer times out" do
+      path = Path.join(@fixtures_path, "nested.nix")
+
+      capture_log(fn ->
+        {status, result} = Jobs.run(path, timeout: 1)
+
+        assert status == :error
+        assert %Jobs.Result{} = result
+        assert result.results == []
+      end)
+    end
+  end
 end
