@@ -85,9 +85,8 @@ release-push:
 start: dev-services
     iex --sname dev1 -S mix phx.server
 
-[working-directory('agent')]
 start-agent:
-    just start
+    iex --sname agent1 --dot-iex ./.iex-agent.exs -S mix run --no-start
 
 start-pry:
     iex --dbg pry -S mix phx.server
