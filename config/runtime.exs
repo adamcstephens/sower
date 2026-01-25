@@ -1,6 +1,8 @@
 import Config
 
 if config_env() == :dev do
+  config :sower_agent, SowerAgent.Scheduler, timezone: SowerAgent.Scheduler.get_timezone()
+
   SowerAgent.Config.load(%{
     access_token_file: Path.expand("../.dev-api-token", __DIR__),
     endpoint: "http://localhost:7150",

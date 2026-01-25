@@ -49,6 +49,7 @@ defmodule SowerAgent.Scheduler do
 
             job
         end
+        |> Quantum.Job.set_timezone(get_timezone())
         |> Quantum.Job.set_schedule(cron)
         |> Quantum.Job.set_task(fn ->
           subscriptions = SowerAgent.Storage.read().subscriptions || []
@@ -106,5 +107,20 @@ defmodule SowerAgent.Scheduler do
 
   defp job_name_sub(sid) do
     :"#{@sub_prefix}#{sid}"
+  end
+
+  def get_timezone() do
+    with timedatectl when not is_nil(timedatectl) <- System.find_executable("timedatectl"),
+         {tz, 0} <- System.cmd(timedatectl, ["show", "--property=Timezone", "--value"]) do
+      String.trim(tz)
+    else
+      {error, 1} ->
+        Logger.error(
+          msg: "Failed to run timedatectl to get tz, falling back to UTC",
+          error: error
+        )
+
+        :utc
+    end
   end
 end

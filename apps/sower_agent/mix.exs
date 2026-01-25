@@ -36,7 +36,8 @@ defmodule SowerAgent.MixProject do
       {:typedstruct, "~> 0.5", runtime: false},
       {:sower_client, in_umbrella: true},
       {:systemd,
-       github: "hauleth/erlang-systemd", ref: "62723b2a99afca491cc5c8f15c7f72d108e84f4b"}
+       github: "hauleth/erlang-systemd", ref: "62723b2a99afca491cc5c8f15c7f72d108e84f4b"},
+      {:zoneinfo, "~> 0.1.8"}
     ]
   end
 end
