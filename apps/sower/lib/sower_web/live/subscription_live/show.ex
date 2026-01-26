@@ -10,16 +10,21 @@ defmodule SowerWeb.SubscriptionLive.Show do
   end
 
   @impl true
-  def handle_params(%{"sid" => sid}, _, socket) do
+  def handle_params(%{"agent_sid" => agent_sid, "sid" => sid}, _, socket) do
+    agent = Orchestration.get_agent_sid!(agent_sid)
+
     case Orchestration.get_subscription_sid_with_deployments(sid) do
       nil ->
         {:noreply,
          socket
          |> put_flash(:error, "Subscription not found")
-         |> redirect(to: ~p"/subscriptions")}
+         |> redirect(to: ~p"/agents/#{agent}/subscriptions")}
 
       subscription ->
         matching_seeds = Orchestration.list_matching_seeds(subscription, 5)
+
+        # TODO find the generations in the current visible seed list
+        # matching_generations = matching_seeds |> Enum.map(
 
         if connected?(socket) do
           Phoenix.PubSub.subscribe(Sower.PubSub, "deployments:subscription:#{sid}")
@@ -27,6 +32,7 @@ defmodule SowerWeb.SubscriptionLive.Show do
 
         {:noreply,
          socket
+         |> assign(:agent, agent)
          |> assign(:page_title, page_title(socket.assigns.live_action))
          |> assign(:subscription, subscription)
          |> assign(:matching_seeds, matching_seeds)}

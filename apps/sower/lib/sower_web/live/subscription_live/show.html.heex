@@ -3,7 +3,7 @@
     Subscription {@subscription.id}
     <:subtitle>This is a subscription record from your database.</:subtitle>
     <:actions>
-      <.link patch={~p"/subscriptions/#{@subscription}/show/edit"} phx-click={JS.push_focus()}>
+      <.link patch={~p"/agents/#{@agent}/subscriptions/#{@subscription}/show/edit"} phx-click={JS.push_focus()}>
         <.button>Edit subscription</.button>
       </.link>
     </:actions>
@@ -71,13 +71,13 @@
     </:item>
   </.list>
 
-  <.back navigate={~p"/subscriptions"}>Back to subscriptions</.back>
+  <.back navigate={~p"/agents/#{@agent}/subscriptions"}>Back to subscriptions</.back>
 
   <.modal
     :if={@live_action == :edit}
     id="subscription-modal"
     show
-    on_cancel={JS.patch(~p"/subscriptions/#{@subscription}")}
+    on_cancel={JS.patch(~p"/agents/#{@agent}/subscriptions/#{@subscription}")}
   >
     <.live_component
       module={SowerWeb.SubscriptionLive.FormComponent}
@@ -85,7 +85,7 @@
       title={@page_title}
       action={@live_action}
       subscription={@subscription}
-      patch={~p"/subscriptions/#{@subscription}"}
+      patch={~p"/agents/#{@agent}/subscriptions/#{@subscription}"}
     />
   </.modal>
 </Layouts.app>

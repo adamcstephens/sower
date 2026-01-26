@@ -316,6 +316,17 @@ defmodule Sower.Orchestration do
   end
 
   @doc """
+  Returns the list of subscriptions for a given agent.
+  """
+  def list_subscriptions_for_agent(%Agent{} = agent) do
+    import Ecto.Query
+
+    Subscription
+    |> where([s], s.agent_id == ^agent.id)
+    |> Repo.all()
+  end
+
+  @doc """
   Gets a single subscription.
 
   Raises `Ecto.NoResultsError` if the Subscription does not exist.

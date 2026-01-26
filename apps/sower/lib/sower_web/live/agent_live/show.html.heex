@@ -59,7 +59,7 @@
       <.table
         id="subscriptions"
         rows={@agent.subscriptions}
-        row_click={fn subscription -> JS.navigate(~p"/subscriptions/#{subscription.sid}") end}
+        row_click={fn subscription -> JS.navigate(~p"/agents/#{@agent}/subscriptions/#{subscription.sid}") end}
       >
         <:col :let={subscription}>{subscription.seed_name}</:col>
         <:col :let={subscription}>{subscription.seed_type}</:col>

@@ -6,24 +6,31 @@ defmodule SowerWeb.SubscriptionLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, stream(socket, :subscriptions, Orchestration.list_subscriptions())}
+    {:ok, socket}
   end
 
   @impl true
-  def handle_params(params, _url, socket) do
+  def handle_params(%{"agent_sid" => agent_sid} = params, _url, socket) do
+    agent = Orchestration.get_agent_sid!(agent_sid)
+
+    socket =
+      socket
+      |> assign(:agent, agent)
+      |> stream(:subscriptions, Orchestration.list_subscriptions_for_agent(agent))
+
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
   end
 
-  defp apply_action(socket, :edit, %{"id" => id}) do
+  defp apply_action(socket, :edit, %{"sid" => sid}) do
     socket
     |> assign(:page_title, "Edit Subscription")
-    |> assign(:subscription, Orchestration.get_subscription!(id))
+    |> assign(:subscription, Orchestration.get_subscription_sid!(sid))
   end
 
   defp apply_action(socket, :new, _params) do
     socket
     |> assign(:page_title, "New Subscription")
-    |> assign(:subscription, %Subscription{})
+    |> assign(:subscription, %Subscription{agent_id: socket.assigns.agent.id})
   end
 
   defp apply_action(socket, :index, _params) do

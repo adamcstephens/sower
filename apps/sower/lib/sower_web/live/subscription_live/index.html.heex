@@ -2,7 +2,7 @@
   <.header>
     Listing Subscriptions
     <:actions>
-      <.link patch={~p"/subscriptions/new"}>
+      <.link patch={~p"/agents/#{@agent}/subscriptions/new"}>
         <.button>New Subscription</.button>
       </.link>
     </:actions>
@@ -11,14 +11,14 @@
   <.table
     id="subscriptions"
     rows={@streams.subscriptions}
-    row_click={fn {_id, subscription} -> JS.navigate(~p"/subscriptions/#{subscription}") end}
+    row_click={fn {_id, subscription} -> JS.navigate(~p"/agents/#{@agent}/subscriptions/#{subscription}") end}
   >
     <:col :let={{_id, subscription}} label="Sid">{subscription.sid}</:col>
     <:action :let={{_id, subscription}}>
       <div class="sr-only">
-        <.link navigate={~p"/subscriptions/#{subscription}"}>Show</.link>
+        <.link navigate={~p"/agents/#{@agent}/subscriptions/#{subscription}"}>Show</.link>
       </div>
-      <.link patch={~p"/subscriptions/#{subscription}/edit"}>Edit</.link>
+      <.link patch={~p"/agents/#{@agent}/subscriptions/#{subscription}/edit"}>Edit</.link>
     </:action>
     <:action :let={{id, subscription}}>
       <.link
@@ -34,7 +34,7 @@
     :if={@live_action in [:new, :edit]}
     id="subscription-modal"
     show
-    on_cancel={JS.patch(~p"/subscriptions")}
+    on_cancel={JS.patch(~p"/agents/#{@agent}/subscriptions")}
   >
     <.live_component
       module={SowerWeb.SubscriptionLive.FormComponent}
@@ -42,7 +42,7 @@
       title={@page_title}
       action={@live_action}
       subscription={@subscription}
-      patch={~p"/subscriptions"}
+      patch={~p"/agents/#{@agent}/subscriptions"}
     />
   </.modal>
 </Layouts.app>

@@ -29,7 +29,7 @@ defmodule SowerWeb.DeploymentLive.Show do
           <.table
             id="subscriptions"
             rows={@deployment.subscriptions}
-            row_click={fn subscription -> JS.navigate(~p"/subscriptions/#{subscription.sid}") end}
+            row_click={fn subscription -> JS.navigate(~p"/agents/#{subscription.agent}/subscriptions/#{subscription.sid}") end}
           >
             <:col :let={subscription} label="agent">{subscription.agent.name}</:col>
             <:col :let={subscription} label="info">

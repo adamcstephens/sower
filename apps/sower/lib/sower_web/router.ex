@@ -47,6 +47,12 @@ defmodule SowerWeb.Router do
       live "/agents/:sid", AgentLive.Show, :show
       live "/agents/:sid/show/edit", AgentLive.Show, :edit
 
+      live "/agents/:agent_sid/subscriptions", SubscriptionLive.Index, :index
+      live "/agents/:agent_sid/subscriptions/new", SubscriptionLive.Index, :new
+      live "/agents/:agent_sid/subscriptions/:sid/edit", SubscriptionLive.Index, :edit
+      live "/agents/:agent_sid/subscriptions/:sid", SubscriptionLive.Show, :show
+      live "/agents/:agent_sid/subscriptions/:sid/show/edit", SubscriptionLive.Show, :edit
+
       live "/deployments", DeploymentLive.Index, :index
       live "/deployments/:sid", DeploymentLive.Show, :show
 
@@ -74,12 +80,6 @@ defmodule SowerWeb.Router do
       live "/settings/access-tokens/:sid/edit", Settings.AccessTokenLive.Index, :edit
       live "/settings/access-tokens/:sid", Settings.AccessTokenLive.Show, :show
       live "/settings/access-tokens/:sid/show/edit", Settings.AccessTokenLive.Show, :edit
-
-      live "/subscriptions", SubscriptionLive.Index, :index
-      live "/subscriptions/new", SubscriptionLive.Index, :new
-      live "/subscriptions/:sid/edit", SubscriptionLive.Index, :edit
-      live "/subscriptions/:sid", SubscriptionLive.Show, :show
-      live "/subscriptions/:sid/show/edit", SubscriptionLive.Show, :edit
     end
   end
 

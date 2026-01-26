@@ -55,10 +55,6 @@ defmodule SowerWeb.AgentLive.Show do
     {:noreply, add_online_status(socket)}
   end
 
-  def handle_info(%Nix.Profile.Generation{} = generation, socket) do
-    {:noreply, assign(socket, :current_generation, generation)}
-  end
-
   def handle_info({:deployment, _event, _deployment}, socket) do
     deployments = Orchestration.list_deployments(socket.assigns.agent, limit: 10)
     {:noreply, assign(socket, :deployments, deployments)}
