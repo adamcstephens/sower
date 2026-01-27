@@ -13,7 +13,6 @@ let
   # Build agent settings, optionally including activator socket path
   agentSettings =
     cfg.settings
-    // (lib.optionalAttrs cfg.autoreboot { reboot = true; })
     // (lib.optionalAttrs activatorCfg.enable { activator_socket = activatorCfg.socketPath; });
 
   jsonConfig = json.generate "sower-client.json" agentSettings;
@@ -43,7 +42,13 @@ in
     services.sower.agent = {
       enable = lib.mkEnableOption "Sower agent";
 
-      autoreboot = lib.mkEnableOption "automatic rebooting";
+      package = lib.mkOption { type = lib.types.package; };
+
+      accessTokenFile = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        description = "path to access token";
+        default = null;
+      };
 
       credentials = lib.mkOption {
         type = lib.types.listOf lib.types.str;
@@ -51,23 +56,14 @@ in
         default = [ ];
       };
 
-      onCalendar = lib.mkOption {
-        type = lib.types.str;
-        description = "OnCalendar for systemd timer on linux. See https://www.freedesktop.org/software/systemd/man/latest/systemd.time.html#Calendar%20Events";
-        default = "daily";
-      };
-
-      package = lib.mkOption { type = lib.types.package; };
-
       settings = lib.mkOption {
         type = lib.types.submodule {
           freeformType = jsonType;
 
-          options = {
-          };
+          options = { };
         };
         description = "Sower client (agent and cli) configuration file";
-        default = null;
+        default = { };
       };
     };
   };
@@ -122,9 +118,13 @@ in
       environment = {
         # erlexec needs a shell
         SHELL = lib.getExe pkgs.bash;
-        SOWER_CONFIG_FILE = "/etc/sower/client.json";
-        # load code on demand
+        # load code on demand, reduces memory requirement
         RELEASE_MODE = "interactive";
+
+        SOWER_CONFIG_FILE = "/etc/sower/client.json";
+      }
+      // lib.optionalAttrs (cfg.accessTokenFile != null) {
+        SOWER_ACCESS_TOKEN_FILE = cfg.accessTokenFile;
       };
 
       # reload is an async notification to the agent
@@ -138,8 +138,13 @@ in
       serviceConfig = {
         Type = "notify";
         WatchdogSec = "10s";
+
+        # automatic recovery is preferred
         Restart = lib.mkDefault "always";
         RestartSec = "5";
+        # back off to reduce load from beam startups
+        RestartMaxDelaySec = "120s";
+        RestartSteps = "7";
 
         LoadCredential = cfg.credentials;
 
