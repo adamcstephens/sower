@@ -55,14 +55,12 @@ config :logger, :console,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
-# config :elixir, :time_zone_database, Timex.Timezone.Database
-
-# disable runtime fetching
-# config :tzdata, :autoupdate, :disabled
-
 config :sower, :generators,
   migration: true,
   timestamp_type: :utc_datetime_usec
+
+config :elixir, time_zone_database: Zoneinfo.TimeZoneDatabase
+config :zoneinfo, tzpath: "/etc/zoneinfo"
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

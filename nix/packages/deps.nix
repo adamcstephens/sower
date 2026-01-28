@@ -1497,6 +1497,23 @@ let
         in
         drv;
 
+      zoneinfo =
+        let
+          version = "0.1.8";
+          drv = buildMix {
+            inherit version;
+            name = "zoneinfo";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "zoneinfo";
+              sha256 = "3999755971bbf85f0c8c75a724be560199bb63406660585849f0eb680e2333f7";
+            };
+          };
+        in
+        drv;
+
     };
 in
 self

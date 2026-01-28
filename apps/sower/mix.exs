@@ -64,7 +64,8 @@ defmodule Sower.MixProject do
       {:telemetry_poller, "~> 1.1"},
       {:ueberauth, "~> 0.10"},
       {:ueberauth_oidcc, "~> 0.3"},
-      {:uuidv7, "~> 1.0.0"}
+      {:uuidv7, "~> 1.0.0"},
+      {:zoneinfo, "~> 0.1.8"}
     ]
   end
 
