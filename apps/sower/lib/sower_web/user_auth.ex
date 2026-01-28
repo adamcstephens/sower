@@ -6,6 +6,8 @@ defmodule SowerWeb.UserAuth do
 
   alias Sower.Accounts
 
+  require Logger
+
   # Make the remember me cookie valid for 60 days.
   # If you want bump or reduce this value, also change
   # the token expiry itself in UserToken.
@@ -188,6 +190,20 @@ defmodule SowerWeb.UserAuth do
         end
 
         user
+      end
+    end)
+    |> Phoenix.Component.assign_new(:user_timezone, fn ->
+      case Phoenix.LiveView.get_connect_params(socket) |> get_in(["timezone"]) do
+        nil ->
+          "Etc/UTC"
+
+        tz ->
+          if Zoneinfo.valid_time_zone?(tz) do
+            tz
+          else
+            Logger.error(msg: "Invalid user timezone", user_timezone: tz)
+            "Etc/UTC"
+          end
       end
     end)
   end
