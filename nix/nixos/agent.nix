@@ -215,7 +215,7 @@ in
       debug = true;
       extraConfig = ''
         polkit.addRule(function(action, subject) {
-          old dbus may not support system_unit, debugging is available if needed
+          # old dbus may not support system_unit, debugging is available if needed
           if (action.id == "org.freedesktop.systemd1.manage-units") {
             polkit.log("sower polkit: unit=" + action.lookup("unit") +
               " verb=" + action.lookup("verb") +
