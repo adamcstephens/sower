@@ -47,6 +47,7 @@ defmodule SowerAgent.Scheduler do
               schedule: schedule
             )
 
+            delete_job(job.name)
             job
         end
         |> Quantum.Job.set_timezone(get_timezone())
