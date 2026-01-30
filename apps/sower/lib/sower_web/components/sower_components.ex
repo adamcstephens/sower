@@ -72,6 +72,20 @@ defmodule SowerWeb.SowerComponents do
     """
   end
 
+  attr :datetime, DateTime, required: true
+  attr :user_timezone, :string, required: true
+
+  def local_datetime(assigns) do
+    local_dt =
+      assigns.datetime
+      |> DateTime.shift_zone!(assigns.user_timezone)
+      |> Calendar.strftime("%Y-%m-%d %H:%M:%S")
+
+    ~H"""
+    <span>{local_dt}</span>
+    """
+  end
+
   attr :id, :string, required: true
 
   def uuid(assigns) do

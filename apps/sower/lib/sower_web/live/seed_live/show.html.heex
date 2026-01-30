@@ -20,8 +20,12 @@
         </ul>
       <% end %>
     </:item>
-    <:item title="created">{@seed.inserted_at}</:item>
-    <:item title="updated">{@seed.updated_at}</:item>
+    <:item title="created">
+      <.local_datetime datetime={@seed.inserted_at} user_timezone={@user_timezone} />
+    </:item>
+    <:item title="updated">
+      <.local_datetime datetime={@seed.updated_at} user_timezone={@user_timezone} />
+    </:item>
   </.list>
 
   <.back navigate={~p"/seeds"}>Back to seeds</.back>

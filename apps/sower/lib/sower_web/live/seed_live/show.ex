@@ -1,6 +1,8 @@
 defmodule SowerWeb.SeedLive.Show do
   use SowerWeb, :live_view
 
+  import SowerWeb.SowerComponents
+
   @impl true
   def mount(_params, _session, socket) do
     {:ok, socket}

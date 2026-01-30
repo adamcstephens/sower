@@ -52,7 +52,9 @@
               </span>
             <% end %>
           </:col>
-          <:col :let={seed} label="Created">{seed.inserted_at}</:col>
+          <:col :let={seed} label="Created">
+            <.local_datetime datetime={seed.inserted_at} user_timezone={@user_timezone} />
+          </:col>
         </.table>
       <% end %>
     </:item>
@@ -66,7 +68,9 @@
           <.result result={deployment.result} />
         </:col>
         <:col :let={deployment}>{deployment.sid}</:col>
-        <:col :let={deployment}>{deployment.inserted_at}</:col>
+        <:col :let={deployment}>
+          <.local_datetime datetime={deployment.inserted_at} user_timezone={@user_timezone} />
+        </:col>
       </.table>
     </:item>
   </.list>

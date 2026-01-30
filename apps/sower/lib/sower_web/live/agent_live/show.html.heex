@@ -53,7 +53,7 @@
           {(gen.is_current && "✓") || ""}
         </:col>
         <:col :let={gen} label="Created">
-          {DateTime.shift_zone!(gen.created_at_generation, @user_timezone)}
+          <.local_datetime datetime={gen.created_at_generation} user_timezone={@user_timezone} />
         </:col>
       </.table>
     </:item>
@@ -69,7 +69,9 @@
       >
         <:col :let={subscription}>{subscription.seed_name}</:col>
         <:col :let={subscription}>{subscription.seed_type}</:col>
-        <:col :let={subscription}>{subscription.updated_at}</:col>
+        <:col :let={subscription}>
+          <.local_datetime datetime={subscription.updated_at} user_timezone={@user_timezone} />
+        </:col>
       </.table>
     </:item>
     <:item title="Deployments">
@@ -82,7 +84,9 @@
           <.result result={deployment.result} />
         </:col>
         <:col :let={deployment}>{deployment.sid}</:col>
-        <:col :let={deployment}>{deployment.inserted_at}</:col>
+        <:col :let={deployment}>
+          <.local_datetime datetime={deployment.inserted_at} user_timezone={@user_timezone} />
+        </:col>
       </.table>
     </:item>
   </.list>
