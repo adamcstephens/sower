@@ -81,8 +81,10 @@ defmodule SowerWeb.SowerComponents do
       |> DateTime.shift_zone!(assigns.user_timezone)
       |> Calendar.strftime("%Y-%m-%d %H:%M:%S")
 
+    assigns = assign(assigns, :local_dt, local_dt)
+
     ~H"""
-    <span>{local_dt}</span>
+    <span>{@local_dt}</span>
     """
   end
 

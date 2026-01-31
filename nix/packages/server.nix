@@ -59,7 +59,7 @@ beamPackages.mixRelease rec {
     ln -sfv ${lib.getExe esbuild} _build/esbuild-${os}-${arch}
     ln -sfv ${lib.getExe tailwindcss} _build/tailwind-${os}-${arch}
 
-    mix do deps.loadpaths --no-deps-check, assets.deploy --no-deps-check
+    mix do deps.loadpaths --no-deps-check + assets.deploy --no-deps-check
   '';
 
   postInstall = ''
@@ -79,7 +79,7 @@ beamPackages.mixRelease rec {
   #
   #   ${nixpkgs}/pkgs/development/beam-modules/mix-configure-hook.sh
   #
-  #   mix do deps.loadpaths --no-deps-check, test
+  #   mix do deps.loadpaths --no-deps-check + test
   #
   #   runHook postCheck
   # '';
