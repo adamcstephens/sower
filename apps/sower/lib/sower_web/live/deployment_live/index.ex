@@ -23,7 +23,10 @@ defmodule SowerWeb.DeploymentLive.Index do
           <.result result={deployment.result} />
         </:col>
         <:col :let={{_id, deployment}} label="sid">{deployment.sid}</:col>
-        <:col :let={{_id, deployment}} label="completed">{deployment.deployed_at}</:col>
+        <:col :let={{_id, deployment}} label="agent">{deployment.agent.name}</:col>
+        <:col :let={{_id, deployment}} label="completed">
+          <.local_datetime datetime={deployment.deployed_at} user_timezone={@user_timezone} />
+        </:col>
         <:action :let={{_id, deployment}}>
           <div class="sr-only">
             <.link navigate={~p"/deployments/#{deployment}"}>Show</.link>
@@ -43,7 +46,7 @@ defmodule SowerWeb.DeploymentLive.Index do
     {:ok,
      socket
      |> assign(:page_title, "Listing Deployments")
-     |> stream(:deployments, Orchestration.list_deployments())}
+     |> stream(:deployments, Orchestration.list_deployments() |> Sower.Repo.preload([:agent]))}
   end
 
   @impl Phoenix.LiveView

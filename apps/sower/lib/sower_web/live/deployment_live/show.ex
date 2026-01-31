@@ -12,7 +12,7 @@ defmodule SowerWeb.DeploymentLive.Show do
       <.header>
         <div class="flex items-center space-x-2">
           <.result result={@deployment.result} />
-          <span>Deployment {@deployment.sid}</span>
+          <span>{@deployment.sid}</span>
         </div>
         <:actions>
           <.link patch={~p"/deployments"}>
@@ -24,15 +24,26 @@ defmodule SowerWeb.DeploymentLive.Show do
       </.header>
 
       <.list>
-        <:item title="sid">{@deployment.sid}</:item>
+        <:item title="completed">
+          <.local_datetime datetime={@deployment.deployed_at} user_timezone={@user_timezone} />
+        </:item>
+        <:item title="agent">
+          <.link patch={~p"/agents/#{@deployment.agent}"}>
+            {@deployment.agent.name}
+          </.link>
+        </:item>
+
         <:item title="Subscriptions">
           <.table
             id="subscriptions"
             rows={@deployment.subscriptions}
-            row_click={fn subscription -> JS.navigate(~p"/agents/#{subscription.agent}/subscriptions/#{subscription.sid}") end}
+            row_click={
+              fn subscription ->
+                JS.navigate(~p"/agents/#{@deployment.agent}/subscriptions/#{subscription.sid}")
+              end
+            }
           >
-            <:col :let={subscription} label="agent">{subscription.agent.name}</:col>
-            <:col :let={subscription} label="info">
+            <:col :let={subscription}>
               {subscription.seed_type}/{subscription.seed_name}
             </:col>
           </.table>
@@ -71,7 +82,7 @@ defmodule SowerWeb.DeploymentLive.Show do
          |> redirect(to: ~p"/deployments")}
 
       deployment ->
-        deployment = Sower.Repo.preload(deployment, [:seeds, subscriptions: [:agent]])
+        deployment = Sower.Repo.preload(deployment, [:seeds, :subscriptions, :agent])
 
         {:noreply, assign(socket, :deployment, deployment)}
     end
