@@ -213,25 +213,26 @@ in
     security.polkit = {
       enable = true;
       debug = true;
-      extraConfig = ''
-        polkit.addRule(function(action, subject) {
-          # old dbus may not support system_unit, debugging is available if needed
-          if (action.id == "org.freedesktop.systemd1.manage-units") {
-            polkit.log("sower polkit: unit=" + action.lookup("unit") +
-              " verb=" + action.lookup("verb") +
-              " user=" + subject.user +
-              " system_unit=" + subject.system_unit +
-              " pid=" + subject.pid);
-          }
+      extraConfig = # javascript
+        ''
+          polkit.addRule(function(action, subject) {
+            // old dbus may not support system_unit, debugging is available if needed
+            // if (action.id == "org.freedesktop.systemd1.manage-units") {
+            //   polkit.log("sower polkit: unit=" + action.lookup("unit") +
+            //     " verb=" + action.lookup("verb") +
+            //     " user=" + subject.user +
+            //     " system_unit=" + subject.system_unit +
+            //     " pid=" + subject.pid);
+            // }
 
-          if (action.id == "org.freedesktop.systemd1.manage-units" &&
-              action.lookup("unit") == "sower-agent.service" &&
-              action.lookup("verb") == "restart" &&
-              subject.system_unit == "sower-agent.service") {
-            return polkit.Result.YES;
-          }
-        });
-      '';
+            if (action.id == "org.freedesktop.systemd1.manage-units" &&
+                action.lookup("unit") == "sower-agent.service" &&
+                action.lookup("verb") == "restart" &&
+                subject.system_unit == "sower-agent.service") {
+              return polkit.Result.YES;
+            }
+          });
+        '';
     };
 
     systemd.tmpfiles.rules = lib.optionals manageServices [
