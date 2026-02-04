@@ -11,7 +11,11 @@
   <.table
     id="subscriptions"
     rows={@streams.subscriptions}
-    row_click={fn {_id, subscription} -> JS.navigate(~p"/agents/#{@agent}/subscriptions/#{subscription}") end}
+    row_click={
+      fn {_id, subscription} ->
+        JS.navigate(~p"/agents/#{@agent}/subscriptions/#{subscription}")
+      end
+    }
   >
     <:col :let={{_id, subscription}} label="Sid">{subscription.sid}</:col>
     <:action :let={{_id, subscription}}>

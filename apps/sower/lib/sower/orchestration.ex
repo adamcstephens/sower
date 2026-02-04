@@ -786,7 +786,7 @@ defmodule Sower.Orchestration do
       {:error, :agent_not_found}
 
   """
-  def deploy_subscription(%Subscription{} = sub) do
+  def deploy_subscription(%Subscription{} = sub, opts \\ []) do
     subscription = Repo.preload(sub, :agent)
 
     case subscription.agent do
@@ -795,7 +795,7 @@ defmodule Sower.Orchestration do
 
       %Agent{} = agent ->
         request_id = SowerClient.Sid.generate("request")
-        process_deployment(request_id, [subscription], agent)
+        process_deployment(request_id, [subscription], agent, opts)
     end
   end
 
@@ -818,7 +818,7 @@ defmodule Sower.Orchestration do
   """
   def request_deployment(%SowerClient.Orchestration.DeploymentRequest{} = request) do
     with {:ok, subs} <- validate_request_subscriptions(request.subscription_sids) do
-      do_deployment(request.request_id, subs)
+      do_deployment(request.request_id, subs, force: request.force)
     else
       {:error, _} = err ->
         Logger.error(msg: "Failed to process deployment request", error: IO.inspect(err))
@@ -850,7 +850,7 @@ defmodule Sower.Orchestration do
   def handle_deployment_request(payload, agent) do
     with {:ok, request} <- SowerClient.Orchestration.DeploymentRequest.cast(payload),
          {:ok, subscriptions} <- validate_deployment_request(request, agent.id) do
-      process_deployment(request.request_id, subscriptions, agent)
+      process_deployment(request.request_id, subscriptions, agent, force: request.force)
     end
   end
 
@@ -888,11 +888,11 @@ defmodule Sower.Orchestration do
       {:ok, "request_123"}
 
   """
-  def process_deployment(request_id, subscriptions, %Agent{} = agent) do
+  def process_deployment(request_id, subscriptions, %Agent{} = agent, opts \\ []) do
     Task.Supervisor.start_child(Sower.TaskSupervisor, fn ->
       Repo.put_org_id(agent.org_id)
 
-      case do_deployment(request_id, subscriptions) do
+      case do_deployment(request_id, subscriptions, opts) do
         {:ok, deployment} ->
           SowerWeb.Endpoint.broadcast(
             "agent:#{agent.sid}",
@@ -912,30 +912,78 @@ defmodule Sower.Orchestration do
     {:ok, request_id}
   end
 
-  defp do_deployment(request_id, subscriptions) do
+  defp do_deployment(request_id, subscriptions, opts) do
+    force? = Keyword.get(opts, :force, false)
     agent_id = hd(subscriptions).agent_id
     seeds = subscriptions |> Enum.map(&match_seed/1) |> Enum.reject(&is_nil/1)
 
     if seeds == [] do
       {:error, :seeds_not_found}
     else
-      case create_deployment(%{
-             agent_id: agent_id,
-             seeds: seeds,
-             subscriptions: subscriptions
-           }) do
-        {:ok, deploy} ->
+      content_hash = compute_content_hash(seeds)
+
+      case find_duplicate_deployment(agent_id, content_hash, force?) do
+        {:skip, existing} ->
+          existing = Repo.preload(existing, [:seeds])
+
           {:ok,
            %SowerClient.Orchestration.Deployment{
              request_id: request_id,
              subscription_sids: Enum.map(subscriptions, & &1.sid),
-             sid: deploy.sid,
-             seeds: seeds
+             sid: existing.sid,
+             seeds: existing.seeds |> Sower.Repo.preload([:tags]),
+             skipped: true
            }}
 
-        other ->
-          other
+        :proceed ->
+          case create_deployment(%{
+                 agent_id: agent_id,
+                 content_hash: content_hash,
+                 seeds: seeds,
+                 subscriptions: subscriptions
+               }) do
+            {:ok, deploy} ->
+              {:ok,
+               %SowerClient.Orchestration.Deployment{
+                 request_id: request_id,
+                 subscription_sids: Enum.map(subscriptions, & &1.sid),
+                 sid: deploy.sid,
+                 seeds: seeds,
+                 skipped: false
+               }}
+
+            other ->
+              other
+          end
       end
+    end
+  end
+
+  defp compute_content_hash(seeds) do
+    seeds
+    |> Enum.map(& &1.id)
+    |> Enum.sort()
+    |> Enum.join(":")
+    |> then(&:crypto.hash(:sha256, &1))
+    |> Base.encode16(case: :lower)
+  end
+
+  defp find_duplicate_deployment(_agent_id, _content_hash, true), do: :proceed
+
+  defp find_duplicate_deployment(agent_id, content_hash, false) do
+    query =
+      from(d in Deployment,
+        where:
+          d.agent_id == ^agent_id and
+            d.content_hash == ^content_hash and
+            d.result == :success,
+        order_by: [desc: d.deployed_at],
+        limit: 1
+      )
+
+    case Repo.one(query) do
+      nil -> :proceed
+      deployment -> {:skip, deployment}
     end
   end
 

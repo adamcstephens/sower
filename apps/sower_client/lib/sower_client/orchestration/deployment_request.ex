@@ -17,6 +17,11 @@ defmodule SowerClient.Orchestration.DeploymentRequest do
           type: :string,
           description: "subscription sid allocated by Sower"
         }
+      },
+      force: %Schema{
+        type: :boolean,
+        default: false,
+        description: "Force deployment even if identical to a previous successful deployment"
       }
     },
     required: [:subscription_sids]

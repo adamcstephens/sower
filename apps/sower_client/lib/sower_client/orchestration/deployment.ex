@@ -33,6 +33,12 @@ defmodule SowerClient.Orchestration.Deployment do
         format: :date_time,
         description: "when the deployment was deployed",
         default: DateTime.from_unix!(0) |> DateTime.to_iso8601()
+      },
+      skipped: %Schema{
+        type: :boolean,
+        description:
+          "true if deployment was skipped due to matching a previous successful deployment",
+        default: false
       }
     },
     required: ~w(subscription_sids)a
