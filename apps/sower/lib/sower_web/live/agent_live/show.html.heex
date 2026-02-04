@@ -12,36 +12,40 @@
     </:actions>
   </.header>
 
-  <.list>
-    <:item title="Local Sid">{@agent.local_sid}</:item>
-    <:item title="Seed Generations">
-      <div class="flex items-center space-x-2 mb-4">
-        <.link
-          patch={~p"/agents/#{@agent}?generations_filter=current"}
-          class={[
-            "px-3 py-1 rounded text-sm border",
-            @generations_filter == "current" &&
-              "bg-zinc-200 text-zinc-800 font-medium",
-            @generations_filter != "current" &&
-              "bg-zinc-800 text-zinc-200 border-zinc-200 hover:bg-orange-700 hover:text-zinc-50"
-          ]}
-        >
-          Current
-        </.link>
-        <.link
-          patch={~p"/agents/#{@agent}?generations_filter=all"}
-          class={[
-            "px-3 py-1 rounded text-sm border",
-            @generations_filter == "all" &&
-              "bg-zinc-200 text-zinc-800 font-medium",
-            @generations_filter != "all" &&
-              "bg-zinc-800 text-zinc-200 border-zinc-200 hover:bg-orange-700 hover:text-zinc-50"
-          ]}
-        >
-          All
-        </.link>
+  <div class="mt-8 space-y-10">
+    <.detail_field label="Local Sid">{@agent.local_sid}</.detail_field>
+
+    <section>
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200">Seed Generations</h2>
+        <div class="flex items-center space-x-2">
+          <.link
+            patch={~p"/agents/#{@agent}?generations_filter=current"}
+            class={[
+              "px-3 py-1 rounded text-sm border",
+              @generations_filter == "current" &&
+                "bg-zinc-200 text-zinc-800 font-medium",
+              @generations_filter != "current" &&
+                "bg-zinc-800 text-zinc-200 border-zinc-200 hover:bg-orange-700 hover:text-zinc-50"
+            ]}
+          >
+            Current
+          </.link>
+          <.link
+            patch={~p"/agents/#{@agent}?generations_filter=all"}
+            class={[
+              "px-3 py-1 rounded text-sm border",
+              @generations_filter == "all" &&
+                "bg-zinc-200 text-zinc-800 font-medium",
+              @generations_filter != "all" &&
+                "bg-zinc-800 text-zinc-200 border-zinc-200 hover:bg-orange-700 hover:text-zinc-50"
+            ]}
+          >
+            All
+          </.link>
+        </div>
       </div>
-      <.table
+      <.responsive_table
         id="generations"
         rows={@generations}
         row_click={fn gen -> JS.navigate(~p"/seeds/#{gen.seed.sid}") end}
@@ -55,10 +59,18 @@
         <:col :let={gen} label="Created">
           <.local_datetime datetime={gen.created_at_generation} user_timezone={@user_timezone} />
         </:col>
-      </.table>
-    </:item>
-    <:item title="Subscriptions">
-      <.table
+      </.responsive_table>
+      <p
+        :if={@generations == []}
+        class="text-sm text-zinc-500 dark:text-zinc-400 italic"
+      >
+        No seed generations.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4">Subscriptions</h2>
+      <.responsive_table
         id="subscriptions"
         rows={@agent.subscriptions}
         row_click={
@@ -67,15 +79,23 @@
           end
         }
       >
-        <:col :let={subscription}>{subscription.seed_name}</:col>
-        <:col :let={subscription}>{subscription.seed_type}</:col>
-        <:col :let={subscription}>
+        <:col :let={subscription} label="Name">{subscription.seed_name}</:col>
+        <:col :let={subscription} label="Type">{subscription.seed_type}</:col>
+        <:col :let={subscription} label="Updated">
           <.local_datetime datetime={subscription.updated_at} user_timezone={@user_timezone} />
         </:col>
-      </.table>
-    </:item>
-    <:item title="Deployments">
-      <.table
+      </.responsive_table>
+      <p
+        :if={@agent.subscriptions == []}
+        class="text-sm text-zinc-500 dark:text-zinc-400 italic"
+      >
+        No subscriptions.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4">Deployments</h2>
+      <.responsive_table
         id="deployments"
         rows={@deployments}
         row_click={fn deployment -> JS.navigate(~p"/deployments/#{deployment.sid}") end}
@@ -83,13 +103,19 @@
         <:col :let={deployment} label="Result">
           <.result result={deployment.result} />
         </:col>
-        <:col :let={deployment}>{deployment.sid}</:col>
-        <:col :let={deployment}>
+        <:col :let={deployment} label="SID">{deployment.sid}</:col>
+        <:col :let={deployment} label="Created">
           <.local_datetime datetime={deployment.inserted_at} user_timezone={@user_timezone} />
         </:col>
-      </.table>
-    </:item>
-  </.list>
+      </.responsive_table>
+      <p
+        :if={@deployments == []}
+        class="text-sm text-zinc-500 dark:text-zinc-400 italic"
+      >
+        No deployments.
+      </p>
+    </section>
+  </div>
 
   <.back navigate={~p"/agents"}>Back to agents</.back>
 

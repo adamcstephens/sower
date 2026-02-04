@@ -3,3 +3,71 @@
 @import "tailwindcss/utilities";
 
 /* This file is for your main application CSS */
+
+/* Responsive table: stacked cards on mobile, normal table on sm+ */
+@media (max-width: 639px) {
+  .responsive-table,
+  .responsive-table thead,
+  .responsive-table tbody,
+  .responsive-table tr,
+  .responsive-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .responsive-table {
+    margin-top: 0;
+  }
+
+  .responsive-table thead {
+    display: none;
+  }
+
+  .responsive-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    border-top: none !important;
+  }
+
+  .responsive-table tr {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgb(228 228 231 / 0.5) !important; /* zinc-200 at 50% */
+    border-radius: 0.5rem;
+    padding: 1rem;
+  }
+
+  :is(.dark .responsive-table tr) {
+    border-color: rgb(63 63 70 / 0.5); /* zinc-700 at 50% */
+  }
+
+  .responsive-table td {
+    padding: 0;
+    position: static;
+  }
+
+  .responsive-table td > div {
+    padding: 0.125rem 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .responsive-table td::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.75rem;
+    color: rgb(113 113 122); /* zinc-500 */
+    margin-bottom: 0.125rem;
+  }
+
+  .responsive-table td:first-child::before {
+    display: none;
+  }
+
+  /* Hide the hover background spans on mobile */
+  .responsive-table td span[class*="absolute"] {
+    display: none;
+  }
+}

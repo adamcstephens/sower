@@ -23,18 +23,23 @@ defmodule SowerWeb.DeploymentLive.Show do
         </:actions>
       </.header>
 
-      <.list>
-        <:item title="completed">
+      <div class="mt-8 space-y-10">
+        <.detail_field label="Completed">
           <.local_datetime datetime={@deployment.deployed_at} user_timezone={@user_timezone} />
-        </:item>
-        <:item title="agent">
-          <.link patch={~p"/agents/#{@deployment.agent}"}>
+        </.detail_field>
+
+        <.detail_field label="Agent">
+          <.link
+            navigate={~p"/agents/#{@deployment.agent}"}
+            class="hover:text-orange-500 dark:hover:text-orange-400"
+          >
             {@deployment.agent.name}
           </.link>
-        </:item>
+        </.detail_field>
 
-        <:item title="Subscriptions">
-          <.table
+        <section>
+          <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4">Subscriptions</h2>
+          <.responsive_table
             id="subscriptions"
             rows={@deployment.subscriptions}
             row_click={
@@ -43,26 +48,38 @@ defmodule SowerWeb.DeploymentLive.Show do
               end
             }
           >
-            <:col :let={subscription}>
+            <:col :let={subscription} label="Subscription">
               {subscription.seed_type}/{subscription.seed_name}
             </:col>
-          </.table>
-        </:item>
-        <:item title="Seeds">
-          <.table
+          </.responsive_table>
+          <p
+            :if={@deployment.subscriptions == []}
+            class="text-sm text-zinc-500 dark:text-zinc-400 italic"
+          >
+            No subscriptions.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4">Seeds</h2>
+          <.responsive_table
             id="seeds"
             rows={@deployment.seeds}
             row_click={fn seed -> JS.navigate(~p"/seeds/#{seed.sid}") end}
           >
-            <:col :let={seed}>
+            <:col :let={seed} label="Seed">
               {seed.seed_type}/{seed.name}
             </:col>
-            <:col :let={seed}>
-              {seed.artifact}
-            </:col>
-          </.table>
-        </:item>
-      </.list>
+            <:col :let={seed} label="Artifact">{seed.artifact}</:col>
+          </.responsive_table>
+          <p
+            :if={@deployment.seeds == []}
+            class="text-sm text-zinc-500 dark:text-zinc-400 italic"
+          >
+            No seeds.
+          </p>
+        </section>
+      </div>
     </Layouts.app>
     """
   end

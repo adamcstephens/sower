@@ -12,15 +12,21 @@
     </:actions>
   </.header>
 
-  <.list>
-    <:item title="Agent">
-      <.link patch={~p"/agents/#{@subscription.agent}"}>
+  <div class="mt-8 space-y-10">
+    <.detail_field label="Agent">
+      <.link
+        navigate={~p"/agents/#{@subscription.agent}"}
+        class="hover:text-orange-500 dark:hover:text-orange-400"
+      >
         {@subscription.agent.name}
       </.link>
-    </:item>
-    <:item title="Seed Name">{@subscription.seed_name}</:item>
-    <:item title="Seed Type">{@subscription.seed_type}</:item>
-    <:item title="Rules">
+    </.detail_field>
+
+    <.detail_field label="Seed Name">{@subscription.seed_name}</.detail_field>
+
+    <.detail_field label="Seed Type">{@subscription.seed_type}</.detail_field>
+
+    <.detail_field label="Rules">
       <%= if Enum.empty?(@subscription.rules) do %>
         <span class="text-zinc-500 dark:text-zinc-400">No rules</span>
       <% else %>
@@ -32,37 +38,35 @@
           <% end %>
         </ul>
       <% end %>
-    </:item>
-    <:item title="Matching Seeds">
-      <%= if Enum.empty?(@matching_seeds) do %>
-        <span class="text-zinc-500 dark:text-zinc-400">No matching seeds found</span>
-      <% else %>
-        <.table
-          id="matching-seeds"
-          rows={@matching_seeds}
-          row_click={fn seed -> JS.navigate(~p"/seeds/#{seed}") end}
-        >
-          <:col :let={seed} label="Name">{seed.name}</:col>
-          <:col :let={seed} label="Type">{seed.seed_type}</:col>
-          <:col :let={seed} label="Tags">
-            <%= if Enum.empty?(seed.tags) do %>
-              <span class="text-zinc-500 dark:text-zinc-400">No tags</span>
-            <% else %>
-              <span class="text-xs">
-                <%= for tag <- Enum.sort(seed.tags) do %>
-                  {tag.key}={tag.value}{if tag != List.last(Enum.sort(seed.tags)), do: ", "}
-                <% end %>
-              </span>
-            <% end %>
-          </:col>
-          <:col :let={seed} label="Created">
-            <.local_datetime datetime={seed.inserted_at} user_timezone={@user_timezone} />
-          </:col>
-        </.table>
-      <% end %>
-    </:item>
-    <:item title="Deployments">
-      <.table
+    </.detail_field>
+
+    <section>
+      <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4">Matching Seeds</h2>
+      <.responsive_table
+        id="matching-seeds"
+        rows={@matching_seeds}
+        row_click={fn seed -> JS.navigate(~p"/seeds/#{seed}") end}
+      >
+        <:col :let={seed} label="Name">{seed.name}</:col>
+        <:col :let={seed} label="Type">{seed.seed_type}</:col>
+        <:col :let={seed} label="Tags">
+          {Enum.sort(seed.tags) |> Enum.map_join(", ", fn tag -> "#{tag.key}=#{tag.value}" end)}
+        </:col>
+        <:col :let={seed} label="Created">
+          <.local_datetime datetime={seed.inserted_at} user_timezone={@user_timezone} />
+        </:col>
+      </.responsive_table>
+      <p
+        :if={@matching_seeds == []}
+        class="text-sm text-zinc-500 dark:text-zinc-400 italic"
+      >
+        No matching seeds found.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4">Deployments</h2>
+      <.responsive_table
         id="deployments"
         rows={@subscription.deployments}
         row_click={fn deployment -> JS.navigate(~p"/deployments/#{deployment.sid}") end}
@@ -70,13 +74,19 @@
         <:col :let={deployment} label="Result">
           <.result result={deployment.result} />
         </:col>
-        <:col :let={deployment}>{deployment.sid}</:col>
-        <:col :let={deployment}>
+        <:col :let={deployment} label="SID">{deployment.sid}</:col>
+        <:col :let={deployment} label="Created">
           <.local_datetime datetime={deployment.inserted_at} user_timezone={@user_timezone} />
         </:col>
-      </.table>
-    </:item>
-  </.list>
+      </.responsive_table>
+      <p
+        :if={@subscription.deployments == []}
+        class="text-sm text-zinc-500 dark:text-zinc-400 italic"
+      >
+        No deployments.
+      </p>
+    </section>
+  </div>
 
   <.back navigate={~p"/agents/#{@agent}/subscriptions"}>Back to subscriptions</.back>
 
