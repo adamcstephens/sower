@@ -16,7 +16,7 @@ defmodule SowerAgent.Storage do
   # client
 
   def put(field, value) do
-    read() |> Map.put(field, value) |> write()
+    GenServer.call(__MODULE__, {:put, field, value})
   end
 
   def write(struct) do
@@ -59,15 +59,25 @@ defmodule SowerAgent.Storage do
   end
 
   @impl GenServer
-  def handle_call({:write, struct}, _from, %{file: file} = state) do
-    File.write!(file, :erlang.term_to_binary(struct))
-    Logger.debug(msg: "Wrote storage", file: file)
-    {:reply, :ok, %{state | data: struct}}
+  def handle_call({:write, struct}, _from, state) do
+    {:reply, :ok, do_write(struct, state)}
   end
 
   @impl GenServer
-  def handle_call(:read, _from, %{data: data} = state) do
-    {:reply, data, state}
+  def handle_call(:read, _from, state) do
+    {:reply, state.data, state}
+  end
+
+  @impl GenServer
+  def handle_call({:put, field, value}, _from, state) do
+    new_data = Map.put(state.data, field, value)
+    {:reply, :ok, do_write(new_data, state)}
+  end
+
+  defp do_write(data, %{file: file} = state) do
+    File.write!(file, :erlang.term_to_binary(data))
+    Logger.debug(msg: "Wrote storage", file: file)
+    %{state | data: data}
   end
 
   defp default() do
