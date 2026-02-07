@@ -63,7 +63,7 @@
                   beamPackages.elixir
                   beamPackages.hex
                   pkgs.next-ls
-                  (inputs'.expert.packages.expert.override { inherit beamPackages; })
+                  inputs'.expert.packages.expert
 
                   # elixir deps build deps
                   pkgs.cargo
