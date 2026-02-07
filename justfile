@@ -82,7 +82,9 @@ release-push:
     git push --tags
     just release
 
-start: dev-services
+start: dev-services start-all
+
+start-all:
     iex --sname dev1 -S mix phx.server
 
 start-agent:

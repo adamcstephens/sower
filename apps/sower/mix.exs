@@ -62,6 +62,7 @@ defmodule Sower.MixProject do
       {:tailwind, "~> 0.4.0", runtime: Mix.env() == :dev},
       {:telemetry_metrics, "~> 1.1.0"},
       {:telemetry_poller, "~> 1.1"},
+          {:tidewave, "~> 0.5", only: :dev},
       {:ueberauth, "~> 0.10"},
       {:ueberauth_oidcc, "~> 0.3"},
       {:uuidv7, "~> 1.0.0"},
