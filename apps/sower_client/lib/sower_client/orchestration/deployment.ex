@@ -16,17 +16,9 @@ defmodule SowerClient.Orchestration.Deployment do
         description: "deployment sid allocated by Sower",
         readOnly: true
       },
-      subscription_sids: %Schema{
+      seed_deployments: %Schema{
         type: :array,
-        items: %Schema{
-          type: :string,
-          description: "subscription sids in deployment",
-          readOnly: true
-        }
-      },
-      seeds: %Schema{
-        type: :array,
-        items: SowerClient.Seed
+        items: SowerClient.Orchestration.SeedDeployment
       },
       deployed_at: %Schema{
         type: :string,
@@ -41,6 +33,6 @@ defmodule SowerClient.Orchestration.Deployment do
         default: false
       }
     },
-    required: ~w(subscription_sids)a
+    required: []
   })
 end

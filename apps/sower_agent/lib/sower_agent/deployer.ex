@@ -31,8 +31,8 @@ defmodule SowerAgent.Deployer do
   end
 
   def upgrade(%Deployment{} = deployment) do
-    deployment.seeds
-    |> async_stream(fn seed ->
+    deployment.seed_deployments
+    |> async_stream(fn %{seed: seed} ->
       Logger.debug(
         msg: "Realizing seed",
         name: seed.name,
