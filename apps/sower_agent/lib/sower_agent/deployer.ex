@@ -1,7 +1,11 @@
 defmodule SowerAgent.Deployer do
   require Logger
 
+  alias SowerAgent.Config
+  alias SowerAgent.Storage
   alias SowerClient.Orchestration.Deployment
+  alias SowerClient.Orchestration.DeploymentProfile
+  alias SowerClient.Orchestration.SeedDeployment
 
   def run(%Deployment{} = deployment) do
     deploy_result = upgrade(deployment)
@@ -32,7 +36,7 @@ defmodule SowerAgent.Deployer do
 
   def upgrade(%Deployment{} = deployment) do
     deployment.seed_deployments
-    |> async_stream(fn %{seed: seed} ->
+    |> async_stream(fn %{seed: seed} = seed_deploy ->
       Logger.debug(
         msg: "Realizing seed",
         name: seed.name,
@@ -55,7 +59,7 @@ defmodule SowerAgent.Deployer do
             artifact: seed.artifact
           )
 
-          {:ok, seed}
+          {:ok, seed_deploy}
 
         {output, exit_code} ->
           output =
@@ -75,11 +79,11 @@ defmodule SowerAgent.Deployer do
             output: output
           )
 
-          {:error, :failed_to_realize, seed}
+          {:error, :failed_to_realize, seed_deploy}
       end
     end)
     |> async_stream(fn
-      {:ok, {:ok, seed}} ->
+      {:ok, {:ok, %SeedDeployment{seed: seed} = seed_deploy}} ->
         Logger.info(
           msg: "Activating seed",
           name: seed.name,
@@ -89,7 +93,7 @@ defmodule SowerAgent.Deployer do
           deployment_sid: deployment.sid
         )
 
-        result = SowerAgent.Seed.activate(seed)
+        result = SowerAgent.Seed.activate(seed, get_deploy_profile(seed_deploy.subscription_sid))
 
         case result do
           {:ok, output} ->
@@ -131,6 +135,42 @@ defmodule SowerAgent.Deployer do
       # 5 minutes
       timeout: 5 * 60_000
     )
+  end
+
+  def get_deploy_profile(nil), do: nil
+
+  def get_deploy_profile(
+        subscription_sid,
+        find_sub \\ &find_subscription/1,
+        find_profile \\ &find_deploy_profile/1
+      ) do
+    sub = find_sub.(subscription_sid)
+
+    subscription_overrides =
+      case get_in(sub.deployment_profile) do
+        nil ->
+          Logger.warning(
+            msg: "Subscription not found, using defaults",
+            deploy_subscription_sid: subscription_sid
+          )
+
+          %{}
+
+        profile_name ->
+          find_profile.(profile_name) || %{}
+      end
+
+    %DeploymentProfile{}
+    |> Map.merge(subscription_overrides)
+  end
+
+  defp find_deploy_profile(name) do
+    config = Config.get()
+    get_in(config.deploy_profiles[name])
+  end
+
+  defp find_subscription(sid) do
+    Storage.read().subscriptions |> Enum.find(&(&1.sid == sid))
   end
 
   defp maybe_write_log(_deployment, _seed, []), do: :ok

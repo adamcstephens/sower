@@ -915,16 +915,26 @@ defmodule Sower.Orchestration do
   defp do_deployment(request_id, subscriptions, opts) do
     force? = Keyword.get(opts, :force, false)
     agent_id = hd(subscriptions).agent_id
-    seed_deploys = subscriptions |> Enum.reduce([], fn sub, acc ->
-      case match_seed(sub) do
-        nil ->  acc
-        seed -> [%SowerClient.Orchestration.SeedDeployment{
-          seed: seed,
-          subscription_sid: sub.sid
-        } | acc]
-      end
-    end)
-    seeds = Enum.map(seed_deploys, &(&1.seed))
+
+    seed_deploys =
+      subscriptions
+      |> Enum.reduce([], fn sub, acc ->
+        case match_seed(sub) do
+          nil ->
+            acc
+
+          seed ->
+            [
+              %SowerClient.Orchestration.SeedDeployment{
+                seed: seed,
+                subscription_sid: sub.sid
+              }
+              | acc
+            ]
+        end
+      end)
+
+    seeds = Enum.map(seed_deploys, & &1.seed)
 
     if seeds == [] do
       {:error, :seeds_not_found}

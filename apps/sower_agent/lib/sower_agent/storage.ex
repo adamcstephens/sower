@@ -15,6 +15,10 @@ defmodule SowerAgent.Storage do
 
   # client
 
+  def get(field) do
+    GenServer.call(__MODULE__, {:get, field})
+  end
+
   def put(field, value) do
     GenServer.call(__MODULE__, {:put, field, value})
   end

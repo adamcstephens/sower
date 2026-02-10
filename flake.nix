@@ -64,6 +64,7 @@
                   beamPackages.hex
                   pkgs.next-ls
                   inputs'.expert.packages.expert
+                  beamPackages.elixir-ls
 
                   # elixir deps build deps
                   pkgs.cargo
