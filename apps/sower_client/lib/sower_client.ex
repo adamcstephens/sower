@@ -15,6 +15,7 @@ defmodule SowerClient do
       SowerClient.Orchestration.AgentSeedProfile,
       SowerClient.Orchestration.AgentSeedsReport,
       SowerClient.Orchestration.Deployment,
+      SowerClient.Orchestration.DeploymentProfile,
       SowerClient.Orchestration.DeploymentResult,
       SowerClient.Orchestration.DeploymentRequest,
       SowerClient.Orchestration.Subscription,

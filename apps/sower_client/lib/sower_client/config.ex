@@ -48,11 +48,24 @@ defmodule SowerClient.Config do
         type: :string,
         description: "Directory where state files are written (agent-only)"
       },
+      default_deploy_profile: %Schema{
+        type: :string,
+        description: "Name of default deployment profile",
+        nullable: true
+      },
+      deploy_profiles: %Schema{
+        type: :object,
+        additionalProperties: %OpenApiSpex.Schema{
+          type: SowerClient.Orchestration.DeploymentProfile
+        },
+        nullable: true,
+        description: "Depolyment policies (agent-only)"
+      },
       subscriptions: %Schema{
         type: :array,
         items: SowerClient.Orchestration.Subscription,
         default: [],
-        description: "Agent subscriptions (agent-only)"
+        description: "Subscriptions (agent-only)"
       }
     },
     required: []

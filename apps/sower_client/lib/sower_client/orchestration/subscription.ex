@@ -29,6 +29,11 @@ defmodule SowerClient.Orchestration.Subscription do
         default: [],
         description: "Tag-based rules to filter seeds"
       },
+      deployment_profile: %Schema{
+        type: :string,
+        description: "Name of deployment profile to apply",
+        nullable: true
+      },
       schedule: %Schema{
         type: :string,
         description: "Cron expression for polling schedule (agent-only)",
