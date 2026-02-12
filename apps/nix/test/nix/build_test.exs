@@ -47,7 +47,10 @@ defmodule Nix.BuildTest do
         assert status == :error
         assert build.status == :error
         assert is_list(build.log)
-        assert Enum.any?(build.log, &String.contains?(&1, "timeout"))
+
+        assert Enum.any?(build.log, fn line ->
+                 String.contains?(line, "timeout") or String.contains?(line, "time out")
+               end)
       end)
     end
   end

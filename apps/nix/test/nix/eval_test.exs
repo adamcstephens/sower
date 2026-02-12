@@ -136,7 +136,10 @@ defmodule Nix.EvalTest do
         assert status == :error
         assert eval.status == :error
         assert is_list(eval.errors)
-        assert Enum.any?(eval.errors, &String.contains?(&1, "timeout"))
+
+        assert Enum.any?(eval.errors, fn line ->
+                 String.contains?(line, "timeout") or String.contains?(line, "time out")
+               end)
       end)
     end
   end
