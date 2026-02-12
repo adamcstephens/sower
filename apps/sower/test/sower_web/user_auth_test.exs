@@ -123,7 +123,7 @@ defmodule SowerWeb.UserAuthTest do
       session = conn |> put_session(:user_token, user_token) |> get_session()
 
       {:cont, updated_socket} =
-        UserAuth.on_mount(:mount_current_user, %{}, session, %LiveView.Socket{})
+        UserAuth.on_mount(:mount_current_user, %{}, session, mount_socket())
 
       assert updated_socket.assigns.current_user.id == user.id
     end
@@ -133,7 +133,7 @@ defmodule SowerWeb.UserAuthTest do
       session = conn |> put_session(:user_token, user_token) |> get_session()
 
       {:cont, updated_socket} =
-        UserAuth.on_mount(:mount_current_user, %{}, session, %LiveView.Socket{})
+        UserAuth.on_mount(:mount_current_user, %{}, session, mount_socket())
 
       assert updated_socket.assigns.current_user == nil
     end
@@ -142,7 +142,7 @@ defmodule SowerWeb.UserAuthTest do
       session = conn |> get_session()
 
       {:cont, updated_socket} =
-        UserAuth.on_mount(:mount_current_user, %{}, session, %LiveView.Socket{})
+        UserAuth.on_mount(:mount_current_user, %{}, session, mount_socket())
 
       assert updated_socket.assigns.current_user == nil
     end
@@ -154,7 +154,7 @@ defmodule SowerWeb.UserAuthTest do
       session = conn |> put_session(:user_token, user_token) |> get_session()
 
       {:cont, updated_socket} =
-        UserAuth.on_mount(:ensure_authenticated, %{}, session, %LiveView.Socket{})
+        UserAuth.on_mount(:ensure_authenticated, %{}, session, mount_socket())
 
       assert updated_socket.assigns.current_user.id == user.id
     end
@@ -163,10 +163,7 @@ defmodule SowerWeb.UserAuthTest do
       user_token = "invalid_token"
       session = conn |> put_session(:user_token, user_token) |> get_session()
 
-      socket = %LiveView.Socket{
-        endpoint: SowerWeb.Endpoint,
-        assigns: %{__changed__: %{}, flash: %{}}
-      }
+      socket = mount_socket()
 
       {:halt, updated_socket} = UserAuth.on_mount(:ensure_authenticated, %{}, session, socket)
       assert updated_socket.assigns.current_user == nil
@@ -175,10 +172,7 @@ defmodule SowerWeb.UserAuthTest do
     test "redirects to login page if there isn't a user_token", %{conn: conn} do
       session = conn |> get_session()
 
-      socket = %LiveView.Socket{
-        endpoint: SowerWeb.Endpoint,
-        assigns: %{__changed__: %{}, flash: %{}}
-      }
+      socket = mount_socket()
 
       {:halt, updated_socket} = UserAuth.on_mount(:ensure_authenticated, %{}, session, socket)
       assert updated_socket.assigns.current_user == nil
@@ -195,7 +189,7 @@ defmodule SowerWeb.UserAuthTest do
                  :redirect_if_user_is_authenticated,
                  %{},
                  session,
-                 %LiveView.Socket{}
+                 mount_socket()
                )
     end
 
@@ -207,7 +201,7 @@ defmodule SowerWeb.UserAuthTest do
                  :redirect_if_user_is_authenticated,
                  %{},
                  session,
-                 %LiveView.Socket{}
+                 mount_socket()
                )
     end
   end
@@ -265,5 +259,13 @@ defmodule SowerWeb.UserAuthTest do
       refute conn.halted
       refute conn.status
     end
+  end
+
+  defp mount_socket(connect_params \\ %{}) do
+    %LiveView.Socket{
+      endpoint: SowerWeb.Endpoint,
+      assigns: %{__changed__: %{}, flash: %{}},
+      private: %{connect_params: connect_params}
+    }
   end
 end

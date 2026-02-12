@@ -193,7 +193,7 @@ defmodule SowerWeb.UserAuth do
       end
     end)
     |> Phoenix.Component.assign_new(:user_timezone, fn ->
-      case Phoenix.LiveView.get_connect_params(socket) |> get_in(["timezone"]) do
+      case socket |> Phoenix.LiveView.get_connect_params() |> get_in(["timezone"]) do
         nil ->
           "Etc/UTC"
 
