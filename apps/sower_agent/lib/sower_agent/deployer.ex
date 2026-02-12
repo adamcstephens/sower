@@ -3,13 +3,22 @@ defmodule SowerAgent.Deployer do
 
   alias SowerAgent.Config
   alias SowerAgent.Storage
+  alias SowerClient.Activator
   alias SowerClient.Orchestration.Deployment
   alias SowerClient.Orchestration.DeploymentProfile
   alias SowerClient.Orchestration.SeedDeployment
 
   def run(%Deployment{} = deployment) do
-    deploy_result = upgrade(deployment)
+    result =
+      deployment
+      |> upgrade()
+      |> deployment_result()
 
+    maybe_reboot(deployment, result)
+    result
+  end
+
+  def deployment_result(deploy_result) do
     Enum.all?(deploy_result, fn r ->
       case r do
         {:ok, {:ok, _}} -> true
@@ -84,16 +93,19 @@ defmodule SowerAgent.Deployer do
     end)
     |> async_stream(fn
       {:ok, {:ok, %SeedDeployment{seed: seed} = seed_deploy}} ->
+        profile = get_deploy_profile(seed_deploy.subscription_sid)
+
         Logger.info(
           msg: "Activating seed",
           name: seed.name,
           seed_sid: seed.sid,
           seed_type: seed.seed_type,
           artifact: seed.artifact,
-          deployment_sid: deployment.sid
+          deployment_sid: deployment.sid,
+          activation_args: get_in(profile.activation_args)
         )
 
-        result = SowerAgent.Seed.activate(seed, get_deploy_profile(seed_deploy.subscription_sid))
+        result = SowerAgent.Seed.activate(seed, profile)
 
         case result do
           {:ok, output} ->
@@ -173,6 +185,97 @@ defmodule SowerAgent.Deployer do
     Storage.read().subscriptions |> Enum.find(&(&1.sid == sid))
   end
 
+  def maybe_reboot(%Deployment{} = _deployment, result) when result != :success, do: :ok
+
+  def maybe_reboot(%Deployment{} = deployment, :success) do
+    case reboot_reason(deployment.seed_deployments) do
+      nil ->
+        :ok
+
+      reason ->
+        if Application.get_env(:sower_agent, :enable_activation, true) do
+          Logger.info(
+            msg: "Reboot required by deployment policy",
+            deployment_sid: deployment.sid,
+            reason: reason
+          )
+
+          case Activator.reboot(reason: reason) do
+            {:ok, output} ->
+              Logger.info(
+                msg: "Reboot request completed",
+                deployment_sid: deployment.sid,
+                reason: reason,
+                output: output
+              )
+
+            {:error, code, output} ->
+              Logger.error(
+                msg: "Reboot request failed",
+                deployment_sid: deployment.sid,
+                reason: reason,
+                code: code,
+                output: output
+              )
+
+            {:error, reboot_error} ->
+              Logger.error(
+                msg: "Reboot request failed",
+                deployment_sid: deployment.sid,
+                reason: reason,
+                error: inspect(reboot_error)
+              )
+          end
+        else
+          Logger.debug(
+            msg: "Reboot run in noop",
+            deployment_sid: deployment.sid,
+            reason: reason
+          )
+        end
+    end
+  end
+
+  def reboot_reason(
+        seed_deployments,
+        get_profile \\ &get_deploy_profile/1,
+        read_link \\ &:file.read_link_all/1
+      ) do
+    profiles =
+      seed_deployments
+      |> Enum.filter(fn %SeedDeployment{seed: seed} ->
+        seed.seed_type == "nixos"
+      end)
+      |> Enum.map(fn %SeedDeployment{subscription_sid: subscription_sid} ->
+        get_profile.(subscription_sid) || %DeploymentProfile{}
+      end)
+
+    cond do
+      profiles == [] ->
+        nil
+
+      Enum.any?(profiles, fn profile ->
+        profile.reboot_policy == "always"
+      end) ->
+        "policy_always"
+
+      Enum.any?(profiles, fn profile ->
+        profile.reboot_policy == "when-required" and
+            SowerAgent.Seed.activation_mode(profile) == "boot"
+      end) ->
+        "boot_mode"
+
+      Enum.any?(profiles, fn profile ->
+        profile.reboot_policy == "when-required" and
+            SowerAgent.Seed.activation_mode(profile) == "switch"
+      end) ->
+        detect_boot_critical_change_reason(read_link)
+
+      true ->
+        nil
+    end
+  end
+
   defp maybe_write_log(_deployment, _seed, []), do: :ok
 
   # TODO: when you write to disk, you should ensure it gets deleted
@@ -194,5 +297,52 @@ defmodule SowerAgent.Deployer do
 
   defp strip_ansi(text) do
     Regex.replace(~r/\x1b\[[0-9;]*[a-zA-Z]/, text, "")
+  end
+
+  defp detect_boot_critical_change_reason(read_link) do
+    with {:ok, profile_store_path} <- resolved_symlink("/nix/var/nix/profiles/system", read_link),
+         {:ok, current_store_path} <- resolved_symlink("/run/current-system", read_link),
+         {:ok, booted_store_path} <- resolved_symlink("/run/booted-system", read_link) do
+      cond do
+        current_store_path != profile_store_path ->
+          "system_changed"
+
+        "#{current_store_path}/initrd" != "#{booted_store_path}/initrd" ->
+          "initrd_changed"
+
+        "#{current_store_path}/kernel" != "#{booted_store_path}/kernel" ->
+          "kernel_changed"
+
+        "#{current_store_path}/kernel-modules" != "#{booted_store_path}/kernel-modules" ->
+          "modules_changed"
+
+        true ->
+          nil
+      end
+    else
+      {:error, reason} ->
+        Logger.warning(
+          msg: "Could not evaluate reboot requirement from system profile links",
+          reason: inspect(reason)
+        )
+
+        nil
+    end
+  end
+
+  defp resolved_symlink(path, read_link) do
+    case read_link.(path) do
+      {:ok, resolved} when is_binary(resolved) ->
+        {:ok, resolved}
+
+      {:ok, resolved} when is_list(resolved) ->
+        {:ok, List.to_string(resolved)}
+
+      {:error, reason} ->
+        {:error, {path, reason}}
+
+      other ->
+        {:error, {path, other}}
+    end
   end
 end

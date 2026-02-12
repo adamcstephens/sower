@@ -59,14 +59,26 @@ func (h *ConnectionHandler) Handle() {
 		return
 	}
 
-	var req ActivateRequest
+	var req Request
 	if err := json.Unmarshal(line, &req); err != nil {
 		slog.Error("Failed to parse request", "error", err)
 		h.sendError("", "invalid JSON")
 		return
 	}
 
-	slog.Info("Received activation request", "id", req.ID, "type", req.Type, "path", req.Path, "mode", req.Mode)
+	slog.Info(
+		"Received request",
+		"id",
+		req.ID,
+		"type",
+		req.Type,
+		"path",
+		req.Path,
+		"mode",
+		req.Mode,
+		"reason",
+		req.Reason,
+	)
 
 	// Validate request
 	if err := h.validateRequest(&req); err != nil {
@@ -75,15 +87,19 @@ func (h *ConnectionHandler) Handle() {
 		return
 	}
 
-	// Execute activation with streaming output
-	exitCode := h.executeActivation(&req)
+	// Execute request with streaming output
+	exitCode := h.executeRequest(&req)
 	h.sendComplete(req.ID, exitCode)
 }
 
 // validateRequest checks that the request is valid.
-func (h *ConnectionHandler) validateRequest(req *ActivateRequest) error {
+func (h *ConnectionHandler) validateRequest(req *Request) error {
 	if req.ID == "" {
 		return fmt.Errorf("missing request ID")
+	}
+
+	if req.Type == "reboot" {
+		return nil
 	}
 
 	if req.Type != SeedTypeNixOS && req.Type != SeedTypeHomeManager {
@@ -113,8 +129,8 @@ func (h *ConnectionHandler) validateRequest(req *ActivateRequest) error {
 	return nil
 }
 
-// executeActivation runs the activation and streams output.
-func (h *ConnectionHandler) executeActivation(req *ActivateRequest) int {
+// executeRequest runs the request action and streams output.
+func (h *ConnectionHandler) executeRequest(req *Request) int {
 	outputCallback := func(line string, isError bool) {
 		respType := ResponseTypeOutput
 		if isError {
@@ -127,9 +143,19 @@ func (h *ConnectionHandler) executeActivation(req *ActivateRequest) int {
 		})
 	}
 
-	exitCode, err := activateStreaming(req.Type, req.Path, req.Mode, outputCallback)
+	var (
+		exitCode int
+		err      error
+	)
+
+	if req.Type == "reboot" {
+		exitCode, err = rebootStreaming(outputCallback)
+	} else {
+		exitCode, err = activateStreaming(req.Type, req.Path, req.Mode, outputCallback)
+	}
+
 	if err != nil {
-		slog.Error("Activation failed", "id", req.ID, "error", err)
+		slog.Error("Request failed", "id", req.ID, "type", req.Type, "error", err)
 		h.sendResponse(ActivateResponse{
 			ID:   req.ID,
 			Type: ResponseTypeError,

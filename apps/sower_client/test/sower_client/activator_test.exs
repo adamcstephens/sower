@@ -96,6 +96,32 @@ defmodule SowerClient.ActivatorTest do
     end
   end
 
+  describe "reboot_via_socket/1" do
+    test "sends reboot request with reason" do
+      {socket_path, server_pid} =
+        start_mock_server(fn request_line, client_socket ->
+          request = Jason.decode!(request_line)
+          assert request["type"] == "reboot"
+          assert request["reason"] == "policy_always"
+          refute Map.has_key?(request, "path")
+          refute Map.has_key?(request, "mode")
+
+          send_response(client_socket, %{id: request["id"], type: "complete", exit_code: 0})
+        end)
+
+      on_exit(fn ->
+        stop_mock_server(server_pid)
+        File.rm_rf!(Path.dirname(socket_path))
+      end)
+
+      assert {:ok, []} =
+               Activator.reboot_via_socket(
+                 socket_path: socket_path,
+                 reason: "policy_always"
+               )
+    end
+  end
+
   describe "activate_via_cli/3" do
     test "returns error when executables not found" do
       # Ensure the executables don't exist in PATH
@@ -142,6 +168,25 @@ defmodule SowerClient.ActivatorTest do
       capture_log(fn ->
         result =
           Activator.activate("nixos", "/nix/store/xyz", socket_path: "/nonexistent/socket")
+
+        assert {:error, :cmd_not_found} = result
+      end)
+    end
+  end
+
+  describe "reboot/1" do
+    test "falls back to CLI when socket is not available" do
+      original_path = System.get_env("PATH")
+      System.put_env("PATH", "/nonexistent")
+
+      on_exit(fn -> System.put_env("PATH", original_path) end)
+
+      capture_log(fn ->
+        result =
+          Activator.reboot(
+            socket_path: "/nonexistent/socket",
+            reason: "policy_always"
+          )
 
         assert {:error, :cmd_not_found} = result
       end)

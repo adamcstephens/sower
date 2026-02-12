@@ -1,11 +1,12 @@
 package main
 
-// ActivateRequest is sent by clients to request activation.
-type ActivateRequest struct {
-	ID   string `json:"id"`   // Request correlation ID
-	Type string `json:"type"` // "nixos" or "home-manager"
-	Path string `json:"path"` // Nix store path
-	Mode string `json:"mode"` // "switch", "boot", etc. (NixOS only)
+// Request is sent by clients to request activation or reboot.
+type Request struct {
+	ID     string `json:"id"`               // Request correlation ID
+	Type   string `json:"type"`             // "nixos", "home-manager", or "reboot"
+	Path   string `json:"path,omitempty"`   // Nix store path for activation
+	Mode   string `json:"mode,omitempty"`   // "switch", "boot", etc. (NixOS only)
+	Reason string `json:"reason,omitempty"` // Reboot reason
 }
 
 // ResponseType indicates the type of response message.

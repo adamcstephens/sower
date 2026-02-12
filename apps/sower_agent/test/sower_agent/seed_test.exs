@@ -4,6 +4,7 @@ defmodule SowerAgent.SeedTest do
   import ExUnit.CaptureLog
 
   alias SowerAgent.Seed
+  alias SowerClient.Orchestration.DeploymentProfile
   alias SowerClient.Seed, as: ClientSeed
 
   describe "activate/1" do
@@ -93,6 +94,37 @@ defmodule SowerAgent.SeedTest do
         end)
 
       assert log =~ "Failed to activate"
+    end
+  end
+
+  describe "activate/2" do
+    test "uses deployment profile activation_args for nixos mode" do
+      {socket_path, server_pid} =
+        start_mock_server(fn request_line, client_socket ->
+          request = Jason.decode!(request_line)
+          assert request["type"] == "nixos"
+          assert request["path"] == "/nix/store/xyz"
+          assert request["mode"] == "boot"
+
+          send_response(client_socket, %{id: request["id"], type: "complete", exit_code: 0})
+        end)
+
+      Application.put_env(:sower_agent, :activator_socket, socket_path)
+
+      on_exit(fn ->
+        Application.delete_env(:sower_agent, :activator_socket)
+        stop_mock_server(server_pid)
+        File.rm_rf!(Path.dirname(socket_path))
+      end)
+
+      seed = %ClientSeed{name: "test", seed_type: "nixos", artifact: "/nix/store/xyz"}
+
+      profile = %DeploymentProfile{
+        activation_args: ["boot"],
+        reboot_policy: "never"
+      }
+
+      assert {:ok, []} = Seed.activate(seed, profile)
     end
   end
 

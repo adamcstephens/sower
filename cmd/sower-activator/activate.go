@@ -102,6 +102,14 @@ func activateStreaming(seedType, storePath, mode string, callback OutputCallback
 	}
 }
 
+// rebootStreaming requests a system reboot and streams output via callback.
+func rebootStreaming(callback OutputCallback) (int, error) {
+	args := []string{"reboot"}
+
+	cmd := exec.Command("systemctl", args...)
+	return runCommandStreaming(cmd, callback)
+}
+
 // runCommandStreaming executes a command and streams output via callback.
 // Returns the exit code and any error that occurred.
 func runCommandStreaming(cmd *exec.Cmd, callback OutputCallback) (int, error) {

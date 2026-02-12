@@ -20,8 +20,9 @@ defmodule SowerClient.Activator do
   typedstruct module: Request do
     field(:id, String.t(), enforce: true)
     field(:type, String.t(), enforce: true)
-    field(:path, String.t(), enforce: true)
+    field(:path, String.t())
     field(:mode, String.t())
+    field(:reason, String.t())
   end
 
   typedstruct module: Response do
@@ -60,6 +61,26 @@ defmodule SowerClient.Activator do
   end
 
   @doc """
+  Request a system reboot via socket or CLI fallback.
+
+  ## Options
+
+  - `:socket_path` - Path to activator socket (default: #{@default_socket_path})
+  - `:reason` - Optional reason attached to reboot request
+  - `:on_output` - Callback function for streaming output
+  """
+  def reboot(opts \\ []) do
+    socket_path = Keyword.get(opts, :socket_path, @default_socket_path)
+
+    if socket_available?(socket_path) do
+      reboot_via_socket(opts)
+    else
+      Logger.debug("Socket not available, falling back to CLI reboot")
+      reboot_via_cli(opts)
+    end
+  end
+
+  @doc """
   Activate via Unix socket connection to sower-activator daemon.
 
   ## Options
@@ -84,6 +105,28 @@ defmodule SowerClient.Activator do
       type: type,
       path: path,
       mode: mode
+    }
+
+    with {:ok, socket} <- connect(socket_path),
+         :ok <- send_request(socket, request),
+         result <- receive_responses(socket, request.id, on_output) do
+      :gen_tcp.close(socket)
+      result
+    end
+  end
+
+  @doc """
+  Request reboot via Unix socket connection to sower-activator daemon.
+  """
+  def reboot_via_socket(opts \\ []) do
+    socket_path = Keyword.get(opts, :socket_path, @default_socket_path)
+    reason = Keyword.get(opts, :reason)
+    on_output = Keyword.get(opts, :on_output, fn _line -> :ok end)
+
+    request = %Request{
+      id: generate_request_id(),
+      type: "reboot",
+      reason: reason
     }
 
     with {:ok, socket} <- connect(socket_path),
@@ -131,6 +174,32 @@ defmodule SowerClient.Activator do
     else
       nil ->
         Logger.error("Required executables not found: sudo and/or sower-activator")
+        {:error, :cmd_not_found}
+    end
+  end
+
+  @doc """
+  Request reboot via CLI invocation of `systemctl reboot`.
+  """
+  def reboot_via_cli(_opts \\ []) do
+    with systemctl when not is_nil(systemctl) <- System.find_executable("systemctl"),
+         sudo when not is_nil(sudo) <- System.find_executable("sudo") do
+      case System.cmd(sudo, [systemctl, "reboot"],
+             into: [],
+             lines: 1024,
+             stderr_to_stdout: true
+           ) do
+        {output, 0} ->
+          Logger.debug(output: output)
+          {:ok, output}
+
+        {output, code} ->
+          Logger.error(msg: "Reboot failed", output: output, return_code: code)
+          {:error, code, output}
+      end
+    else
+      nil ->
+        Logger.error("Required executables not found: sudo and/or systemctl")
         {:error, :cmd_not_found}
     end
   end
@@ -190,10 +259,11 @@ defmodule SowerClient.Activator do
     map =
       %{
         "id" => request.id,
-        "type" => request.type,
-        "path" => request.path
+        "type" => request.type
       }
+      |> maybe_put("path", request.path)
       |> maybe_put("mode", request.mode)
+      |> maybe_put("reason", request.reason)
 
     Jason.encode!(map)
   end

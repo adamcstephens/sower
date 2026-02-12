@@ -1,16 +1,30 @@
 defmodule SowerAgent.Seed do
   alias SowerClient.{Activator, Seed}
+  alias SowerClient.Orchestration.DeploymentProfile
 
   require Logger
 
   @default_socket_path "/run/sower-activator/activator.sock"
 
-  def activate(%Seed{seed_type: "home-manager"} = seed) do
+  def activate(seed, profile \\ %DeploymentProfile{})
+
+  def activate(%Seed{seed_type: "home-manager"} = seed, _profile) do
     run_activation("home-manager", seed.artifact)
   end
 
-  def activate(%Seed{seed_type: "nixos"} = seed) do
-    run_activation("nixos", seed.artifact, mode: "switch")
+  def activate(%Seed{seed_type: "nixos"} = seed, %DeploymentProfile{} = profile) do
+    run_activation("nixos", seed.artifact, mode: activation_mode(profile))
+  end
+
+  # TODO pass these args through to the activator once we validate the store paths it receives
+  def activation_mode(%DeploymentProfile{} = profile) do
+    case profile.activation_args do
+      [mode | _] when is_binary(mode) and mode != "" ->
+        mode
+
+      _ ->
+        "switch"
+    end
   end
 
   defp run_activation(type, path, opts \\ []) do
