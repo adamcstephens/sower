@@ -9,15 +9,15 @@ defmodule SowerAgent.DeployerTest do
   alias SowerClient.Orchestration.Subscription
   alias SowerClient.Seed
 
-  describe "get_deploy_profile/3" do
+  describe "get_deployment_profile/3" do
     test "returns nil for nil subscription sid" do
-      assert Deployer.get_deploy_profile(nil) == nil
+      assert Deployer.get_deployment_profile(nil) == nil
     end
 
     test "returns defaults and logs warning when subscription is missing" do
       logs =
         capture_log(fn ->
-          assert Deployer.get_deploy_profile("sub_missing", fn _sid -> nil end, fn _name ->
+          assert Deployer.get_deployment_profile("sub_missing", fn _sid -> nil end, fn _name ->
                    %{}
                  end) ==
                    %DeploymentProfile{}
@@ -45,7 +45,7 @@ defmodule SowerAgent.DeployerTest do
         _ -> %{}
       end
 
-      assert Deployer.get_deploy_profile(sid, find_sub, find_profile) == %DeploymentProfile{
+      assert Deployer.get_deployment_profile(sid, find_sub, find_profile) == %DeploymentProfile{
                activation_args: ["boot"],
                reboot_policy: "always"
              }
@@ -59,7 +59,7 @@ defmodule SowerAgent.DeployerTest do
         deployment_profile: "partial_profile"
       }
 
-      assert Deployer.get_deploy_profile(
+      assert Deployer.get_deployment_profile(
                sid,
                fn _ -> sub end,
                fn _ -> %{activation_args: ["boot"]} end
@@ -77,7 +77,7 @@ defmodule SowerAgent.DeployerTest do
         deployment_profile: "missing_profile"
       }
 
-      assert Deployer.get_deploy_profile(
+      assert Deployer.get_deployment_profile(
                sid,
                fn _ -> sub end,
                fn _ -> nil end

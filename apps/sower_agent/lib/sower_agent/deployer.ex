@@ -93,7 +93,7 @@ defmodule SowerAgent.Deployer do
     end)
     |> async_stream(fn
       {:ok, {:ok, %SeedDeployment{seed: seed} = seed_deploy}} ->
-        profile = get_deploy_profile(seed_deploy.subscription_sid)
+        profile = get_deployment_profile(seed_deploy.subscription_sid)
 
         Logger.info(
           msg: "Activating seed",
@@ -149,12 +149,12 @@ defmodule SowerAgent.Deployer do
     )
   end
 
-  def get_deploy_profile(nil), do: nil
+  def get_deployment_profile(nil), do: nil
 
-  def get_deploy_profile(
+  def get_deployment_profile(
         subscription_sid,
         find_sub \\ &find_subscription/1,
-        find_profile \\ &find_deploy_profile/1
+        find_profile \\ &find_deployment_profile/1
       ) do
     sub = find_sub.(subscription_sid)
 
@@ -162,30 +162,36 @@ defmodule SowerAgent.Deployer do
       case get_in(sub.deployment_profile) do
         nil ->
           Logger.warning(
-            msg: "Subscription not found, using defaults",
-            deploy_subscription_sid: subscription_sid
+            msg: "Subscription deployment profile not found, using default",
+            deploy_subscription_sid: subscription_sid,
+            subscription_seed_name: sub.seed_name,
+            subscription_seed_type: sub.seed_type
           )
 
-          %{}
+          Map.get(Config.get(), :default_deployment_profile, "default")
 
         profile_name ->
-          find_profile.(profile_name) || %{}
+          profile_name
       end
+      |> find_profile.()
 
     %DeploymentProfile{}
     |> Map.merge(subscription_overrides)
   end
 
-  defp find_deploy_profile(name) do
+  defp find_deployment_profile(name) do
     config = Config.get()
-    get_in(config.deploy_profiles[name])
+    get_in(config.deployment_profiles[name])
   end
 
   defp find_subscription(sid) do
     Storage.read().subscriptions |> Enum.find(&(&1.sid == sid))
   end
 
-  def maybe_reboot(%Deployment{} = _deployment, result) when result != :success, do: :ok
+  def maybe_reboot(%Deployment{} = _deployment, result) when result != :success do
+    Logger.debug(msg: "Skipping reboot due to unsuccesful deployment", result: result)
+    :ok
+  end
 
   def maybe_reboot(%Deployment{} = deployment, :success) do
     case reboot_reason(deployment.seed_deployments) do
@@ -238,7 +244,7 @@ defmodule SowerAgent.Deployer do
 
   def reboot_reason(
         seed_deployments,
-        get_profile \\ &get_deploy_profile/1,
+        get_profile \\ &get_deployment_profile/1,
         read_link \\ &:file.read_link_all/1
       ) do
     profiles =
@@ -299,7 +305,7 @@ defmodule SowerAgent.Deployer do
     Regex.replace(~r/\x1b\[[0-9;]*[a-zA-Z]/, text, "")
   end
 
-  defp detect_boot_critical_change_reason(read_link) do
+  def detect_boot_critical_change_reason(read_link \\ &:file.read_link_all/1) do
     with {:ok, profile_store_path} <- resolved_symlink("/nix/var/nix/profiles/system", read_link),
          {:ok, current_store_path} <- resolved_symlink("/run/current-system", read_link),
          {:ok, booted_store_path} <- resolved_symlink("/run/booted-system", read_link) do

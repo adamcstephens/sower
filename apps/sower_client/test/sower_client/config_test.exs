@@ -136,12 +136,12 @@ defmodule SowerClient.ConfigTest do
       assert config.endpoint == "https://default.com"
     end
 
-    test "casts deploy_profiles additionalProperties into deployment profiles", %{
+    test "casts deployment_profiles additionalProperties into deployment profiles", %{
       config_file: config_file
     } do
       config_data = %{
         "endpoint" => "https://my.sower.dev",
-        "deploy_profiles" => %{
+        "deployment_profiles" => %{
           "default" => %{"reboot_policy" => "when-required"}
         }
       }
@@ -151,9 +151,9 @@ defmodule SowerClient.ConfigTest do
       config = Config.load(config_path: config_file)
 
       assert %Config{} = config
-      assert %DeploymentProfile{} = config.deploy_profiles["default"]
-      assert config.deploy_profiles["default"].reboot_policy == "when-required"
-      assert config.deploy_profiles["default"].activation_args == []
+      assert %DeploymentProfile{} = config.deployment_profiles["default"]
+      assert config.deployment_profiles["default"].reboot_policy == "when-required"
+      assert config.deployment_profiles["default"].activation_args == []
     end
   end
 

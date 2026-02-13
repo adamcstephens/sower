@@ -48,12 +48,12 @@ defmodule SowerClient.Config do
         type: :string,
         description: "Directory where state files are written (agent-only)"
       },
-      default_deploy_profile: %Schema{
+      default_deployment_profile: %Schema{
         type: :string,
         description: "Name of default deployment profile",
         nullable: true
       },
-      deploy_profiles: %Schema{
+      deployment_profiles: %Schema{
         type: :object,
         additionalProperties: SowerClient.Orchestration.DeploymentProfile,
         nullable: true,
