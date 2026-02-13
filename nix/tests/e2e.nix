@@ -38,6 +38,7 @@ testers.runNixOSTest {
 
           environment.systemPackages = [
             flake.packages.${pkgs.stdenv.hostPlatform.system}.cli
+            pkgs.python3
           ];
 
           networking.firewall.allowedTCPPorts = [ 4000 ];
@@ -142,6 +143,36 @@ testers.runNixOSTest {
       server.wait_for_unit("sower-activator.socket")
       server.wait_for_unit("sower-agent.service")
       server.wait_for_open_port(4000)
+
+      with subtest("activator socket activation"):
+          server.succeed("test \"$(systemctl show -p ActiveState --value sower-activator.service)\" = inactive")
+          server.succeed("test -S /run/sower-activator/activator.sock")
+          server.succeed("test \"$(stat -c '%a' /run/sower-activator/activator.sock)\" = 660")
+          server.succeed("test \"$(stat -c '%G' /run/sower-activator/activator.sock)\" = sower-activator")
+
+          server.succeed(
+              """
+              python3 - <<'PY'
+              import json
+              import socket
+
+              sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+              sock.settimeout(5)
+              sock.connect("/run/sower-activator/activator.sock")
+              req = {
+                  "id": "socket-activation-probe",
+                  "type": "nixos",
+                  "path": "/nix/store/not-a-real-profile",
+                  "mode": "switch",
+              }
+              sock.sendall((json.dumps(req) + "\\n").encode())
+              sock.recv(4096)
+              sock.close()
+              PY
+              """
+          )
+
+          server.wait_until_succeeds("test \"$(systemctl show -p ActiveState --value sower-activator.service)\" = active")
 
       # with subtest("basic submission"):
       #     server_profile = server.succeed("readlink -f /run/booted-system").strip()
