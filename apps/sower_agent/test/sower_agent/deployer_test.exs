@@ -14,16 +14,33 @@ defmodule SowerAgent.DeployerTest do
       assert Deployer.get_deployment_profile(nil) == nil
     end
 
-    test "returns defaults and logs warning when subscription is missing" do
-      logs =
-        capture_log(fn ->
-          assert Deployer.get_deployment_profile("sub_missing", fn _sid -> nil end, fn _name ->
-                   %{}
-                 end) ==
-                   %DeploymentProfile{}
-        end)
+    test "returns defaults and logs when subscription is missing" do
+      assert Deployer.get_deployment_profile("sub_missing", fn _sid -> nil end, fn _name ->
+               %{}
+             end) ==
+               %DeploymentProfile{}
+    end
 
-      assert logs =~ "Subscription not found, using defaults"
+    test "uses the default profile name when subscription deployment profile is not set" do
+      sid = "sub_default"
+
+      sub = %Subscription{
+        sid: sid,
+        seed_name: "kale",
+        seed_type: "nixos"
+      }
+
+      assert Deployer.get_deployment_profile(
+               sid,
+               fn _ -> sub end,
+               fn
+                 "default" -> %{activation_args: ["boot"], reboot_policy: "always"}
+                 other -> flunk("expected \"default\" profile lookup, got: #{inspect(other)}")
+               end
+             ) == %DeploymentProfile{
+               activation_args: ["boot"],
+               reboot_policy: "always"
+             }
     end
 
     test "uses subscription deployment_profile string to resolve named profile overrides" do

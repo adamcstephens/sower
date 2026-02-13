@@ -156,37 +156,51 @@ defmodule SowerAgent.Deployer do
         find_sub \\ &find_subscription/1,
         find_profile \\ &find_deployment_profile/1
       ) do
-    sub = find_sub.(subscription_sid)
+    case find_sub.(subscription_sid) do
+      nil ->
+        Logger.info(
+          msg: "Subscription not found, using defaults",
+          deploy_subscription_sid: subscription_sid
+        )
 
-    subscription_overrides =
-      case get_in(sub.deployment_profile) do
-        nil ->
-          Logger.info(
-            msg: "Subscription deployment profile not found, using default",
-            default_deployment_profile: default_deployment_profile(),
-            deploy_subscription_sid: subscription_sid,
-            subscription_seed_name: sub.seed_name,
-            subscription_seed_type: sub.seed_type
-          )
+        %DeploymentProfile{}
 
-          default_deployment_profile()
+      sub ->
+        profile_name =
+          case get_in(sub.deployment_profile) do
+            nil ->
+              default_profile_name = default_deployment_profile()
 
-        profile_name ->
-          profile_name
-      end
-      |> find_profile.()
+              Logger.info(
+                msg: "Subscription deployment profile not found, using default",
+                default_deployment_profile: default_profile_name,
+                deploy_subscription_sid: subscription_sid,
+                subscription_seed_name: get_in(sub.seed_name),
+                subscription_seed_type: get_in(sub.seed_type)
+              )
 
-    %DeploymentProfile{}
-    |> Map.merge(subscription_overrides)
+              default_profile_name
+
+            configured_profile_name ->
+              configured_profile_name
+          end
+
+        subscription_overrides = find_profile.(profile_name) || %DeploymentProfile{}
+
+        %DeploymentProfile{}
+        |> Map.merge(subscription_overrides)
+    end
   end
 
   defp default_deployment_profile() do
-    Map.get(Config.get(), :default_deployment_profile, "default")
+    Config.get()
+    |> Kernel.||(%{})
+    |> Map.get(:default_deployment_profile, "default")
   end
 
-  defp find_deployment_profile(name) do
+  def find_deployment_profile(name) do
     config = Config.get()
-    get_in(config.deployment_profiles[name])
+    get_in(config.deployment_profiles[name]) || %DeploymentProfile{}
   end
 
   defp find_subscription(sid) do
