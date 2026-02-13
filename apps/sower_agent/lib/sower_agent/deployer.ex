@@ -161,14 +161,15 @@ defmodule SowerAgent.Deployer do
     subscription_overrides =
       case get_in(sub.deployment_profile) do
         nil ->
-          Logger.warning(
+          Logger.info(
             msg: "Subscription deployment profile not found, using default",
+            default_deployment_profile: default_deployment_profile(),
             deploy_subscription_sid: subscription_sid,
             subscription_seed_name: sub.seed_name,
             subscription_seed_type: sub.seed_type
           )
 
-          Map.get(Config.get(), :default_deployment_profile, "default")
+          default_deployment_profile()
 
         profile_name ->
           profile_name
@@ -177,6 +178,10 @@ defmodule SowerAgent.Deployer do
 
     %DeploymentProfile{}
     |> Map.merge(subscription_overrides)
+  end
+
+  defp default_deployment_profile() do
+    Map.get(Config.get(), :default_deployment_profile, "default")
   end
 
   defp find_deployment_profile(name) do
