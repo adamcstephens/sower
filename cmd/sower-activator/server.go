@@ -3,13 +3,19 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"syscall"
 )
+
+var errSystemdSocketUnavailable = errors.New("systemd socket activation unavailable")
+
+const systemdListenFDStart = 3
 
 // Server handles Unix socket connections for activation requests.
 type Server struct {
@@ -31,25 +37,35 @@ func NewServer(socketPath string, allowedUIDs, allowedGIDs []uint32) *Server {
 
 // Run starts the server and blocks until shutdown.
 func (s *Server) Run(ctx context.Context) error {
-	// Remove existing socket file if present
-	if err := os.Remove(s.socketPath); err != nil && !os.IsNotExist(err) {
+	listener, err := listenerFromSystemd()
+	if err != nil && !errors.Is(err, errSystemdSocketUnavailable) {
 		return err
 	}
 
-	// Create listener
-	var err error
-	s.listener, err = net.Listen("unix", s.socketPath)
-	if err != nil {
-		return err
+	if errors.Is(err, errSystemdSocketUnavailable) {
+		// Remove existing socket file if present
+		if err := os.Remove(s.socketPath); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+
+		// Create listener when not socket-activated
+		listener, err = net.Listen("unix", s.socketPath)
+		if err != nil {
+			return err
+		}
+
+		// Set socket permissions (owner rw, group rw)
+		if err := os.Chmod(s.socketPath, 0660); err != nil {
+			return err
+		}
+
+		slog.Info("Server listening", "socket", s.socketPath, "mode", "standalone")
+	} else {
+		slog.Info("Server listening", "socket", s.socketPath, "mode", "systemd-socket-activation")
 	}
+
+	s.listener = listener
 	defer s.listener.Close()
-
-	// Set socket permissions (owner rw, group rw)
-	if err := os.Chmod(s.socketPath, 0660); err != nil {
-		return err
-	}
-
-	slog.Info("Server listening", "socket", s.socketPath)
 
 	// Handle shutdown
 	go func() {
@@ -80,6 +96,58 @@ func (s *Server) Run(ctx context.Context) error {
 	slog.Info("Server stopped")
 
 	return nil
+}
+
+func listenerFromSystemd() (net.Listener, error) {
+	pidStr := os.Getenv("LISTEN_PID")
+	fdsStr := os.Getenv("LISTEN_FDS")
+	if pidStr == "" && fdsStr == "" {
+		return nil, errSystemdSocketUnavailable
+	}
+	if pidStr == "" || fdsStr == "" {
+		return nil, fmt.Errorf("incomplete systemd socket activation environment")
+	}
+
+	listenPID, err := strconv.Atoi(pidStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid LISTEN_PID: %w", err)
+	}
+	if listenPID != os.Getpid() {
+		return nil, errSystemdSocketUnavailable
+	}
+
+	listenFDs, err := strconv.Atoi(fdsStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid LISTEN_FDS: %w", err)
+	}
+	if listenFDs <= 0 {
+		return nil, errSystemdSocketUnavailable
+	}
+	if listenFDs != 1 {
+		return nil, fmt.Errorf("expected exactly 1 socket from systemd, got %d", listenFDs)
+	}
+
+	_ = os.Unsetenv("LISTEN_PID")
+	_ = os.Unsetenv("LISTEN_FDS")
+	_ = os.Unsetenv("LISTEN_FDNAMES")
+
+	file := os.NewFile(uintptr(systemdListenFDStart), "systemd-activator-socket")
+	if file == nil {
+		return nil, fmt.Errorf("failed to access systemd socket FD")
+	}
+	defer file.Close()
+
+	listener, err := net.FileListener(file)
+	if err != nil {
+		return nil, fmt.Errorf("creating listener from systemd socket: %w", err)
+	}
+
+	if _, ok := listener.(*net.UnixListener); !ok {
+		listener.Close()
+		return nil, fmt.Errorf("systemd socket is not a unix listener")
+	}
+
+	return listener, nil
 }
 
 // RunServer is the entry point for server mode.

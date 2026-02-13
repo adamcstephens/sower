@@ -139,7 +139,7 @@ testers.runNixOSTest {
       start_all()
       server.wait_for_unit("postgresql.service")
       server.wait_for_unit("sower.service")
-      server.wait_for_unit("sower-activator.service")
+      server.wait_for_unit("sower-activator.socket")
       server.wait_for_unit("sower-agent.service")
       server.wait_for_open_port(4000)
 

@@ -97,12 +97,12 @@ in
         "network-online.target"
       ]
       ++ lib.optionals config.services.sower.server.enable [ "sower.service" ]
-      ++ lib.optionals activatorCfg.enable [ "sower-activator.service" ];
+      ++ lib.optionals activatorCfg.enable [ "sower-activator.socket" ];
       requires = [
         "network-online.target"
       ];
       wants =
-        lib.optionals activatorCfg.enable [ "sower-activator.service" ]
+        lib.optionals activatorCfg.enable [ "sower-activator.socket" ]
         ++ lib.optionals config.services.sower.server.enable [ "sower.service" ];
 
       path = [

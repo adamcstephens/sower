@@ -42,13 +42,30 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    systemd.services.sower-activator = {
-      description = "Sower Activator Service";
-      wantedBy = [ "multi-user.target" ];
-      after = [ "network.target" ];
+    systemd.sockets.sower-activator = {
+      description = "Sower Activator Socket";
+      wantedBy = [ "sockets.target" ];
 
       # Start before agent so socket is ready
       before = [ "sower-agent.service" ];
+
+      socketConfig = {
+        ListenStream = cfg.socketPath;
+        SocketMode = "0660";
+        SocketUser = "root";
+        SocketGroup = cfg.socketGroup;
+        DirectoryMode = "0755";
+        RemoveOnStop = true;
+      };
+    };
+
+    systemd.services.sower-activator = {
+      description = "Sower Activator Service";
+      requires = [ "sower-activator.socket" ];
+      after = [
+        "network.target"
+        "sower-activator.socket"
+      ];
 
       path = [
         config.nix.package
@@ -62,14 +79,6 @@ in
         Type = "simple";
         Restart = "on-failure";
         RestartSec = "5s";
-
-        # Run as root (needed for NixOS activation) but with socketGroup
-        # so the socket is created with root:socketGroup ownership
-        Group = cfg.socketGroup;
-
-        # RuntimeDirectory creates /run/sower-activator with proper ownership
-        RuntimeDirectory = "sower-activator";
-        RuntimeDirectoryMode = "0750";
 
         # Build allowed GIDs list at runtime (group GIDs may not be known at eval time)
         ExecStart =
