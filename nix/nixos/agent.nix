@@ -177,8 +177,11 @@ in
         ExecStop = pkgs.writeShellScript "sower-agent-stop" ''
           RELEASE_COOKIE=$(cat release-cookie)
           export RELEASE_COOKIE
+          PID=$(${lib.getExe cfg.package} pid)
 
           exec ${lib.getExe cfg.package} stop
+
+          while [ -d "/proc/$PID" ]; do sleep 1; done
         '';
         # Request reload via RPC - the agent will restart itself at end of deployment
         ExecReload = pkgs.writeShellScript "sower-agent-reload" ''
