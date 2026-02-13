@@ -90,6 +90,9 @@ start-all:
 start-agent:
     iex --sname agent1 --dot-iex ./.iex-agent.exs -S mix run --no-start
 
+start-server:
+    iex --sname server1 --dot-iex ./.iex-server.exs -S mix phx.server --no-start
+
 start-pry:
     iex --dbg pry -S mix phx.server
 
