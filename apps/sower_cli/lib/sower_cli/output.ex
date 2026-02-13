@@ -220,7 +220,7 @@ defmodule SowerCli.Output do
       error("#{path}")
 
       build.log
-      |> Enum.take(-10)
+      |> Enum.take(-40)
       |> Enum.each(&info/1)
     end)
   end
