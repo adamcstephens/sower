@@ -2,6 +2,7 @@ defmodule SowerClient.ConfigTest do
   use ExUnit.Case, async: true
 
   alias SowerClient.Config
+  alias SowerClient.Orchestration.DeploymentProfile
 
   describe "xdg_config_path/2" do
     test "respects XDG_CONFIG_HOME when set" do
@@ -133,6 +134,26 @@ defmodule SowerClient.ConfigTest do
 
       assert %Config{} = config
       assert config.endpoint == "https://default.com"
+    end
+
+    test "casts deploy_profiles additionalProperties into deployment profiles", %{
+      config_file: config_file
+    } do
+      config_data = %{
+        "endpoint" => "https://my.sower.dev",
+        "deploy_profiles" => %{
+          "default" => %{"reboot_policy" => "when-required"}
+        }
+      }
+
+      File.write!(config_file, Jason.encode!(config_data))
+
+      config = Config.load(config_path: config_file)
+
+      assert %Config{} = config
+      assert %DeploymentProfile{} = config.deploy_profiles["default"]
+      assert config.deploy_profiles["default"].reboot_policy == "when-required"
+      assert config.deploy_profiles["default"].activation_args == []
     end
   end
 

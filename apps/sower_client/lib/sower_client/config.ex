@@ -55,11 +55,9 @@ defmodule SowerClient.Config do
       },
       deploy_profiles: %Schema{
         type: :object,
-        additionalProperties: %OpenApiSpex.Schema{
-          type: SowerClient.Orchestration.DeploymentProfile
-        },
+        additionalProperties: SowerClient.Orchestration.DeploymentProfile,
         nullable: true,
-        description: "Depolyment policies (agent-only)"
+        description: "Deployment policies (agent-only)"
       },
       subscriptions: %Schema{
         type: :array,
