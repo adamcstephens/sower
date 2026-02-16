@@ -195,7 +195,8 @@ defmodule SowerAgent.Deployer do
   defp default_deployment_profile() do
     Config.get()
     |> Kernel.||(%{})
-    |> Map.get(:default_deployment_profile, "default")
+    |> Map.get(:default_deployment_profile)
+    |> Kernel.||("default")
   end
 
   def find_deployment_profile(name) do
