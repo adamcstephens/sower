@@ -286,7 +286,8 @@ defmodule SowerAgent.Deployer do
 
       Enum.any?(profiles, fn profile ->
         profile.reboot_policy == "when-required" and
-            SowerAgent.Seed.activation_mode(profile) == "boot"
+          SowerAgent.Seed.activation_mode(profile) == "boot" and
+            not is_nil(detect_boot_critical_change_reason(read_link))
       end) ->
         "boot_mode"
 
