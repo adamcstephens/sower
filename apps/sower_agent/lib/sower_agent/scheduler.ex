@@ -54,24 +54,7 @@ defmodule SowerAgent.Scheduler do
         |> Quantum.Job.set_schedule(cron)
         |> Quantum.Job.set_overlap(false)
         |> Quantum.Job.set_task(fn ->
-          subscriptions = SowerAgent.Storage.read().subscriptions || []
-
-          case Enum.find(subscriptions, &(&1.sid == sid)) do
-            nil ->
-              Logger.warning(
-                msg: "Subscription not found for scheduled deployment",
-                subscription_sid: sid
-              )
-
-            subscription ->
-              Logger.info(
-                msg: "Running scheduled deployment",
-                subscription_sid: sid,
-                schedule: schedule
-              )
-
-              SowerAgent.Client.deploy(subscription)
-          end
+          deploy_if_not_cooled_down(sid, schedule)
         end)
         |> add_job()
 
@@ -109,6 +92,48 @@ defmodule SowerAgent.Scheduler do
 
   defp job_name_sub(sid) do
     :"#{@sub_prefix}#{sid}"
+  end
+
+  def deploy_if_not_cooled_down(sid, schedule, opts \\ []) do
+    deploy_fun = Keyword.get(opts, :deploy_fun, &SowerAgent.Client.deploy/1)
+    check_cooldown = Keyword.get(opts, :check_cooldown, &SowerAgent.Storage.check_cooldown/1)
+
+    read_subscriptions =
+      Keyword.get(opts, :read_subscriptions, fn ->
+        SowerAgent.Storage.read().subscriptions || []
+      end)
+
+    case check_cooldown.({:schedule, sid}) do
+      {:cooldown, seconds_ago} ->
+        Logger.info(
+          msg: "Skipping scheduled deployment, fired recently",
+          subscription_sid: sid,
+          schedule: schedule,
+          seconds_since_last: seconds_ago
+        )
+
+        :skipped
+
+      :ok ->
+        subscriptions = read_subscriptions.()
+
+        case Enum.find(subscriptions, &(&1.sid == sid)) do
+          nil ->
+            Logger.warning(
+              msg: "Subscription not found for scheduled deployment",
+              subscription_sid: sid
+            )
+
+          subscription ->
+            Logger.info(
+              msg: "Running scheduled deployment",
+              subscription_sid: sid,
+              schedule: schedule
+            )
+
+            deploy_fun.(subscription)
+        end
+    end
   end
 
   def get_timezone() do

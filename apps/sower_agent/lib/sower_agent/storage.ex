@@ -13,6 +13,8 @@ defmodule SowerAgent.Storage do
     field :subscriptions, list(SowerClient.Orchestration.Subscription)
   end
 
+  @cooldown_seconds 60
+
   # client
 
   def get(field) do
@@ -29,6 +31,10 @@ defmodule SowerAgent.Storage do
 
   def read() do
     GenServer.call(__MODULE__, :read)
+  end
+
+  def check_cooldown(key) do
+    GenServer.call(__MODULE__, {:check_cooldown, key})
   end
 
   # server
@@ -59,7 +65,7 @@ defmodule SowerAgent.Storage do
 
     data = :erlang.binary_to_term(bin)
 
-    {:ok, %{file: file, data: data}}
+    {:ok, %{file: file, data: data, cooldowns: %{}}}
   end
 
   @impl GenServer
@@ -76,6 +82,19 @@ defmodule SowerAgent.Storage do
   def handle_call({:put, field, value}, _from, state) do
     new_data = Map.put(state.data, field, value)
     {:reply, :ok, do_write(new_data, state)}
+  end
+
+  @impl GenServer
+  def handle_call({:check_cooldown, key}, _from, state) do
+    now = System.monotonic_time(:second)
+
+    case Map.get(state.cooldowns, key) do
+      last when is_integer(last) and now - last < @cooldown_seconds ->
+        {:reply, {:cooldown, now - last}, state}
+
+      _ ->
+        {:reply, :ok, put_in(state.cooldowns[key], now)}
+    end
   end
 
   defp do_write(data, %{file: file} = state) do
