@@ -325,7 +325,7 @@ defmodule SowerAgent.Deployer do
     Regex.replace(~r/\x1b\[[0-9;]*[a-zA-Z]/, text, "")
   end
 
-  def detect_boot_critical_change_reason(read_link \\ &:file.read_link_all/1) do
+  def detect_boot_critical_change_reason(read_link \\ &:file.read_link/1) do
     with {:ok, profile_store_path} <- resolved_symlink("/nix/var/nix/profiles/system", read_link),
          {:ok, current_store_path} <- resolved_symlink("/run/current-system", read_link),
          {:ok, booted_store_path} <- resolved_symlink("/run/booted-system", read_link) do
@@ -357,18 +357,50 @@ defmodule SowerAgent.Deployer do
   end
 
   defp resolved_symlink(path, read_link) do
-    case read_link.(path) do
-      {:ok, resolved} when is_binary(resolved) ->
-        {:ok, resolved}
+    resolve_symlink(path, read_link, MapSet.new())
+  end
 
-      {:ok, resolved} when is_list(resolved) ->
-        {:ok, List.to_string(resolved)}
+  defp resolve_symlink(path, read_link, visited) do
+    cond do
+      String.starts_with?(path, "/nix/store/") ->
+        {:ok, path}
 
-      {:error, reason} ->
-        {:error, {path, reason}}
+      MapSet.member?(visited, path) ->
+        {:error, {path, :symlink_loop}}
 
-      other ->
-        {:error, {path, other}}
+      MapSet.size(visited) >= 20 ->
+        {:error, {path, :symlink_depth_exceeded}}
+
+      true ->
+        case read_link.(path) do
+          {:ok, resolved} when is_binary(resolved) ->
+            resolved
+            |> resolve_link_target(path)
+            |> resolve_symlink(read_link, MapSet.put(visited, path))
+
+          {:ok, resolved} when is_list(resolved) ->
+            resolved
+            |> List.to_string()
+            |> resolve_link_target(path)
+            |> resolve_symlink(read_link, MapSet.put(visited, path))
+
+          {:error, :einval} ->
+            {:ok, path}
+
+          {:error, reason} ->
+            {:error, {path, reason}}
+
+          other ->
+            {:error, {path, other}}
+        end
+    end
+  end
+
+  defp resolve_link_target(resolved, path) do
+    if Path.type(resolved) == :absolute do
+      Path.expand(resolved)
+    else
+      Path.expand(resolved, Path.dirname(path))
     end
   end
 end

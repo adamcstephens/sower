@@ -143,7 +143,30 @@ defmodule SowerAgent.DeployerTest do
         %DeploymentProfile{activation_args: ["boot"], reboot_policy: "when-required"}
       end
 
-      assert Deployer.reboot_reason(seed_deployments, get_profile) == "boot_mode"
+      read_link = fn
+        "/nix/var/nix/profiles/system" -> {:ok, "/nix/store/sys-b"}
+        "/run/current-system" -> {:ok, "/nix/store/sys-a"}
+        "/run/booted-system" -> {:ok, "/nix/store/sys-a"}
+      end
+
+      assert Deployer.reboot_reason(seed_deployments, get_profile, read_link) == "boot_mode"
+    end
+
+    test "returns nil when boot profile already matches running and booted system" do
+      seed_deployments = [seed_deploy("sub_boot")]
+
+      get_profile = fn "sub_boot" ->
+        %DeploymentProfile{activation_args: ["boot"], reboot_policy: "when-required"}
+      end
+
+      read_link = fn
+        "/nix/var/nix/profiles/system" -> {:ok, "/nix/var/nix/profiles/system-123-link"}
+        "/nix/var/nix/profiles/system-123-link" -> {:ok, "/nix/store/sys-a"}
+        "/run/current-system" -> {:ok, "/nix/store/sys-a"}
+        "/run/booted-system" -> {:ok, "/nix/store/sys-a"}
+      end
+
+      assert Deployer.reboot_reason(seed_deployments, get_profile, read_link) == nil
     end
 
     test "returns initrd_changed when when-required switch profile has boot-critical changes" do
