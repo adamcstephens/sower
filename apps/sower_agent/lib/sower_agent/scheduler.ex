@@ -52,6 +52,7 @@ defmodule SowerAgent.Scheduler do
         end
         |> Quantum.Job.set_timezone(get_timezone())
         |> Quantum.Job.set_schedule(cron)
+        |> Quantum.Job.set_overlap(false)
         |> Quantum.Job.set_task(fn ->
           subscriptions = SowerAgent.Storage.read().subscriptions || []
 

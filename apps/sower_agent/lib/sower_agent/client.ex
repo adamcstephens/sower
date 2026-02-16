@@ -168,6 +168,15 @@ defmodule SowerAgent.Client do
       )
       when topic == agent_sid do
     case SowerClient.Orchestration.Deployment.cast(payload) do
+      {:ok, %{skipped: true} = deployment} ->
+        Logger.info(
+          msg: "Deployment skipped by server",
+          request_id: deployment.request_id,
+          deployment_sid: deployment.sid
+        )
+
+        {:ok, socket}
+
       {:ok, deployment} ->
         Logger.debug(
           msg: "Received deployment",

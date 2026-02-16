@@ -1,0 +1,1 @@
+- When in doubt, deployment should move forward with a sane default. This strives to avoid a node that cannot upgrade itself. e.g. the default activation mode for nixos is `switch`, rather than a failure, so that a misconfiguration cannot break management.

@@ -993,8 +993,8 @@ defmodule Sower.Orchestration do
         where:
           d.agent_id == ^agent_id and
             d.content_hash == ^content_hash and
-            d.result == :success,
-        order_by: [desc: d.deployed_at],
+            (d.result == :success or is_nil(d.result)),
+        order_by: [desc: d.inserted_at],
         limit: 1
       )
 
