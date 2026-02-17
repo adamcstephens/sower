@@ -186,14 +186,16 @@ defmodule SowerClient.Config do
   end
 
   def xdg_config_path(app_name, filename) do
+    system_config = Path.join(["/etc", app_name, filename])
+
     case System.get_env("USER") do
       user when user != "root" ->
         f = xdg_path_file(:config, app_name, filename)
 
-        if File.exists?(f), do: f, else: Path.join(["/etc", app_name, filename])
+        if File.exists?(f), do: f, else: system_config
 
       _ ->
-        Path.join(["/etc", app_name, filename])
+        system_config
     end
   end
 
@@ -261,12 +263,20 @@ defmodule SowerClient.Config do
 
       if not is_nil(value) and String.ends_with?(key, "_file") do
         real_key = String.trim_trailing(key, "_file")
-        value = value |> Path.absname() |> File.read!() |> String.trim()
-        {real_key, value}
+
+        if Map.has_key?(config_map, real_key) or
+             Map.has_key?(config_map, String.to_existing_atom(real_key)) do
+          # Base key exists, skip file read and drop the _file key
+          nil
+        else
+          value = value |> Path.absname() |> File.read!() |> String.trim()
+          {real_key, value}
+        end
       else
         {key, value}
       end
     end)
+    |> Enum.reject(&is_nil/1)
     |> Map.new()
   end
 

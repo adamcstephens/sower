@@ -5,11 +5,63 @@ defmodule SowerClient.ConfigTest do
   alias SowerClient.Orchestration.DeploymentProfile
 
   describe "xdg_config_path/2" do
-    test "respects XDG_CONFIG_HOME when set" do
-      with_env(%{"XDG_CONFIG_HOME" => "/custom/config"}, fn ->
+    test "respects XDG_CONFIG_HOME when set and file exists" do
+      tmp_dir = System.tmp_dir!()
+      config_home = Path.join(tmp_dir, "xdg_config_#{:rand.uniform(1000)}")
+      config_file = Path.join([config_home, "sower", "client.json"])
+
+      # Create the config file so the fallback to /etc doesn't trigger
+      File.mkdir_p!(Path.dirname(config_file))
+      File.write!(config_file, "{}")
+
+      with_env(%{"XDG_CONFIG_HOME" => config_home}, fn ->
         result = Config.xdg_config_path("sower", "client.json")
-        assert result =~ "/custom/config/sower/client.json"
+        assert result == config_file
       end)
+
+      File.rm_rf!(config_home)
+    end
+
+    test "falls back to system config when user config file does not exist" do
+      tmp_dir = System.tmp_dir!()
+      config_home = Path.join(tmp_dir, "empty_config_#{:rand.uniform(1000)}")
+      File.mkdir_p!(config_home)
+
+      with_env(
+        %{
+          "XDG_CONFIG_HOME" => config_home,
+          "USER" => "testuser"
+        },
+        fn ->
+          result = Config.xdg_config_path("sower", "client.json")
+          assert result == "/etc/sower/client.json"
+        end
+      )
+
+      File.rm_rf!(config_home)
+    end
+
+    test "returns system config path for root user regardless of file existence" do
+      tmp_dir = System.tmp_dir!()
+      config_home = Path.join(tmp_dir, "root_config_#{:rand.uniform(1000)}")
+      config_file = Path.join([config_home, "sower", "client.json"])
+
+      # Create a config file (root ignores it anyway)
+      File.mkdir_p!(Path.dirname(config_file))
+      File.write!(config_file, "{}")
+
+      with_env(
+        %{
+          "XDG_CONFIG_HOME" => config_home,
+          "USER" => "root"
+        },
+        fn ->
+          result = Config.xdg_config_path("sower", "client.json")
+          assert result == "/etc/sower/client.json"
+        end
+      )
+
+      File.rm_rf!(config_home)
     end
   end
 
@@ -58,6 +110,18 @@ defmodule SowerClient.ConfigTest do
       result = Config.parse_file_values(config)
 
       assert result == config
+    end
+
+    test "prefers direct values over _file values without reading files" do
+      config = %{
+        "access_token" => "token-from-env",
+        "access_token_file" => "/nonexistent/access_token"
+      }
+
+      result = Config.parse_file_values(config)
+
+      assert result["access_token"] == "token-from-env"
+      refute Map.has_key?(result, "access_token_file")
     end
   end
 
@@ -154,6 +218,22 @@ defmodule SowerClient.ConfigTest do
       assert %DeploymentProfile{} = config.deployment_profiles["default"]
       assert config.deployment_profiles["default"].reboot_policy == "when-required"
       assert config.deployment_profiles["default"].activation_args == []
+    end
+
+    test "prefers access_token override over access_token_file from config", %{
+      config_file: config_file
+    } do
+      config_data = %{
+        "access_token_file" => "/nonexistent/access_token"
+      }
+
+      File.write!(config_file, Jason.encode!(config_data))
+
+      config =
+        Config.load(config_path: config_file, overrides: %{"access_token" => "token-from-env"})
+
+      assert %Config{} = config
+      assert config.access_token == "token-from-env"
     end
   end
 
