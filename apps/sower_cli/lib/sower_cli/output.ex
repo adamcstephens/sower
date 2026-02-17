@@ -47,7 +47,13 @@ defmodule SowerCli.Output do
   @doc """
   Print an error message.
   """
-  def error(message) do
+  def error(errors) when is_list(errors) do
+    errors
+    |> Enum.join("\n")
+    |> error()
+  end
+
+  def error(message) when is_binary(message) do
     IO.puts("#{IO.ANSI.red()}✗#{IO.ANSI.reset()} #{message}")
   end
 

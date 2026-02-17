@@ -30,21 +30,19 @@ defmodule SowerCli.ConfigTest do
     end
   end
 
-  describe "require_server_connection!/1" do
-    test "raises when endpoint is missing" do
+  describe "require_server_connection/1" do
+    test "returns error when endpoint is missing" do
       config = %SowerClient.Config{access_token: "token123"}
 
-      assert_raise ArgumentError, ~r/endpoint is required/, fn ->
-        SowerCli.Config.require_server_connection!(config)
-      end
+      assert {:error, ["endpoint is required (set via config file or --endpoint option)"]} =
+               SowerCli.Config.require_server_connection(config)
     end
 
-    test "raises when access_token is missing" do
+    test "returns error when access_token is missing" do
       config = %SowerClient.Config{endpoint: "https://test.com"}
 
-      assert_raise ArgumentError, ~r/access_token is required/, fn ->
-        SowerCli.Config.require_server_connection!(config)
-      end
+      assert {:error, ["access_token is required (set via config file or access_token_file)"]} =
+               SowerCli.Config.require_server_connection(config)
     end
 
     test "returns :ok when both are present" do
@@ -53,7 +51,7 @@ defmodule SowerCli.ConfigTest do
         access_token: "token123"
       }
 
-      assert :ok = SowerCli.Config.require_server_connection!(config)
+      assert :ok = SowerCli.Config.require_server_connection(config)
     end
   end
 end

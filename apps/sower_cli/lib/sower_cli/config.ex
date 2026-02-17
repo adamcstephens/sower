@@ -26,14 +26,14 @@ defmodule SowerCli.Config do
   @doc """
   Validate that endpoint and access_token are present for server operations.
 
-  Raises an error if either field is missing.
+  Returns `:ok` when valid, or `{:error, messages}` when fields are missing.
   """
-  def require_server_connection!(%SowerClient.Config{} = config) do
+  def require_server_connection(%SowerClient.Config{} = config) do
     errors = []
 
     errors =
       if is_nil(config.endpoint) do
-        ["endpoint is required (set via config file or --endpoint flag)" | errors]
+        ["endpoint is required (set via config file or --endpoint option)" | errors]
       else
         errors
       end
@@ -50,7 +50,7 @@ defmodule SowerCli.Config do
         :ok
 
       _ ->
-        raise ArgumentError, Enum.join(errors, ", ")
+        {:error, Enum.reverse(errors)}
     end
   end
 end

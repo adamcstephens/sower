@@ -8,24 +8,57 @@ defmodule SowerCli do
   @version Path.expand("../../../VERSION", __DIR__) |> File.read!() |> String.trim()
 
   def main(argv) do
+    # start off at warning
+    set_log_level(:warning)
+
     # Load config at startup
     SowerCli.Config.load(config_path_env: "SOWER_CLI_CONFIG")
 
     Application.get_all_env(:sower_cli)
 
-    {subcommands, parsed} =
-      config()
-      |> Optimus.parse!(argv)
+    case Optimus.parse(config(), argv) do
+      {:ok, subcommands, parsed} ->
+        # Set log level after all apps have started
+        set_log_level(if parsed.flags.debug, do: :debug, else: :error)
 
-    # Set log level after all apps have started
-    set_log_level(if parsed.flags.debug, do: :debug, else: :error)
+        apply_global_overrides(parsed)
 
-    result = run({subcommands, parsed})
+        result = run({subcommands, parsed})
 
-    case result do
-      {:error, _reason} -> System.halt(1)
-      _ -> System.halt(0)
+        case result do
+          {:error, _reason} -> System.halt(1)
+          _ -> System.halt(0)
+        end
+
+      {:ok, %Optimus.ParseResult{}} ->
+        print_usage([])
+
+      :version ->
+        IO.puts("sower version #{version()}")
+        System.stop(0)
+
+      :help ->
+        print_usage([])
+
+      {:help, subcommands} ->
+        print_usage(subcommands)
+
+      {:error, errors} ->
+        SowerCli.Output.error(errors)
+        System.stop(1)
+
+      {:error, subcommands, errors} ->
+        SowerCli.Output.error(errors)
+        print_usage(subcommands)
+
+        System.stop(1)
     end
+  end
+
+  defp print_usage(subcommands) do
+    config()
+    |> Optimus.Help.help(subcommands, columns())
+    |> Enum.map(&IO.puts/1)
   end
 
   defp run({[:build], %{args: args, flags: flags, options: options}}) do
@@ -48,10 +81,8 @@ defmodule SowerCli do
     SowerCli.Seed.Upgrade.run(flags, options)
   end
 
-  defp run({subcommand_path, _}) when is_list(subcommand_path) do
-    config()
-    |> Optimus.Help.help(subcommand_path, columns())
-    |> Enum.map(&IO.puts/1)
+  defp run({subcommands, _}) when is_list(subcommands) do
+    print_usage(subcommands)
   end
 
   defp run(_) do
@@ -59,6 +90,20 @@ defmodule SowerCli do
     |> Optimus.help()
     |> IO.puts()
   end
+
+  defp apply_global_overrides(%{options: options}) do
+    overrides =
+      %{}
+      |> maybe_put_override("endpoint", Map.get(options, :endpoint))
+      |> maybe_put_override("access_token_file", Map.get(options, :access_token_file))
+
+    SowerCli.Config.load(config_path_env: "SOWER_CLI_CONFIG", overrides: overrides)
+
+    :ok
+  end
+
+  defp maybe_put_override(overrides, _key, nil), do: overrides
+  defp maybe_put_override(overrides, key, value), do: Map.put(overrides, key, value)
 
   defp set_log_level(level) do
     Logger.configure(level: level)
@@ -79,12 +124,26 @@ defmodule SowerCli do
   def config do
     Optimus.new!(
       name: "sower",
-      version: version(),
       flags: [
         debug: [
           short: "-d",
           long: "--debug",
           help: "Enable debug logging",
+          global: true
+        ]
+      ],
+      options: [
+        endpoint: [
+          short: "-e",
+          long: "--endpoint",
+          value_name: "URL",
+          help: "Server endpoint (SOWER_ENDPOINT=)",
+          global: true
+        ],
+        access_token_file: [
+          long: "--access-token-file",
+          value_name: "PATH",
+          help: "Server access token (SOWER_ACCESS_TOKEN_FILE=)",
           global: true
         ]
       ],

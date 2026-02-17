@@ -27,12 +27,13 @@ defmodule SowerCli.Auth do
   end
 
   defp validate_config(%SowerClient.Config{} = config) do
-    try do
-      Config.require_server_connection!(config)
-      :ok
-    rescue
-      e in ArgumentError ->
-        Output.error(e.message)
+    case Config.require_server_connection(config) do
+      :ok ->
+        :ok
+
+      {:error, errors} ->
+        Enum.map(errors, &Output.error/1)
+
         {:error, :missing_server_config}
     end
   end

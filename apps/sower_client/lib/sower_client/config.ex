@@ -188,7 +188,9 @@ defmodule SowerClient.Config do
   def xdg_config_path(app_name, filename) do
     case System.get_env("USER") do
       user when user != "root" ->
-        xdg_path_file(:config, app_name, filename)
+        f = xdg_path_file(:config, app_name, filename)
+
+        if File.exists?(f), do: f, else: Path.join(["/etc", app_name, filename])
 
       _ ->
         Path.join(["/etc", app_name, filename])
