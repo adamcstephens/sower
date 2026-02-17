@@ -23,7 +23,7 @@ defmodule SowerWeb.DeploymentLive.Index do
           <.result result={deployment.result} />
         </:col>
         <:col :let={{_id, deployment}} label="sid">{deployment.sid}</:col>
-        <:col :let={{_id, deployment}} label="agent">{deployment.agent.name}</:col>
+        <:col :let={{_id, deployment}} label="agent">{get_in(deployment.agent.name) || "-"}</:col>
         <:col :let={{_id, deployment}} label="completed">
           <.local_datetime datetime={deployment.deployed_at} user_timezone={@user_timezone} />
         </:col>
@@ -51,11 +51,15 @@ defmodule SowerWeb.DeploymentLive.Index do
 
   @impl Phoenix.LiveView
   def handle_info({:deployment, :created, deployment}, socket) do
+    deployment = Sower.Repo.preload(deployment, [:agent])
+
     # Insert new deployment at the top of the stream
     {:noreply, stream_insert(socket, :deployments, deployment, at: 0)}
   end
 
   def handle_info({:deployment, :updated, deployment}, socket) do
+    deployment = Sower.Repo.preload(deployment, [:agent])
+
     # Update existing deployment in the stream
     {:noreply, stream_insert(socket, :deployments, deployment)}
   end
