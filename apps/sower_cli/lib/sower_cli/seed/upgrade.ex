@@ -85,7 +85,7 @@ defmodule SowerCli.Seed.Upgrade do
       Output.info("  #{line}")
     end
 
-    opts = [on_output: on_output]
+    opts = [on_output: on_output, tags: seed.tags]
     opts = if mode, do: Keyword.put(opts, :mode, mode), else: opts
 
     case SowerClient.Activator.activate(type, path, opts) do

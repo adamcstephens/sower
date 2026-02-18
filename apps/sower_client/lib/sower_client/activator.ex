@@ -42,12 +42,15 @@ defmodule SowerClient.Activator do
   - `:socket_path` - Path to activator socket (default: #{@default_socket_path})
   - `:mode` - Activation mode (e.g., "switch", "boot", "test")
   - `:on_output` - Callback function for streaming output: `(String.t() -> any())`
+  - `:tags` - Seed tags for privilege checking (home-manager seeds with username tag)
 
   ## Returns
 
   - `{:ok, output_lines}` - Success with output lines as strings
   - `{:error, reason}` - Connection/socket error
   - `{:error, exit_code, output}` - Activation failed with exit code
+  - `{:error, :missing_username_tag}` - Home-manager seed missing username tag
+  - `{:error, :username_mismatch}` - Home-manager username doesn't match current user
   """
   def activate(type, path, opts \\ []) do
     socket_path = Keyword.get(opts, :socket_path, @default_socket_path)
@@ -140,41 +143,30 @@ defmodule SowerClient.Activator do
   @doc """
   Activate via CLI invocation of sower-activator binary.
 
-  Requires `sudo` and `sower-activator` in PATH. Invokes:
-  `sudo sower-activator -type TYPE -path PATH [-mode MODE]`
+  For home-manager seeds with a matching username tag, activates without sudo.
+  For nixos seeds or mismatched usernames, requires `sudo` and `sower-activator`.
 
   ## Options
 
   - `:mode` - Activation mode
+  - `:tags` - Seed tags for privilege checking (home-manager seeds with username tag)
 
   ## Returns
 
   - `{:ok, output_lines}` - Success
   - `{:error, :cmd_not_found}` - Required executables not found
+  - `{:error, :missing_username_tag}` - Home-manager seed missing username tag
+  - `{:error, :username_mismatch}` - Home-manager username doesn't match current user
   - `{:error, exit_code, output}` - Command failed
   """
   def activate_via_cli(type, path, opts \\ []) do
     args = build_cli_args(type, path, opts)
+    tags = Keyword.get(opts, :tags, [])
 
-    with activator when not is_nil(activator) <- System.find_executable("sower-activator"),
-         sudo when not is_nil(sudo) <- System.find_executable("sudo") do
-      case System.cmd(sudo, [activator | args],
-             into: [],
-             lines: 1024,
-             stderr_to_stdout: true
-           ) do
-        {output, 0} ->
-          Logger.debug(output: output)
-          {:ok, output}
-
-        {output, code} ->
-          Logger.error(msg: "Activation failed", output: output, return_code: code)
-          {:error, code, output}
-      end
-    else
-      nil ->
-        Logger.error("Required executables not found: sudo and/or sower-activator")
-        {:error, :cmd_not_found}
+    with :ok <- validate_privileges(type, tags),
+         {:ok, cmd, cmd_args} <- build_cli_command(args, type, tags),
+         {:ok, output} <- run_cli_command(cmd, cmd_args) do
+      {:ok, output}
     end
   end
 
@@ -366,6 +358,72 @@ defmodule SowerClient.Activator do
     case Keyword.get(opts, :mode) do
       nil -> args
       mode -> args ++ ["-mode", mode]
+    end
+  end
+
+  defp validate_privileges("home-manager", tags) do
+    current_user = System.get_env("USER")
+
+    case Enum.find(tags, &(&1.key == "username")) do
+      nil ->
+        {:error, :missing_username_tag}
+
+      %{value: ^current_user} ->
+        :ok
+
+      _other ->
+        {:error, :username_mismatch}
+    end
+  end
+
+  defp validate_privileges(_type, _tags), do: :ok
+
+  defp build_cli_command(args, "home-manager", tags) do
+    current_user = System.get_env("USER")
+
+    case Enum.find(tags, &(&1.key == "username")) do
+      %{value: ^current_user} ->
+        # No sudo needed when username matches
+        with activator when not is_nil(activator) <- System.find_executable("sower-activator") do
+          {:ok, activator, args}
+        else
+          nil ->
+            Logger.error("Required executable not found: sower-activator")
+            {:error, :cmd_not_found}
+        end
+
+      _ ->
+        # This shouldn't happen if validate_privileges was called first
+        {:error, :username_mismatch}
+    end
+  end
+
+  defp build_cli_command(args, _type, _tags) do
+    with activator when not is_nil(activator) <- System.find_executable("sower-activator"),
+         sudo when not is_nil(sudo) <- System.find_executable("sudo") do
+      {:ok, sudo, [activator | args]}
+    else
+      nil ->
+        Logger.error("Required executables not found: sudo and/or sower-activator")
+        {:error, :cmd_not_found}
+    end
+  end
+
+  defp run_cli_command({:error, reason}, _args), do: {:error, reason}
+
+  defp run_cli_command(cmd, args) do
+    case System.cmd(cmd, args,
+           into: [],
+           lines: 1024,
+           stderr_to_stdout: true
+         ) do
+      {output, 0} ->
+        Logger.debug(output: output)
+        {:ok, output}
+
+      {output, code} ->
+        Logger.error(msg: "Activation failed", output: output, return_code: code)
+        {:error, code, output}
     end
   end
 end

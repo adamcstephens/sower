@@ -86,6 +86,8 @@
                   pkgs.postgresql
                   pkgs.sd-switch
                   pkgs.entr
+
+                  self'.packages.activator
                 ]
                 ++ lib.optionals pkgs.stdenv.isLinux [
                   # elixir

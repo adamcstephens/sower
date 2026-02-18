@@ -9,7 +9,7 @@ defmodule SowerAgent.Seed do
   def activate(seed, profile \\ %DeploymentProfile{})
 
   def activate(%Seed{seed_type: "home-manager"} = seed, _profile) do
-    run_activation("home-manager", seed.artifact)
+    run_activation("home-manager", seed.artifact, tags: seed.tags)
   end
 
   def activate(%Seed{seed_type: "nixos"} = seed, %DeploymentProfile{} = profile) do
@@ -27,7 +27,7 @@ defmodule SowerAgent.Seed do
     end
   end
 
-  defp run_activation(type, path, opts \\ []) do
+  defp run_activation(type, path, opts) do
     if Application.get_env(:sower_agent, :enable_activation, true) do
       socket_path = Application.get_env(:sower_agent, :activator_socket, @default_socket_path)
 
