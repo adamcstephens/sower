@@ -14,7 +14,7 @@
         };
 
         cli = pkgs.callPackage ./cli.nix {
-          inherit beamPackages version;
+          inherit activator beamPackages version;
         };
 
         go-cli = pkgs.callPackage ./go-cli.nix {

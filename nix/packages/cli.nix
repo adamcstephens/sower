@@ -1,4 +1,5 @@
 {
+  activator,
   beamPackages,
   callPackages,
   lib,
@@ -35,7 +36,7 @@ beamPackages.mixRelease {
 
   postInstall = ''
     mv $out/bin/cli $out/bin/sower
-    wrapProgram $out/bin/sower --add-flags "eval 'SowerCli.main(System.argv())'"
+    wrapProgram $out/bin/sower --add-flags "eval 'SowerCli.main(System.argv())'" --suffix PATH : ${lib.makeBinPath [ activator ]}
   '';
 
   doCheck = true;
