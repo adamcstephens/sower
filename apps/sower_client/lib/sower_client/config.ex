@@ -79,6 +79,10 @@ defmodule SowerClient.Config do
     skip_config_file = Keyword.get(opts, :skip_config_file, false)
     config_path = resolve_config_path(opts)
 
+    # ensure elixir configs aren't atom-keyed
+    config_overrides =
+      opts |> Keyword.get(:overrides, %{}) |> Map.new(fn {k, v} -> {to_string(k), v} end)
+
     defaults()
     |> Map.merge(Keyword.get(opts, :defaults, %{}))
     |> then(fn cfg ->
@@ -89,7 +93,7 @@ defmodule SowerClient.Config do
         |> Map.merge(read_config_file(config_path))
         |> then(fn merged ->
           if File.exists?(config_path) do
-            Map.put(merged, :config_path, config_path)
+            Map.put(merged, "config_path", config_path)
           else
             merged
           end
@@ -97,7 +101,7 @@ defmodule SowerClient.Config do
       end
     end)
     |> preprocess_subscription_rules()
-    |> Map.merge(Keyword.get(opts, :overrides, %{}))
+    |> Map.merge(config_overrides)
     |> override_with_env()
     |> parse_file_values()
     |> OpenApiSpex.cast_value(spec.components.schemas["Config"], spec)
