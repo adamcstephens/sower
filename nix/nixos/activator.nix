@@ -51,6 +51,7 @@ in
 
       socketConfig = {
         ListenStream = cfg.socketPath;
+        Accept = true;
         SocketMode = "0660";
         SocketUser = "root";
         SocketGroup = cfg.socketGroup;
@@ -59,26 +60,21 @@ in
       };
     };
 
-    systemd.services.sower-activator = {
+    systemd.services."sower-activator@" = {
       description = "Sower Activator Service";
-      requires = [ "sower-activator.socket" ];
-      after = [
-        "network.target"
-        "sower-activator.socket"
-      ];
 
       path = [
         config.nix.package
         pkgs.getent
       ];
 
-      # avoid restarting mid-switch
+      # avoid stopping mid-switch
       restartIfChanged = false;
 
       serviceConfig = {
         Type = "simple";
-        Restart = "on-failure";
-        RestartSec = "5s";
+        StandardInput = "socket";
+        StandardOutput = "socket";
 
         # Build allowed GIDs list at runtime (group GIDs may not be known at eval time)
         ExecStart =
@@ -98,8 +94,7 @@ in
             ALLOWED_GIDS="$SOCKET_GID${lib.optionalString (additionalGroupsArg != "") ",$EXTRA_GIDS"}"
 
             exec ${lib.getExe config.services.sower.activator.package} \
-              --server \
-              --socket ${cfg.socketPath} \
+              --socket-mode \
               --allowed-gids "$ALLOWED_GIDS" \
               ${debugFlag}
           '';

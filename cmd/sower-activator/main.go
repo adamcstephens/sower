@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log/slog"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -12,9 +13,7 @@ import (
 func main() {
 	// Define command-line flags
 	var (
-		// Server mode flags
-		serverMode  = flag.Bool("server", false, "Run as server daemon")
-		socketPath  = flag.String("socket", "/run/sower-activator/activator.sock", "Unix socket path")
+		socketMode  = flag.Bool("socket-mode", false, "Process one request from connected socket on stdin")
 		allowedUIDs = flag.String("allowed-uids", "", "Comma-separated list of allowed UIDs")
 		allowedGIDs = flag.String("allowed-gids", "", "Comma-separated list of allowed GIDs")
 
@@ -32,17 +31,17 @@ func main() {
 	// Setup logger
 	initLogger(*debug)
 
-	if *serverMode {
-		runServerMode(*socketPath, *allowedUIDs, *allowedGIDs)
+	if *socketMode || (*seedType == "" && stdinIsSocket()) {
+		runSocketMode(*allowedUIDs, *allowedGIDs)
 	} else {
 		runCLIMode(*seedType, *path, *mode)
 	}
 }
 
-func runServerMode(socketPath, allowedUIDsStr, allowedGIDsStr string) {
+func runSocketMode(allowedUIDsStr, allowedGIDsStr string) {
 	// Check if running as root
 	if os.Getuid() != 0 {
-		slog.Error("Server mode must be run as root")
+		slog.Error("Socket mode must be run as root")
 		os.Exit(1)
 	}
 
@@ -58,10 +57,24 @@ func runServerMode(socketPath, allowedUIDsStr, allowedGIDsStr string) {
 		os.Exit(1)
 	}
 
-	if err := RunServer(socketPath, uids, gids); err != nil {
-		slog.Error("Server error", "error", err)
+	conn, err := net.FileConn(os.Stdin)
+	if err != nil {
+		slog.Error("Failed to get socket connection from stdin", "error", err)
 		os.Exit(1)
 	}
+	defer conn.Close()
+
+	handler := NewConnectionHandler(conn, uids, gids)
+	handler.Handle()
+}
+
+func stdinIsSocket() bool {
+	info, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+
+	return info.Mode()&os.ModeSocket != 0
 }
 
 func runCLIMode(seedType, path, mode string) {
