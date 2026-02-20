@@ -197,7 +197,7 @@
   },
   "info": {
     "title": "sower",
-    "version": "0.5.0-dev"
+    "version": "0.6.0-dev"
   },
   "openapi": "3.0.0",
   "paths": {
@@ -378,7 +378,20 @@
       "post": {
         "callbacks": {},
         "operationId": "NewSeed",
-        "parameters": [],
+        "parameters": [
+          {
+            "description": "Rename the seed if matching artifact found",
+            "example": "true",
+            "in": "query",
+            "name": "rename",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "x-struct": null,
+              "x-validate": null
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {

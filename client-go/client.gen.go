@@ -95,6 +95,12 @@ type ListSeedsParams struct {
 	SeedType *string `form:"seed_type,omitempty" json:"seed_type,omitempty"`
 }
 
+// NewSeedParams defines parameters for NewSeed.
+type NewSeedParams struct {
+	// Rename Rename the seed if matching artifact found
+	Rename *bool `form:"rename,omitempty" json:"rename,omitempty"`
+}
+
 // LatestSeedParams defines parameters for LatestSeed.
 type LatestSeedParams struct {
 	// Tags Filter by tags (key=value format, can repeat)
@@ -193,9 +199,9 @@ type ClientInterface interface {
 	ListSeeds(ctx context.Context, params *ListSeedsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// NewSeedWithBody request with any body
-	NewSeedWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	NewSeedWithBody(ctx context.Context, params *NewSeedParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	NewSeed(ctx context.Context, body NewSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	NewSeed(ctx context.Context, params *NewSeedParams, body NewSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// LatestSeed request
 	LatestSeed(ctx context.Context, params *LatestSeedParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -240,8 +246,8 @@ func (c *Client) ListSeeds(ctx context.Context, params *ListSeedsParams, reqEdit
 	return c.Client.Do(req)
 }
 
-func (c *Client) NewSeedWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewNewSeedRequestWithBody(c.Server, contentType, body)
+func (c *Client) NewSeedWithBody(ctx context.Context, params *NewSeedParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewNewSeedRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -252,8 +258,8 @@ func (c *Client) NewSeedWithBody(ctx context.Context, contentType string, body i
 	return c.Client.Do(req)
 }
 
-func (c *Client) NewSeed(ctx context.Context, body NewSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewNewSeedRequest(c.Server, body)
+func (c *Client) NewSeed(ctx context.Context, params *NewSeedParams, body NewSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewNewSeedRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -408,18 +414,18 @@ func NewListSeedsRequest(server string, params *ListSeedsParams) (*http.Request,
 }
 
 // NewNewSeedRequest calls the generic NewSeed builder with application/json body
-func NewNewSeedRequest(server string, body NewSeedJSONRequestBody) (*http.Request, error) {
+func NewNewSeedRequest(server string, params *NewSeedParams, body NewSeedJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewNewSeedRequestWithBody(server, "application/json", bodyReader)
+	return NewNewSeedRequestWithBody(server, params, "application/json", bodyReader)
 }
 
 // NewNewSeedRequestWithBody generates requests for NewSeed with any type of body
-func NewNewSeedRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+func NewNewSeedRequestWithBody(server string, params *NewSeedParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -435,6 +441,28 @@ func NewNewSeedRequestWithBody(server string, contentType string, body io.Reader
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Rename != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "rename", runtime.ParamLocationQuery, *params.Rename); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("POST", queryURL.String(), body)
@@ -615,9 +643,9 @@ type ClientWithResponsesInterface interface {
 	ListSeedsWithResponse(ctx context.Context, params *ListSeedsParams, reqEditors ...RequestEditorFn) (*ListSeedsResponse, error)
 
 	// NewSeedWithBodyWithResponse request with any body
-	NewSeedWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*NewSeedResponse, error)
+	NewSeedWithBodyWithResponse(ctx context.Context, params *NewSeedParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*NewSeedResponse, error)
 
-	NewSeedWithResponse(ctx context.Context, body NewSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*NewSeedResponse, error)
+	NewSeedWithResponse(ctx context.Context, params *NewSeedParams, body NewSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*NewSeedResponse, error)
 
 	// LatestSeedWithResponse request
 	LatestSeedWithResponse(ctx context.Context, params *LatestSeedParams, reqEditors ...RequestEditorFn) (*LatestSeedResponse, error)
@@ -816,16 +844,16 @@ func (c *ClientWithResponses) ListSeedsWithResponse(ctx context.Context, params 
 }
 
 // NewSeedWithBodyWithResponse request with arbitrary body returning *NewSeedResponse
-func (c *ClientWithResponses) NewSeedWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*NewSeedResponse, error) {
-	rsp, err := c.NewSeedWithBody(ctx, contentType, body, reqEditors...)
+func (c *ClientWithResponses) NewSeedWithBodyWithResponse(ctx context.Context, params *NewSeedParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*NewSeedResponse, error) {
+	rsp, err := c.NewSeedWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseNewSeedResponse(rsp)
 }
 
-func (c *ClientWithResponses) NewSeedWithResponse(ctx context.Context, body NewSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*NewSeedResponse, error) {
-	rsp, err := c.NewSeed(ctx, body, reqEditors...)
+func (c *ClientWithResponses) NewSeedWithResponse(ctx context.Context, params *NewSeedParams, body NewSeedJSONRequestBody, reqEditors ...RequestEditorFn) (*NewSeedResponse, error) {
+	rsp, err := c.NewSeed(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
