@@ -51,7 +51,7 @@ func (s *SeedClient) CreateSeed(name, seedType, artifact string, tags []SeedTag)
 		seed.Tags = &tags
 	}
 
-	resp, err := s.client.NewSeedWithResponse(context.TODO(), seed)
+	resp, err := s.client.NewSeedWithResponse(context.TODO(), nil, seed)
 	if err != nil {
 		return nil, err
 	}
