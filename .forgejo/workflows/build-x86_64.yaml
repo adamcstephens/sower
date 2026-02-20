@@ -4,7 +4,6 @@ on:
 env:
   ATTIC_URL: ${{ vars.ATTIC_URL }}
   ATTIC_CACHE: ${{ vars.ATTIC_CACHE }}
-  ATTIC_KEY: ${{ secrets.ATTIC_KEY }}
   SOWER_ENDPOINT: ${{ vars.SOWER_ENDPOINT }}
 
 jobs:
@@ -20,3 +19,45 @@ jobs:
 
           nix develop .#ci --command attic login junco $ATTIC_URL --set-default $ATTIC_KEY
           nix develop .#ci --command sower build --cache attic://junco:$ATTIC_CACHE --eval-jobs 12 .#sowerJobs.x86_64-linux --push
+        env:
+          ATTIC_KEY: ${{ secrets.ATTIC_KEY }}
+
+  elixir-format:
+    runs-on: local/x86_64-linux
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: |
+          export HOME=$PWD
+          nix develop .# --command just check-elixir-format
+
+  # elixir-test:
+  #   runs-on: local/x86_64-linux
+  #
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #
+  #     - run: |
+  #         export HOME=$PWD
+  #         nix develop .# --command just check-elixir-test
+
+  go:
+    runs-on: local/x86_64-linux
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: |
+          export HOME=$PWD
+          nix develop .# --command just check-go
+
+  e2e:
+    runs-on: local/x86_64-linux
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: |
+          export HOME=$PWD
+          nix develop .# --command just check-nix
