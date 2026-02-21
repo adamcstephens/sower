@@ -64,7 +64,7 @@ func runSocketMode(allowedUIDsStr, allowedGIDsStr string) {
 	}
 	defer conn.Close()
 
-	handler := NewConnectionHandler(conn, uids, gids)
+	handler := NewConnectionHandlerWithWriter(conn, os.Stdout, uids, gids)
 	handler.Handle()
 }
 

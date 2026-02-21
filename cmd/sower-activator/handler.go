@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"path/filepath"
@@ -21,11 +22,16 @@ type ConnectionHandler struct {
 
 // NewConnectionHandler creates a new handler for a connection.
 func NewConnectionHandler(conn net.Conn, allowedUIDs, allowedGIDs []uint32) *ConnectionHandler {
+	return NewConnectionHandlerWithWriter(conn, conn, allowedUIDs, allowedGIDs)
+}
+
+// NewConnectionHandlerWithWriter creates a new handler with explicit response writer.
+func NewConnectionHandlerWithWriter(conn net.Conn, writer io.Writer, allowedUIDs, allowedGIDs []uint32) *ConnectionHandler {
 	return &ConnectionHandler{
 		conn:        conn,
 		allowedUIDs: allowedUIDs,
 		allowedGIDs: allowedGIDs,
-		encoder:     json.NewEncoder(conn),
+		encoder:     json.NewEncoder(writer),
 	}
 }
 

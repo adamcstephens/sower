@@ -75,6 +75,7 @@ in
         Type = "simple";
         StandardInput = "socket";
         StandardOutput = "socket";
+        StandardError = "journal";
 
         # Build allowed GIDs list at runtime (group GIDs may not be known at eval time)
         ExecStart =
