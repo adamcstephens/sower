@@ -84,7 +84,7 @@ in
             additionalGroupsArg = lib.concatStringsSep " " additionalGroups;
             debugFlag = lib.optionalString cfg.debug "--debug";
           in
-          pkgs.writeShellScript "sower-activator-start" ''
+          pkgs.writeShellScriptBin "sower-activator-start" ''
             # Look up socket group GID at runtime
             SOCKET_GID=$(getent group ${cfg.socketGroup} | cut -f 3 -d :)
 
@@ -98,7 +98,8 @@ in
               --socket-mode \
               --allowed-gids "$ALLOWED_GIDS" \
               ${debugFlag}
-          '';
+          ''
+          |> lib.getExe;
 
         # TODO security hardening is limited, but we could probably turn on some things
         # NoNewPrivileges = false;

@@ -31,6 +31,12 @@
           };
         }
         self.nixosModules.sower
+        {
+          services.sower.activator = {
+            enable = true;
+            package = self.packages.x86_64-linux.activator;
+          };
+        }
       ];
     };
 
