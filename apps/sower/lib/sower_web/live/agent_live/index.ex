@@ -15,7 +15,7 @@ defmodule SowerWeb.AgentLive.Index do
     end
 
     {:ok,
-     stream(socket, :agents, Orchestration.list_agents())
+     stream(socket, :agents, Orchestration.list_agents_with_latest_deployment())
      |> assign(:agent_presence, Presence.list("agent:presence"))}
   end
 
@@ -53,7 +53,7 @@ defmodule SowerWeb.AgentLive.Index do
     socket =
       socket
       |> assign(:agent_presence, Presence.list("agent:presence"))
-      |> stream(:agents, Orchestration.list_agents())
+      |> stream(:agents, Orchestration.list_agents_with_latest_deployment())
 
     {:noreply, socket}
   end

@@ -5,6 +5,7 @@ defmodule Sower.Orchestration do
 
   alias Sower.Repo
   alias Sower.Orchestration.Agent
+  alias Sower.Orchestration.Deployment
   alias Sower.Orchestration.DeploymentPubSub
 
   import Ecto.Query, warn: false
@@ -23,6 +24,32 @@ defmodule Sower.Orchestration do
   """
   def list_agents do
     Repo.all(Agent)
+  end
+
+  @doc """
+  Returns the list of agents with their latest deployment preloaded.
+
+  ## Examples
+
+      iex> list_agents_with_latest_deployment()
+      [%Agent{latest_deployment: %Deployment{} | nil}, ...]
+
+  """
+  def list_agents_with_latest_deployment do
+    latest_deployment_query =
+      from(d in Deployment,
+        where: d.agent_id == parent_as(:agent).id,
+        order_by: [desc: d.inserted_at],
+        limit: 1
+      )
+
+    from(a in Agent,
+      as: :agent,
+      left_lateral_join: d in subquery(latest_deployment_query),
+      on: true,
+      select: %{a | latest_deployment: d}
+    )
+    |> Repo.all()
   end
 
   def get_agent(
@@ -277,7 +304,6 @@ defmodule Sower.Orchestration do
   end
 
   alias Sower.Orchestration.Subscription
-  alias Sower.Orchestration.Deployment
 
   @doc """
   List deployments for a specific agent, ordered by most recent first.
@@ -599,7 +625,6 @@ defmodule Sower.Orchestration do
     |> Subscription.changeset(attrs)
   end
 
-  alias Sower.Orchestration.Deployment
   alias Sower.Seed
 
   def match_seed(%Subscription{} = subscription) do

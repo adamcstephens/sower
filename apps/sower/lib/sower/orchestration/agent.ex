@@ -15,6 +15,8 @@ defmodule Sower.Orchestration.Agent do
     has_many :deployments, Sower.Orchestration.Deployment
     has_many :agent_seed_generations, Sower.Orchestration.AgentSeedGeneration
 
+    field :latest_deployment, :any, virtual: true
+
     timestamps()
   end
 
