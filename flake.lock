@@ -34,16 +34,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1770823197,
-        "narHash": "sha256-7/lnERdNy109k5+DGz2+J+3rHhk7aQzE7f//KWTCdjc=",
+        "lastModified": 1771695008,
+        "narHash": "sha256-4DmGeTccKfhiiEmf/UFtmt9fJFUmp8FJWt6/hhWGLVc=",
         "owner": "elixir-lang",
         "repo": "expert",
-        "rev": "aa5ba2b92174d75b27dfcb96592b678ad7a62636",
+        "rev": "d3eb92cf16ef154ddd7cd08d1135fd9d44c8bff0",
         "type": "github"
       },
       "original": {
         "owner": "elixir-lang",
-        "ref": "main",
+        "ref": "nightly",
         "repo": "expert",
         "type": "github"
       }
