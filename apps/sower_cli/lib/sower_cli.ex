@@ -361,7 +361,8 @@ defmodule SowerCli do
                   long: "--mode",
                   value_name: "MODE",
                   help: "Activation mode (e.g., switch, boot, test)",
-                  required: false
+                  required: false,
+                  default: "switch"
                 ],
                 tag: [
                   short: "-T",
