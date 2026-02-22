@@ -315,7 +315,11 @@ defmodule SowerAgent.Deployer do
     filename = "#{date}-#{deployment.sid}-#{seed.sid}.log"
     path = Path.join(deployments_dir, filename)
 
-    cleaned_output = Enum.map(output_lines, &strip_ansi/1)
+    cleaned_output =
+      output_lines
+      |> Enum.reject(&is_nil/1)
+      |> Enum.map(&strip_ansi/1)
+
     content = Enum.join(cleaned_output, "\n")
     File.write!(path, content)
 
