@@ -5,8 +5,6 @@ defmodule Mix.Tasks.Cli.Run do
   use Mix.Task
 
   def run(args) do
-    {:ok, _} = Application.ensure_all_started(:erlexec)
-
     SowerCli.main(args)
   end
 end
