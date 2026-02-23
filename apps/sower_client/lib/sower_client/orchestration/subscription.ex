@@ -15,13 +15,15 @@ defmodule SowerClient.Orchestration.Subscription do
       seed_name: %Schema{
         type: :string,
         description: "Name of the seed",
-        example: "myhost"
+        example: "myhost",
+        nullable: false
       },
       seed_type: %Schema{
         type: :string,
         description: "Type of the seed",
         enum: SowerClient.Seed.seed_types(),
-        example: "nixos"
+        example: "nixos",
+        nullable: false
       },
       rules: %Schema{
         type: :array,
@@ -45,7 +47,7 @@ defmodule SowerClient.Orchestration.Subscription do
         default: false
       }
     },
-    required: [],
+    required: [:seed_name, :seed_type],
     example: %{
       seed_name: "myhost",
       seed_type: "nixos",
