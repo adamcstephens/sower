@@ -1,17 +1,17 @@
 module codeberg.org/adamcstephens/sower
 
-go 1.25.4
+go 1.25.5
 
 require (
 	github.com/adrg/xdg v0.5.3
 	github.com/alexflint/go-arg v1.6.1
-	github.com/golang-queue/queue v0.4.0
-	github.com/lmittmann/tint v1.1.2
+	github.com/golang-queue/queue v0.5.0
+	github.com/lmittmann/tint v1.1.3
 	github.com/mattn/go-isatty v0.0.20
 	github.com/nshafer/phx v0.2.5
 	github.com/oapi-codegen/oapi-codegen/v2 v2.5.1
 	github.com/oapi-codegen/runtime v1.1.2
-	golang.org/x/sys v0.39.0
+	golang.org/x/sys v0.41.0
 )
 
 require (
