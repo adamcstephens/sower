@@ -3,7 +3,7 @@
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixpkgs-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
 
-    expert.url = "github:elixir-lang/expert?ref=nightly";
+    expert.url = "github:elixir-lang/expert?ref=v0.1.0-rc.1";
     expert.inputs.nixpkgs.follows = "nixpkgs";
   };
 
