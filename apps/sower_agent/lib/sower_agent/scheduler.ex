@@ -29,27 +29,17 @@ defmodule SowerAgent.Scheduler do
       {:ok, cron} ->
         job_name = job_name_sub(sid)
 
-        case find_job(job_name) do
-          nil ->
-            Logger.info(
-              msg: "Creating new subscription scheduler",
-              sub_sid: sid,
-              schedule: schedule
-            )
+        job =
+          case find_job(job_name) do
+            nil ->
+              new_job()
+              |> Quantum.Job.set_name(job_name_sub(sid))
 
-            new_job()
-            |> Quantum.Job.set_name(job_name_sub(sid))
+            job ->
+              job
+          end
 
-          job ->
-            Logger.info(
-              msg: "Found existing subscription scheduler, refreshing",
-              sub_sid: sid,
-              schedule: schedule
-            )
-
-            delete_job(job.name)
-            job
-        end
+        job
         |> Quantum.Job.set_timezone(get_timezone())
         |> Quantum.Job.set_schedule(cron)
         |> Quantum.Job.set_overlap(false)
@@ -58,13 +48,35 @@ defmodule SowerAgent.Scheduler do
         end)
         |> add_job()
 
-        job_name
+        # re-fetch the job since add_job is async
+        job = find_job(job_name)
+
+        tz =
+          case job.timezone do
+            :utc -> "Etc/UTC"
+            tz when is_binary(tz) -> tz
+          end
+
+        next_run =
+          job.schedule
+          |> Crontab.Scheduler.get_next_run_date!(DateTime.now!(tz))
+          |> DateTime.to_iso8601()
+
+        Logger.info(
+          msg: "Setup subscription schedule",
+          sub_sid: sid,
+          schedule: schedule,
+          job: job.name,
+          schedule: job.schedule,
+          next_run: next_run
+        )
+
+        job.name
 
       {:error, error} ->
         Logger.error(
           msg: "Failed to parse schedule",
           error: error,
-          schedule: schedule,
           subscription_sid: sid
         )
 
