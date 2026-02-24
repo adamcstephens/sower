@@ -62,6 +62,9 @@ config :sower, :generators,
 config :elixir, time_zone_database: Zoneinfo.TimeZoneDatabase
 config :zoneinfo, tzpath: "/etc/zoneinfo"
 
+config :ex_aws, http_client: ExAws.Request.Req
+config :ex_aws_s3, :content_hash_algorithm, :sha256
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

@@ -13,8 +13,8 @@ defmodule SowerAgent.Admin do
   end
 
   def deploy(seed_type) when is_atom(seed_type) do
-     seed_type |> String.to_existing_atom() |> deploy()
-   end
+    seed_type |> String.to_existing_atom() |> deploy()
+  end
 
   def deploy(seed_type) when is_seed_type?(seed_type) do
     case subs(seed_type) do

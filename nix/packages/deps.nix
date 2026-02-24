@@ -441,6 +441,53 @@ let
         in
         drv;
 
+      ex_aws =
+        let
+          version = "2.6.1";
+          drv = buildMix {
+            inherit version;
+            name = "ex_aws";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "ex_aws";
+              sha256 = "67842a08c90a1d9a09dbe4ac05754175c7ca253abe4912987c759395d4bd9d26";
+            };
+
+            beamDeps = [
+              jason
+              mime
+              req
+              sweet_xml
+              telemetry
+            ];
+          };
+        in
+        drv;
+
+      ex_aws_s3 =
+        let
+          version = "2.5.9";
+          drv = buildMix {
+            inherit version;
+            name = "ex_aws_s3";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "ex_aws_s3";
+              sha256 = "a480d2bb2da64610014021629800e1e9457ca5e4a62f6775bffd963360c2bf90";
+            };
+
+            beamDeps = [
+              ex_aws
+              sweet_xml
+            ];
+          };
+        in
+        drv;
+
       expo =
         let
           version = "1.1.1";
@@ -1217,6 +1264,23 @@ let
               nimble_options
               telemetry
             ];
+          };
+        in
+        drv;
+
+      sweet_xml =
+        let
+          version = "0.7.5";
+          drv = buildMix {
+            inherit version;
+            name = "sweet_xml";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "sweet_xml";
+              sha256 = "193b28a9b12891cae351d81a0cead165ffe67df1b73fe5866d10629f4faefb12";
+            };
           };
         in
         drv;

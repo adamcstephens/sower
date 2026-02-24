@@ -78,14 +78,16 @@
                   pkgs.attic-client
                   pkgs.nushell
 
+                  # dev tools
+                  pkgs.entr
                   pkgs.just
                   pkgs.mix2nix
                   pkgs.nix-eval-jobs
                   pkgs.nvfetcher
-                  pkgs.process-compose
                   pkgs.postgresql
+                  pkgs.process-compose
+                  pkgs.s5cmd
                   pkgs.sd-switch
-                  pkgs.entr
                 ]
                 ++ lib.optionals pkgs.stdenv.isLinux [
                   # elixir

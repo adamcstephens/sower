@@ -54,6 +54,16 @@ defmodule Sower.Config do
           }
         }
       },
+      s3: %Schema{
+        type: :object,
+        properties: %{
+          endpoint: %Schema{type: :string, format: :uri},
+          region: %Schema{type: :string},
+          access_key_id: %Schema{type: :string},
+          secret_access_key_file: %Schema{type: :string}
+        },
+        required: [:endpoint]
+      },
       listen_address: %Schema{
         anyOf: [
           %Schema{type: :string, format: :ipv4},
@@ -161,6 +171,27 @@ defmodule Sower.Config do
           Kernel.exit(1)
       end
 
+    # s3 secret access key
+    json_config =
+      with {:ok, s3} <- json_config |> Keyword.fetch(:s3),
+           {:ok, secret_access_key_file} <- s3 |> Keyword.fetch(:secret_access_key_file),
+           {:ok, secret_access_key} <- read_credential(secret_access_key_file) do
+        json_config
+        |> Keyword.put(:s3, s3 |> Keyword.put(:secret_access_key, secret_access_key))
+      else
+        {:error, err} ->
+          Logger.warning(
+            msg: "Failed to load secret_access_key from secret file",
+            error: err
+          )
+
+          Kernel.exit(1)
+
+        :error ->
+          Logger.debug("Configuration is missing `s3.secret_access_key_file`.")
+          json_config
+      end
+
     Logger.debug("Final configuration:")
     Logger.debug(json_config)
 
@@ -203,6 +234,29 @@ defmodule Sower.Config do
           require_pkce: true
         }
       ]
+
+    config :ex_aws,
+      region: get_in(json_config, [:s3, :region]),
+      host: get_in(json_config, [:s3, :host]),
+      access_key_id: [
+        get_in(json_config, [:s3, :access_key_id]),
+        # json_config |> Keyword.fetch!(:s3) |> Keyword
+        {:system, "AWS_ACCESS_KEY_ID"},
+        {:system, "SOWER_AWS_ACCESS_KEY_ID"}
+      ],
+      secret_access_key: [
+        get_in(json_config, [:s3, :secret_access_key]),
+        {:system, "AWS_SECRET_ACCESS_KEY"},
+        {:system, "SOWER_AWS_SECRET_ACCESS_KEY"}
+      ]
+
+    %URI{scheme: scheme, host: host, port: port} =
+      URI.parse(get_in(json_config, [:s3, :endpoint]))
+
+    config :ex_aws, :s3,
+      scheme: scheme <> "://",
+      host: host,
+      port: port
 
     Logger.info("Finished loading configuration.")
   end
