@@ -2,9 +2,6 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixpkgs-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
-
-    expert.url = "github:elixir-lang/expert?ref=v0.1.0-rc.1";
-    expert.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
@@ -25,7 +22,6 @@
 
         perSystem =
           {
-            inputs',
             lib,
             pkgs,
             self',
@@ -62,7 +58,6 @@
                   beamPackages.erlang
                   beamPackages.elixir
                   beamPackages.hex
-                  inputs'.expert.packages.expert
 
                   # elixir deps build deps
                   pkgs.cargo
