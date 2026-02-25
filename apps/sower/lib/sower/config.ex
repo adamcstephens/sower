@@ -60,9 +60,10 @@ defmodule Sower.Config do
           endpoint: %Schema{type: :string, format: :uri},
           region: %Schema{type: :string},
           access_key_id: %Schema{type: :string},
-          secret_access_key_file: %Schema{type: :string}
+          secret_access_key_file: %Schema{type: :string},
+          bucket: %Schema{type: :string}
         },
-        required: [:endpoint]
+        required: [:endpoint, :region, :bucket, :access_key_id]
       },
       listen_address: %Schema{
         anyOf: [
@@ -257,6 +258,8 @@ defmodule Sower.Config do
       scheme: scheme <> "://",
       host: host,
       port: port
+
+    config :sower, Sower.Storage, s3: [bucket: get_in(json_config, [:s3, :bucket])]
 
     Logger.info("Finished loading configuration.")
   end
