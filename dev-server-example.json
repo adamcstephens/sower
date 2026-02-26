@@ -21,5 +21,12 @@
     }
   },
   "log_level": "debug",
-  "secret_key_base_file": ".dev-secret-key-base"
+  "secret_key_base_file": ".dev-secret-key-base",
+  "s3": {
+    "endpoint": "https://my.garage.server",
+    "region": "garage",
+    "access_key_file": ".dev-s3-key-id",
+    "secret_key_file": ".dev-s3-secret-key",
+    "bucket": "sower-dev"
+  }
 }

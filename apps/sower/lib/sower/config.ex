@@ -59,11 +59,11 @@ defmodule Sower.Config do
         properties: %{
           endpoint: %Schema{type: :string, format: :uri},
           region: %Schema{type: :string},
-          access_key_id: %Schema{type: :string},
-          secret_access_key_file: %Schema{type: :string},
+          access_key_file: %Schema{type: :string},
+          secret_key_file: %Schema{type: :string},
           bucket: %Schema{type: :string}
         },
-        required: [:endpoint, :region, :bucket, :access_key_id]
+        required: [:endpoint, :region, :bucket, :access_key_file, :secret_key_file]
       },
       listen_address: %Schema{
         anyOf: [
@@ -172,24 +172,45 @@ defmodule Sower.Config do
           Kernel.exit(1)
       end
 
-    # s3 secret access key
+    # s3 access key id
     json_config =
       with {:ok, s3} <- json_config |> Keyword.fetch(:s3),
-           {:ok, secret_access_key_file} <- s3 |> Keyword.fetch(:secret_access_key_file),
-           {:ok, secret_access_key} <- read_credential(secret_access_key_file) do
+           {:ok, access_key_file} <- s3 |> Keyword.fetch(:access_key_file),
+           {:ok, access_key} <- read_credential(access_key_file) do
         json_config
-        |> Keyword.put(:s3, s3 |> Keyword.put(:secret_access_key, secret_access_key))
+        |> Keyword.put(:s3, s3 |> Keyword.put(:access_key, access_key))
       else
         {:error, err} ->
           Logger.warning(
-            msg: "Failed to load secret_access_key from secret file",
+            msg: "Failed to load access_key from secret file",
             error: err
           )
 
           Kernel.exit(1)
 
         :error ->
-          Logger.debug("Configuration is missing `s3.secret_access_key_file`.")
+          Logger.debug("Configuration is missing `s3.access_key_file`.")
+          json_config
+      end
+
+    # s3 secret access key
+    json_config =
+      with {:ok, s3} <- json_config |> Keyword.fetch(:s3),
+           {:ok, secret_key_file} <- s3 |> Keyword.fetch(:secret_key_file),
+           {:ok, secret_key} <- read_credential(secret_key_file) do
+        json_config
+        |> Keyword.put(:s3, s3 |> Keyword.put(:secret_key, secret_key))
+      else
+        {:error, err} ->
+          Logger.warning(
+            msg: "Failed to load secret_key from secret file",
+            error: err
+          )
+
+          Kernel.exit(1)
+
+        :error ->
+          Logger.debug("Configuration is missing `s3.secret_key_file`.")
           json_config
       end
 
@@ -240,15 +261,12 @@ defmodule Sower.Config do
       region: get_in(json_config, [:s3, :region]),
       host: get_in(json_config, [:s3, :host]),
       access_key_id: [
-        get_in(json_config, [:s3, :access_key_id]),
-        # json_config |> Keyword.fetch!(:s3) |> Keyword
-        {:system, "AWS_ACCESS_KEY_ID"},
-        {:system, "SOWER_AWS_ACCESS_KEY_ID"}
+        get_in(json_config, [:s3, :access_key]),
+        {:system, "SOWER_AWS_ACCESS_KEY"}
       ],
       secret_access_key: [
-        get_in(json_config, [:s3, :secret_access_key]),
-        {:system, "AWS_SECRET_ACCESS_KEY"},
-        {:system, "SOWER_AWS_SECRET_ACCESS_KEY"}
+        get_in(json_config, [:s3, :secret_key]),
+        {:system, "SOWER_AWS_SECRET_KEY"}
       ]
 
     %URI{scheme: scheme, host: host, port: port} =
