@@ -1,12 +1,15 @@
 defmodule SowerAgent.Deployer do
   require Logger
 
+  alias SowerAgent.Client
   alias SowerAgent.Config
   alias SowerAgent.Storage
   alias SowerClient.Activator
   alias SowerClient.Orchestration.Deployment
   alias SowerClient.Orchestration.DeploymentProfile
   alias SowerClient.Orchestration.SeedDeployment
+  alias SowerClient.Storage.PresignUploadReply
+  alias SowerClient.Storage.PresignUploadRequest
 
   def run(%Deployment{} = deployment) do
     result =
@@ -305,25 +308,111 @@ defmodule SowerAgent.Deployer do
 
   defp maybe_write_log(_deployment, _seed, []), do: :ok
 
-  # TODO: when you write to disk, you should ensure it gets deleted
   defp maybe_write_log(%Deployment{} = deployment, seed, output_lines) do
-    state_dir = SowerAgent.Config.get().state_directory
-    deployments_dir = Path.join(state_dir, "deployments")
-    File.mkdir_p!(deployments_dir)
-
-    date = DateTime.utc_now() |> DateTime.to_unix()
-    filename = "#{date}-#{deployment.sid}-#{seed.sid}.log"
-    path = Path.join(deployments_dir, filename)
-
-    cleaned_output =
+    content =
       output_lines
       |> Enum.reject(&is_nil/1)
       |> Enum.map(&strip_ansi/1)
+      |> Enum.join("\n")
 
-    content = Enum.join(cleaned_output, "\n")
-    File.write!(path, content)
+    checksum_sha256 = :crypto.hash(:sha256, content) |> Base.encode64()
+    object_path = "logs/deployments/#{deployment.sid}/seeds/#{seed.sid}.log"
 
-    Logger.debug(msg: "Wrote deployment log", path: path)
+    request =
+      PresignUploadRequest.cast!(%{
+        path: object_path,
+        method: "PUT",
+        checksum_sha256: checksum_sha256
+      })
+
+    case Client.call(PresignUploadRequest.event(), request, 15_000) do
+      {:ok, reply_payload} ->
+        case PresignUploadReply.cast(reply_payload) do
+          {:ok, reply} ->
+            upload_deployment_log(reply, content, deployment.sid, seed.sid, object_path)
+
+          {:error, error} ->
+            Logger.error(
+              msg: "Failed to parse presign upload reply",
+              deployment_sid: deployment.sid,
+              seed_sid: seed.sid,
+              object_path: object_path,
+              error: inspect(error)
+            )
+        end
+
+      {:error, error} ->
+        Logger.error(
+          msg: "Failed to request presign upload URL",
+          deployment_sid: deployment.sid,
+          seed_sid: seed.sid,
+          object_path: object_path,
+          error: inspect(error)
+        )
+    end
+  end
+
+  defp upload_deployment_log(
+         %PresignUploadReply{} = reply,
+         content,
+         deployment_sid,
+         seed_sid,
+         object_path
+       ) do
+    case String.upcase(reply.method || "") do
+      "PUT" ->
+        do_upload_deployment_log(reply, content, deployment_sid, seed_sid, object_path)
+
+      method ->
+        Logger.error(
+          msg: "Unsupported presign upload method",
+          deployment_sid: deployment_sid,
+          seed_sid: seed_sid,
+          object_path: object_path,
+          method: method
+        )
+    end
+  end
+
+  defp do_upload_deployment_log(
+         %PresignUploadReply{} = reply,
+         content,
+         deployment_sid,
+         seed_sid,
+         object_path
+       ) do
+    headers =
+      (reply.headers || %{})
+      |> Enum.to_list()
+
+    case Req.put(url: reply.url, headers: headers, body: content, retry: false) do
+      {:ok, %Req.Response{status: status}} when status in 200..299 ->
+        Logger.info(
+          msg: "Uploaded deployment log",
+          deployment_sid: deployment_sid,
+          seed_sid: seed_sid,
+          object_path: object_path
+        )
+
+      {:ok, %Req.Response{status: status, body: body}} ->
+        Logger.error(
+          msg: "Failed to upload deployment log",
+          deployment_sid: deployment_sid,
+          seed_sid: seed_sid,
+          object_path: object_path,
+          status: status,
+          body: inspect(body)
+        )
+
+      {:error, error} ->
+        Logger.error(
+          msg: "Failed to upload deployment log",
+          deployment_sid: deployment_sid,
+          seed_sid: seed_sid,
+          object_path: object_path,
+          error: inspect(error)
+        )
+    end
   end
 
   defp strip_ansi(text) do

@@ -26,6 +26,10 @@ defmodule SowerAgent.ChannelClient do
         GenServer.call(__MODULE__, {event, params})
       end
 
+      def call(event, params, timeout) do
+        GenServer.call(__MODULE__, {event, params}, timeout)
+      end
+
       def cast(event) when is_atom(event) do
         GenServer.cast(__MODULE__, event)
       end

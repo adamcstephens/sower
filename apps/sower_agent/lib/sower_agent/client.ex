@@ -258,8 +258,45 @@ defmodule SowerAgent.Client do
         {:noreply, socket}
 
       deployment ->
-        result = SowerAgent.Deployer.run(deployment)
+        Task.Supervisor.start_child(SowerAgent.TaskSupervisor, fn ->
+          result =
+            try do
+              SowerAgent.Deployer.run(deployment)
+            rescue
+              error ->
+                Logger.error(
+                  msg: "Deployment task crashed",
+                  deployment_sid: deployment.sid,
+                  error: Exception.format(:error, error, __STACKTRACE__)
+                )
 
+                :failure
+            catch
+              kind, reason ->
+                Logger.error(
+                  msg: "Deployment task crashed",
+                  deployment_sid: deployment.sid,
+                  kind: inspect(kind),
+                  reason: inspect(reason)
+                )
+
+                :failure
+            end
+
+          send(__MODULE__, {:deployment_completed, deployment.sid, result})
+        end)
+
+        {:noreply, socket}
+    end
+  end
+
+  def handle_info({:deployment_completed, sid, result}, socket) do
+    case Map.get(socket.active_deployments, sid) do
+      nil ->
+        Logger.warning(msg: "Deployment not found during completion", sid: sid)
+        {:noreply, socket}
+
+      deployment ->
         {:ok, deployment_result} =
           SowerClient.Orchestration.DeploymentResult.cast(%{
             request_id: deployment.request_id,

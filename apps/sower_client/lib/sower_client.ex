@@ -21,6 +21,8 @@ defmodule SowerClient do
       SowerClient.Orchestration.SeedDeployment,
       SowerClient.Orchestration.Subscription,
       SowerClient.Orchestration.SubscriptionSync,
+      SowerClient.Storage.PresignUploadReply,
+      SowerClient.Storage.PresignUploadRequest,
       SowerClient.Seed,
       SowerClient.SeedMeta,
       SowerClient.SeedTag

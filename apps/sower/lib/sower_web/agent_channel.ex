@@ -138,6 +138,8 @@ defmodule SowerWeb.AgentChannel do
     Orchestration.update_agent_seed_generations(report, socket.assigns.agent)
   end)
 
+  handle_schema(SowerClient.Storage.PresignUploadRequest, &Sower.Storage.presign_upload/1)
+
   @impl Phoenix.Channel
   def handle_info(:track_presence, %Phoenix.Socket{assigns: %{agent: agent}} = socket) do
     Logger.debug(msg: "Tracking agent presence", agent_sid: agent.sid)
