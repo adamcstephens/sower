@@ -62,16 +62,59 @@ defmodule SowerWeb.DeploymentLive.Show do
 
         <section>
           <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4">Seeds</h2>
-          <.responsive_table
-            id="seeds"
-            rows={@deployment.seeds}
-            row_click={fn seed -> JS.navigate(~p"/seeds/#{seed.sid}") end}
-          >
-            <:col :let={seed} label="Seed">
-              {seed.seed_type}/{seed.name}
-            </:col>
-            <:col :let={seed} label="Artifact">{seed.artifact}</:col>
-          </.responsive_table>
+          <div :if={@deployment.seeds != []} class="space-y-4">
+            <article
+              :for={seed <- @deployment.seeds}
+              id={"seed-log-#{seed.sid}"}
+              class="rounded-lg border border-zinc-200/50 dark:border-zinc-700/50 p-4"
+            >
+              <div class="flex items-center justify-between gap-4">
+                <div class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 flex flex-wrap items-center gap-2">
+                  <.link
+                    navigate={~p"/seeds/#{seed.sid}"}
+                    class="hover:text-orange-500 dark:hover:text-orange-400"
+                  >
+                    {seed.seed_type}/{seed.name}
+                  </.link>
+                  <span class="text-xs font-normal text-zinc-500 dark:text-zinc-400">
+                    {seed.artifact}
+                  </span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <.link
+                    :if={expanded_seed_log?(@expanded_seed_logs, seed.sid)}
+                    href={seed_log_url(@deployment.sid, seed.sid)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-sm text-orange-600 hover:text-orange-500 dark:text-orange-400 dark:hover:text-orange-300"
+                  >
+                    Open in new tab
+                  </.link>
+                  <button
+                    type="button"
+                    phx-click="toggle_seed_log"
+                    phx-value-seed_sid={seed.sid}
+                    class="rounded-md border border-zinc-300 dark:border-zinc-600 px-3 py-1.5 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                  >
+                    {if expanded_seed_log?(@expanded_seed_logs, seed.sid),
+                      do: "Hide log",
+                      else: "View log"}
+                  </button>
+                </div>
+              </div>
+              <div
+                :if={loaded_seed_log?(@loaded_seed_logs, seed.sid)}
+                id={"seed-log-frame-#{seed.sid}"}
+                class={["mt-3", !expanded_seed_log?(@expanded_seed_logs, seed.sid) && "hidden"]}
+              >
+                <iframe
+                  src={seed_log_url(@deployment.sid, seed.sid)}
+                  class="w-full h-80 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-300 dark:invert"
+                  title={"Seed deployment log #{seed.sid}"}
+                />
+              </div>
+            </article>
+          </div>
           <p
             :if={@deployment.seeds == []}
             class="text-sm text-zinc-500 dark:text-zinc-400 italic"
@@ -86,7 +129,11 @@ defmodule SowerWeb.DeploymentLive.Show do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, :page_title, "Show Deployment")}
+    {:ok,
+     socket
+     |> assign(:page_title, "Show Deployment")
+     |> assign(:expanded_seed_logs, MapSet.new())
+     |> assign(:loaded_seed_logs, MapSet.new())}
   end
 
   @impl true
@@ -101,7 +148,41 @@ defmodule SowerWeb.DeploymentLive.Show do
       deployment ->
         deployment = Sower.Repo.preload(deployment, [:seeds, :subscriptions, :agent])
 
-        {:noreply, assign(socket, :deployment, deployment)}
+        {:noreply,
+         socket
+         |> assign(:deployment, deployment)
+         |> assign(:expanded_seed_logs, MapSet.new())
+         |> assign(:loaded_seed_logs, MapSet.new())}
     end
+  end
+
+  @impl true
+  def handle_event("toggle_seed_log", %{"seed_sid" => seed_sid}, socket) do
+    expanded_seed_logs = socket.assigns.expanded_seed_logs
+    loaded_seed_logs = socket.assigns.loaded_seed_logs
+
+    {expanded_seed_logs, loaded_seed_logs} =
+      if expanded_seed_log?(socket.assigns.expanded_seed_logs, seed_sid) do
+        {MapSet.delete(expanded_seed_logs, seed_sid), loaded_seed_logs}
+      else
+        {MapSet.put(expanded_seed_logs, seed_sid), MapSet.put(loaded_seed_logs, seed_sid)}
+      end
+
+    {:noreply,
+     socket
+     |> assign(:expanded_seed_logs, expanded_seed_logs)
+     |> assign(:loaded_seed_logs, loaded_seed_logs)}
+  end
+
+  defp expanded_seed_log?(expanded_seed_logs, seed_sid) do
+    MapSet.member?(expanded_seed_logs, seed_sid)
+  end
+
+  defp loaded_seed_log?(loaded_seed_logs, seed_sid) do
+    MapSet.member?(loaded_seed_logs, seed_sid)
+  end
+
+  defp seed_log_url(deployment_sid, seed_sid) do
+    ~p"/deployments/#{deployment_sid}/seeds/#{seed_sid}/log"
   end
 end

@@ -316,7 +316,7 @@ defmodule SowerAgent.Deployer do
       |> Enum.join("\n")
 
     checksum_sha256 = :crypto.hash(:sha256, content) |> Base.encode64()
-    object_path = "logs/deployments/#{deployment.sid}/seeds/#{seed.sid}.log"
+    object_path = SeedDeployment.log_path(deployment.sid, seed.sid)
 
     request =
       PresignUploadRequest.cast!(%{

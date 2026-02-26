@@ -49,6 +49,28 @@ defmodule Sower.Storage do
     )
   end
 
+  def presign_download(file, opts \\ []) do
+    bucket = get_in(config(), [:s3, :bucket])
+    expires_in = Keyword.get(opts, :expires_in, 60 * 60)
+
+    Logger.debug(msg: "Generating presigned download url", file: file, expires_in: expires_in)
+
+    :s3
+    |> ExAws.Config.new()
+    |> ExAws.S3.presigned_url(:get, bucket, file, expires_in: expires_in)
+  end
+
+  def presign_head(file, opts \\ []) do
+    bucket = get_in(config(), [:s3, :bucket])
+    expires_in = Keyword.get(opts, :expires_in, 60 * 60)
+
+    Logger.debug(msg: "Generating presigned head url", file: file, expires_in: expires_in)
+
+    :s3
+    |> ExAws.Config.new()
+    |> ExAws.S3.presigned_url(:head, bucket, file, expires_in: expires_in)
+  end
+
   defp checksum_headers(opts) do
     case Keyword.fetch(opts, :checksum_sha256) do
       {:ok, checksum} ->
