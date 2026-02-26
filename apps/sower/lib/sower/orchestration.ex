@@ -1081,7 +1081,8 @@ defmodule Sower.Orchestration do
 
   @doc """
   Upserts an agent_seed_generation from report data.
-  Uses the unique constraint on (agent_id, seed_id) for conflict resolution.
+  Uses lookup semantics on (agent_id, seed_id), inserting missing rows and
+  updating existing rows.
 
   ## Parameters
     - agent_id: The agent's ID
@@ -1102,19 +1103,29 @@ defmodule Sower.Orchestration do
       created_at_generation: attrs.created_at_generation
     }
 
-    %AgentSeedGeneration{}
-    |> AgentSeedGeneration.changeset(changeset_attrs)
-    |> Repo.insert(
-      on_conflict: [
-        set: [
+    case Repo.get_by(AgentSeedGeneration, agent_id: agent_id, seed_id: seed_id) do
+      nil ->
+        %AgentSeedGeneration{}
+        |> AgentSeedGeneration.changeset(changeset_attrs)
+        |> Repo.insert()
+
+      %AgentSeedGeneration{} = existing ->
+        update_attrs = %{
           profile_id: profile_id,
           generation_number: attrs.generation_number,
           is_current: attrs.is_current,
+          created_at_generation: attrs.created_at_generation,
           updated_at: now
-        ]
-      ],
-      conflict_target: [:agent_id, :seed_id]
-    )
+        }
+
+        if generation_row_changed?(existing, update_attrs) do
+          existing
+          |> AgentSeedGeneration.changeset(update_attrs)
+          |> Repo.update()
+        else
+          {:ok, existing}
+        end
+    end
   end
 
   @doc """
@@ -1135,15 +1146,33 @@ defmodule Sower.Orchestration do
     Repo.transaction(fn ->
       for profile <- report.profiles do
         nix_profile = NixProfile.find_or_create!(profile.profile_path)
+        rows = resolve_profile_generation_rows(agent, profile)
+        sync_profile_generation_rows(agent, nix_profile, rows)
+      end
 
-        # Collect seed_ids we're upserting for this profile
-        upserted_seed_ids =
-          for gen <- profile.generations, reduce: [] do
-            acc ->
+      :ok
+    end)
+  end
+
+  defp resolve_profile_generation_rows(%Agent{} = agent, profile) do
+    artifacts =
+      profile.generations
+      |> Enum.map(& &1.path)
+      |> Enum.uniq()
+
+    seeds_by_artifact =
+      from(s in Seed, where: s.artifact in ^artifacts)
+      |> Repo.all()
+      |> Map.new(&{&1.artifact, &1})
+
+    {rows, _seeds_by_artifact} =
+      Enum.reduce(profile.generations, {[], seeds_by_artifact}, fn gen, {rows, seeds} ->
+        {seed, seeds} =
+          case Map.get(seeds, gen.path) do
+            nil ->
               case Seed.find_or_register(agent, gen, profile) do
                 {:ok, seed} ->
-                  upsert_agent_seed_generation(agent, nix_profile, seed, gen)
-                  [seed.id | acc]
+                  {seed, Map.put(seeds, gen.path, seed)}
 
                 {:error, error} ->
                   Logger.warning(
@@ -1152,39 +1181,93 @@ defmodule Sower.Orchestration do
                     error: error
                   )
 
-                  acc
+                  {nil, seeds}
               end
+
+            seed ->
+              {seed, seeds}
           end
 
-        # Delete agent_seed_generations for this profile that are no longer in the report
-        delete_stale_agent_seed_generations(agent.id, nix_profile.id, upserted_seed_ids)
-      end
+        case {seed, parse_generation_created(gen.created)} do
+          {nil, _} ->
+            {rows, seeds}
 
-      :ok
-    end)
+          {_, :error} ->
+            Logger.warning(
+              msg: "Failed to parse generation created timestamp",
+              artifact: gen.path,
+              created: gen.created
+            )
+
+            {rows, seeds}
+
+          {%Seed{id: seed_id}, {:ok, created_at}} ->
+            row = %{
+              seed_id: seed_id,
+              generation_number: gen.generation_number,
+              is_current: gen.is_current,
+              created_at_generation: created_at
+            }
+
+            {[row | rows], seeds}
+        end
+      end)
+
+    rows
+    |> Enum.reverse()
+    |> normalize_current_generation_rows()
+    |> Enum.reverse()
+    |> Enum.uniq_by(& &1.seed_id)
+    |> Enum.reverse()
   end
 
-  defp upsert_agent_seed_generation(%Agent{} = agent, nix_profile, seed, gen) do
-    # If this generation is_current, clear other is_current flags first
-    if gen.is_current do
+  defp parse_generation_created(%DateTime{} = dt), do: {:ok, DateTime.truncate(dt, :second)}
+
+  defp parse_generation_created(str) when is_binary(str) do
+    case DateTime.from_iso8601(str) do
+      {:ok, dt, _offset} -> {:ok, DateTime.truncate(dt, :second)}
+      _ -> :error
+    end
+  end
+
+  defp parse_generation_created(_), do: :error
+
+  defp normalize_current_generation_rows(rows) do
+    current_seed_id =
+      Enum.reduce(rows, nil, fn row, acc -> if row.is_current, do: row.seed_id, else: acc end)
+
+    if is_nil(current_seed_id) do
+      rows
+    else
+      Enum.map(rows, fn row ->
+        %{row | is_current: row.seed_id == current_seed_id}
+      end)
+    end
+  end
+
+  defp sync_profile_generation_rows(%Agent{} = agent, nix_profile, rows) do
+    if Enum.any?(rows, & &1.is_current) do
       from(asg in AgentSeedGeneration,
         where: asg.agent_id == ^agent.id and asg.profile_id == ^nix_profile.id
       )
       |> Repo.update_all(set: [is_current: false])
     end
 
-    # Parse created timestamp
-    created_at =
-      case gen.created do
-        %DateTime{} = dt -> dt
-        str when is_binary(str) -> DateTime.from_iso8601(str) |> elem(1)
-      end
+    keep_seed_ids =
+      Enum.reduce(rows, [], fn row, acc ->
+        upsert_agent_generation(agent.id, nix_profile.id, row.seed_id, row)
+        [row.seed_id | acc]
+      end)
+      |> Enum.uniq()
 
-    upsert_agent_generation(agent.id, nix_profile.id, seed.id, %{
-      generation_number: gen.generation_number,
-      is_current: gen.is_current,
-      created_at_generation: created_at
-    })
+    delete_stale_agent_seed_generations(agent.id, nix_profile.id, keep_seed_ids)
+  end
+
+  defp generation_row_changed?(existing, attrs) do
+    existing.profile_id != attrs.profile_id or
+      existing.generation_number != attrs.generation_number or
+      existing.is_current != attrs.is_current or
+      existing.created_at_generation != attrs.created_at_generation
   end
 
   defp delete_stale_agent_seed_generations(agent_id, profile_id, keep_seed_ids) do

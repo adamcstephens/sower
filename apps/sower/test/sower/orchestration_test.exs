@@ -807,6 +807,43 @@ defmodule Sower.OrchestrationTest do
       assert hd(profiles).generation_number == 2
     end
 
+    test "repeated identical reports do not advance generation id sequence" do
+      agent = agent_fixture()
+      artifact = "/nix/store/#{unique_hash()}-nixos-system-testhost-25.11"
+      created_at = DateTime.to_iso8601(DateTime.utc_now())
+
+      report = %SowerClient.Orchestration.AgentSeedsReport{
+        profiles: [
+          %SowerClient.Orchestration.AgentSeedProfile{
+            profile_path: "/nix/var/nix/profiles/system",
+            tags: %{},
+            generations: [
+              %SowerClient.Orchestration.AgentSeedGeneration{
+                path: artifact,
+                link: "/nix/var/nix/profiles/system-42-link",
+                created: created_at,
+                generation_number: 42,
+                is_current: true
+              }
+            ]
+          }
+        ]
+      }
+
+      assert {:ok, :ok} = Orchestration.update_agent_seed_generations(report, agent)
+      first_sequence_value = agent_seed_generation_sequence_last_value()
+
+      [first_row] = Orchestration.list_agent_seed_generation(agent)
+
+      assert {:ok, :ok} = Orchestration.update_agent_seed_generations(report, agent)
+      second_sequence_value = agent_seed_generation_sequence_last_value()
+
+      [second_row] = Orchestration.list_agent_seed_generation(agent)
+
+      assert second_row.id == first_row.id
+      assert second_sequence_value == first_sequence_value
+    end
+
     test "handles multiple profiles (NixOS + home-manager)" do
       agent = agent_fixture()
       nixos_artifact = "/nix/store/#{unique_hash()}-nixos-system-testhost"
@@ -866,5 +903,16 @@ defmodule Sower.OrchestrationTest do
 
   defp unique_hash do
     :crypto.strong_rand_bytes(16) |> Base.encode32(case: :lower) |> String.slice(0, 32)
+  end
+
+  defp agent_seed_generation_sequence_last_value do
+    %Postgrex.Result{rows: [[last_value]]} =
+      Ecto.Adapters.SQL.query!(
+        Sower.Repo,
+        "SELECT last_value FROM public.agent_seed_generations_id_seq",
+        []
+      )
+
+    last_value
   end
 end
