@@ -46,3 +46,4 @@ dev-server.json
 .erlang-history/
 /sower-activator
 .direnv
+.workspaces/
