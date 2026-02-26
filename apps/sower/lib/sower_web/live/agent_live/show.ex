@@ -60,6 +60,11 @@ defmodule SowerWeb.AgentLive.Show do
     {:noreply, assign(socket, :deployments, deployments)}
   end
 
+  def handle_info({SowerWeb.AgentLive.FormComponent, {:saved, agent}}, socket) do
+    agent = Sower.Repo.preload(agent, :subscriptions)
+    {:noreply, assign(socket, :agent, agent)}
+  end
+
   @impl true
   def handle_event("set_generations_filter", %{"filter" => filter}, socket) do
     generations = load_generations(socket.assigns.agent, filter)
