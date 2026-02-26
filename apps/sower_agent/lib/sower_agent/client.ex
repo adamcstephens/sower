@@ -24,17 +24,30 @@ defmodule SowerAgent.Client do
 
   @impl Slipstream
   def handle_cast(:report_seeds, socket) do
-    report = SowerAgent.Profile.collect_all_profiles()
+    storage = Storage.read()
+    subscriptions = Map.get(storage, :subscriptions, [])
 
-    Logger.debug(
-      msg: "Reporting seed profiles",
-      profile_count: length(report.profiles)
-    )
+    report = SowerAgent.Profile.collect_profiles_for_subscriptions(subscriptions)
 
-    topic = private_channel(socket)
-    {:ok, _ref} = push(socket, topic, "agent:seeds:report", report)
+    if not Enum.empty?(subscriptions) and Enum.empty?(report.profiles) do
+      Logger.debug(
+        msg: "No profiles found for any targets",
+        subscription_count: length(subscriptions)
+      )
 
-    {:noreply, socket}
+      {:noreply, socket}
+    else
+      Logger.debug(
+        msg: "Reporting seed profiles",
+        profile_count: length(report.profiles),
+        subscription_count: length(subscriptions)
+      )
+
+      topic = private_channel(socket)
+      {:ok, _ref} = push(socket, topic, "agent:seeds:report", report)
+
+      {:noreply, socket}
+    end
   end
 
   @impl Slipstream

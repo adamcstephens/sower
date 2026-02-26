@@ -1144,10 +1144,15 @@ defmodule Sower.Orchestration do
         %Agent{} = agent
       ) do
     Repo.transaction(fn ->
-      for profile <- report.profiles do
-        nix_profile = NixProfile.find_or_create!(profile.profile_path)
-        rows = resolve_profile_generation_rows(agent, profile)
-        sync_profile_generation_rows(agent, nix_profile, rows)
+      if Enum.empty?(report.profiles) do
+        # Empty report means agent has no subscriptions - delete all generations
+        delete_all_agent_seed_generations(agent.id)
+      else
+        for profile <- report.profiles do
+          nix_profile = NixProfile.find_or_create!(profile.profile_path)
+          rows = resolve_profile_generation_rows(agent, profile)
+          sync_profile_generation_rows(agent, nix_profile, rows)
+        end
       end
 
       :ok
@@ -1284,5 +1289,10 @@ defmodule Sower.Orchestration do
       end
 
     Repo.delete_all(query)
+  end
+
+  defp delete_all_agent_seed_generations(agent_id) do
+    from(asg in AgentSeedGeneration, where: asg.agent_id == ^agent_id)
+    |> Repo.delete_all()
   end
 end

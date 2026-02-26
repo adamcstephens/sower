@@ -8,34 +8,207 @@ defmodule SowerAgent.Profile do
   alias SowerClient.Orchestration.{AgentSeedGeneration, AgentSeedProfile, AgentSeedsReport}
 
   @doc """
-  Collects all available Nix profiles with their generations.
+  Collects profiles based on the provided targets.
 
-  Returns an AgentSeedsReport struct containing NixOS and HomeManager profiles.
+  Targets should be a list of maps with :type and :path keys:
+  - `%{type: "nixos", path: "/nix/var/nix/profiles/system"}`
+  - `%{type: "home-manager", path: "/home/user/.local/state/nix/profiles/home-manager"}`
+
+  Returns an AgentSeedsReport struct containing only the requested profiles.
   Profiles that fail to load are logged as warnings and excluded from the report.
+
+  ## Examples
+
+      iex> targets = [%{type: "nixos", path: "/nix/var/nix/profiles/system"}]
+      iex> SowerAgent.Profile.collect_profiles(targets)
+      %SowerClient.Orchestration.AgentSeedsReport{profiles: [...]}
   """
-  def collect_all_profiles() do
+  def collect_profiles(targets) when is_list(targets) do
     profiles =
-      [
-        collect_nixos(),
-        collect_home_manager()
-      ]
+      targets
+      |> Enum.map(&collect_target/1)
       |> Enum.reject(fn {result, _} -> result == :error end)
       |> Enum.map(fn {_, profile} -> profile end)
 
     AgentSeedsReport.cast!(%{profiles: profiles})
   end
 
-  def collect_nixos() do
-    collect_profile(Nix.NixOS, "/nix/var/nix/profiles/system")
+  @doc """
+  Builds profile targets from subscriptions.
+
+  For nixos subscriptions: generates target with system profile path.
+  For home-manager subscriptions: extracts username from rules and generates
+  profile path for each unique user.
+
+  ## Examples
+
+      iex> subs = [%{seed_type: "nixos", seed_name: "host", rules: []}]
+      iex> SowerAgent.Profile.build_profile_targets(subs)
+      [%{type: "nixos", path: "/nix/var/nix/profiles/system"}]
+
+      iex> subs = [%{seed_type: "home-manager", seed_name: "alice@host", rules: [%{key: "username", value: "alice"}]}]
+      iex> SowerAgent.Profile.build_profile_targets(subs)
+      [%{type: "home-manager", path: "/home/alice/.local/state/nix/profiles/home-manager"}]
+  """
+  def build_profile_targets(subscriptions) when is_list(subscriptions) do
+    subscriptions
+    |> Enum.flat_map(&subscription_to_targets/1)
+    |> Enum.uniq()
   end
 
-  def collect_home_manager() do
-    collect_profile(Nix.HomeManager, home_manager_profile_path())
+  defp subscription_to_targets(%{seed_type: "nixos"}) do
+    [%{type: "nixos", path: "/nix/var/nix/profiles/system"}]
   end
 
-  def home_manager_profile_path() do
-    xdg_state = System.get_env("XDG_STATE_HOME", "#{System.get_env("HOME")}/.local/state")
-    "#{xdg_state}/nix/profiles/home-manager"
+  defp subscription_to_targets(%{seed_type: "home-manager", rules: rules}) do
+    username = extract_username_from_rules(rules)
+
+    case home_manager_profile_path(username) do
+      {:ok, path} ->
+        [%{type: "home-manager", path: path}]
+
+      {:error, reason} ->
+        Logger.warning(
+          msg: "Could not determine home-manager profile path",
+          username: username,
+          reason: reason
+        )
+
+        []
+    end
+  end
+
+  defp subscription_to_targets(_), do: []
+
+  defp extract_username_from_rules(rules) when is_list(rules) do
+    case Enum.find(rules, &(&1.key == "username")) do
+      %{value: username} when is_binary(username) and username != "" ->
+        username
+
+      _ ->
+        nil
+    end
+  end
+
+  defp extract_username_from_rules(_), do: nil
+
+  @doc """
+  Collects profiles for the given subscriptions.
+
+  Builds profile targets from subscriptions and collects profiles for each target.
+  Returns an empty report if no subscriptions exist (allowing server cleanup).
+
+  ## Examples
+
+      iex> subs = [%{seed_type: "nixos", seed_name: "host", rules: []}]
+      iex> SowerAgent.Profile.collect_profiles_for_subscriptions(subs)
+      %SowerClient.Orchestration.AgentSeedsReport{profiles: [...]}
+
+      iex> SowerAgent.Profile.collect_profiles_for_subscriptions([])
+      %SowerClient.Orchestration.AgentSeedsReport{profiles: []}
+  """
+  def collect_profiles_for_subscriptions(subscriptions) when is_list(subscriptions) do
+    targets = build_profile_targets(subscriptions)
+    collect_profiles(targets)
+  end
+
+  @doc """
+  Returns the home-manager profile path for the current user.
+  """
+  def home_manager_profile_path(user \\ nil)
+
+  def home_manager_profile_path(nil) do
+    case System.get_env("XDG_STATE_HOME") do
+      nil ->
+        # Get current user and look up their home directory
+        case get_user_home(System.fetch_env!("USER")) do
+          {:ok, home} ->
+            {:ok, "#{home}/.local/state/nix/profiles/home-manager"}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
+
+      xdg_state ->
+        {:ok, "#{xdg_state}/nix/profiles/home-manager"}
+    end
+  end
+
+  def home_manager_profile_path(username) when is_binary(username) do
+    case get_user_home(username) do
+      {:ok, home} ->
+        {:ok, "#{home}/.local/state/nix/profiles/home-manager"}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Gets the home directory for a user using getent, falling back to /etc/passwd,
+  then assuming /home/<username> as a last resort.
+
+  Returns `{:ok, home_path}` or `{:error, :user_not_found}`.
+  """
+  def get_user_home(username) when is_binary(username) do
+    case System.cmd("getent", ["passwd", username], stderr_to_stdout: true) do
+      {output, 0} ->
+        parse_passwd_home(output)
+
+      {_output, _exit_code} ->
+        fallback_get_user_home(username)
+    end
+  end
+
+  defp parse_passwd_home(output) do
+    # Format: username:password:uid:gid:gecos:home:shell
+    case String.split(String.trim(output), ":") do
+      parts when length(parts) >= 6 ->
+        {:ok, Enum.at(parts, 5)}
+
+      _ ->
+        {:error, :invalid_passwd_format}
+    end
+  end
+
+  defp fallback_get_user_home(username) do
+    case File.read("/etc/passwd") do
+      {:ok, contents} ->
+        contents
+        |> String.split("\n")
+        |> Enum.find(&String.starts_with?(&1, "#{username}:"))
+        |> case do
+          nil ->
+            # Last resort: assume /home/<username>
+            {:ok, "/home/#{username}"}
+
+          line ->
+            parse_passwd_home(line)
+        end
+
+      {:error, reason} ->
+        # Can't read /etc/passwd, assume /home/<username>
+        Logger.debug(
+          msg: "Could not read /etc/passwd, assuming /home/<username>",
+          username: username,
+          reason: reason
+        )
+
+        {:ok, "/home/#{username}"}
+    end
+  end
+
+  defp collect_target(%{type: "nixos", path: path}) do
+    collect_profile(Nix.NixOS, path)
+  end
+
+  defp collect_target(%{type: "home-manager", path: path}) do
+    collect_profile(Nix.HomeManager, path)
+  end
+
+  defp collect_target(target) do
+    Logger.warning(msg: "Unknown profile target type", target: target)
+    {:error, :unknown_target_type}
   end
 
   def collect_profile(module, profile_path) do
