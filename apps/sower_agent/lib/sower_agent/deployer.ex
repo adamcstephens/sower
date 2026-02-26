@@ -8,8 +8,8 @@ defmodule SowerAgent.Deployer do
   alias SowerClient.Orchestration.Deployment
   alias SowerClient.Orchestration.DeploymentProfile
   alias SowerClient.Orchestration.SeedDeployment
-  alias SowerClient.Storage.PresignUploadReply
-  alias SowerClient.Storage.PresignUploadRequest
+  alias SowerClient.Storage.PresignedUploadReply
+  alias SowerClient.Storage.DeploymentLogUploadRequest
 
   def run(%Deployment{} = deployment) do
     result =
@@ -319,21 +319,21 @@ defmodule SowerAgent.Deployer do
     object_path = SeedDeployment.log_path(deployment.sid, seed.sid)
 
     request =
-      PresignUploadRequest.cast!(%{
-        path: object_path,
-        method: "PUT",
+      DeploymentLogUploadRequest.cast!(%{
+        deployment_sid: deployment.sid,
+        seed_sid: seed.sid,
         checksum_sha256: checksum_sha256
       })
 
-    case Client.call(PresignUploadRequest.event(), request, 15_000) do
+    case Client.call(DeploymentLogUploadRequest.event(), request, 15_000) do
       {:ok, reply_payload} ->
-        case PresignUploadReply.cast(reply_payload) do
+        case PresignedUploadReply.cast(reply_payload) do
           {:ok, reply} ->
             upload_deployment_log(reply, content, deployment.sid, seed.sid, object_path)
 
           {:error, error} ->
             Logger.error(
-              msg: "Failed to parse presign upload reply",
+              msg: "Failed to parse deployment log upload reply",
               deployment_sid: deployment.sid,
               seed_sid: seed.sid,
               object_path: object_path,
@@ -343,7 +343,7 @@ defmodule SowerAgent.Deployer do
 
       {:error, error} ->
         Logger.error(
-          msg: "Failed to request presign upload URL",
+          msg: "Failed to request deployment log upload URL",
           deployment_sid: deployment.sid,
           seed_sid: seed.sid,
           object_path: object_path,
@@ -353,7 +353,7 @@ defmodule SowerAgent.Deployer do
   end
 
   defp upload_deployment_log(
-         %PresignUploadReply{} = reply,
+         %PresignedUploadReply{} = reply,
          content,
          deployment_sid,
          seed_sid,
@@ -375,7 +375,7 @@ defmodule SowerAgent.Deployer do
   end
 
   defp do_upload_deployment_log(
-         %PresignUploadReply{} = reply,
+         %PresignedUploadReply{} = reply,
          content,
          deployment_sid,
          seed_sid,

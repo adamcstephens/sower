@@ -138,7 +138,9 @@ defmodule SowerWeb.AgentChannel do
     Orchestration.update_agent_seed_generations(report, socket.assigns.agent)
   end)
 
-  handle_schema(SowerClient.Storage.PresignUploadRequest, &Sower.Storage.presign_upload/1)
+  handle_schema(SowerClient.Storage.DeploymentLogUploadRequest, fn req, socket ->
+    Sower.Storage.presign_deployment_log_upload(socket.assigns.agent, req)
+  end)
 
   @impl Phoenix.Channel
   def handle_info(:track_presence, %Phoenix.Socket{assigns: %{agent: agent}} = socket) do

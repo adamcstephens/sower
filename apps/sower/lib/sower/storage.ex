@@ -1,36 +1,84 @@
 defmodule Sower.Storage do
   require Logger
 
-  alias SowerClient.Storage.PresignUploadReply
-  alias SowerClient.Storage.PresignUploadRequest
+  alias Sower.Orchestration
+  alias Sower.Orchestration.Agent
+  alias SowerClient.Storage.PresignedUploadReply
+  alias SowerClient.Storage.DeploymentLogUploadRequest
 
-  def presign_upload(%PresignUploadRequest{} = request) do
-    method = request.method || "PUT"
+  @doc """
+  Generates a presigned URL for deployment log upload with authorization checks.
 
-    if method != "PUT" do
-      {:error, :unsupported_method}
+  Validates that:
+  1. The deployment exists
+  2. The deployment belongs to the requesting agent
+  3. The seed is associated with the deployment
+
+  Returns {:ok, PresignedUploadReply} on success, {:error, reason} on failure.
+  """
+  def presign_deployment_log_upload(
+        %Agent{} = agent,
+        %DeploymentLogUploadRequest{} = request,
+        presign_upload_fun \\ &presign_upload/2
+      ) do
+    with {:ok, deployment} <- fetch_deployment(request.deployment_sid),
+         :ok <- verify_deployment_ownership(deployment, agent),
+         :ok <- verify_seed_in_deployment(deployment, request.seed_sid),
+         object_path =
+           SowerClient.Orchestration.SeedDeployment.log_path(
+             request.deployment_sid,
+             request.seed_sid
+           ),
+         {:ok, url} <- presign_upload_fun.(object_path, presign_upload_opts(request)) do
+      {:ok,
+       PresignedUploadReply.cast!(%{
+         url: url,
+         method: "PUT",
+         headers: presign_upload_headers(request)
+       })}
     else
-      opts = presign_upload_opts(request)
+      {:error, :deployment_not_found} ->
+        {:error, :unauthorized}
 
-      case presign_upload(request.path, opts) do
-        {:ok, url} ->
-          {:ok,
-           PresignUploadReply.cast!(%{
-             url: url,
-             method: method,
-             headers: presign_upload_headers(request)
-           })}
+      {:error, :unauthorized} ->
+        {:error, :unauthorized}
 
-        {:error, reason} ->
-          Logger.error(
-            msg: "Failed to presign upload",
-            path: request.path,
-            method: method,
-            reason: inspect(reason)
-          )
+      {:error, :seed_not_in_deployment} ->
+        {:error, :seed_not_in_deployment}
 
-          {:error, :failed_to_presign_upload}
-      end
+      {:error, reason} ->
+        Logger.error(
+          msg: "Failed to presign deployment log upload",
+          deployment_sid: request.deployment_sid,
+          seed_sid: request.seed_sid,
+          agent_sid: agent.sid,
+          reason: inspect(reason)
+        )
+
+        {:error, :failed_to_presign_upload}
+    end
+  end
+
+  defp fetch_deployment(deployment_sid) do
+    case Orchestration.get_deployment_sid(deployment_sid) do
+      nil -> {:error, :deployment_not_found}
+      deployment -> {:ok, Sower.Repo.preload(deployment, :seeds)}
+    end
+  end
+
+  defp verify_deployment_ownership(deployment, agent) do
+    if deployment.agent_id == agent.id do
+      :ok
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  defp verify_seed_in_deployment(deployment, seed_sid) do
+    if Enum.any?(deployment.seeds, &(&1.sid == seed_sid)) do
+      :ok
+    else
+      {:error, :seed_not_in_deployment}
     end
   end
 
@@ -81,14 +129,14 @@ defmodule Sower.Storage do
     end
   end
 
-  defp presign_upload_opts(%PresignUploadRequest{} = request) do
+  defp presign_upload_opts(%DeploymentLogUploadRequest{} = request) do
     case request.checksum_sha256 do
       nil -> []
       checksum -> [checksum_sha256: checksum]
     end
   end
 
-  defp presign_upload_headers(%PresignUploadRequest{} = request) do
+  defp presign_upload_headers(%DeploymentLogUploadRequest{} = request) do
     case request.checksum_sha256 do
       nil -> %{}
       checksum -> %{"x-amz-checksum-sha256" => checksum}

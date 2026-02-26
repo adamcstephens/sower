@@ -1,8 +1,15 @@
-defmodule SowerClient.Storage.PresignUploadReply do
+defmodule SowerClient.Storage.PresignedUploadReply do
   use SowerClient.Schema
 
+  @moduledoc """
+  Generic reply for presigned upload URL requests.
+
+  Used across different upload contexts (deployment logs, etc.).
+  Contains the URL, HTTP method, and required headers for the upload.
+  """
+
   OpenApiSpex.schema(%{
-    title: "PresignUploadReply",
+    title: "PresignedUploadReply",
     type: :object,
     properties: %{
       url: %Schema{
