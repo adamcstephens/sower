@@ -45,3 +45,4 @@ dev-client.json
 dev-server.json
 .erlang-history/
 /sower-activator
+.direnv

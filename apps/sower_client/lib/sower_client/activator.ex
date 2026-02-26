@@ -4,9 +4,21 @@ defmodule SowerClient.Activator do
 
   Supports two activation methods:
   - Socket mode: Communicates with sower-activator daemon via Unix socket
-  - CLI mode: Invokes sower-activator binary directly (with sudo)
+  - CLI mode: Invokes sower-activator binary directly (with sudo for NixOS)
 
-  The `activate/3` function automatically tries socket first, then falls back to CLI.
+  ## Activation Path Selection
+
+  The `activate/3` function selects the activation method based on type and context:
+
+  1. For **home-manager** with username tag matching the current user:
+     Uses CLI activation directly (no sudo, no socket) - enables self-managed
+     home-manager configurations without requiring a privileged daemon.
+
+  2. For **NixOS** or other types:
+     Uses socket activation when available, falls back to CLI with sudo.
+
+  3. For **home-manager** with mismatched username:
+     Uses socket activation when available, otherwise returns `{:error, :username_mismatch}`.
   """
 
   use TypedStruct
@@ -54,12 +66,18 @@ defmodule SowerClient.Activator do
   """
   def activate(type, path, opts \\ []) do
     socket_path = Keyword.get(opts, :socket_path, @default_socket_path)
+    tags = Keyword.get(opts, :tags, [])
 
-    if socket_available?(socket_path) do
-      activate_via_socket(type, path, opts)
-    else
-      Logger.debug("Socket not available, falling back to CLI activation")
+    if type == "home-manager" and username_matches_current_user?(tags) do
+      Logger.debug("Home-manager username matches current user, using direct CLI activation")
       activate_via_cli(type, path, opts)
+    else
+      if socket_available?(socket_path) do
+        activate_via_socket(type, path, opts)
+      else
+        Logger.debug("Socket not available, falling back to CLI activation")
+        activate_via_cli(type, path, opts)
+      end
     end
   end
 
@@ -204,6 +222,23 @@ defmodule SowerClient.Activator do
   def socket_available?(socket_path \\ @default_socket_path) do
     File.exists?(socket_path)
   end
+
+  @doc """
+  Check if the username tag matches the current user.
+
+  Returns `true` if a username tag exists and matches `System.get_env("USER")`.
+  Returns `false` if no username tag found or it doesn't match.
+  """
+  def username_matches_current_user?(tags) when is_list(tags) do
+    current_user = System.get_env("USER")
+
+    case Enum.find(tags, &(&1.key == "username")) do
+      %{value: ^current_user} -> true
+      _ -> false
+    end
+  end
+
+  def username_matches_current_user?(_tags), do: false
 
   # Private functions - Socket communication
 

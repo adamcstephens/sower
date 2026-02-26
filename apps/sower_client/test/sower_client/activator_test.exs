@@ -159,7 +159,6 @@ defmodule SowerClient.ActivatorTest do
     end
 
     test "falls back to CLI when socket not available" do
-      # Ensure the executables don't exist in PATH
       original_path = System.get_env("PATH")
       System.put_env("PATH", "/nonexistent")
 
@@ -170,6 +169,93 @@ defmodule SowerClient.ActivatorTest do
           Activator.activate("nixos", "/nix/store/xyz", socket_path: "/nonexistent/socket")
 
         assert {:error, :cmd_not_found} = result
+      end)
+    end
+
+    test "home-manager with matching username bypasses socket" do
+      {socket_path, server_pid} =
+        start_mock_server(fn _request_line, _client_socket ->
+          # This should not be called - we're testing CLI bypass
+          flunk("Socket should not be contacted for same-user home-manager")
+        end)
+
+      original_user = System.get_env("USER")
+      System.put_env("USER", "alice")
+
+      original_path = System.get_env("PATH")
+      System.put_env("PATH", "/nonexistent")
+
+      on_exit(fn ->
+        System.put_env("USER", original_user || "")
+        System.put_env("PATH", original_path)
+        stop_mock_server(server_pid)
+        File.rm_rf!(Path.dirname(socket_path))
+      end)
+
+      tags = [%{key: "username", value: "alice"}]
+
+      capture_log(fn ->
+        result =
+          Activator.activate("home-manager", "/nix/store/xyz",
+            socket_path: socket_path,
+            tags: tags
+          )
+
+        assert {:error, :cmd_not_found} = result
+      end)
+    end
+
+    test "home-manager with mismatched username fails without socket" do
+      original_user = System.get_env("USER")
+      System.put_env("USER", "alice")
+
+      on_exit(fn -> System.put_env("USER", original_user || "") end)
+
+      tags = [%{key: "username", value: "bob"}]
+
+      capture_log(fn ->
+        result =
+          Activator.activate("home-manager", "/nix/store/xyz",
+            socket_path: "/nonexistent/socket",
+            tags: tags
+          )
+
+        assert {:error, :username_mismatch} = result
+      end)
+    end
+
+    test "NixOS activation still uses socket when available" do
+      {socket_path, server_pid} =
+        start_mock_server(fn request_line, client_socket ->
+          request = Jason.decode!(request_line)
+          assert request["type"] == "nixos"
+
+          send_response(client_socket, %{id: request["id"], type: "complete", exit_code: 0})
+        end)
+
+      on_exit(fn ->
+        stop_mock_server(server_pid)
+        File.rm_rf!(Path.dirname(socket_path))
+      end)
+
+      assert {:ok, []} =
+               Activator.activate("nixos", "/nix/store/xyz", socket_path: socket_path)
+    end
+
+    test "home-manager without username tag returns appropriate error" do
+      original_user = System.get_env("USER")
+      System.put_env("USER", "alice")
+
+      on_exit(fn -> System.put_env("USER", original_user || "") end)
+
+      capture_log(fn ->
+        result =
+          Activator.activate("home-manager", "/nix/store/xyz",
+            socket_path: "/nonexistent/socket",
+            tags: []
+          )
+
+        assert {:error, :missing_username_tag} = result
       end)
     end
   end
@@ -190,6 +276,33 @@ defmodule SowerClient.ActivatorTest do
 
         assert {:error, :cmd_not_found} = result
       end)
+    end
+  end
+
+  describe "username_matches_current_user?/1" do
+    test "returns true when username tag matches current user" do
+      original_user = System.get_env("USER")
+      System.put_env("USER", "alice")
+
+      on_exit(fn -> System.put_env("USER", original_user || "") end)
+
+      tags = [%{key: "username", value: "alice"}]
+      assert Activator.username_matches_current_user?(tags)
+    end
+
+    test "returns false when username tag doesn't match current user" do
+      original_user = System.get_env("USER")
+      System.put_env("USER", "alice")
+
+      on_exit(fn -> System.put_env("USER", original_user || "") end)
+
+      tags = [%{key: "username", value: "bob"}]
+      refute Activator.username_matches_current_user?(tags)
+    end
+
+    test "returns false when no username tag present" do
+      refute Activator.username_matches_current_user?([])
+      refute Activator.username_matches_current_user?([%{key: "other", value: "test"}])
     end
   end
 
