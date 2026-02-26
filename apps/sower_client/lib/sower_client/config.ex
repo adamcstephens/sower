@@ -182,7 +182,25 @@ defmodule SowerClient.Config do
   end
 
   def default_client_name() do
-    :inet.gethostname() |> then(fn {:ok, hostname} -> to_string(hostname) end)
+    hostname =
+      case :inet.gethostname() do
+        {:ok, value} -> to_string(value)
+        _ -> "unknown-host"
+      end
+
+    case System.get_env("USER") do
+      user when is_binary(user) ->
+        user = String.trim(user)
+
+        if user == "" or user == "sower-agent" do
+          hostname
+        else
+          "#{user}@#{hostname}"
+        end
+
+      _ ->
+        hostname
+    end
   end
 
   def default_state_dir do

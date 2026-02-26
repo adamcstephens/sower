@@ -74,6 +74,26 @@ defmodule SowerClient.ConfigTest do
     end
   end
 
+  describe "default_client_name/0" do
+    test "returns USER@HOST for non-sower-agent users" do
+      {:ok, hostname} = :inet.gethostname()
+      hostname = to_string(hostname)
+
+      with_env(%{"USER" => "alice"}, fn ->
+        assert Config.default_client_name() == "alice@#{hostname}"
+      end)
+    end
+
+    test "returns HOST for sower-agent user" do
+      {:ok, hostname} = :inet.gethostname()
+      hostname = to_string(hostname)
+
+      with_env(%{"USER" => "sower-agent"}, fn ->
+        assert Config.default_client_name() == hostname
+      end)
+    end
+  end
+
   describe "parse_file_values/1" do
     setup do
       tmp_dir = System.tmp_dir!()
