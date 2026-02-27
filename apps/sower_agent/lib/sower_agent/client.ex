@@ -191,16 +191,26 @@ defmodule SowerAgent.Client do
         {:ok, socket}
 
       {:ok, deployment} ->
-        Logger.debug(
-          msg: "Received deployment",
-          request_id: deployment.request_id,
-          deployment_sid: deployment.sid
-        )
+        if Map.has_key?(socket.active_deployments, deployment.sid) do
+          Logger.debug(
+            msg: "Ignoring duplicate deployment event",
+            request_id: deployment.request_id,
+            deployment_sid: deployment.sid
+          )
 
-        socket = put_in(socket.active_deployments[deployment.sid], deployment)
-        send(self(), {:run_deployment, deployment.sid})
+          {:ok, socket}
+        else
+          Logger.debug(
+            msg: "Received deployment",
+            request_id: deployment.request_id,
+            deployment_sid: deployment.sid
+          )
 
-        {:ok, socket}
+          socket = put_in(socket.active_deployments[deployment.sid], deployment)
+          send(self(), {:run_deployment, deployment.sid})
+
+          {:ok, socket}
+        end
 
       {:error, error} ->
         Logger.error(msg: "Error casting deployment", error: error)

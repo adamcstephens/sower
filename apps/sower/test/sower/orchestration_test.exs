@@ -901,6 +901,93 @@ defmodule Sower.OrchestrationTest do
     end
   end
 
+  describe "handle_deployment_request/2" do
+    import Sower.OrchestrationFixtures
+
+    test "returns immediate request_id for valid deployment request", %{organization: _org} do
+      agent = agent_fixture()
+      _seed = seed_fixture(%{name: "testhost", seed_type: "nixos"})
+
+      subscription =
+        subscription_fixture(%{
+          agent_id: agent.id,
+          seed_name: "testhost",
+          seed_type: "nixos"
+        })
+
+      # Payload with provided request_id (as the client would generate)
+      payload = %{
+        "subscription_sids" => [subscription.sid],
+        "request_id" => "req_test_#{System.unique_integer([:positive])}",
+        "force" => false
+      }
+
+      assert {:ok, request_id} = Orchestration.handle_deployment_request(payload, agent)
+      assert is_binary(request_id)
+    end
+
+    test "returns error for deployment request with unauthorized subscription", %{
+      organization: _org
+    } do
+      agent1 = agent_fixture()
+      agent2 = agent_fixture()
+
+      # Create subscription for agent1
+      subscription =
+        subscription_fixture(%{
+          agent_id: agent1.id,
+          seed_name: "testhost",
+          seed_type: "nixos"
+        })
+
+      # Try to use agent2's subscription with agent1's context (should fail)
+      payload = %{
+        "subscription_sids" => [subscription.sid],
+        "force" => false
+      }
+
+      # This should be rejected because agent2 doesn't own the subscription
+      result = Orchestration.handle_deployment_request(payload, agent2)
+      assert result == {:error, :unauthorized}
+    end
+
+    test "process_deployment returns request_id and starts async task", %{organization: _org} do
+      agent = agent_fixture()
+      _seed = seed_fixture(%{name: "testhost", seed_type: "nixos"})
+
+      subscription =
+        subscription_fixture(%{
+          agent_id: agent.id,
+          seed_name: "testhost",
+          seed_type: "nixos"
+        })
+
+      request_id = "dr_test_#{System.unique_integer([:positive])}"
+
+      # process_deployment should return immediately with the request_id
+      assert {:ok, ^request_id} =
+               Orchestration.process_deployment(request_id, [subscription], agent)
+    end
+
+    test "process_deployment handles error case with no matching seeds", %{organization: _org} do
+      agent = agent_fixture()
+
+      # Create subscription with no matching seed
+      subscription =
+        subscription_fixture(%{
+          agent_id: agent.id,
+          seed_name: "nonexistent",
+          seed_type: "nixos"
+        })
+
+      request_id = "dr_test_error_#{System.unique_integer([:positive])}"
+
+      # Should still return {:ok, request_id} since processing is async
+      assert {:ok, ^request_id} =
+               Orchestration.process_deployment(request_id, [subscription], agent)
+    end
+  end
+
   defp unique_hash do
     :crypto.strong_rand_bytes(16) |> Base.encode32(case: :lower) |> String.slice(0, 32)
   end

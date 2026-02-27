@@ -917,8 +917,21 @@ defmodule Sower.Orchestration do
     Task.Supervisor.start_child(Sower.TaskSupervisor, fn ->
       Repo.put_org_id(agent.org_id)
 
+      Logger.info(
+        msg: "Deployment processing started",
+        request_id: request_id,
+        agent_id: agent.id
+      )
+
       case do_deployment(request_id, subscriptions, opts) do
         {:ok, deployment} ->
+          Logger.info(
+            msg: "Deployment broadcast successful",
+            request_id: request_id,
+            deployment_sid: deployment.sid,
+            skipped: deployment.skipped
+          )
+
           SowerWeb.Endpoint.broadcast(
             "agent:#{agent.sid}",
             "deployment",
@@ -926,6 +939,12 @@ defmodule Sower.Orchestration do
           )
 
         {:error, reason} ->
+          Logger.error(
+            msg: "Deployment processing failed",
+            request_id: request_id,
+            reason: to_string(reason)
+          )
+
           SowerWeb.Endpoint.broadcast(
             "agent:#{agent.sid}",
             "deployment:error",
@@ -962,13 +981,33 @@ defmodule Sower.Orchestration do
     seeds = Enum.map(seed_deploys, & &1.seed)
 
     if seeds == [] do
+      Logger.warning(
+        msg: "No matching seeds found for deployment request",
+        request_id: request_id,
+        subscription_count: length(subscriptions)
+      )
+
       {:error, :seeds_not_found}
     else
       content_hash = compute_content_hash(seeds)
 
+      Logger.debug(
+        msg: "Processing deployment with matched seeds",
+        request_id: request_id,
+        seed_count: length(seeds),
+        content_hash: content_hash
+      )
+
       case find_duplicate_deployment(agent_id, content_hash, force?) do
         {:skip, existing} ->
           existing = Repo.preload(existing, [:seeds])
+
+          Logger.info(
+            msg: "Skipping deployment - duplicate found",
+            request_id: request_id,
+            deployment_sid: existing.sid,
+            content_hash: content_hash
+          )
 
           {:ok,
            %SowerClient.Orchestration.Deployment{
@@ -979,6 +1018,12 @@ defmodule Sower.Orchestration do
            }}
 
         :proceed ->
+          Logger.debug(
+            msg: "Creating new deployment record",
+            request_id: request_id,
+            agent_id: agent_id
+          )
+
           case create_deployment(%{
                  agent_id: agent_id,
                  content_hash: content_hash,
@@ -986,6 +1031,12 @@ defmodule Sower.Orchestration do
                  subscriptions: subscriptions
                }) do
             {:ok, deploy} ->
+              Logger.info(
+                msg: "Deployment record created successfully",
+                request_id: request_id,
+                deployment_sid: deploy.sid
+              )
+
               {:ok,
                %SowerClient.Orchestration.Deployment{
                  request_id: request_id,
@@ -994,8 +1045,14 @@ defmodule Sower.Orchestration do
                  skipped: false
                }}
 
-            other ->
-              other
+            {:error, reason} ->
+              Logger.error(
+                msg: "Failed to create deployment record",
+                request_id: request_id,
+                reason: inspect(reason)
+              )
+
+              {:error, reason}
           end
       end
     end
