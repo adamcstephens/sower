@@ -4,6 +4,7 @@ defmodule Sower.Orchestration do
   """
 
   alias Sower.Repo
+  alias Sower.Accounts.User
   alias Sower.Orchestration.Agent
   alias Sower.Orchestration.Deployment
   alias Sower.Orchestration.DeploymentPubSub
@@ -720,6 +721,105 @@ defmodule Sower.Orchestration do
       {:error, _} = error ->
         error
     end
+  end
+
+  def retry_deployment(%Deployment{} = deployment, user_id) when is_integer(user_id) do
+    Repo.transaction(fn ->
+      user = Repo.get(User, user_id, skip_org_id: true)
+
+      if is_nil(user) do
+        Repo.rollback(:unauthorized)
+      end
+
+      deployment =
+        from(d in Deployment, where: d.id == ^deployment.id, lock: "FOR UPDATE")
+        |> Repo.one()
+        |> Repo.preload([:seeds, :subscriptions])
+
+      cond do
+        is_nil(deployment) ->
+          Repo.rollback(:deployment_not_found)
+
+        user.org_id != deployment.org_id ->
+          Repo.rollback(:unauthorized)
+
+        deployment.result not in [:success, :failure] ->
+          Repo.rollback(:deployment_not_retryable)
+
+        true ->
+          retry_in_progress? =
+            from(d in Deployment,
+              where: d.parent_deployment_id == ^deployment.id and is_nil(d.result),
+              limit: 1,
+              select: d.id
+            )
+            |> Repo.one()
+
+          if retry_in_progress? do
+            Repo.rollback(:retry_in_progress)
+          else
+            max_retry_ordinal =
+              from(d in Deployment,
+                where: d.parent_deployment_id == ^deployment.id,
+                select: max(d.retry_ordinal)
+              )
+              |> Repo.one() || 0
+
+            attrs = %{
+              agent_id: deployment.agent_id,
+              content_hash: deployment.content_hash,
+              seeds: deployment.seeds,
+              subscriptions: deployment.subscriptions,
+              parent_deployment_id: deployment.id,
+              retried_by_user_id: user_id,
+              retry_ordinal: max_retry_ordinal + 1,
+              retried_at: DateTime.utc_now()
+            }
+
+            case create_deployment(attrs) do
+              {:ok, retry_deployment} ->
+                retry_deployment =
+                  Repo.preload(retry_deployment, [:agent, :subscriptions, seeds: [:tags]])
+
+                request_id = SowerClient.Sid.generate("request")
+
+                seed_deployments =
+                  Enum.map(retry_deployment.seeds, fn seed ->
+                    subscription_sid =
+                      retry_deployment.subscriptions
+                      |> Enum.find(fn sub ->
+                        sub.seed_name == seed.name and sub.seed_type == seed.seed_type
+                      end)
+                      |> case do
+                        nil -> nil
+                        sub -> sub.sid
+                      end
+
+                    %SowerClient.Orchestration.SeedDeployment{
+                      seed: seed,
+                      subscription_sid: subscription_sid
+                    }
+                  end)
+
+                SowerWeb.Endpoint.broadcast(
+                  "agent:#{retry_deployment.agent.sid}",
+                  "deployment",
+                  %{
+                    request_id: request_id,
+                    sid: retry_deployment.sid,
+                    seed_deployments: seed_deployments,
+                    skipped: false
+                  }
+                )
+
+                retry_deployment
+
+              {:error, changeset} ->
+                Repo.rollback(changeset)
+            end
+          end
+      end
+    end)
   end
 
   @doc """

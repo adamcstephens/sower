@@ -12,6 +12,9 @@ defmodule Sower.Orchestration.Deployment do
     field :org_id, Ecto.UUID
 
     belongs_to :agent, Sower.Orchestration.Agent
+    belongs_to :parent_deployment, __MODULE__
+    has_many :retries, __MODULE__, foreign_key: :parent_deployment_id
+    belongs_to :retried_by_user, Sower.Accounts.User
 
     many_to_many :subscriptions, Sower.Orchestration.Subscription,
       join_through: Orchestration.SubscriptionDeployment
@@ -21,6 +24,8 @@ defmodule Sower.Orchestration.Deployment do
     field :deployed_at, :utc_datetime
     field :result, Ecto.Enum, values: [:success, :failure, :partial]
     field :content_hash, :string
+    field :retry_ordinal, :integer
+    field :retried_at, :utc_datetime_usec
 
     timestamps()
   end
@@ -28,9 +33,19 @@ defmodule Sower.Orchestration.Deployment do
   @doc false
   def changeset(deployment, attrs) do
     deployment
-    |> cast(attrs, [:deployed_at, :result, :agent_id, :content_hash])
+    |> cast(attrs, [
+      :deployed_at,
+      :result,
+      :agent_id,
+      :content_hash,
+      :parent_deployment_id,
+      :retried_by_user_id,
+      :retry_ordinal,
+      :retried_at
+    ])
     |> put_assoc(:seeds, Map.get(attrs, :seeds, deployment.seeds))
     |> put_assoc(:subscriptions, Map.get(attrs, :subscriptions, deployment.subscriptions))
+    |> validate_number(:retry_ordinal, greater_than: 0)
     |> validate_required([])
   end
 end

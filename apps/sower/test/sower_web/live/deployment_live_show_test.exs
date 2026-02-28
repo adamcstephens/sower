@@ -61,4 +61,77 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
     assert html =~ "Seeds"
     assert html =~ "No seeds."
   end
+
+  test "shows retry button only for terminal deployments", %{conn: conn, user: user} do
+    Sower.Repo.put_org_id(user.org_id)
+    agent = agent_fixture()
+
+    successful_deployment =
+      deployment_fixture(%{
+        agent_id: agent.id,
+        result: :success,
+        deployed_at: DateTime.utc_now()
+      })
+
+    running_deployment =
+      deployment_fixture(%{
+        agent_id: agent.id,
+        result: nil,
+        deployed_at: nil
+      })
+
+    {:ok, _show_live, html} = live(conn, ~p"/deployments/#{successful_deployment.sid}")
+    assert html =~ "Retry"
+
+    {:ok, _show_live, html} = live(conn, ~p"/deployments/#{running_deployment.sid}")
+    refute html =~ "Retry"
+  end
+
+  test "creates a retry deployment from the show page", %{conn: conn, user: user} do
+    Sower.Repo.put_org_id(user.org_id)
+    agent = agent_fixture()
+
+    deployment =
+      deployment_fixture(%{
+        agent_id: agent.id,
+        result: :success,
+        deployed_at: DateTime.utc_now()
+      })
+
+    {:ok, show_live, _html} = live(conn, ~p"/deployments/#{deployment.sid}")
+
+    show_live |> element("button", "Retry") |> render_click()
+
+    retried =
+      Sower.Repo.get_by!(Sower.Orchestration.Deployment, parent_deployment_id: deployment.id)
+
+    assert retried.retried_by_user_id == user.id
+
+    assert_redirect(show_live, ~p"/deployments/#{retried.sid}")
+  end
+
+  test "shows error when retry is already in progress", %{conn: conn, user: user} do
+    Sower.Repo.put_org_id(user.org_id)
+    agent = agent_fixture()
+
+    parent =
+      deployment_fixture(%{
+        agent_id: agent.id,
+        result: :success,
+        deployed_at: DateTime.utc_now()
+      })
+
+    deployment_fixture(%{
+      agent_id: agent.id,
+      parent_deployment_id: parent.id,
+      retry_ordinal: 1,
+      retried_by_user_id: user.id,
+      retried_at: DateTime.utc_now()
+    })
+
+    {:ok, show_live, _html} = live(conn, ~p"/deployments/#{parent.sid}")
+
+    assert show_live |> element("button", "Retry") |> render_click() =~
+             "A retry is already in progress for this deployment"
+  end
 end

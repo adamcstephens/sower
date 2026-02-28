@@ -28,6 +28,20 @@ defmodule SowerWeb.DeploymentLive.Index do
           <.local_datetime datetime={deployment.deployed_at} user_timezone={@user_timezone} />
         </:col>
         <:action :let={{_id, deployment}}>
+          <button
+            :if={retryable?(deployment)}
+            type="button"
+            phx-click="retry"
+            phx-value-sid={deployment.sid}
+            phx-stop-propagation
+            phx-disable-with="Retrying..."
+            class="text-sm text-zinc-700 dark:text-zinc-200 hover:text-orange-500 dark:hover:text-orange-400 disabled:opacity-50"
+            disabled={@retrying_deployment_sid == deployment.sid}
+          >
+            Retry
+          </button>
+        </:action>
+        <:action :let={{_id, deployment}}>
           <div class="sr-only">
             <.link navigate={~p"/deployments/#{deployment}"}>Show</.link>
           </div>
@@ -46,6 +60,7 @@ defmodule SowerWeb.DeploymentLive.Index do
     {:ok,
      socket
      |> assign(:page_title, "Listing Deployments")
+     |> assign(:retrying_deployment_sid, nil)
      |> stream(:deployments, Orchestration.list_deployments() |> Sower.Repo.preload([:agent]))}
   end
 
@@ -62,5 +77,48 @@ defmodule SowerWeb.DeploymentLive.Index do
 
     # Update existing deployment in the stream
     {:noreply, stream_insert(socket, :deployments, deployment)}
+  end
+
+  @impl true
+  def handle_event("retry", %{"sid" => sid}, socket) do
+    deployment = Orchestration.get_deployment_sid(sid)
+
+    cond do
+      is_nil(deployment) ->
+        {:noreply, put_flash(socket, :error, "Deployment not found")}
+
+      not retryable?(deployment) ->
+        {:noreply,
+         socket
+         |> assign(:retrying_deployment_sid, nil)
+         |> put_flash(:error, "Only successful or failed deployments can be retried")}
+
+      true ->
+        socket = assign(socket, :retrying_deployment_sid, sid)
+
+        case Orchestration.retry_deployment(deployment, socket.assigns.current_user.id) do
+          {:ok, _new_deployment} ->
+            {:noreply,
+             socket
+             |> assign(:retrying_deployment_sid, nil)
+             |> put_flash(:info, "Retry deployment created")}
+
+          {:error, :retry_in_progress} ->
+            {:noreply,
+             socket
+             |> assign(:retrying_deployment_sid, nil)
+             |> put_flash(:error, "A retry is already in progress for this deployment")}
+
+          {:error, _reason} ->
+            {:noreply,
+             socket
+             |> assign(:retrying_deployment_sid, nil)
+             |> put_flash(:error, "Failed to retry deployment")}
+        end
+    end
+  end
+
+  defp retryable?(deployment) do
+    deployment.result in [:success, :failure]
   end
 end

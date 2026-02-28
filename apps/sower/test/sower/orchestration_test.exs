@@ -988,6 +988,144 @@ defmodule Sower.OrchestrationTest do
     end
   end
 
+  describe "retry_deployment/2" do
+    import Sower.OrchestrationFixtures
+
+    test "creates retry deployment for successful deployment", %{organization: org} do
+      user = user_fixture(%{org_id: org.org_id})
+      agent = agent_fixture()
+      seed = seed_fixture()
+
+      subscription =
+        subscription_fixture(%{
+          agent_id: agent.id,
+          seed_name: seed.name,
+          seed_type: seed.seed_type
+        })
+
+      deployment =
+        deployment_fixture(%{
+          agent_id: agent.id,
+          seeds: [seed],
+          subscriptions: [subscription],
+          result: :success,
+          deployed_at: DateTime.utc_now()
+        })
+
+      assert {:ok, retried} = Orchestration.retry_deployment(deployment, user.id)
+      assert retried.parent_deployment_id == deployment.id
+      assert retried.retried_by_user_id == user.id
+      assert retried.retry_ordinal == 1
+
+      retried = Sower.Repo.preload(retried, [:seeds, :subscriptions])
+      assert Enum.map(retried.seeds, & &1.id) == [seed.id]
+      assert Enum.map(retried.subscriptions, & &1.id) == [subscription.id]
+    end
+
+    test "creates retry deployment for failed deployment", %{organization: org} do
+      user = user_fixture(%{org_id: org.org_id})
+      agent = agent_fixture()
+
+      deployment =
+        deployment_fixture(%{
+          agent_id: agent.id,
+          result: :failure,
+          deployed_at: DateTime.utc_now()
+        })
+
+      assert {:ok, retried} = Orchestration.retry_deployment(deployment, user.id)
+      assert retried.parent_deployment_id == deployment.id
+    end
+
+    test "rejects retries for non-terminal deployment", %{organization: org} do
+      user = user_fixture(%{org_id: org.org_id})
+      agent = agent_fixture()
+
+      deployment =
+        deployment_fixture(%{
+          agent_id: agent.id,
+          result: nil,
+          deployed_at: nil
+        })
+
+      assert {:error, :deployment_not_retryable} =
+               Orchestration.retry_deployment(deployment, user.id)
+    end
+
+    test "rejects retries from user in another organization" do
+      owner_user = user_fixture()
+      owner_org_id = owner_user.org_id
+      Sower.Repo.put_org_id(owner_org_id)
+
+      agent = agent_fixture()
+
+      deployment =
+        deployment_fixture(%{
+          agent_id: agent.id,
+          result: :success,
+          deployed_at: DateTime.utc_now()
+        })
+
+      outsider = user_fixture()
+      Sower.Repo.put_org_id(owner_org_id)
+
+      assert {:error, :unauthorized} = Orchestration.retry_deployment(deployment, outsider.id)
+    end
+
+    test "blocks concurrent duplicate retries while retry is in progress", %{organization: org} do
+      user = user_fixture(%{org_id: org.org_id})
+      agent = agent_fixture()
+
+      deployment =
+        deployment_fixture(%{
+          agent_id: agent.id,
+          result: :success,
+          deployed_at: DateTime.utc_now()
+        })
+
+      assert {:ok, _retried} = Orchestration.retry_deployment(deployment, user.id)
+      assert {:error, :retry_in_progress} = Orchestration.retry_deployment(deployment, user.id)
+    end
+
+    test "broadcasts deployment event to agent topic when retry is created", %{organization: org} do
+      user = user_fixture(%{org_id: org.org_id})
+      agent = agent_fixture()
+      seed = seed_fixture(%{name: "kale", seed_type: "home-manager"})
+
+      subscription =
+        subscription_fixture(%{
+          agent_id: agent.id,
+          seed_name: seed.name,
+          seed_type: seed.seed_type
+        })
+
+      deployment =
+        deployment_fixture(%{
+          agent_id: agent.id,
+          seeds: [seed],
+          subscriptions: [subscription],
+          result: :success,
+          deployed_at: DateTime.utc_now()
+        })
+
+      Phoenix.PubSub.subscribe(Sower.PubSub, "agent:#{agent.sid}")
+
+      assert {:ok, retried} = Orchestration.retry_deployment(deployment, user.id)
+
+      assert_receive %Phoenix.Socket.Broadcast{
+        topic: topic,
+        event: "deployment",
+        payload: payload
+      }
+
+      assert topic == "agent:#{agent.sid}"
+      assert payload.sid == retried.sid
+      assert payload.skipped == false
+      assert is_binary(payload.request_id)
+      assert Enum.any?(payload.seed_deployments, &(&1.seed.sid == seed.sid))
+    end
+  end
+
   defp unique_hash do
     :crypto.strong_rand_bytes(16) |> Base.encode32(case: :lower) |> String.slice(0, 32)
   end

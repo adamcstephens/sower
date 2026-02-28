@@ -15,6 +15,15 @@ defmodule SowerWeb.DeploymentLive.Show do
           <span>{@deployment.sid}</span>
         </div>
         <:actions>
+          <.button
+            :if={retryable?(@deployment)}
+            type="button"
+            phx-click="retry"
+            phx-disable-with="Retrying..."
+            disabled={@retrying}
+          >
+            Retry
+          </.button>
           <.link patch={~p"/deployments"}>
             <.button>
               <.icon name="hero-arrow-left" />
@@ -133,7 +142,8 @@ defmodule SowerWeb.DeploymentLive.Show do
      socket
      |> assign(:page_title, "Show Deployment")
      |> assign(:expanded_seed_logs, MapSet.new())
-     |> assign(:loaded_seed_logs, MapSet.new())}
+     |> assign(:loaded_seed_logs, MapSet.new())
+     |> assign(:retrying, false)}
   end
 
   @impl true
@@ -174,6 +184,36 @@ defmodule SowerWeb.DeploymentLive.Show do
      |> assign(:loaded_seed_logs, loaded_seed_logs)}
   end
 
+  def handle_event("retry", _params, socket) do
+    socket = assign(socket, :retrying, true)
+
+    case Orchestration.retry_deployment(socket.assigns.deployment, socket.assigns.current_user.id) do
+      {:ok, deployment} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Retry deployment created")
+         |> redirect(to: ~p"/deployments/#{deployment.sid}")}
+
+      {:error, :deployment_not_retryable} ->
+        {:noreply,
+         socket
+         |> assign(:retrying, false)
+         |> put_flash(:error, "Only successful or failed deployments can be retried")}
+
+      {:error, :retry_in_progress} ->
+        {:noreply,
+         socket
+         |> assign(:retrying, false)
+         |> put_flash(:error, "A retry is already in progress for this deployment")}
+
+      {:error, _reason} ->
+        {:noreply,
+         socket
+         |> assign(:retrying, false)
+         |> put_flash(:error, "Failed to retry deployment")}
+    end
+  end
+
   defp expanded_seed_log?(expanded_seed_logs, seed_sid) do
     MapSet.member?(expanded_seed_logs, seed_sid)
   end
@@ -184,5 +224,9 @@ defmodule SowerWeb.DeploymentLive.Show do
 
   defp seed_log_url(deployment_sid, seed_sid) do
     ~p"/deployments/#{deployment_sid}/seeds/#{seed_sid}/log"
+  end
+
+  defp retryable?(deployment) do
+    deployment.result in [:success, :failure]
   end
 end
