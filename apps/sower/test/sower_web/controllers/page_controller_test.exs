@@ -1,6 +1,37 @@
 defmodule SowerWeb.PageControllerTest do
   use SowerWeb.ConnCase, async: true
 
+  test "home renders mobile dropdown navigation using semantic HTML", %{conn: conn} do
+    conn = get(conn, ~p"/")
+    html = html_response(conn, 200)
+
+    assert html =~ "mobile-nav-dropdown"
+    assert html =~ "<summary"
+    assert html =~ "Menu"
+    assert html =~ "mobile-nav-dropdown-panel"
+    assert html =~ ~s(href="/agents")
+    assert html =~ ~s(href="/seeds")
+    assert html =~ ~s(href="/deployments")
+  end
+
+  test "home keeps sign in action on one line", %{conn: conn} do
+    conn = get(conn, ~p"/")
+    html = html_response(conn, 200)
+
+    assert html =~ "Sign In"
+    assert html =~ "whitespace-nowrap"
+    assert html =~ "shrink-0"
+  end
+
+  test "mobile dropdown styles include open and closed states" do
+    css = File.read!("assets/css/app.css")
+
+    assert css =~ ".mobile-nav-dropdown-panel"
+    assert css =~ ".mobile-nav-dropdown[open] .mobile-nav-dropdown-panel"
+    assert css =~ ".mobile-nav-dropdown-chevron"
+    assert css =~ ".mobile-nav-dropdown[open] .mobile-nav-dropdown-chevron"
+  end
+
   test "home renders auth feedback below header when auth_error flash is present", %{conn: conn} do
     conn =
       conn

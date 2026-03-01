@@ -4,6 +4,26 @@
 
 /* This file is for your main application CSS */
 
+.mobile-nav-dropdown > summary::-webkit-details-marker {
+  display: none;
+}
+
+.mobile-nav-dropdown-panel {
+  display: none;
+}
+
+.mobile-nav-dropdown[open] .mobile-nav-dropdown-panel {
+  display: block;
+}
+
+.mobile-nav-dropdown-chevron {
+  transition: transform 0.2s ease;
+}
+
+.mobile-nav-dropdown[open] .mobile-nav-dropdown-chevron {
+  transform: rotate(180deg);
+}
+
 /* Responsive table: stacked cards on mobile, normal table on sm+ */
 @media (max-width: 639px) {
   .responsive-table,

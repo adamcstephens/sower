@@ -29,9 +29,54 @@ defmodule SowerWeb.Layouts do
     ~H"""
     <header>
       <nav class="bg-zinc-200 dark:bg-zinc-800 w-full">
-        <div class="max-w-screen-xl flex flex-no-wrap items-center justify-between mx-auto p-4">
-          <div class="items-center justify-between w-full md:flex md:w-auto md:order-1">
-            <ul class="flex flex-col font-medium mt-4 md:space-x-8 rtl:space-x-reverse md:flex-row md:mt-0 md:border-0 ">
+        <div class="mx-auto flex max-w-screen-xl items-center justify-between p-4">
+          <div class="md:order-1">
+            <details class="mobile-nav-dropdown relative md:hidden">
+              <summary class="flex list-none cursor-pointer items-center gap-2 rounded-lg bg-zinc-100 px-3 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-300/80 dark:bg-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:focus-visible:ring-zinc-300">
+                Menu
+                <svg
+                  class="mobile-nav-dropdown-chevron size-4 stroke-zinc-900 dark:stroke-zinc-200"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M6 9L12 15L18 9"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </summary>
+              <ul class="mobile-nav-dropdown-panel absolute left-0 top-full z-50 mt-2 w-56 rounded-lg border border-zinc-300 bg-zinc-100 p-2 shadow-lg dark:border-zinc-600 dark:bg-zinc-700">
+                <li>
+                  <.link
+                    navigate={~p"/agents"}
+                    class="block rounded-md px-3 py-2 hover:text-orange-700 hover:bg-zinc-200 dark:hover:text-orange-300 dark:hover:bg-zinc-600"
+                  >
+                    Agents
+                  </.link>
+                </li>
+                <li>
+                  <.link
+                    navigate={~p"/seeds"}
+                    class="block rounded-md px-3 py-2 hover:text-orange-700 hover:bg-zinc-200 dark:hover:text-orange-300 dark:hover:bg-zinc-600"
+                  >
+                    Seeds
+                  </.link>
+                </li>
+                <li>
+                  <.link
+                    navigate={~p"/deployments"}
+                    class="block rounded-md px-3 py-2 hover:text-orange-700 hover:bg-zinc-200 dark:hover:text-orange-300 dark:hover:bg-zinc-600"
+                  >
+                    Deployments
+                  </.link>
+                </li>
+              </ul>
+            </details>
+
+            <ul class="hidden font-medium md:flex md:items-center md:space-x-8 rtl:space-x-reverse">
               <li>
                 <.link navigate={~p"/agents"} class="hover:text-orange-700 dark:hover:text-orange-300">
                   Agents
@@ -66,7 +111,7 @@ defmodule SowerWeb.Layouts do
             </ul>
           </div>
 
-          <div class="relative md:order-2 space-x-3 md:space-x-0 rtl:space-x-reverse">
+          <div class="relative flex shrink-0 items-center md:order-2 md:space-x-0 rtl:space-x-reverse">
             <%= if @current_user || nil do %>
               <button
                 type="button"
@@ -163,7 +208,7 @@ defmodule SowerWeb.Layouts do
             <% else %>
               <.link
                 navigate={~p"/auth/oidcc"}
-                class="rounded-lg bg-zinc-100 px-2 py-1 text-[0.8125rem] font-semibold leading-6 text-zinc-900 hover:bg-zinc-200/80 active:text-zinc-900/70"
+                class="inline-flex shrink-0 whitespace-nowrap rounded-lg bg-zinc-100 px-2 py-1 text-[0.8125rem] font-semibold leading-6 text-zinc-900 hover:bg-zinc-200/80 active:text-zinc-900/70"
               >
                 Sign In
               </.link>
