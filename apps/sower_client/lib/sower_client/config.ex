@@ -13,6 +13,8 @@ defmodule SowerClient.Config do
   require OpenApiSpex
 
   @config_file_env "SOWER_CONFIG_FILE"
+  @path_setting_keys ["state_directory"]
+  @env_var_pattern ~r/\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\})/
 
   OpenApiSpex.schema(%{
     title: "Config",
@@ -163,7 +165,9 @@ defmodule SowerClient.Config do
         default_config_path()
       end
 
-    Path.absname(path)
+    path
+    |> expand_path!("config_path")
+    |> Path.absname()
   end
 
   @doc """
@@ -229,7 +233,7 @@ defmodule SowerClient.Config do
             xdg_path_file(:state, app_name, nil)
 
           state ->
-            state
+            expand_path!(state, "STATE_DIRECTORY")
         end
 
       _ ->
@@ -244,6 +248,7 @@ defmodule SowerClient.Config do
 
       path ->
         path
+        |> expand_path!("XDG_CONFIG_HOME")
         |> Path.join(app_name)
         |> Path.join(filename)
     end
@@ -256,6 +261,7 @@ defmodule SowerClient.Config do
 
       path ->
         path
+        |> expand_path!("XDG_STATE_HOME")
         |> Path.join(app_name)
     end
   end
@@ -275,6 +281,7 @@ defmodule SowerClient.Config do
   """
   def parse_file_values(config_map) do
     config_map
+    |> expand_known_path_values()
     |> Enum.map(fn {key, value} ->
       key =
         if is_atom(key) do
@@ -291,7 +298,13 @@ defmodule SowerClient.Config do
           # Base key exists, skip file read and drop the _file key
           nil
         else
-          value = value |> Path.absname() |> File.read!() |> String.trim()
+          value =
+            value
+            |> expand_path!(key)
+            |> Path.absname()
+            |> File.read!()
+            |> String.trim()
+
           {real_key, value}
         end
       else
@@ -300,6 +313,56 @@ defmodule SowerClient.Config do
     end)
     |> Enum.reject(&is_nil/1)
     |> Map.new()
+  end
+
+  defp expand_known_path_values(config_map) do
+    Enum.reduce(config_map, config_map, fn {key, value}, acc ->
+      setting_key = to_string(key)
+
+      if setting_key in @path_setting_keys and is_binary(value) do
+        Map.put(acc, key, expand_path!(value, setting_key))
+      else
+        acc
+      end
+    end)
+  end
+
+  defp expand_path!(value, _setting_name) when not is_binary(value), do: value
+
+  defp expand_path!(value, setting_name) do
+    value
+    |> expand_home_token()
+    |> expand_env_tokens(setting_name)
+  end
+
+  defp expand_home_token("~"), do: user_home!()
+
+  defp expand_home_token("~/" <> rest) do
+    Path.join(user_home!(), rest)
+  end
+
+  defp expand_home_token(value), do: value
+
+  defp expand_env_tokens(value, setting_name) do
+    Regex.replace(@env_var_pattern, value, fn _full, plain, wrapped ->
+      var_name = plain || wrapped
+
+      case System.get_env(var_name) do
+        nil ->
+          raise ArgumentError,
+                "Invalid path for #{setting_name}: missing environment variable #{var_name}"
+
+        env_value ->
+          env_value
+      end
+    end)
+  end
+
+  defp user_home!() do
+    case System.user_home() do
+      nil -> raise ArgumentError, "Cannot expand '~': user home directory is unavailable"
+      home -> home
+    end
   end
 
   # parse subscriptions and rules

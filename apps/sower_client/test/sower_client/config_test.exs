@@ -143,6 +143,42 @@ defmodule SowerClient.ConfigTest do
       assert result["access_token"] == "token-from-env"
       refute Map.has_key?(result, "access_token_file")
     end
+
+    test "expands environment variables in _file paths", %{token_file: token_file} do
+      token_dir = Path.dirname(token_file)
+      token_name = Path.basename(token_file)
+
+      result =
+        with_env(%{"TOKEN_DIR" => token_dir}, fn ->
+          Config.parse_file_values(%{"access_token_file" => "$TOKEN_DIR/#{token_name}"})
+        end)
+
+      assert result["access_token"] == "secret-token-123"
+    end
+
+    test "expands tilde in _file paths", %{token_file: token_file} do
+      user_home = System.user_home()
+      token_name = "config_token_#{:rand.uniform(1000)}"
+      home_token_file = Path.join(user_home, token_name)
+
+      File.cp!(token_file, home_token_file)
+
+      on_exit(fn -> File.rm(home_token_file) end)
+
+      result = Config.parse_file_values(%{"access_token_file" => "~/#{token_name}"})
+
+      assert result["access_token"] == "secret-token-123"
+    end
+
+    test "raises a clear error when an env variable is missing in _file path" do
+      assert_raise ArgumentError,
+                   "Invalid path for access_token_file: missing environment variable MISSING_TOKEN_DIR",
+                   fn ->
+                     Config.parse_file_values(%{
+                       "access_token_file" => "$MISSING_TOKEN_DIR/token"
+                     })
+                   end
+    end
   end
 
   describe "read_config_file/1" do
@@ -195,18 +231,20 @@ defmodule SowerClient.ConfigTest do
     end
 
     test "loads config with defaults and overrides", %{config_file: config_file} do
-      config =
-        Config.load(
-          overrides: %{"name" => "override-host"},
-          config_path: config_file,
-          defaults: %{"state_directory" => "/var/lib/test"}
-        )
+      expanded_config =
+        with_env(%{"TEST_STATE_DIR" => "/var/lib/test"}, fn ->
+          Config.load(
+            overrides: %{"name" => "override-host"},
+            config_path: config_file,
+            defaults: %{"state_directory" => "$TEST_STATE_DIR"}
+          )
+        end)
 
-      assert %Config{} = config
-      assert config.endpoint == "https://my.sower.dev"
-      assert config.caches == ["attic://server:cache"]
-      assert config.name == "override-host"
-      assert config.state_directory == "/var/lib/test"
+      assert %Config{} = expanded_config
+      assert expanded_config.endpoint == "https://my.sower.dev"
+      assert expanded_config.caches == ["attic://server:cache"]
+      assert expanded_config.name == "override-host"
+      assert expanded_config.state_directory == "/var/lib/test"
     end
 
     test "returns struct when no config file exists" do
@@ -218,6 +256,19 @@ defmodule SowerClient.ConfigTest do
 
       assert %Config{} = config
       assert config.endpoint == "https://default.com"
+    end
+
+    test "raises a clear error when state_directory references a missing env var", %{
+      config_file: config_file
+    } do
+      assert_raise ArgumentError,
+                   "Invalid path for state_directory: missing environment variable MISSING_STATE_DIR",
+                   fn ->
+                     Config.load(
+                       config_path: config_file,
+                       defaults: %{"state_directory" => "$MISSING_STATE_DIR/sower"}
+                     )
+                   end
     end
 
     test "casts deployment_profiles additionalProperties into deployment profiles", %{
