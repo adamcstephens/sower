@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"codeberg.org/adamcstephens/sower/client-go"
-	"codeberg.org/adamcstephens/sower/cmd/cli/builder"
 	"github.com/adrg/xdg"
 	"github.com/alexflint/go-arg"
 	"github.com/lmittmann/tint"
@@ -22,8 +21,6 @@ import (
 var version = "dev"
 
 type config struct {
-	Builder  *builderCmd  `arg:"subcommand:builder"`
-	Daemon   *daemonCmd   `arg:"subcommand:daemon"`
 	Seed     *seedCmd     `arg:"subcommand:seed"`
 	Services *servicesCmd `arg:"subcommand:services"`
 
@@ -33,31 +30,6 @@ type config struct {
 	Debug           bool     `arg:"--debug"`
 	Endpoint        string   `arg:"--endpoint,-e,env:SOWER_ENDPOINT"`
 	Version         bool     `arg:"--version"`
-}
-
-type builderCmd struct {
-	Eval  *builderEvalCmd  `arg:"subcommand:eval"`
-	Build *builderBuildCmd `arg:"subcommand:build"`
-	Push  *builderPushCmd  `arg:"subcommand:push"`
-}
-
-type builderBuildCmd struct {
-	Workers int    `arg:"--workers,-w"`
-	System  string `arg:"--system"`
-}
-
-type builderEvalCmd struct {
-	Workers int    `arg:"--workers,-w"`
-	System  string `arg:"--system"`
-}
-
-type builderPushCmd struct {
-	Workers int      `arg:"--workers,-w"`
-	System  string   `arg:"--system"`
-	Targets []string `arg:"--target,-t,required,separate" help:"Upload target (attic:<cache>[?jobs=N] or nix-copy:<remote>). Can be repeated."`
-}
-
-type daemonCmd struct {
 }
 
 type seedCmd struct {
@@ -190,10 +162,6 @@ func main() {
 	case parseResult != nil:
 		slog.Error("Unknown error", "error", parseResult)
 		os.Exit(1)
-	case args.Builder != nil:
-		buildCommand(cfg)
-	case args.Daemon != nil:
-		daemonCommand(cfg)
 	case args.Seed != nil:
 		err := seedSubcommand(cfg)
 		if err != nil {
@@ -228,43 +196,6 @@ func initLogger(debug bool) {
 	}))
 
 	slog.SetDefault(logger)
-}
-
-func buildCommand(cfg config) {
-	switch {
-	case cfg.Builder.Build != nil:
-		err := builder.Build(cfg.Builder.Build.Workers, cfg.Builder.Build.System)
-		if err != nil {
-			slog.Error("Failed to eval", "error", err)
-			os.Exit(1)
-		}
-	case cfg.Builder.Eval != nil:
-		err := builder.Eval(cfg.Builder.Eval.Workers, cfg.Builder.Eval.System)
-		if err != nil {
-			slog.Error("Failed to eval", "error", err)
-			os.Exit(1)
-		}
-	case cfg.Builder.Push != nil:
-		err := builder.Push(cfg.Builder.Push.Workers, cfg.Builder.Push.System, cfg.Builder.Push.Targets)
-		if err != nil {
-			slog.Error("Failed to eval", "error", err)
-			os.Exit(1)
-		}
-	default:
-		slog.Error("No subcommand specified")
-		os.Exit(1)
-	}
-}
-
-func daemonCommand(cfg config) {
-	client := newClient(cfg)
-
-	err := client.connect()
-	if err != nil {
-		slog.Error("failed to connect")
-	}
-
-	client.run()
 }
 
 func seedSubcommand(cfg config) error {
