@@ -33,28 +33,28 @@ defmodule SowerWeb.Layouts do
           <div class="items-center justify-between w-full md:flex md:w-auto md:order-1">
             <ul class="flex flex-col font-medium mt-4 md:space-x-8 rtl:space-x-reverse md:flex-row md:mt-0 md:border-0 ">
               <li>
-                <.link navigate={~p"/seeds"} class="hover:text-orange-700 dark:hover:text-orange-300">
-                  Seeds
-                </.link>
-              </li>
-              <li>
                 <.link navigate={~p"/agents"} class="hover:text-orange-700 dark:hover:text-orange-300">
                   Agents
                 </.link>
               </li>
               <li>
-                <.link
-                  navigate={~p"/nix/caches"}
-                  class="hover:text-orange-700 dark:hover:text-orange-300"
-                >
-                  Caches
+                <.link navigate={~p"/seeds"} class="hover:text-orange-700 dark:hover:text-orange-300">
+                  Seeds
                 </.link>
               </li>
-              <li>
-                <.link navigate={~p"/forges"} class="hover:text-orange-700 dark:hover:text-orange-300">
-                  Forges
-                </.link>
-              </li>
+              <%!-- <li> --%>
+              <%!--   <.link --%>
+              <%!--     navigate={~p"/nix/caches"} --%>
+              <%!--     class="hover:text-orange-700 dark:hover:text-orange-300" --%>
+              <%!--   > --%>
+              <%!--     Caches --%>
+              <%!--   </.link> --%>
+              <%!-- </li> --%>
+              <%!-- <li> --%>
+              <%!--   <.link navigate={~p"/forges"} class="hover:text-orange-700 dark:hover:text-orange-300"> --%>
+              <%!--     Forges --%>
+              <%!--   </.link> --%>
+              <%!-- </li> --%>
               <li>
                 <.link
                   navigate={~p"/deployments"}
@@ -174,10 +174,31 @@ defmodule SowerWeb.Layouts do
     </header>
     <main class="px-4 py-8 sm:px-6 lg:px-8 relative">
       <div class="mx-auto max-w-screen-xl">
+        <.auth_feedback flash={@flash} />
         <.flash_group flash={@flash} />
         {render_slot(@inner_block)}
       </div>
     </main>
+    """
+  end
+
+  @doc """
+  Shows login-specific authentication feedback.
+  """
+  attr :flash, :map, required: true
+  attr :id, :string, default: "auth-feedback"
+
+  def auth_feedback(assigns) do
+    ~H"""
+    <div
+      :if={msg = Phoenix.Flash.get(@flash, :auth_error)}
+      id={@id}
+      role="alert"
+      data-auto-dismiss-ms="5000"
+      class="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-rose-900 shadow-sm transition-opacity duration-300"
+    >
+      <p class="text-sm leading-5">{msg}</p>
+    </div>
     """
   end
 

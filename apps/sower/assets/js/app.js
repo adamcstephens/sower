@@ -25,6 +25,31 @@ import topbar from "../vendor/topbar";
 let csrfToken = document
   .querySelector("meta[name='csrf-token']")
   .getAttribute("content");
+
+let initAutoDismiss = () => {
+  document.querySelectorAll("[data-auto-dismiss-ms]").forEach((element) => {
+    if (element.dataset.autoDismissInit === "true") {
+      return;
+    }
+
+    let timeout = Number.parseInt(element.dataset.autoDismissMs || "0", 10);
+
+    if (!Number.isFinite(timeout) || timeout <= 0) {
+      return;
+    }
+
+    element.dataset.autoDismissInit = "true";
+
+    window.setTimeout(() => {
+      element.classList.add("opacity-0");
+
+      window.setTimeout(() => {
+        element.remove();
+      }, 300);
+    }, timeout);
+  });
+};
+
 let liveSocket = new LiveSocket("/live", Socket, {
   params: {
     _csrf_token: csrfToken,
@@ -35,7 +60,14 @@ let liveSocket = new LiveSocket("/live", Socket, {
 // Show progress bar on live navigation and form submits
 topbar.config({ barColors: { 0: "#29d" }, shadowColor: "rgba(0, 0, 0, .3)" });
 window.addEventListener("phx:page-loading-start", (_info) => topbar.show(300));
-window.addEventListener("phx:page-loading-stop", (_info) => topbar.hide());
+window.addEventListener("phx:page-loading-stop", (_info) => {
+  topbar.hide();
+  initAutoDismiss();
+});
+
+window.addEventListener("DOMContentLoaded", () => {
+  initAutoDismiss();
+});
 
 // connect if there are any LiveViews on the page
 liveSocket.connect();
