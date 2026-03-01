@@ -4,6 +4,7 @@ defmodule SowerAgent.DeployerTest do
   import ExUnit.CaptureLog
 
   alias SowerAgent.Deployer
+  alias SowerClient.Orchestration.Deployment
   alias SowerClient.Orchestration.SeedDeployment
   alias SowerClient.Orchestration.DeploymentProfile
   alias SowerClient.Orchestration.Subscription
@@ -116,6 +117,63 @@ defmodule SowerAgent.DeployerTest do
     test "returns :failure when all seed activations fail" do
       result = [{:ok, {:error, 1, ["failed"]}}, {:error, :failed_to_realize, %{}}]
       assert Deployer.deployment_result(result) == :failure
+    end
+  end
+
+  describe "maybe_reboot/3" do
+    test "skips reboot logic when deployment has no nixos seeds" do
+      deployment = %Deployment{
+        sid: "dep_non_nixos",
+        seed_deployments: [seed_deploy("sub1", "service")]
+      }
+
+      assert Deployer.maybe_reboot(deployment, :success,
+               reboot_reason_fun: fn _ ->
+                 send(self(), :reboot_reason_called)
+                 nil
+               end,
+               reboot_fun: fn _ ->
+                 send(self(), :reboot_called)
+                 {:ok, []}
+               end,
+               activation_enabled_fun: fn -> true end
+             ) == :ok
+
+      refute_received :reboot_reason_called
+      refute_received :reboot_called
+    end
+
+    test "evaluates reboot logic when deployment includes nixos seeds" do
+      deployment = %Deployment{sid: "dep_nixos", seed_deployments: [seed_deploy("sub1", "nixos")]}
+
+      assert Deployer.maybe_reboot(deployment, :success,
+               reboot_reason_fun: fn _ ->
+                 send(self(), :reboot_reason_called)
+                 nil
+               end,
+               reboot_fun: fn _ -> flunk("reboot should not be requested") end,
+               activation_enabled_fun: fn -> true end
+             ) == :ok
+
+      assert_received :reboot_reason_called
+    end
+
+    test "requests reboot when nixos deployment requires it" do
+      deployment = %Deployment{
+        sid: "dep_reboot",
+        seed_deployments: [seed_deploy("sub1", "nixos")]
+      }
+
+      assert Deployer.maybe_reboot(deployment, :success,
+               reboot_reason_fun: fn _ -> "policy_always" end,
+               reboot_fun: fn opts ->
+                 send(self(), {:reboot_called, opts})
+                 {:ok, ["ok"]}
+               end,
+               activation_enabled_fun: fn -> true end
+             ) == :ok
+
+      assert_received {:reboot_called, [reason: "policy_always"]}
     end
   end
 

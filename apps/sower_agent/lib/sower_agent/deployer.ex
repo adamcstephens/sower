@@ -211,57 +211,78 @@ defmodule SowerAgent.Deployer do
     Storage.read().subscriptions |> Enum.find(&(&1.sid == sid))
   end
 
-  def maybe_reboot(%Deployment{} = _deployment, result) when result != :success do
+  def maybe_reboot(%Deployment{} = deployment, result) do
+    maybe_reboot(deployment, result, [])
+  end
+
+  def maybe_reboot(%Deployment{} = _deployment, result, _opts) when result != :success do
     Logger.debug(msg: "Skipping reboot due to unsuccesful deployment", result: result)
     :ok
   end
 
-  def maybe_reboot(%Deployment{} = deployment, :success) do
-    case reboot_reason(deployment.seed_deployments) do
-      nil ->
-        :ok
+  def maybe_reboot(%Deployment{} = deployment, :success, opts) do
+    reboot_reason_fun = Keyword.get(opts, :reboot_reason_fun, &reboot_reason/1)
+    reboot_fun = Keyword.get(opts, :reboot_fun, &Activator.reboot/1)
 
-      reason ->
-        if Application.get_env(:sower_agent, :enable_activation, true) do
-          Logger.info(
-            msg: "Reboot required by deployment policy",
-            deployment_sid: deployment.sid,
-            reason: reason
-          )
+    activation_enabled_fun =
+      Keyword.get(opts, :activation_enabled_fun, fn ->
+        Application.get_env(:sower_agent, :enable_activation, true)
+      end)
 
-          case Activator.reboot(reason: reason) do
-            {:ok, output} ->
-              Logger.info(
-                msg: "Reboot request completed",
-                deployment_sid: deployment.sid,
-                reason: reason,
-                output: output
-              )
+    if Enum.any?(deployment.seed_deployments, &(get_in(&1.seed.seed_type) == "nixos")) do
+      case reboot_reason_fun.(deployment.seed_deployments) do
+        nil ->
+          :ok
 
-            {:error, code, output} ->
-              Logger.error(
-                msg: "Reboot request failed",
-                deployment_sid: deployment.sid,
-                reason: reason,
-                code: code,
-                output: output
-              )
+        reason ->
+          if activation_enabled_fun.() do
+            Logger.info(
+              msg: "Reboot required by deployment policy",
+              deployment_sid: deployment.sid,
+              reason: reason
+            )
 
-            {:error, reboot_error} ->
-              Logger.error(
-                msg: "Reboot request failed",
-                deployment_sid: deployment.sid,
-                reason: reason,
-                error: inspect(reboot_error)
-              )
+            case reboot_fun.(reason: reason) do
+              {:ok, output} ->
+                Logger.info(
+                  msg: "Reboot request completed",
+                  deployment_sid: deployment.sid,
+                  reason: reason,
+                  output: output
+                )
+
+              {:error, code, output} ->
+                Logger.error(
+                  msg: "Reboot request failed",
+                  deployment_sid: deployment.sid,
+                  reason: reason,
+                  code: code,
+                  output: output
+                )
+
+              {:error, reboot_error} ->
+                Logger.error(
+                  msg: "Reboot request failed",
+                  deployment_sid: deployment.sid,
+                  reason: reason,
+                  error: inspect(reboot_error)
+                )
+            end
+          else
+            Logger.debug(
+              msg: "Reboot run in noop",
+              deployment_sid: deployment.sid,
+              reason: reason
+            )
           end
-        else
-          Logger.debug(
-            msg: "Reboot run in noop",
-            deployment_sid: deployment.sid,
-            reason: reason
-          )
-        end
+      end
+    else
+      Logger.debug(
+        msg: "Skipping reboot for non-nixos deployment",
+        deployment_sid: deployment.sid
+      )
+
+      :ok
     end
   end
 
@@ -272,9 +293,7 @@ defmodule SowerAgent.Deployer do
       ) do
     profiles =
       seed_deployments
-      |> Enum.filter(fn %SeedDeployment{seed: seed} ->
-        seed.seed_type == "nixos"
-      end)
+      |> Enum.filter(&(get_in(&1.seed.seed_type) == "nixos"))
       |> Enum.map(fn %SeedDeployment{subscription_sid: subscription_sid} ->
         get_profile.(subscription_sid) || %DeploymentProfile{}
       end)
