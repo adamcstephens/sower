@@ -6,16 +6,22 @@ defmodule SowerAgent.Client do
   alias SowerAgent.Scheduler
   alias SowerAgent.Storage
 
-  def deploy(%SowerClient.Orchestration.Subscription{} = sub) do
-    GenServer.cast(__MODULE__, {:deployment_request, sub})
+  def deploy(%SowerClient.Orchestration.Subscription{} = sub, opts \\ []) do
+    force? = Keyword.get(opts, :force, false)
+    GenServer.cast(__MODULE__, {:deployment_request, sub, force?})
   end
 
   @impl Slipstream
-  def handle_cast({:deployment_request, %{sid: sid}}, socket) do
+  def handle_cast({:deployment_request, %{sid: sid}, force?}, socket) do
+    request_payload =
+      if force? do
+        %{subscription_sids: [sid], force: true}
+      else
+        %{subscription_sids: [sid]}
+      end
+
     {:ok, upgrade_request} =
-      SowerClient.Orchestration.DeploymentRequest.new(%{
-        subscription_sids: [sid]
-      })
+      SowerClient.Orchestration.DeploymentRequest.new(request_payload)
 
     {:ok, _ref} = push_message(socket, upgrade_request)
 

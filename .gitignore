@@ -33,6 +33,7 @@ npm-debug.log
 /assets/node_modules/
 
 /.dev-*
+/.dev.*
 .secret.envrc
 .services/*/data/
 
@@ -47,3 +48,4 @@ dev-server.json
 /sower-activator
 .direnv
 .workspaces/
+.gocache/

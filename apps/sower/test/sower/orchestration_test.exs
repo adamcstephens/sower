@@ -988,6 +988,72 @@ defmodule Sower.OrchestrationTest do
     end
   end
 
+  describe "request_deployment/1 force behavior" do
+    import Sower.OrchestrationFixtures
+
+    test "non-force request skips duplicate successful deployment", %{organization: _org} do
+      agent = agent_fixture()
+      _seed = seed_fixture(%{name: "retry-host", seed_type: "nixos"})
+
+      subscription =
+        subscription_fixture(%{
+          agent_id: agent.id,
+          seed_name: "retry-host",
+          seed_type: "nixos"
+        })
+
+      {:ok, first_request} =
+        SowerClient.Orchestration.DeploymentRequest.new(%{
+          subscription_sids: [subscription.sid]
+        })
+
+      assert {:ok, first_deployment} = Orchestration.request_deployment(first_request)
+      assert first_deployment.skipped == false
+
+      {:ok, second_request} =
+        SowerClient.Orchestration.DeploymentRequest.new(%{
+          subscription_sids: [subscription.sid]
+        })
+
+      assert {:ok, second_deployment} = Orchestration.request_deployment(second_request)
+      assert second_deployment.skipped == true
+      assert second_deployment.sid == first_deployment.sid
+    end
+
+    test "force request creates new deployment even when duplicate successful deployment exists",
+         %{
+           organization: _org
+         } do
+      agent = agent_fixture()
+      _seed = seed_fixture(%{name: "retry-host", seed_type: "nixos"})
+
+      subscription =
+        subscription_fixture(%{
+          agent_id: agent.id,
+          seed_name: "retry-host",
+          seed_type: "nixos"
+        })
+
+      {:ok, first_request} =
+        SowerClient.Orchestration.DeploymentRequest.new(%{
+          subscription_sids: [subscription.sid]
+        })
+
+      assert {:ok, first_deployment} = Orchestration.request_deployment(first_request)
+      assert first_deployment.skipped == false
+
+      {:ok, second_request} =
+        SowerClient.Orchestration.DeploymentRequest.new(%{
+          subscription_sids: [subscription.sid],
+          force: true
+        })
+
+      assert {:ok, second_deployment} = Orchestration.request_deployment(second_request)
+      assert second_deployment.skipped == false
+      assert second_deployment.sid != first_deployment.sid
+    end
+  end
+
   describe "retry_deployment/2" do
     import Sower.OrchestrationFixtures
 

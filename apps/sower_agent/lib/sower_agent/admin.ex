@@ -17,13 +17,19 @@ defmodule SowerAgent.Admin do
   end
 
   def deploy(seed_type) when is_seed_type?(seed_type) do
+    deploy(seed_type, [])
+  end
+
+  def deploy(seed_type, opts) when is_seed_type?(seed_type) do
+    force? = Keyword.get(opts, :force, false)
+
     case subs(seed_type) do
       [] ->
         Logger.error(msg: "nixos subscription not found")
         {:error, :subscription_not_found}
 
       [sub] ->
-        SowerAgent.Client.deploy(sub)
+        SowerAgent.Client.deploy(sub, force: force?)
 
       [_ | _] ->
         Logger.error(msg: "too many nixos subscriptions found")
