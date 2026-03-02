@@ -47,8 +47,20 @@ defmodule SowerAgent.Deployer do
   end
 
   def upgrade(%Deployment{} = deployment) do
-    deployment.seed_deployments
-    |> async_stream(fn %{seed: seed} = seed_deploy ->
+    upgrade(deployment, [])
+  end
+
+  def upgrade(%Deployment{} = deployment, opts) do
+    async_stream_fun = Keyword.get(opts, :async_stream_fun, &async_stream/2)
+    realize_seed_fun = Keyword.get(opts, :realize_seed_fun, &realize_seed/1)
+
+    get_deployment_profile_fun =
+      Keyword.get(opts, :get_deployment_profile_fun, &get_deployment_profile/1)
+
+    activate_seed_fun = Keyword.get(opts, :activate_seed_fun, &SowerAgent.Seed.activate/2)
+    write_log_fun = Keyword.get(opts, :write_log_fun, &maybe_write_log/3)
+
+    async_stream_fun.(deployment.seed_deployments, fn %{seed: seed} = seed_deploy ->
       Logger.debug(
         msg: "Realizing seed",
         name: seed.name,
@@ -57,46 +69,11 @@ defmodule SowerAgent.Deployer do
         artifact: seed.artifact
       )
 
-      case System.cmd("nix-store", ["--realize", seed.artifact],
-             stderr_to_stdout: true,
-             into: [],
-             lines: 1024
-           ) do
-        {_output, 0} ->
-          Logger.info(
-            msg: "Successfully realized seed",
-            name: seed.name,
-            seed_sid: seed.sid,
-            seed_type: seed.seed_type,
-            artifact: seed.artifact
-          )
-
-          {:ok, seed_deploy}
-
-        {output, exit_code} ->
-          output =
-            Enum.filter(output, fn line ->
-              line not in [
-                "warning: you did not specify '--add-root'; the result might be removed by the garbage collector"
-              ]
-            end)
-
-          Logger.error(
-            msg: "Failed to realize seed",
-            name: seed.name,
-            seed_sid: seed.sid,
-            seed_type: seed.seed_type,
-            artifact: seed.artifact,
-            exit_code: exit_code,
-            output: output
-          )
-
-          {:error, :failed_to_realize, seed_deploy}
-      end
+      realize_seed_fun.(seed_deploy)
     end)
-    |> async_stream(fn
+    |> async_stream_fun.(fn
       {:ok, {:ok, %SeedDeployment{seed: seed} = seed_deploy}} ->
-        profile = get_deployment_profile(seed_deploy.subscription_sid)
+        profile = get_deployment_profile_fun.(seed_deploy.subscription_sid)
 
         Logger.info(
           msg: "Activating seed",
@@ -108,7 +85,7 @@ defmodule SowerAgent.Deployer do
           activation_args: get_in(profile.activation_args)
         )
 
-        result = SowerAgent.Seed.activate(seed, profile)
+        result = activate_seed_fun.(seed, profile)
 
         case result do
           {:ok, output} ->
@@ -118,7 +95,7 @@ defmodule SowerAgent.Deployer do
               seed_sid: seed.sid
             )
 
-            maybe_write_log(deployment, seed, output)
+            write_log_fun.(deployment, seed, output)
 
           {:error, _code, output} ->
             Logger.error(
@@ -127,7 +104,19 @@ defmodule SowerAgent.Deployer do
               seed_sid: seed.sid
             )
 
-            maybe_write_log(deployment, seed, output)
+            write_log_fun.(deployment, seed, output)
+
+          {:error, reason} when reason in [:activator_unavailable, :cmd_not_found] ->
+            Logger.error(
+              msg: "Missing activator during deployment activation",
+              deployment_sid: deployment.sid,
+              seed_sid: seed.sid,
+              reason: inspect(reason)
+            )
+
+            write_log_fun.(deployment, seed, [
+              "FATAL: missing activator executable sower-activator; deployment cannot continue"
+            ])
 
           {:error, _reason} ->
             :ok
@@ -142,6 +131,45 @@ defmodule SowerAgent.Deployer do
         error
     end)
     |> Enum.to_list()
+  end
+
+  defp realize_seed(%SeedDeployment{seed: seed} = seed_deploy) do
+    case System.cmd("nix-store", ["--realize", seed.artifact],
+           stderr_to_stdout: true,
+           into: [],
+           lines: 1024
+         ) do
+      {_output, 0} ->
+        Logger.info(
+          msg: "Successfully realized seed",
+          name: seed.name,
+          seed_sid: seed.sid,
+          seed_type: seed.seed_type,
+          artifact: seed.artifact
+        )
+
+        {:ok, seed_deploy}
+
+      {output, exit_code} ->
+        output =
+          Enum.filter(output, fn line ->
+            line not in [
+              "warning: you did not specify '--add-root'; the result might be removed by the garbage collector"
+            ]
+          end)
+
+        Logger.error(
+          msg: "Failed to realize seed",
+          name: seed.name,
+          seed_sid: seed.sid,
+          seed_type: seed.seed_type,
+          artifact: seed.artifact,
+          exit_code: exit_code,
+          output: output
+        )
+
+        {:error, :failed_to_realize, seed_deploy}
+    end
   end
 
   def async_stream(enumerable, func) do

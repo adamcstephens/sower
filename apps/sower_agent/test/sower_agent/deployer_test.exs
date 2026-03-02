@@ -2,6 +2,7 @@ defmodule SowerAgent.DeployerTest do
   use ExUnit.Case, async: true
 
   import ExUnit.CaptureLog
+  require Logger
 
   alias SowerAgent.Deployer
   alias SowerClient.Orchestration.Deployment
@@ -262,10 +263,118 @@ defmodule SowerAgent.DeployerTest do
     end
   end
 
+  describe "upgrade/2" do
+    test "writes a fatal deployment log line when activator is unavailable" do
+      deployment = %Deployment{
+        sid: "dep_1",
+        seed_deployments: [seed_deploy_with_identity("seed_1")]
+      }
+
+      logs =
+        capture_log(fn ->
+          assert [
+                   {:ok, {:error, :activator_unavailable}}
+                 ] =
+                   Deployer.upgrade(deployment,
+                     async_stream_fun: fn enumerable, func ->
+                       Enum.map(enumerable, fn item -> {:ok, func.(item)} end)
+                     end,
+                     realize_seed_fun: fn seed_deploy -> {:ok, seed_deploy} end,
+                     get_deployment_profile_fun: fn _ -> %DeploymentProfile{} end,
+                     activate_seed_fun: fn _seed, _profile -> {:error, :activator_unavailable} end,
+                     write_log_fun: fn _deployment, _seed, output_lines ->
+                       Logger.error(
+                         msg: "Deployment log payload",
+                         output: Enum.join(output_lines, "\n")
+                       )
+                     end
+                   )
+        end)
+
+      assert logs =~ "Missing activator during deployment activation"
+
+      assert logs =~
+               "FATAL: missing activator executable sower-activator; deployment cannot continue"
+    end
+
+    test "keeps successful deployment logging behavior unchanged" do
+      deployment = %Deployment{
+        sid: "dep_2",
+        seed_deployments: [seed_deploy_with_identity("seed_2")]
+      }
+
+      capture_log(fn ->
+        assert [
+                 {:ok, {:ok, ["activation complete"]}}
+               ] =
+                 Deployer.upgrade(deployment,
+                   async_stream_fun: fn enumerable, func ->
+                     Enum.map(enumerable, fn item -> {:ok, func.(item)} end)
+                   end,
+                   realize_seed_fun: fn seed_deploy -> {:ok, seed_deploy} end,
+                   get_deployment_profile_fun: fn _ -> %DeploymentProfile{} end,
+                   activate_seed_fun: fn _seed, _profile -> {:ok, ["activation complete"]} end,
+                   write_log_fun: fn _deployment, _seed, output_lines ->
+                     Logger.info(
+                       msg: "Deployment log payload",
+                       output: Enum.join(output_lines, "\n")
+                     )
+                   end
+                 )
+      end)
+    end
+
+    test "writes a fatal deployment log line when activator executable is missing" do
+      deployment = %Deployment{
+        sid: "dep_3",
+        seed_deployments: [seed_deploy_with_identity("seed_3")]
+      }
+
+      logs =
+        capture_log(fn ->
+          assert [
+                   {:ok, {:error, :cmd_not_found}}
+                 ] =
+                   Deployer.upgrade(deployment,
+                     async_stream_fun: fn enumerable, func ->
+                       Enum.map(enumerable, fn item -> {:ok, func.(item)} end)
+                     end,
+                     realize_seed_fun: fn seed_deploy -> {:ok, seed_deploy} end,
+                     get_deployment_profile_fun: fn _ -> %DeploymentProfile{} end,
+                     activate_seed_fun: fn _seed, _profile -> {:error, :cmd_not_found} end,
+                     write_log_fun: fn _deployment, _seed, output_lines ->
+                       Logger.error(
+                         msg: "Deployment log payload",
+                         output: Enum.join(output_lines, "\n")
+                       )
+                     end
+                   )
+        end)
+
+      assert logs =~ "Missing activator during deployment activation"
+      assert logs =~ "cmd_not_found"
+
+      assert logs =~
+               "FATAL: missing activator executable sower-activator; deployment cannot continue"
+    end
+  end
+
   defp seed_deploy(subscription_sid, seed_type \\ "nixos") do
     %SeedDeployment{
       subscription_sid: subscription_sid,
       seed: %Seed{seed_type: seed_type}
+    }
+  end
+
+  defp seed_deploy_with_identity(seed_sid) do
+    %SeedDeployment{
+      subscription_sid: "sub_#{seed_sid}",
+      seed: %Seed{
+        sid: seed_sid,
+        name: "seed-#{seed_sid}",
+        seed_type: "nixos",
+        artifact: "/nix/store/#{seed_sid}"
+      }
     }
   end
 end
