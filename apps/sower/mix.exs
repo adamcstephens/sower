@@ -57,6 +57,7 @@ defmodule Sower.MixProject do
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.1.0"},
       {:postgrex, ">= 0.0.0"},
+      {:quantum, "~> 3.0"},
       {:req, ">= 0.5.8"},
       {:shortuuid, "~> 4.0"},
       {:sower_client, in_umbrella: true},

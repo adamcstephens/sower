@@ -32,3 +32,5 @@ config :sower, :database,
 config :sower_agent, Client,
   uri: "ws://example.org/socket/websocket",
   reconnect_after_msec: [200, 500, 1_000, 2_000]
+
+config :sower, Sower.Orchestration.StaleDeploymentFinalizer, interval_ms: 0

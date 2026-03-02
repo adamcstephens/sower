@@ -24,6 +24,12 @@ config :sower, SowerWeb.Endpoint,
   pubsub_server: Sower.PubSub,
   live_view: [signing_salt: "nrwHFIM7"]
 
+config :sower, Sower.Orchestration,
+  stale_after_seconds: 2 * 60 * 60,
+  stale_batch_size: 100
+
+config :sower, Sower.Orchestration.StaleDeploymentFinalizer, interval_ms: :timer.minutes(5)
+
 # Configure esbuild (the version is required)
 config :esbuild,
   version_check: false,

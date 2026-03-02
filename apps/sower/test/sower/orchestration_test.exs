@@ -988,6 +988,188 @@ defmodule Sower.OrchestrationTest do
     end
   end
 
+  describe "replay_unresolved_deployments/2" do
+    import Sower.OrchestrationFixtures
+
+    test "replays unresolved deployments and updates dispatch timestamp", %{organization: _org} do
+      agent = agent_fixture()
+      seed = seed_fixture(%{name: "replay-host", seed_type: "nixos"})
+
+      subscription =
+        subscription_fixture(%{
+          agent_id: agent.id,
+          seed_name: seed.name,
+          seed_type: seed.seed_type
+        })
+
+      unresolved =
+        deployment_fixture(%{
+          agent_id: agent.id,
+          seeds: [seed],
+          subscriptions: [subscription],
+          result: nil,
+          deployed_at: nil
+        })
+
+      _terminal =
+        deployment_fixture(%{
+          agent_id: agent.id,
+          seeds: [seed],
+          subscriptions: [subscription],
+          result: :success,
+          deployed_at: DateTime.utc_now()
+        })
+
+      replayed_at = DateTime.utc_now() |> DateTime.truncate(:second)
+      Phoenix.PubSub.subscribe(Sower.PubSub, "agent:#{agent.sid}")
+
+      assert {:ok, deployments} =
+               Orchestration.replay_unresolved_deployments(agent,
+                 now: replayed_at,
+                 request_id_fun: fn -> "request_replay_1" end
+               )
+
+      assert Enum.map(deployments, & &1.sid) == [unresolved.sid]
+
+      assert_receive %Phoenix.Socket.Broadcast{
+        topic: topic,
+        event: "deployment",
+        payload: payload
+      }
+
+      assert topic == "agent:#{agent.sid}"
+      assert payload.sid == unresolved.sid
+      assert payload.skipped == false
+      assert payload.request_id == "request_replay_1"
+
+      refreshed = Orchestration.get_deployment_sid!(unresolved.sid)
+
+      assert DateTime.truncate(refreshed.last_dispatched_at, :second) ==
+               DateTime.truncate(replayed_at, :second)
+    end
+  end
+
+  describe "finalize_stale_deployments/1" do
+    import Sower.OrchestrationFixtures
+
+    test "finalizes stale unresolved deployments and keeps fresh unresolved unchanged", %{
+      organization: _org
+    } do
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+      old_dispatch = DateTime.add(now, -8_000, :second)
+      fresh_dispatch = DateTime.add(now, -100, :second)
+      agent = agent_fixture()
+
+      stale =
+        deployment_fixture(%{
+          agent_id: agent.id,
+          result: nil,
+          deployed_at: nil,
+          last_dispatched_at: old_dispatch
+        })
+
+      fresh =
+        deployment_fixture(%{
+          agent_id: agent.id,
+          result: nil,
+          deployed_at: nil,
+          last_dispatched_at: fresh_dispatch
+        })
+
+      assert {:ok, 1} =
+               Orchestration.finalize_stale_deployments(
+                 now: now,
+                 stale_after_seconds: 3_600,
+                 batch_size: 10
+               )
+
+      stale = Orchestration.get_deployment_sid!(stale.sid)
+      assert stale.result == :failure
+      assert stale.deployed_at == now
+
+      fresh = Orchestration.get_deployment_sid!(fresh.sid)
+      assert is_nil(fresh.result)
+      assert is_nil(fresh.deployed_at)
+    end
+
+    test "stale finalization unblocks retry creation for abandoned child retries", %{
+      organization: org
+    } do
+      user = user_fixture(%{org_id: org.org_id})
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+      old_dispatch = DateTime.add(now, -10_000, :second)
+      agent = agent_fixture()
+
+      parent =
+        deployment_fixture(%{
+          agent_id: agent.id,
+          result: :success,
+          deployed_at: DateTime.utc_now()
+        })
+
+      _child =
+        deployment_fixture(%{
+          agent_id: agent.id,
+          parent_deployment_id: parent.id,
+          retry_ordinal: 1,
+          retried_by_user_id: user.id,
+          retried_at: DateTime.utc_now(),
+          result: nil,
+          deployed_at: nil,
+          last_dispatched_at: old_dispatch
+        })
+
+      assert {:error, :retry_in_progress} = Orchestration.retry_deployment(parent, user.id)
+
+      assert {:ok, 1} =
+               Orchestration.finalize_stale_deployments(
+                 now: now,
+                 stale_after_seconds: 3_600,
+                 batch_size: 10
+               )
+
+      assert {:ok, _retry} = Orchestration.retry_deployment(parent, user.id)
+    end
+
+    test "late deployment results can still update stale-finalized deployments", %{
+      organization: _org
+    } do
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+      old_dispatch = DateTime.add(now, -8_000, :second)
+      later = DateTime.add(now, 60, :second)
+      agent = agent_fixture()
+
+      deployment =
+        deployment_fixture(%{
+          agent_id: agent.id,
+          result: nil,
+          deployed_at: nil,
+          last_dispatched_at: old_dispatch
+        })
+
+      assert {:ok, 1} =
+               Orchestration.finalize_stale_deployments(
+                 now: now,
+                 stale_after_seconds: 3_600,
+                 batch_size: 10
+               )
+
+      assert {:ok, _updated} =
+               Orchestration.record_deployment(
+                 SowerClient.Orchestration.DeploymentResult.cast!(%{
+                   request_id: "request_late_result",
+                   deployment_sid: deployment.sid,
+                   result: :success,
+                   deployed_at: DateTime.to_iso8601(later)
+                 })
+               )
+
+      refreshed = Orchestration.get_deployment_sid!(deployment.sid)
+      assert refreshed.result == :success
+      assert refreshed.deployed_at == later
+    end
+  end
+
   describe "request_deployment/1 force behavior" do
     import Sower.OrchestrationFixtures
 

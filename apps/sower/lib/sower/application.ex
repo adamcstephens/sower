@@ -17,6 +17,7 @@ defmodule Sower.Application do
       {Phoenix.PubSub, name: Sower.PubSub},
       SowerWeb.Presence,
       {Task.Supervisor, name: Sower.TaskSupervisor},
+      Sower.Orchestration.StaleDeploymentFinalizer,
       SowerWeb.Endpoint,
       :systemd.ready()
     ]

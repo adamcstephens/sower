@@ -14,6 +14,9 @@ defmodule Sower.Orchestration do
 
   require Logger
 
+  @default_stale_after_seconds 2 * 60 * 60
+  @default_stale_batch_size 100
+
   @doc """
   Returns the list of agents.
 
@@ -326,6 +329,64 @@ defmodule Sower.Orchestration do
       limit: ^limit
     )
     |> Repo.all()
+  end
+
+  @doc """
+  List unresolved deployments for a specific agent, oldest dispatch first.
+  """
+  def list_unresolved_deployments_for_agent(%Agent{} = agent, opts \\ []) do
+    limit = Keyword.get(opts, :limit)
+
+    query =
+      from(d in Deployment,
+        where: d.agent_id == ^agent.id and is_nil(d.result),
+        order_by: [
+          asc: fragment("COALESCE(?, ?)", d.last_dispatched_at, d.inserted_at),
+          asc: d.inserted_at
+        ]
+      )
+
+    query =
+      if is_integer(limit) and limit > 0 do
+        from(d in query, limit: ^limit)
+      else
+        query
+      end
+
+    query
+    |> Repo.all()
+    |> Repo.preload([:subscriptions, seeds: [:tags]])
+  end
+
+  @doc """
+  Replay unresolved deployments for an agent.
+  """
+  def replay_unresolved_deployments(%Agent{} = agent, opts \\ []) do
+    broadcast_fun = Keyword.get(opts, :broadcast_fun, &SowerWeb.Endpoint.broadcast/3)
+
+    request_id_fun =
+      Keyword.get(opts, :request_id_fun, fn -> SowerClient.Sid.generate("request") end)
+
+    now = Keyword.get(opts, :now, DateTime.utc_now())
+
+    deployments = list_unresolved_deployments_for_agent(agent)
+    mark_deployments_dispatched(deployments, now)
+
+    Enum.each(deployments, fn deployment ->
+      payload = deployment_event_payload(deployment, request_id_fun.())
+      broadcast_fun.("agent:#{agent.sid}", "deployment", payload)
+    end)
+
+    if deployments != [] do
+      Logger.info(
+        msg: "Replayed unresolved deployments",
+        agent_sid: agent.sid,
+        deployment_count: length(deployments),
+        deployment_sids: Enum.map(deployments, & &1.sid)
+      )
+    end
+
+    {:ok, deployments}
   end
 
   @doc """
@@ -773,7 +834,8 @@ defmodule Sower.Orchestration do
               parent_deployment_id: deployment.id,
               retried_by_user_id: user_id,
               retry_ordinal: max_retry_ordinal + 1,
-              retried_at: DateTime.utc_now()
+              retried_at: DateTime.utc_now(),
+              last_dispatched_at: DateTime.utc_now()
             }
 
             case create_deployment(attrs) do
@@ -783,33 +845,10 @@ defmodule Sower.Orchestration do
 
                 request_id = SowerClient.Sid.generate("request")
 
-                seed_deployments =
-                  Enum.map(retry_deployment.seeds, fn seed ->
-                    subscription_sid =
-                      retry_deployment.subscriptions
-                      |> Enum.find(fn sub ->
-                        sub.seed_name == seed.name and sub.seed_type == seed.seed_type
-                      end)
-                      |> case do
-                        nil -> nil
-                        sub -> sub.sid
-                      end
-
-                    %SowerClient.Orchestration.SeedDeployment{
-                      seed: seed,
-                      subscription_sid: subscription_sid
-                    }
-                  end)
-
                 SowerWeb.Endpoint.broadcast(
                   "agent:#{retry_deployment.agent.sid}",
                   "deployment",
-                  %{
-                    request_id: request_id,
-                    sid: retry_deployment.sid,
-                    seed_deployments: seed_deployments,
-                    skipped: false
-                  }
+                  deployment_event_payload(retry_deployment, request_id)
                 )
 
                 retry_deployment
@@ -1127,6 +1166,7 @@ defmodule Sower.Orchestration do
           case create_deployment(%{
                  agent_id: agent_id,
                  content_hash: content_hash,
+                 last_dispatched_at: DateTime.utc_now(),
                  seeds: seeds,
                  subscriptions: subscriptions
                }) do
@@ -1194,6 +1234,125 @@ defmodule Sower.Orchestration do
       deploy ->
         update_deployment(deploy, %{deployed_at: result.deployed_at, result: result.result})
     end
+  end
+
+  @doc """
+  Finalize stale unresolved deployments.
+  """
+  def finalize_stale_deployments(opts \\ []) do
+    now = Keyword.get(opts, :now, DateTime.utc_now())
+    stale_after_seconds = Keyword.get(opts, :stale_after_seconds, stale_after_seconds())
+    batch_size = Keyword.get(opts, :batch_size, stale_batch_size())
+
+    if stale_after_seconds <= 0 or batch_size <= 0 do
+      {:ok, 0}
+    else
+      cutoff = DateTime.add(now, -stale_after_seconds, :second)
+
+      stale_deployments =
+        from(d in Deployment,
+          where: is_nil(d.result),
+          where: fragment("COALESCE(?, ?) <= ?", d.last_dispatched_at, d.inserted_at, ^cutoff),
+          order_by: [
+            asc: fragment("COALESCE(?, ?)", d.last_dispatched_at, d.inserted_at),
+            asc: d.inserted_at
+          ],
+          limit: ^batch_size
+        )
+        |> Repo.all(skip_org_id: true)
+
+      finalized =
+        Enum.reduce(stale_deployments, 0, fn deployment, acc ->
+          case finalize_stale_deployment(deployment, now) do
+            {:ok, _} -> acc + 1
+            _ -> acc
+          end
+        end)
+
+      if finalized > 0 do
+        Logger.info(
+          msg: "Finalized stale deployments",
+          stale_after_seconds: stale_after_seconds,
+          batch_size: batch_size,
+          finalized_count: finalized
+        )
+      end
+
+      {:ok, finalized}
+    end
+  end
+
+  defp deployment_event_payload(%Deployment{} = deployment, request_id) do
+    %SowerClient.Orchestration.Deployment{
+      request_id: request_id,
+      sid: deployment.sid,
+      seed_deployments: build_seed_deployments(deployment.seeds, deployment.subscriptions),
+      skipped: false
+    }
+  end
+
+  defp build_seed_deployments(seeds, subscriptions) do
+    Enum.map(seeds, fn seed ->
+      subscription_sid =
+        subscriptions
+        |> Enum.find(fn sub ->
+          sub.seed_name == seed.name and sub.seed_type == seed.seed_type
+        end)
+        |> case do
+          nil -> nil
+          sub -> sub.sid
+        end
+
+      %SowerClient.Orchestration.SeedDeployment{
+        seed: seed,
+        subscription_sid: subscription_sid
+      }
+    end)
+  end
+
+  defp mark_deployments_dispatched([], _dispatched_at), do: :ok
+
+  defp mark_deployments_dispatched(deployments, dispatched_at) do
+    ids = Enum.map(deployments, & &1.id)
+    now = DateTime.utc_now()
+
+    from(d in Deployment,
+      where: d.id in ^ids and is_nil(d.result)
+    )
+    |> Repo.update_all(set: [last_dispatched_at: dispatched_at, updated_at: now])
+
+    :ok
+  end
+
+  defp finalize_stale_deployment(%Deployment{} = deployment, now) do
+    previous_org_id = Repo.get_org_id()
+    Repo.put_org_id(deployment.org_id)
+
+    result =
+      case Repo.get(Deployment, deployment.id) do
+        nil ->
+          :ignore
+
+        %Deployment{result: nil} = unresolved ->
+          update_deployment(unresolved, %{deployed_at: now, result: :failure})
+
+        %Deployment{} ->
+          :ignore
+      end
+
+    Repo.put_org_id(previous_org_id)
+
+    result
+  end
+
+  defp stale_after_seconds do
+    config = Application.get_env(:sower, __MODULE__, [])
+    Keyword.get(config, :stale_after_seconds, @default_stale_after_seconds)
+  end
+
+  defp stale_batch_size do
+    config = Application.get_env(:sower, __MODULE__, [])
+    Keyword.get(config, :stale_batch_size, @default_stale_batch_size)
   end
 
   alias Sower.Orchestration.{NixProfile, AgentSeedGeneration}

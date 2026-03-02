@@ -23,6 +23,7 @@ defmodule Sower.Orchestration.Deployment do
 
     field :deployed_at, :utc_datetime
     field :result, Ecto.Enum, values: [:success, :failure, :partial]
+    field :last_dispatched_at, :utc_datetime_usec
     field :content_hash, :string
     field :retry_ordinal, :integer
     field :retried_at, :utc_datetime_usec
@@ -36,6 +37,7 @@ defmodule Sower.Orchestration.Deployment do
     |> cast(attrs, [
       :deployed_at,
       :result,
+      :last_dispatched_at,
       :agent_id,
       :content_hash,
       :parent_deployment_id,

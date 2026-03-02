@@ -57,6 +57,7 @@ defmodule SowerWeb.AgentChannel do
 
       agent when agent.local_sid == local_sid ->
         send(self(), :track_presence)
+        send(self(), :replay_unresolved_deployments)
         {:ok, %{conn_sid: conn_sid}, assign(socket, :agent, agent)}
 
       _ ->
@@ -150,6 +151,23 @@ defmodule SowerWeb.AgentChannel do
       Presence.track(self(), "agent:presence", socket.assigns.agent.sid, %{
         online_at: DateTime.utc_now()
       })
+
+    {:noreply, socket}
+  end
+
+  def handle_info(
+        :replay_unresolved_deployments,
+        %Phoenix.Socket{assigns: %{agent: agent}} = socket
+      ) do
+    {:ok, deployments} = Orchestration.replay_unresolved_deployments(agent)
+
+    if deployments != [] do
+      Logger.debug(
+        msg: "Replayed unresolved deployments after agent join",
+        agent_sid: agent.sid,
+        deployment_count: length(deployments)
+      )
+    end
 
     {:noreply, socket}
   end
