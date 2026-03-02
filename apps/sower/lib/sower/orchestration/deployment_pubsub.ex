@@ -11,6 +11,7 @@ defmodule Sower.Orchestration.DeploymentPubSub do
 
   Broadcasts to multiple topics:
   - "deployments" - Global topic for all deployments
+  - "deployment:<deployment_sid>" - Per-deployment topic
   - "deployments:agent:<agent_sid>" - Per-agent topic
   - "deployments:subscription:<subscription_sid>" - Per-subscription topics
   """
@@ -18,6 +19,7 @@ defmodule Sower.Orchestration.DeploymentPubSub do
     deployment = Sower.Repo.preload(deployment, [:agent, :subscriptions])
 
     broadcast("deployments", {:deployment, event, deployment})
+    broadcast("deployment:#{deployment.sid}", {:deployment, event, deployment})
 
     if deployment.agent do
       broadcast(

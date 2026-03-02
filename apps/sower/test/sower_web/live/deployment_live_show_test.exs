@@ -2,6 +2,9 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
   use SowerWeb.ConnCase, async: true
 
   import Phoenix.LiveViewTest
+  import Ecto.Changeset
+
+  alias Sower.Orchestration.DeploymentPubSub
   import Sower.OrchestrationFixtures
   import Sower.SeedFixtures
 
@@ -60,6 +63,89 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
 
     assert html =~ "Seeds"
     assert html =~ "No seeds."
+  end
+
+  test "subscribes to per-deployment topic on mount", %{conn: conn, user: user} do
+    Sower.Repo.put_org_id(user.org_id)
+    agent = agent_fixture()
+
+    current_deployment =
+      deployment_fixture(%{
+        agent_id: agent.id,
+        result: nil,
+        deployed_at: nil
+      })
+
+    other_deployment =
+      deployment_fixture(%{
+        agent_id: agent.id,
+        result: nil,
+        deployed_at: nil
+      })
+
+    {:ok, show_live, _html} = live(conn, ~p"/deployments/#{current_deployment.sid}")
+    refute has_element?(show_live, "button", "Retry")
+
+    other_deployment
+    |> change(%{result: :success, deployed_at: DateTime.utc_now() |> DateTime.truncate(:second)})
+    |> Sower.Repo.update!()
+
+    assert {:ok, _deployment} =
+             DeploymentPubSub.broadcast_deployment_change(other_deployment, :updated)
+
+    refute has_element?(show_live, "button", "Retry")
+  end
+
+  test "refreshes deployment when update is broadcast", %{conn: conn, user: user} do
+    Sower.Repo.put_org_id(user.org_id)
+    agent = agent_fixture()
+
+    deployment =
+      deployment_fixture(%{
+        agent_id: agent.id,
+        result: nil,
+        deployed_at: nil
+      })
+
+    {:ok, show_live, _html} = live(conn, ~p"/deployments/#{deployment.sid}")
+    refute has_element?(show_live, "button", "Retry")
+
+    deployment
+    |> change(%{result: :success, deployed_at: DateTime.utc_now() |> DateTime.truncate(:second)})
+    |> Sower.Repo.update!()
+
+    assert {:ok, _deployment} = DeploymentPubSub.broadcast_deployment_change(deployment, :updated)
+
+    assert has_element?(show_live, "button", "Retry")
+  end
+
+  test "cleans up PubSub subscription on LiveView termination", %{conn: conn, user: user} do
+    Sower.Repo.put_org_id(user.org_id)
+    agent = agent_fixture()
+
+    deployment =
+      deployment_fixture(%{
+        agent_id: agent.id,
+        result: nil,
+        deployed_at: nil
+      })
+
+    {:ok, show_live, _html} = live(conn, ~p"/deployments/#{deployment.sid}")
+
+    topic = "deployment:#{deployment.sid}"
+
+    assert Enum.any?(Registry.lookup(Sower.PubSub, topic), fn {pid, _} ->
+             pid == show_live.pid
+           end)
+
+    monitor_ref = Process.monitor(show_live.pid)
+    GenServer.stop(show_live.pid)
+
+    assert_receive {:DOWN, ^monitor_ref, :process, _pid, _reason}
+
+    refute Enum.any?(Registry.lookup(Sower.PubSub, topic), fn {pid, _} ->
+             pid == show_live.pid
+           end)
   end
 
   test "shows retry button only for terminal deployments", %{conn: conn, user: user} do

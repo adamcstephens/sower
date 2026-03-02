@@ -132,13 +132,16 @@ defmodule SowerWeb.DeploymentLive.Show do
   end
 
   @impl true
+  def mount(%{"sid" => sid}, _session, socket) do
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Sower.PubSub, "deployment:#{sid}")
+    end
+
+    {:ok, initialize_socket(socket)}
+  end
+
   def mount(_params, _session, socket) do
-    {:ok,
-     socket
-     |> assign(:page_title, "Show Deployment")
-     |> assign(:expanded_seed_logs, MapSet.new())
-     |> assign(:loaded_seed_logs, MapSet.new())
-     |> assign(:retrying, false)}
+    {:ok, initialize_socket(socket)}
   end
 
   @impl true
@@ -158,6 +161,18 @@ defmodule SowerWeb.DeploymentLive.Show do
          |> assign(:deployment, deployment)
          |> assign(:expanded_seed_logs, MapSet.new())
          |> assign(:loaded_seed_logs, MapSet.new())}
+    end
+  end
+
+  @impl true
+  def handle_info({:deployment, _event, %Sower.Orchestration.Deployment{} = deployment}, socket) do
+    case Orchestration.get_deployment_sid(deployment.sid) do
+      nil ->
+        {:noreply, socket}
+
+      deployment ->
+        deployment = Sower.Repo.preload(deployment, [:seeds, :subscriptions, :agent])
+        {:noreply, assign(socket, :deployment, deployment)}
     end
   end
 
@@ -223,5 +238,13 @@ defmodule SowerWeb.DeploymentLive.Show do
 
   defp retryable?(deployment) do
     deployment.result in [:success, :failure]
+  end
+
+  defp initialize_socket(socket) do
+    socket
+    |> assign(:page_title, "Show Deployment")
+    |> assign(:expanded_seed_logs, MapSet.new())
+    |> assign(:loaded_seed_logs, MapSet.new())
+    |> assign(:retrying, false)
   end
 end
