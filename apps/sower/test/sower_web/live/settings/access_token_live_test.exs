@@ -86,6 +86,7 @@ defmodule SowerWeb.Settings.AccessTokenLiveTest do
       {:ok, _show_live, html} = live(conn, ~p"/settings/access-tokens/#{access_token}")
 
       assert html =~ "Show Access token"
+      refute html =~ "Back to"
     end
 
     test "updates access_token within modal", %{conn: conn, access_token: access_token} do

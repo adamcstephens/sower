@@ -24,11 +24,6 @@ defmodule SowerWeb.DeploymentLive.Show do
           >
             Retry
           </.button>
-          <.link patch={~p"/deployments"}>
-            <.button>
-              <.icon name="hero-arrow-left" />
-            </.button>
-          </.link>
         </:actions>
       </.header>
 

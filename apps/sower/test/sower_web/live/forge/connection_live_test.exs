@@ -107,6 +107,7 @@ defmodule SowerWeb.Forge.ConnectionLiveTest do
 
       assert html =~ "Show Connection"
       assert html =~ connection.name
+      refute html =~ "Back to"
     end
 
     test "updates connection within modal", %{conn: conn, connection: connection} do

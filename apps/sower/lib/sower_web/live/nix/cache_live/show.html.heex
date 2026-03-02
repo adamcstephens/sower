@@ -14,8 +14,6 @@
     <:item title="Public key">{@cache.public_key}</:item>
   </.list>
 
-  <.back navigate={~p"/nix/caches"}>Back to Nix Caches</.back>
-
   <.modal
     :if={@live_action == :edit}
     id="cache-modal"

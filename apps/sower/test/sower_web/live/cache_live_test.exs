@@ -96,6 +96,7 @@ defmodule SowerWeb.CacheLiveTest do
 
       assert html =~ "Show Cache"
       assert html =~ cache.public_key
+      refute html =~ "Back to"
     end
 
     test "updates cache within modal", %{conn: conn, cache: cache} do

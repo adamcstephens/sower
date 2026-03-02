@@ -82,9 +82,11 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
 
     {:ok, _show_live, html} = live(conn, ~p"/deployments/#{successful_deployment.sid}")
     assert html =~ "Retry"
+    refute html =~ "hero-arrow-left"
 
     {:ok, _show_live, html} = live(conn, ~p"/deployments/#{running_deployment.sid}")
     refute html =~ "Retry"
+    refute html =~ "hero-arrow-left"
   end
 
   test "creates a retry deployment from the show page", %{conn: conn, user: user} do
