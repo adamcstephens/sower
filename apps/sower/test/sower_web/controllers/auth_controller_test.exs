@@ -27,6 +27,7 @@ defmodule SowerWeb.AuthControllerTest do
     assert Phoenix.Flash.get(conn.assigns.flash || %{}, :auth_error) == nil
   end
 
+  @tag :capture_log
   test "callback/2 failed user creation sets login-specific flash", %{conn: conn} do
     auth = %Ueberauth.Auth{
       uid: Ecto.UUID.generate(),
@@ -40,6 +41,7 @@ defmodule SowerWeb.AuthControllerTest do
     assert Phoenix.Flash.get(conn.assigns.flash, :error) == nil
   end
 
+  @tag :capture_log
   test "callback/2 ueberauth failure sets login-specific flash", %{conn: conn} do
     conn =
       conn

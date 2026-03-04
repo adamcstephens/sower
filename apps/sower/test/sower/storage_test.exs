@@ -1,7 +1,6 @@
 defmodule Sower.StorageTest do
   use Sower.DataCase
 
-  alias Sower.Orchestration
   alias Sower.Storage
   alias SowerClient.Storage.DeploymentLogUploadRequest
   alias SowerClient.Storage.PresignedUploadReply

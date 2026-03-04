@@ -121,7 +121,7 @@ defmodule SowerWeb.AgentChannel do
            req,
            socket.assigns.agent
          ) do
-      {:ok, request_id} ->
+      {:ok, request_id, _task} ->
         {:ok, %{request_id: request_id}}
 
       {:error, error} ->

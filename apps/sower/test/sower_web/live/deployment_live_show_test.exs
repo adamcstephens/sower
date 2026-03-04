@@ -143,6 +143,19 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
 
     assert_receive {:DOWN, ^monitor_ref, :process, _pid, _reason}
 
+    # Registry cleanup is async; wait for unregistration
+    :ok =
+      Enum.reduce_while(1..50, :error, fn _, _ ->
+        if Enum.any?(Registry.lookup(Sower.PubSub, topic), fn {pid, _} ->
+             pid == show_live.pid
+           end) do
+          Process.sleep(10)
+          {:cont, :error}
+        else
+          {:halt, :ok}
+        end
+      end)
+
     refute Enum.any?(Registry.lookup(Sower.PubSub, topic), fn {pid, _} ->
              pid == show_live.pid
            end)

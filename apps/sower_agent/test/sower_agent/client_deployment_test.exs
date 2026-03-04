@@ -117,6 +117,7 @@ defmodule SowerAgent.ClientDeploymentTest do
       assert Map.has_key?(socket.active_deployments, "deploy_789")
     end
 
+    @tag :capture_log
     test "handles deployment:error event" do
       socket = MockSocket.new()
 

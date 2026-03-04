@@ -922,8 +922,9 @@ defmodule Sower.OrchestrationTest do
         "force" => false
       }
 
-      assert {:ok, request_id} = Orchestration.handle_deployment_request(payload, agent)
+      assert {:ok, request_id, task} = Orchestration.handle_deployment_request(payload, agent)
       assert is_binary(request_id)
+      Task.await(task)
     end
 
     test "returns error for deployment request with unauthorized subscription", %{
@@ -964,11 +965,13 @@ defmodule Sower.OrchestrationTest do
 
       request_id = "dr_test_#{System.unique_integer([:positive])}"
 
-      # process_deployment should return immediately with the request_id
-      assert {:ok, ^request_id} =
+      assert {:ok, ^request_id, task} =
                Orchestration.process_deployment(request_id, [subscription], agent)
+
+      Task.await(task)
     end
 
+    @tag :capture_log
     test "process_deployment handles error case with no matching seeds", %{organization: _org} do
       agent = agent_fixture()
 
@@ -982,9 +985,10 @@ defmodule Sower.OrchestrationTest do
 
       request_id = "dr_test_error_#{System.unique_integer([:positive])}"
 
-      # Should still return {:ok, request_id} since processing is async
-      assert {:ok, ^request_id} =
+      assert {:ok, ^request_id, task} =
                Orchestration.process_deployment(request_id, [subscription], agent)
+
+      Task.await(task)
     end
   end
 
