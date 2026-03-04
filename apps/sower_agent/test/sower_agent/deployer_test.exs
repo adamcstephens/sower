@@ -137,7 +137,8 @@ defmodule SowerAgent.DeployerTest do
                  send(self(), :reboot_called)
                  {:ok, []}
                end,
-               activation_enabled_fun: fn -> true end
+               activation_enabled_fun: fn -> true end,
+               write_log_fun: fn _, _, _ -> :ok end
              ) == :ok
 
       refute_received :reboot_reason_called
@@ -153,7 +154,8 @@ defmodule SowerAgent.DeployerTest do
                  nil
                end,
                reboot_fun: fn _ -> flunk("reboot should not be requested") end,
-               activation_enabled_fun: fn -> true end
+               activation_enabled_fun: fn -> true end,
+               write_log_fun: fn _, _, _ -> :ok end
              ) == :ok
 
       assert_received :reboot_reason_called
@@ -171,7 +173,8 @@ defmodule SowerAgent.DeployerTest do
                  send(self(), {:reboot_called, opts})
                  {:ok, ["ok"]}
                end,
-               activation_enabled_fun: fn -> true end
+               activation_enabled_fun: fn -> true end,
+               write_log_fun: fn _, _, _ -> :ok end
              ) == :ok
 
       assert_received {:reboot_called, [reason: "policy_always"]}
@@ -356,6 +359,251 @@ defmodule SowerAgent.DeployerTest do
 
       assert logs =~
                "FATAL: missing activator executable sower-activator; deployment cannot continue"
+    end
+  end
+
+  describe "decision_line/1" do
+    test "formats message with [sower] prefix" do
+      assert Deployer.decision_line("reboot triggered") == "[sower] reboot triggered"
+    end
+  end
+
+  describe "deploy log decision lines" do
+    test "includes realization success decision line in log output" do
+      deployment = %Deployment{
+        sid: "dep_real_ok",
+        seed_deployments: [seed_deploy_with_identity("seed_r1")]
+      }
+
+      logged_lines = capture_log_lines(deployment)
+
+      assert Enum.any?(logged_lines, &(&1 =~ "[sower]" and &1 =~ "realized" and &1 =~ "seed-seed_r1"))
+    end
+
+    test "includes realization failure decision line in log output" do
+      deployment = %Deployment{
+        sid: "dep_real_fail",
+        seed_deployments: [seed_deploy_with_identity("seed_rf1")]
+      }
+
+      logged_lines =
+        capture_log_lines(deployment,
+          realize_seed_fun: fn seed_deploy -> {:error, :failed_to_realize, seed_deploy} end
+        )
+
+      assert Enum.any?(logged_lines, &(&1 =~ "[sower]" and &1 =~ "realization failed"))
+    end
+
+    test "includes activation mode decision line in log output" do
+      deployment = %Deployment{
+        sid: "dep_mode",
+        seed_deployments: [seed_deploy_with_identity("seed_m1")]
+      }
+
+      logged_lines =
+        capture_log_lines(deployment,
+          get_deployment_profile_fun: fn _ ->
+            %DeploymentProfile{activation_args: ["boot"]}
+          end
+        )
+
+      assert Enum.any?(logged_lines, &(&1 =~ "[sower]" and &1 =~ "boot" and &1 =~ "seed-seed_m1"))
+    end
+
+    test "includes reboot triggered decision line" do
+      deployment = %Deployment{
+        sid: "dep_reboot_log",
+        seed_deployments: [seed_deploy_with_identity("seed_rb1")]
+      }
+
+      test_pid = self()
+
+      capture_log(fn ->
+        Deployer.run_with_opts(deployment,
+          upgrade_opts: [
+            async_stream_fun: fn enumerable, func ->
+              Enum.map(enumerable, fn item -> {:ok, func.(item)} end)
+            end,
+            realize_seed_fun: fn sd -> {:ok, sd} end,
+            get_deployment_profile_fun: fn _ ->
+              %DeploymentProfile{reboot_policy: "always"}
+            end,
+            activate_seed_fun: fn _seed, _profile -> {:ok, ["ok"]} end,
+            write_log_fun: fn _deployment, _seed, output_lines ->
+              send(test_pid, {:log_lines, output_lines})
+            end
+          ],
+          reboot_opts: [
+            reboot_reason_fun: fn _ -> "policy_always" end,
+            reboot_fun: fn _opts -> {:ok, ["rebooting"]} end,
+            activation_enabled_fun: fn -> true end
+          ]
+        )
+      end)
+
+      # Collect all messages
+      lines = collect_log_lines()
+      all_lines = List.flatten(lines)
+
+      assert Enum.any?(all_lines, &(&1 =~ "[sower]" and &1 =~ "reboot" and &1 =~ "policy_always"))
+    end
+
+    test "includes reboot skipped decision line for failed deployment" do
+      deployment = %Deployment{
+        sid: "dep_reboot_skip",
+        seed_deployments: [seed_deploy_with_identity("seed_rs1")]
+      }
+
+      test_pid = self()
+
+      capture_log(fn ->
+        Deployer.run_with_opts(deployment,
+          upgrade_opts: [
+            async_stream_fun: fn enumerable, func ->
+              Enum.map(enumerable, fn item -> {:ok, func.(item)} end)
+            end,
+            realize_seed_fun: fn sd -> {:ok, sd} end,
+            get_deployment_profile_fun: fn _ -> %DeploymentProfile{} end,
+            activate_seed_fun: fn _seed, _profile -> {:error, 1, ["failed"]} end,
+            write_log_fun: fn _deployment, _seed, output_lines ->
+              send(test_pid, {:log_lines, output_lines})
+            end
+          ],
+          reboot_opts: []
+        )
+      end)
+
+      lines = collect_log_lines()
+      all_lines = List.flatten(lines)
+
+      assert Enum.any?(all_lines, &(&1 =~ "[sower]" and &1 =~ "reboot" and &1 =~ "skipped"))
+    end
+
+    test "includes reboot skipped decision line for non-nixos deployment" do
+      deployment = %Deployment{
+        sid: "dep_reboot_nonnix",
+        seed_deployments: [
+          %SeedDeployment{
+            subscription_sid: "sub_nonnix",
+            seed: %Seed{
+              sid: "seed_nonnix",
+              name: "my-service",
+              seed_type: "service",
+              artifact: "/nix/store/nonnix"
+            }
+          }
+        ]
+      }
+
+      test_pid = self()
+
+      capture_log(fn ->
+        Deployer.run_with_opts(deployment,
+          upgrade_opts: [
+            async_stream_fun: fn enumerable, func ->
+              Enum.map(enumerable, fn item -> {:ok, func.(item)} end)
+            end,
+            realize_seed_fun: fn sd -> {:ok, sd} end,
+            get_deployment_profile_fun: fn _ -> %DeploymentProfile{} end,
+            activate_seed_fun: fn _seed, _profile -> {:ok, ["ok"]} end,
+            write_log_fun: fn _deployment, _seed, output_lines ->
+              send(test_pid, {:log_lines, output_lines})
+            end
+          ],
+          reboot_opts: []
+        )
+      end)
+
+      lines = collect_log_lines()
+      all_lines = List.flatten(lines)
+
+      assert Enum.any?(all_lines, &(&1 =~ "[sower]" and &1 =~ "no NixOS seeds"))
+    end
+
+    test "includes no reboot needed decision line" do
+      deployment = %Deployment{
+        sid: "dep_reboot_none",
+        seed_deployments: [seed_deploy_with_identity("seed_rn1")]
+      }
+
+      test_pid = self()
+
+      capture_log(fn ->
+        Deployer.run_with_opts(deployment,
+          upgrade_opts: [
+            async_stream_fun: fn enumerable, func ->
+              Enum.map(enumerable, fn item -> {:ok, func.(item)} end)
+            end,
+            realize_seed_fun: fn sd -> {:ok, sd} end,
+            get_deployment_profile_fun: fn _ -> %DeploymentProfile{} end,
+            activate_seed_fun: fn _seed, _profile -> {:ok, ["ok"]} end,
+            write_log_fun: fn _deployment, _seed, output_lines ->
+              send(test_pid, {:log_lines, output_lines})
+            end
+          ],
+          reboot_opts: [
+            reboot_reason_fun: fn _ -> nil end,
+            reboot_fun: fn _opts -> flunk("should not reboot") end,
+            activation_enabled_fun: fn -> true end
+          ]
+        )
+      end)
+
+      lines = collect_log_lines()
+      all_lines = List.flatten(lines)
+
+      assert Enum.any?(all_lines, &(&1 =~ "[sower]" and &1 =~ "no reboot required"))
+    end
+
+    test "includes default activation mode when none configured" do
+      deployment = %Deployment{
+        sid: "dep_mode_default",
+        seed_deployments: [seed_deploy_with_identity("seed_md1")]
+      }
+
+      logged_lines = capture_log_lines(deployment)
+
+      assert Enum.any?(logged_lines, &(&1 =~ "[sower]" and &1 =~ "switch" and &1 =~ "seed-seed_md1"))
+    end
+  end
+
+  defp capture_log_lines(%Deployment{} = deployment, opts \\ []) do
+    test_pid = self()
+
+    capture_log(fn ->
+      Deployer.upgrade(deployment,
+        async_stream_fun: fn enumerable, func ->
+          Enum.map(enumerable, fn item -> {:ok, func.(item)} end)
+        end,
+        realize_seed_fun: Keyword.get(opts, :realize_seed_fun, fn sd -> {:ok, sd} end),
+        get_deployment_profile_fun:
+          Keyword.get(opts, :get_deployment_profile_fun, fn _ -> %DeploymentProfile{} end),
+        activate_seed_fun:
+          Keyword.get(opts, :activate_seed_fun, fn _seed, _profile ->
+            {:ok, ["activation output"]}
+          end),
+        write_log_fun: fn _deployment, _seed, output_lines ->
+          send(test_pid, {:log_lines, output_lines})
+        end
+      )
+    end)
+
+    receive do
+      {:log_lines, lines} -> lines
+    after
+      1000 -> []
+    end
+  end
+
+  defp collect_log_lines do
+    collect_log_lines([])
+  end
+
+  defp collect_log_lines(acc) do
+    receive do
+      {:log_lines, lines} -> collect_log_lines([lines | acc])
+    after
+      100 -> Enum.reverse(acc)
     end
   end
 

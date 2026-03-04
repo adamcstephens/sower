@@ -12,12 +12,20 @@ defmodule SowerAgent.Deployer do
   alias SowerClient.Storage.DeploymentLogUploadRequest
 
   def run(%Deployment{} = deployment) do
+    run_with_opts(deployment, upgrade_opts: [], reboot_opts: [])
+  end
+
+  def run_with_opts(%Deployment{} = deployment, opts) do
+    upgrade_opts = Keyword.get(opts, :upgrade_opts, [])
+    reboot_opts = Keyword.get(opts, :reboot_opts, [])
+    write_log_fun = Keyword.get(upgrade_opts, :write_log_fun, &maybe_write_log/3)
+
     result =
       deployment
-      |> upgrade()
+      |> upgrade(upgrade_opts)
       |> deployment_result()
 
-    maybe_reboot(deployment, result)
+    maybe_reboot(deployment, result, [{:write_log_fun, write_log_fun} | reboot_opts])
     result
   end
 
@@ -74,6 +82,12 @@ defmodule SowerAgent.Deployer do
     |> async_stream_fun.(fn
       {:ok, {:ok, %SeedDeployment{seed: seed} = seed_deploy}} ->
         profile = get_deployment_profile_fun.(seed_deploy.subscription_sid)
+        mode = SowerAgent.Seed.activation_mode(profile)
+
+        preamble = [
+          decision_line("realized #{seed.name} (#{seed.seed_type})"),
+          decision_line("activating #{seed.name} (#{seed.seed_type}) with mode: #{mode}")
+        ]
 
         Logger.info(
           msg: "Activating seed",
@@ -95,7 +109,7 @@ defmodule SowerAgent.Deployer do
               seed_sid: seed.sid
             )
 
-            write_log_fun.(deployment, seed, output)
+            write_log_fun.(deployment, seed, preamble ++ output)
 
           {:error, _code, output} ->
             Logger.error(
@@ -104,7 +118,7 @@ defmodule SowerAgent.Deployer do
               seed_sid: seed.sid
             )
 
-            write_log_fun.(deployment, seed, output)
+            write_log_fun.(deployment, seed, preamble ++ output)
 
           {:error, reason} when reason in [:activator_unavailable, :cmd_not_found] ->
             Logger.error(
@@ -114,7 +128,7 @@ defmodule SowerAgent.Deployer do
               reason: inspect(reason)
             )
 
-            write_log_fun.(deployment, seed, [
+            write_log_fun.(deployment, seed, preamble ++ [
               "FATAL: missing activator executable sower-activator; deployment cannot continue"
             ])
 
@@ -123,6 +137,13 @@ defmodule SowerAgent.Deployer do
         end
 
         result
+
+      {:ok, {:error, :failed_to_realize, %SeedDeployment{seed: seed} = _seed_deploy}} ->
+        write_log_fun.(deployment, seed, [
+          decision_line("realization failed for #{seed.name} (#{seed.seed_type})")
+        ])
+
+        {:error, :failed_to_realize, seed}
 
       {:ok, {:error, _, _} = error} ->
         error
@@ -243,8 +264,9 @@ defmodule SowerAgent.Deployer do
     maybe_reboot(deployment, result, [])
   end
 
-  def maybe_reboot(%Deployment{} = _deployment, result, _opts) when result != :success do
+  def maybe_reboot(%Deployment{} = deployment, result, opts) when result != :success do
     Logger.debug(msg: "Skipping reboot due to unsuccesful deployment", result: result)
+    write_reboot_decision(deployment, opts, "reboot skipped: deployment result was #{result}")
     :ok
   end
 
@@ -260,6 +282,7 @@ defmodule SowerAgent.Deployer do
     if Enum.any?(deployment.seed_deployments, &(get_in(&1.seed.seed_type) == "nixos")) do
       case reboot_reason_fun.(deployment.seed_deployments) do
         nil ->
+          write_reboot_decision(deployment, opts, "no reboot required")
           :ok
 
         reason ->
@@ -269,6 +292,8 @@ defmodule SowerAgent.Deployer do
               deployment_sid: deployment.sid,
               reason: reason
             )
+
+            write_reboot_decision(deployment, opts, "reboot initiated: #{reason}")
 
             case reboot_fun.(reason: reason) do
               {:ok, output} ->
@@ -310,7 +335,21 @@ defmodule SowerAgent.Deployer do
         deployment_sid: deployment.sid
       )
 
+      write_reboot_decision(deployment, opts, "reboot evaluation skipped: no NixOS seeds")
       :ok
+    end
+  end
+
+  defp write_reboot_decision(%Deployment{} = deployment, opts, message) do
+    write_log_fun = Keyword.get(opts, :write_log_fun, &maybe_write_log/3)
+
+    last_seed =
+      deployment.seed_deployments
+      |> Enum.map(& &1.seed)
+      |> List.last()
+
+    if last_seed do
+      write_log_fun.(deployment, last_seed, [decision_line(message)])
     end
   end
 
@@ -461,6 +500,8 @@ defmodule SowerAgent.Deployer do
         )
     end
   end
+
+  def decision_line(message), do: "[sower] #{message}"
 
   defp strip_ansi(text) do
     Regex.replace(~r/\x1b\[[0-9;]*[a-zA-Z]/, text, "")
