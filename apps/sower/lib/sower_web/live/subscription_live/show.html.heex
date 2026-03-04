@@ -3,6 +3,12 @@
     Subscription {@subscription.id}
     <:subtitle>This is a subscription record from your database.</:subtitle>
     <:actions>
+      <.deploy_button
+        subscription_sid={@subscription.sid}
+        deployable={@deployable}
+        deploying={@deploying}
+        deploy_error={@deploy_error}
+      />
       <.link
         patch={~p"/agents/#{@agent}/subscriptions/#{@subscription}/show/edit"}
         phx-click={JS.push_focus()}

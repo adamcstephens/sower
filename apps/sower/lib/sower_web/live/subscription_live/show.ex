@@ -35,7 +35,43 @@ defmodule SowerWeb.SubscriptionLive.Show do
          |> assign(:agent, agent)
          |> assign(:page_title, page_title(socket.assigns.live_action))
          |> assign(:subscription, subscription)
-         |> assign(:matching_seeds, matching_seeds)}
+         |> assign(:matching_seeds, matching_seeds)
+         |> assign(:deployable, matching_seeds != [])
+         |> assign(:deploying, false)
+         |> assign(:deploy_error, nil)}
+    end
+  end
+
+  @impl true
+  def handle_event("deploy_subscription", %{"subscription_sid" => _sub_sid}, socket) do
+    socket = assign(socket, deploying: true, deploy_error: nil)
+
+    case Orchestration.deploy_subscription(socket.assigns.subscription) do
+      {:ok, _request_id} ->
+        {:noreply, socket}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, deploying: false, deploy_error: deploy_error_message(reason))}
+    end
+  end
+
+  @impl Phoenix.LiveView
+  def handle_info({:deployment, :created, deployment}, socket) do
+    if socket.assigns.deploying do
+      {:noreply,
+       socket
+       |> assign(:deploying, false)
+       |> redirect(to: ~p"/deployments/#{deployment.sid}")}
+    else
+      subscription =
+        Orchestration.get_subscription_sid_with_deployments!(socket.assigns.subscription.sid)
+
+      matching_seeds = Orchestration.list_matching_seeds(subscription, 5)
+
+      {:noreply,
+       socket
+       |> assign(:subscription, subscription)
+       |> assign(:matching_seeds, matching_seeds)}
     end
   end
 
@@ -54,4 +90,7 @@ defmodule SowerWeb.SubscriptionLive.Show do
 
   defp page_title(:show), do: "Show Subscription"
   defp page_title(:edit), do: "Edit Subscription"
+
+  defp deploy_error_message(:agent_not_found), do: "Agent not found"
+  defp deploy_error_message(_), do: "Deployment failed"
 end

@@ -1,5 +1,6 @@
 defmodule SowerWeb.SowerComponents do
   use Phoenix.Component
+  import SowerWeb.CoreComponents, only: [button: 1]
 
   attr :label, :string, required: true
   slot :inner_block, required: true
@@ -200,6 +201,34 @@ defmodule SowerWeb.SowerComponents do
 
     ~H"""
     <span>{@local_dt}</span>
+    """
+  end
+
+  attr :subscription_sid, :string, required: true
+  attr :deployable, :boolean, default: false
+  attr :deploying, :boolean, default: false
+  attr :deploy_error, :string, default: nil
+
+  def deploy_button(assigns) do
+    ~H"""
+    <div class="inline-flex items-center gap-2">
+      <.button
+        :if={@deployable}
+        type="button"
+        phx-click="deploy_subscription"
+        phx-value-subscription_sid={@subscription_sid}
+        phx-disable-with="Deploying..."
+        disabled={@deploying}
+      >
+        Deploy
+      </.button>
+      <span
+        :if={@deploy_error}
+        class="text-sm text-red-600 dark:text-red-400"
+      >
+        {@deploy_error}
+      </span>
+    </div>
     """
   end
 

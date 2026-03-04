@@ -84,6 +84,14 @@
         <:col :let={subscription} label="Updated">
           <.local_datetime datetime={subscription.updated_at} user_timezone={@user_timezone} />
         </:col>
+        <:col :let={subscription} label="">
+          <.deploy_button
+            subscription_sid={subscription.sid}
+            deployable={MapSet.member?(@deployable_subs, subscription.sid)}
+            deploying={@deploying_sub == subscription.sid}
+            deploy_error={if @deploying_sub == subscription.sid, do: @deploy_error}
+          />
+        </:col>
       </.responsive_table>
       <p
         :if={@agent.subscriptions == []}
@@ -106,6 +114,18 @@
         <:col :let={deployment} label="SID">{deployment.sid}</:col>
         <:col :let={deployment} label="Created">
           <.local_datetime datetime={deployment.inserted_at} user_timezone={@user_timezone} />
+        </:col>
+        <:col :let={deployment} label="">
+          <.button
+            :if={deployment.result in [:success, :failure]}
+            type="button"
+            phx-click="retry_deployment"
+            phx-value-deployment_sid={deployment.sid}
+            phx-disable-with="Retrying..."
+            disabled={@retrying_deployment == deployment.sid}
+          >
+            Retry
+          </.button>
         </:col>
       </.responsive_table>
       <p
