@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -135,6 +136,40 @@ func (h *ConnectionHandler) validateRequest(req *Request) error {
 	return nil
 }
 
+// callbackSlogHandler tees slog records to an OutputCallback in addition to
+// delegating to an underlying handler (e.g. the stderr text handler).
+type callbackSlogHandler struct {
+	base     slog.Handler
+	callback OutputCallback
+}
+
+func (h *callbackSlogHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return h.base.Enabled(ctx, level)
+}
+
+func (h *callbackSlogHandler) Handle(ctx context.Context, r slog.Record) error {
+	var sb strings.Builder
+	sb.WriteString("[activator] ")
+	sb.WriteString(r.Level.String())
+	sb.WriteString(" ")
+	sb.WriteString(r.Message)
+	r.Attrs(func(a slog.Attr) bool {
+		sb.WriteString(" ")
+		sb.WriteString(a.String())
+		return true
+	})
+	h.callback(sb.String(), r.Level >= slog.LevelError)
+	return h.base.Handle(ctx, r)
+}
+
+func (h *callbackSlogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &callbackSlogHandler{base: h.base.WithAttrs(attrs), callback: h.callback}
+}
+
+func (h *callbackSlogHandler) WithGroup(name string) slog.Handler {
+	return &callbackSlogHandler{base: h.base.WithGroup(name), callback: h.callback}
+}
+
 // executeRequest runs the request action and streams output.
 func (h *ConnectionHandler) executeRequest(req *Request) int {
 	outputCallback := func(line string, isError bool) {
@@ -148,6 +183,11 @@ func (h *ConnectionHandler) executeRequest(req *Request) int {
 			Data: line,
 		})
 	}
+
+	// Tee activator slog messages into the output stream for this request.
+	orig := slog.Default()
+	slog.SetDefault(slog.New(&callbackSlogHandler{base: orig.Handler(), callback: outputCallback}))
+	defer slog.SetDefault(orig)
 
 	var (
 		exitCode int

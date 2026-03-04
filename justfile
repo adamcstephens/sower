@@ -87,7 +87,7 @@ release-push:
 start: dev-services start-all
 
 start-all:
-    iex --sname dev1 -S mix phx.server
+    nix shell ".#activator" -c iex --sname dev1 -S mix phx.server
 
 start-agent:
     nix shell ".#activator" -c iex --sname agent1 --dot-iex ./.iex-agent.exs -S mix run --no-start

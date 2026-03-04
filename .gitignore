@@ -46,6 +46,7 @@ dev-client.json
 dev-server.json
 .erlang-history/
 /sower-activator
+cmd/sower-activator/sower-activator
 .direnv
 .workspaces/
 .gocache/
