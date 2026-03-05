@@ -128,9 +128,14 @@ defmodule SowerAgent.Deployer do
               reason: inspect(reason)
             )
 
-            write_log_fun.(deployment, seed, preamble ++ [
-              "FATAL: missing activator executable sower-activator; deployment cannot continue"
-            ])
+            write_log_fun.(
+              deployment,
+              seed,
+              preamble ++
+                [
+                  "FATAL: missing activator executable sower-activator; deployment cannot continue"
+                ]
+            )
 
           {:error, _reason} ->
             :ok

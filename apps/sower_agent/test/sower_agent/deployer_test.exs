@@ -377,7 +377,10 @@ defmodule SowerAgent.DeployerTest do
 
       logged_lines = capture_log_lines(deployment)
 
-      assert Enum.any?(logged_lines, &(&1 =~ "[sower]" and &1 =~ "realized" and &1 =~ "seed-seed_r1"))
+      assert Enum.any?(
+               logged_lines,
+               &(&1 =~ "[sower]" and &1 =~ "realized" and &1 =~ "seed-seed_r1")
+             )
     end
 
     test "includes realization failure decision line in log output" do
@@ -563,7 +566,10 @@ defmodule SowerAgent.DeployerTest do
 
       logged_lines = capture_log_lines(deployment)
 
-      assert Enum.any?(logged_lines, &(&1 =~ "[sower]" and &1 =~ "switch" and &1 =~ "seed-seed_md1"))
+      assert Enum.any?(
+               logged_lines,
+               &(&1 =~ "[sower]" and &1 =~ "switch" and &1 =~ "seed-seed_md1")
+             )
     end
   end
 
