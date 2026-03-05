@@ -341,6 +341,28 @@ let
         in
         drv;
 
+      deps_nix =
+        let
+          version = "2.6.2";
+          drv = buildMix {
+            inherit version;
+            name = "deps_nix";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "deps_nix";
+              sha256 = "9be50588be3769e68e5311c3fd1afe1e3c58883264198ef55121370f2da2604b";
+            };
+
+            beamDeps = [
+              ex_nar
+              mint
+            ];
+          };
+        in
+        drv;
+
       ecto =
         let
           version = "3.13.5";
@@ -484,6 +506,23 @@ let
               ex_aws
               sweet_xml
             ];
+          };
+        in
+        drv;
+
+      ex_nar =
+        let
+          version = "0.3.0";
+          drv = buildMix {
+            inherit version;
+            name = "ex_nar";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "ex_nar";
+              sha256 = "cbb42d047764feac6c411efddcadc31866e9a998dd6e2bc1eb428cec1c49fdcd";
+            };
           };
         in
         drv;
