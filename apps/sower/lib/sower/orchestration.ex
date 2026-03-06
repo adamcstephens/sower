@@ -959,7 +959,7 @@ defmodule Sower.Orchestration do
 
       %Agent{} = agent ->
         request_id = SowerClient.Sid.generate("request")
-        {:ok, request_id, _task} = process_deployment(request_id, [subscription], agent, opts)
+        {:ok, request_id} = process_deployment(request_id, [subscription], agent, opts)
         {:ok, request_id}
     end
   end
@@ -1015,9 +1015,9 @@ defmodule Sower.Orchestration do
   def handle_deployment_request(payload, agent) do
     with {:ok, request} <- SowerClient.Orchestration.DeploymentRequest.cast(payload),
          {:ok, subscriptions} <- validate_deployment_request(request, agent.id),
-         {:ok, request_id, task} <-
+         {:ok, request_id} <-
            process_deployment(request.request_id, subscriptions, agent, force: request.force) do
-      {:ok, request_id, task}
+      {:ok, request_id}
     end
   end
 
@@ -1042,61 +1042,54 @@ defmodule Sower.Orchestration do
   @doc """
   Process a deployment request asynchronously.
 
-  Spawns an async task to match seeds, create deployment record, and broadcast
-  results back to agent via channel. Validation happens synchronously before
-  task spawn.
+  Spawns a fire-and-forget task to match seeds, create deployment record, and
+  broadcast results back to agent via channel. Validation happens synchronously
+  before task spawn.
 
-  Returns {:ok, request_id, task} where task is the async %Task{}.
+  Returns {:ok, request_id} on success.
   Returns {:error, reason} if validation fails.
-
-  ## Examples
-
-      iex> {:ok, request_id, task} = process_deployment(request_id, subscriptions, agent)
-      iex> Task.await(task)
-
   """
   def process_deployment(request_id, subscriptions, %Agent{} = agent, opts \\ []) do
-    task =
-      Task.Supervisor.async_nolink(Sower.TaskSupervisor, fn ->
-        Repo.put_org_id(agent.org_id)
+    Task.Supervisor.start_child(Sower.TaskSupervisor, fn ->
+      Repo.put_org_id(agent.org_id)
 
-        Logger.info(
-          msg: "Deployment processing started",
-          request_id: request_id,
-          agent_id: agent.id
-        )
+      Logger.info(
+        msg: "Deployment processing started",
+        request_id: request_id,
+        agent_id: agent.id
+      )
 
-        case do_deployment(request_id, subscriptions, opts) do
-          {:ok, deployment} ->
-            Logger.info(
-              msg: "Deployment broadcast successful",
-              request_id: request_id,
-              deployment_sid: deployment.sid,
-              skipped: deployment.skipped
-            )
+      case do_deployment(request_id, subscriptions, opts) do
+        {:ok, deployment} ->
+          Logger.info(
+            msg: "Deployment broadcast successful",
+            request_id: request_id,
+            deployment_sid: deployment.sid,
+            skipped: deployment.skipped
+          )
 
-            SowerWeb.Endpoint.broadcast(
-              "agent:#{agent.sid}",
-              "deployment",
-              Map.from_struct(deployment)
-            )
+          SowerWeb.Endpoint.broadcast(
+            "agent:#{agent.sid}",
+            "deployment",
+            Map.from_struct(deployment)
+          )
 
-          {:error, reason} ->
-            Logger.error(
-              msg: "Deployment processing failed",
-              request_id: request_id,
-              reason: to_string(reason)
-            )
+        {:error, reason} ->
+          Logger.error(
+            msg: "Deployment processing failed",
+            request_id: request_id,
+            reason: to_string(reason)
+          )
 
-            SowerWeb.Endpoint.broadcast(
-              "agent:#{agent.sid}",
-              "deployment:error",
-              %{request_id: request_id, reason: to_string(reason)}
-            )
-        end
-      end)
+          SowerWeb.Endpoint.broadcast(
+            "agent:#{agent.sid}",
+            "deployment:error",
+            %{request_id: request_id, reason: to_string(reason)}
+          )
+      end
+    end)
 
-    {:ok, request_id, task}
+    {:ok, request_id}
   end
 
   defp do_deployment(request_id, subscriptions, opts) do
