@@ -9,3 +9,7 @@ If more than one of the rules conflict, ask before implementing.
 - Never break deployments or strand agents such that they cannot apply an upgrade.
 - You can access the dev server live over tidewave project_eval, allowing for introspection of a live environment.
 - Do not create worktrees unless explicitly asked. When asked, use: `git worktree add .claude/worktrees/<name> -b <name>`
+
+## Worktree setup
+
+After creating a worktree, run: `mix deps.get && mix compile`
