@@ -1,4 +1,4 @@
-defmodule Sower.SeedTag do
+defmodule Sower.Orchestration.SeedTag do
   use Sower.Schema
   import Ecto.Changeset
 
@@ -8,7 +8,7 @@ defmodule Sower.SeedTag do
     field :key, :string
     field :value, :string
 
-    belongs_to :seed, Sower.Seed
+    belongs_to :seed, Sower.Orchestration.Seed
   end
 
   def changeset(tag, attrs) do

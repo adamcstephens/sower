@@ -591,7 +591,7 @@ defmodule Sower.OrchestrationTest do
 
   describe "update_agent_seed_generations/2 with auto-registration" do
     alias Sower.Orchestration.{AgentSeedGeneration, NixProfile}
-    alias Sower.Seed
+    alias Sower.Orchestration.Seed
 
     import Sower.OrchestrationFixtures
 

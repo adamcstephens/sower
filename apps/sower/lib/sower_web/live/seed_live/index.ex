@@ -5,6 +5,6 @@ defmodule SowerWeb.SeedLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, stream(socket, :seeds, Sower.Seed.list())}
+    {:ok, stream(socket, :seeds, Sower.Orchestration.Seed.list())}
   end
 end

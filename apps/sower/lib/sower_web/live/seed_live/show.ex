@@ -10,7 +10,7 @@ defmodule SowerWeb.SeedLive.Show do
 
   @impl true
   def handle_params(%{"sid" => sid}, _, socket) do
-    case Sower.Seed.get_sid(sid) do
+    case Sower.Orchestration.Seed.get_sid(sid) do
       nil ->
         {:noreply,
          socket

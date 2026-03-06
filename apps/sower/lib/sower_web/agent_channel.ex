@@ -100,7 +100,7 @@ defmodule SowerWeb.AgentChannel do
     end
   end
 
-  handle_schema(SowerClient.Seed, &Sower.Seed.get_by_request/1)
+  handle_schema(SowerClient.Seed, &Sower.Orchestration.Seed.get_by_request/1)
 
   handle_schema(SowerClient.Orchestration.Subscription, fn req, socket ->
     Sower.Orchestration.register_subscription(req, socket.assigns.agent.id)

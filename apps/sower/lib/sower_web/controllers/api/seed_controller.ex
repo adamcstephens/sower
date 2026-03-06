@@ -49,7 +49,7 @@ defmodule SowerWeb.Api.SeedController do
     conn = Map.put(conn, :body_params, %{})
 
     if can(conn.assigns.access_token)
-       |> create?(%Sower.Seed{org_id: conn.assigns.access_token.org_id}) do
+       |> create?(%Sower.Orchestration.Seed{org_id: conn.assigns.access_token.org_id}) do
       seed_attrs = %{name: name, seed_type: seed_type, artifact: artifact}
 
       seed_attrs =
@@ -61,8 +61,8 @@ defmodule SowerWeb.Api.SeedController do
             Map.put(seed_attrs, :tags, Enum.map(tags, &Map.from_struct/1))
         end
 
-      case Sower.Seed.create(seed_attrs, rename: rename) do
-        {:ok, %Sower.Seed{} = seed} ->
+      case Sower.Orchestration.Seed.create(seed_attrs, rename: rename) do
+        {:ok, %Sower.Orchestration.Seed{} = seed} ->
           conn
           |> put_status(:created)
           |> render(:show, seed: seed)
@@ -110,10 +110,10 @@ defmodule SowerWeb.Api.SeedController do
 
   def latest(conn, %{name: name, seed_type: seed_type} = params) do
     if can(conn.assigns.access_token)
-       |> read?(%Sower.Seed{org_id: conn.assigns.access_token.org_id}) do
+       |> read?(%Sower.Orchestration.Seed{org_id: conn.assigns.access_token.org_id}) do
       tags = parse_tags(params[:tags])
 
-      case Sower.Seed.latest(name, seed_type, tags) do
+      case Sower.Orchestration.Seed.latest(name, seed_type, tags) do
         nil ->
           conn |> put_status(404) |> render(:not_found)
 
@@ -159,8 +159,8 @@ defmodule SowerWeb.Api.SeedController do
   def get(conn, %{sid: sid}) do
     if conn.assigns.access_token
        |> can()
-       |> read?(%Sower.Seed{org_id: conn.assigns.access_token.org_id}) do
-      case Sower.Seed.get_sid(sid) do
+       |> read?(%Sower.Orchestration.Seed{org_id: conn.assigns.access_token.org_id}) do
+      case Sower.Orchestration.Seed.get_sid(sid) do
         nil ->
           conn |> put_status(404) |> render(:error, error: "not found")
 
@@ -174,7 +174,7 @@ defmodule SowerWeb.Api.SeedController do
 
   def get(conn, _) do
     if can(conn.assigns.access_token)
-       |> read?(%Sower.Seed{org_id: conn.assigns.access_token.org_id}) do
+       |> read?(%Sower.Orchestration.Seed{org_id: conn.assigns.access_token.org_id}) do
       conn |> put_status(:not_found) |> render(:not_found)
     else
       conn |> put_status(401) |> render(:error, error: "unauthorized")
@@ -209,8 +209,8 @@ defmodule SowerWeb.Api.SeedController do
 
   def list(conn, %{name: name, seed_type: seed_type}) do
     if can(conn.assigns.access_token)
-       |> read?(%Sower.Seed{org_id: conn.assigns.access_token.org_id}) do
-      seed = Sower.Seed.get(name, seed_type)
+       |> read?(%Sower.Orchestration.Seed{org_id: conn.assigns.access_token.org_id}) do
+      seed = Sower.Orchestration.Seed.get(name, seed_type)
 
       case seed do
         nil ->
@@ -226,8 +226,8 @@ defmodule SowerWeb.Api.SeedController do
 
   def list(conn, _) do
     if can(conn.assigns.access_token)
-       |> read?(%Sower.Seed{org_id: conn.assigns.access_token.org_id}) do
-      seeds = Sower.Seed.list()
+       |> read?(%Sower.Orchestration.Seed{org_id: conn.assigns.access_token.org_id}) do
+      seeds = Sower.Orchestration.Seed.list()
       render(conn, :list, seeds: seeds)
     else
       conn |> put_status(401) |> render(:error, error: "unauthorized")

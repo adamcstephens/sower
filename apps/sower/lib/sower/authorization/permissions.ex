@@ -34,7 +34,7 @@ defmodule Sower.Authorization.Permissions do
          org_id
        ) do
     permit
-    |> read(Sower.Seed, org_id: org_id)
+    |> read(Sower.Orchestration.Seed, org_id: org_id)
     |> read(Sower.Nix.Cache, org_id: org_id)
   end
 
@@ -44,7 +44,7 @@ defmodule Sower.Authorization.Permissions do
          org_id
        ) do
     permit
-    |> all(Sower.Seed, org_id: org_id)
+    |> all(Sower.Orchestration.Seed, org_id: org_id)
     |> read(Sower.Nix.Cache, org_id: org_id)
   end
 

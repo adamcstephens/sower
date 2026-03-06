@@ -1,7 +1,7 @@
 defmodule Sower.SeedFixtures do
   @moduledoc """
   This module defines test helpers for creating
-  entities via the `Sower.Seed` context.
+  entities via the `Sower.Orchestration.Seed` context.
   """
 
   def unique_seed_name, do: "seed#{System.unique_integer()}"
@@ -22,7 +22,7 @@ defmodule Sower.SeedFixtures do
     {:ok, seed} =
       attrs
       |> valid_seed_attributes()
-      |> Sower.Seed.create()
+      |> Sower.Orchestration.Seed.create()
 
     seed
   end

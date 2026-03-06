@@ -66,9 +66,9 @@ defmodule Sower.Repo.Seeds.Org do
     |> Enum.map(fn t ->
       name = ~s"test#{t}"
 
-      case Sower.Seed.get(name, "nixos") do
+      case Sower.Orchestration.Seed.get(name, "nixos") do
         nil ->
-          Sower.Seed.create(%{
+          Sower.Orchestration.Seed.create(%{
             name: name,
             seed_type: "nixos",
             org_id: user.org_id,

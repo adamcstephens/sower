@@ -1,10 +1,11 @@
-defmodule Sower.Seed do
+defmodule Sower.Orchestration.Seed do
   use Sower.Schema
 
   import Ecto.Changeset
   import Ecto.Query, only: [from: 2]
 
-  alias Sower.{Repo, Seed, SeedTag}
+  alias Sower.Repo
+  alias Sower.Orchestration.{Seed, SeedTag}
   alias Ecto.Multi
 
   @derive {Jason.Encoder, only: [:sid, :name, :seed_type, :artifact, :tags]}
@@ -300,10 +301,10 @@ defmodule Sower.Seed do
 
   ## Examples
 
-      iex> Sower.Seed.extract_info_from_store_path("/nix/store/abc123-nixos-system-myhost-25.11")
+      iex> Sower.Orchestration.Seed.extract_info_from_store_path("/nix/store/abc123-nixos-system-myhost-25.11")
       {"myhost", [%{key: "nixos_version", value: "25.05"}]}
 
-      iex> Sower.Seed.extract_info_from_store_path("/nix/store/xyz789-home-manager-generation")
+      iex> Sower.Orchestration.Seed.extract_info_from_store_path("/nix/store/xyz789-home-manager-generation")
       {"home-manager-generation", []}
   """
   def extract_info_from_store_path(path) do
@@ -329,13 +330,13 @@ defmodule Sower.Seed do
 
   ## Examples
 
-      iex> Sower.Seed.seed_type_from_profile_path("/nix/var/nix/profiles/system")
+      iex> Sower.Orchestration.Seed.seed_type_from_profile_path("/nix/var/nix/profiles/system")
       "nixos"
 
-      iex> Sower.Seed.seed_type_from_profile_path("/home/user/.local/state/nix/profiles/home-manager")
+      iex> Sower.Orchestration.Seed.seed_type_from_profile_path("/home/user/.local/state/nix/profiles/home-manager")
       "home-manager"
 
-      iex> Sower.Seed.seed_type_from_profile_path("/run/current-system/sw")
+      iex> Sower.Orchestration.Seed.seed_type_from_profile_path("/run/current-system/sw")
       "nixos"
   """
   def seed_type_from_profile_path(profile_path) do

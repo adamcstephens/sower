@@ -5,7 +5,7 @@ defmodule Sower.SeedTest do
   import Sower.OrchestrationFixtures
   import Sower.SeedFixtures
 
-  alias Sower.Seed
+  alias Sower.Orchestration.Seed
 
   setup _ do
     org = organization_fixture()
@@ -41,7 +41,7 @@ defmodule Sower.SeedTest do
 
       {:ok, _} = Seed.create(Map.from_struct(seed))
 
-      assert Repo.all(Sower.Seed) |> Enum.count() == 1
+      assert Repo.all(Sower.Orchestration.Seed) |> Enum.count() == 1
     end
   end
 
