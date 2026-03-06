@@ -19,7 +19,6 @@ defmodule Sower.Repo.Migrations.AddStateToDeployments do
     alter table(:deployments) do
       modify :state, :string, null: false
     end
-
   end
 
   def down do
