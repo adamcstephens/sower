@@ -340,7 +340,6 @@ defmodule SowerAgent.Deployer do
         deployment_sid: deployment.sid
       )
 
-      write_reboot_decision(deployment, opts, "reboot evaluation skipped: no NixOS seeds")
       :ok
     end
   end
