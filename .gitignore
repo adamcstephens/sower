@@ -49,4 +49,5 @@ dev-server.json
 cmd/sower-activator/sower-activator
 .direnv
 .workspaces/
+.worktrees/
 .gocache/

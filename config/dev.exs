@@ -68,4 +68,10 @@ config :phoenix, :stacktrace_depth, 20
 # Initialize plugs at runtime for faster development compilation
 config :phoenix, :plug_init_mode, :runtime
 
-config :exsync, logging_enabled: false, exclusions: [~r/\.expert/]
+config :exsync,
+  logging_enabled: false,
+  exclusions: [
+    ~r|\.expert|,
+    ~r|\.workspaces|,
+    ~r|\.worktrees|
+  ]
