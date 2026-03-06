@@ -67,6 +67,7 @@ defmodule SowerWeb.AgentChannelTest do
           seeds: [seed],
           subscriptions: [subscription],
           result: :success,
+          state: :completed,
           deployed_at: DateTime.utc_now() |> DateTime.truncate(:second)
         })
 

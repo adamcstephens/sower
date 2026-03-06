@@ -73,6 +73,7 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
       deployment_fixture(%{
         agent_id: agent.id,
         result: nil,
+        state: :dispatched,
         deployed_at: nil
       })
 
@@ -80,6 +81,7 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
       deployment_fixture(%{
         agent_id: agent.id,
         result: nil,
+        state: :dispatched,
         deployed_at: nil
       })
 
@@ -104,6 +106,7 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
       deployment_fixture(%{
         agent_id: agent.id,
         result: nil,
+        state: :dispatched,
         deployed_at: nil
       })
 
@@ -111,7 +114,11 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
     refute has_element?(show_live, "button", "Retry")
 
     deployment
-    |> change(%{result: :success, deployed_at: DateTime.utc_now() |> DateTime.truncate(:second)})
+    |> change(%{
+      result: :success,
+      state: :completed,
+      deployed_at: DateTime.utc_now() |> DateTime.truncate(:second)
+    })
     |> Sower.Repo.update!()
 
     assert {:ok, _deployment} = DeploymentPubSub.broadcast_deployment_change(deployment, :updated)
@@ -127,6 +134,7 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
       deployment_fixture(%{
         agent_id: agent.id,
         result: nil,
+        state: :dispatched,
         deployed_at: nil
       })
 
@@ -169,6 +177,7 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
       deployment_fixture(%{
         agent_id: agent.id,
         result: :success,
+        state: :completed,
         deployed_at: DateTime.utc_now()
       })
 
@@ -176,6 +185,7 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
       deployment_fixture(%{
         agent_id: agent.id,
         result: nil,
+        state: :dispatched,
         deployed_at: nil
       })
 
@@ -196,6 +206,7 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
       deployment_fixture(%{
         agent_id: agent.id,
         result: :success,
+        state: :completed,
         deployed_at: DateTime.utc_now()
       })
 
@@ -219,6 +230,7 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
       deployment_fixture(%{
         agent_id: agent.id,
         result: :success,
+        state: :completed,
         deployed_at: DateTime.utc_now()
       })
 

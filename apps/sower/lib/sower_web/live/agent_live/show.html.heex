@@ -108,8 +108,8 @@
         rows={@deployments}
         row_click={fn deployment -> JS.navigate(~p"/deployments/#{deployment.sid}") end}
       >
-        <:col :let={deployment} label="Result">
-          <.result result={deployment.result} />
+        <:col :let={deployment} label="Status">
+          <.deployment_status state={deployment.state} result={deployment.result} />
         </:col>
         <:col :let={deployment} label="SID">{deployment.sid}</:col>
         <:col :let={deployment} label="Created">
@@ -117,7 +117,7 @@
         </:col>
         <:col :let={deployment} label="">
           <.button
-            :if={deployment.result in [:success, :failure]}
+            :if={deployment.state in [:completed, :stale]}
             type="button"
             phx-click="retry_deployment"
             phx-value-deployment_sid={deployment.sid}

@@ -14,6 +14,7 @@ defmodule SowerWeb.DeploymentLive.IndexTest do
       deployment_fixture(%{
         agent_id: agent.id,
         result: :success,
+        state: :completed,
         deployed_at: DateTime.utc_now()
       })
 
@@ -21,6 +22,7 @@ defmodule SowerWeb.DeploymentLive.IndexTest do
       deployment_fixture(%{
         agent_id: agent.id,
         result: nil,
+        state: :dispatched,
         deployed_at: nil
       })
 
@@ -38,6 +40,7 @@ defmodule SowerWeb.DeploymentLive.IndexTest do
       deployment_fixture(%{
         agent_id: agent.id,
         result: :failure,
+        state: :completed,
         deployed_at: DateTime.utc_now()
       })
 
@@ -60,6 +63,7 @@ defmodule SowerWeb.DeploymentLive.IndexTest do
       deployment_fixture(%{
         agent_id: agent.id,
         result: :success,
+        state: :completed,
         deployed_at: DateTime.utc_now()
       })
 

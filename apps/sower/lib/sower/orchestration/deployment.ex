@@ -31,6 +31,11 @@ defmodule Sower.Orchestration.Deployment do
 
     field :deployed_at, :utc_datetime
     field :result, Ecto.Enum, values: [:success, :failure, :partial]
+
+    field :state, Ecto.Enum,
+      values: [:created, :dispatched, :completed, :stale],
+      default: :created
+
     field :last_dispatched_at, :utc_datetime_usec
     field :content_hash, :string
     field :retry_ordinal, :integer
@@ -45,6 +50,7 @@ defmodule Sower.Orchestration.Deployment do
     |> cast(attrs, [
       :deployed_at,
       :result,
+      :state,
       :last_dispatched_at,
       :agent_id,
       :content_hash,
@@ -90,7 +96,7 @@ defmodule Sower.Orchestration.Deployment do
 
     query =
       from(d in __MODULE__,
-        where: d.agent_id == ^agent.id and is_nil(d.result),
+        where: d.agent_id == ^agent.id and d.state in [:created, :dispatched],
         order_by: [
           asc: fragment("COALESCE(?, ?)", d.last_dispatched_at, d.inserted_at),
           asc: d.inserted_at
@@ -185,7 +191,8 @@ defmodule Sower.Orchestration.Deployment do
         true ->
           retry_in_progress? =
             from(d in __MODULE__,
-              where: d.parent_deployment_id == ^deployment.id and is_nil(d.result),
+              where:
+                d.parent_deployment_id == ^deployment.id and d.state in [:created, :dispatched],
               limit: 1,
               select: d.id
             )
@@ -210,7 +217,8 @@ defmodule Sower.Orchestration.Deployment do
               retried_by_user_id: user_id,
               retry_ordinal: max_retry_ordinal + 1,
               retried_at: DateTime.utc_now(),
-              last_dispatched_at: DateTime.utc_now()
+              last_dispatched_at: DateTime.utc_now(),
+              state: :dispatched
             }
 
             case create_deployment(attrs) do
@@ -370,7 +378,11 @@ defmodule Sower.Orchestration.Deployment do
         {:error, :deployment_not_found}
 
       deploy ->
-        update_deployment(deploy, %{deployed_at: result.deployed_at, result: result.result})
+        update_deployment(deploy, %{
+          deployed_at: result.deployed_at,
+          result: result.result,
+          state: :completed
+        })
     end
   end
 
@@ -388,7 +400,7 @@ defmodule Sower.Orchestration.Deployment do
 
       stale_deployments =
         from(d in __MODULE__,
-          where: is_nil(d.result),
+          where: d.state in [:created, :dispatched],
           where: fragment("COALESCE(?, ?) <= ?", d.last_dispatched_at, d.inserted_at, ^cutoff),
           order_by: [
             asc: fragment("COALESCE(?, ?)", d.last_dispatched_at, d.inserted_at),
@@ -524,6 +536,7 @@ defmodule Sower.Orchestration.Deployment do
                  agent_id: agent_id,
                  content_hash: content_hash,
                  last_dispatched_at: DateTime.utc_now(),
+                 state: :dispatched,
                  seeds: seeds,
                  subscriptions: subscriptions
                }) do
@@ -572,7 +585,7 @@ defmodule Sower.Orchestration.Deployment do
         where:
           d.agent_id == ^agent_id and
             d.content_hash == ^content_hash and
-            (d.result == :success or is_nil(d.result)),
+            (d.result == :success or d.state in [:created, :dispatched]),
         order_by: [desc: d.inserted_at],
         limit: 1
       )
@@ -618,9 +631,11 @@ defmodule Sower.Orchestration.Deployment do
     now = DateTime.utc_now()
 
     from(d in __MODULE__,
-      where: d.id in ^ids and is_nil(d.result)
+      where: d.id in ^ids and d.state in [:created, :dispatched]
     )
-    |> Repo.update_all(set: [last_dispatched_at: dispatched_at, updated_at: now])
+    |> Repo.update_all(
+      set: [last_dispatched_at: dispatched_at, state: :dispatched, updated_at: now]
+    )
 
     :ok
   end
@@ -634,8 +649,8 @@ defmodule Sower.Orchestration.Deployment do
         nil ->
           :ignore
 
-        %__MODULE__{result: nil} = unresolved ->
-          update_deployment(unresolved, %{deployed_at: now, result: :failure})
+        %__MODULE__{state: state} = unresolved when state in [:created, :dispatched] ->
+          update_deployment(unresolved, %{deployed_at: now, result: :failure, state: :stale})
 
         %__MODULE__{} ->
           :ignore

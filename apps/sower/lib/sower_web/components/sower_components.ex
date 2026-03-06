@@ -140,6 +140,41 @@ defmodule SowerWeb.SowerComponents do
     """
   end
 
+  attr :state, :atom, required: true
+  attr :result, :atom, default: nil
+
+  def deployment_status(assigns) do
+    ~H"""
+    <%= case @state do %>
+      <% :created -> %>
+        <span class="inline-flex items-center gap-1.5 text-sm text-zinc-500 dark:text-zinc-400">
+          <span class="relative flex h-2.5 w-2.5">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-zinc-400 opacity-75" />
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-zinc-400" />
+          </span>
+          Created
+        </span>
+      <% :dispatched -> %>
+        <span class="inline-flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400">
+          <span class="relative flex h-2.5 w-2.5">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75" />
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
+          </span>
+          Dispatched
+        </span>
+      <% :completed -> %>
+        <.result result={@result} />
+      <% :stale -> %>
+        <span class="inline-flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-400">
+          <span class="relative flex h-2.5 w-2.5">
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500" />
+          </span>
+          Stale
+        </span>
+    <% end %>
+    """
+  end
+
   attr :result, :string, required: true
 
   def result(assigns) do

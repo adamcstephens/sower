@@ -19,8 +19,8 @@ defmodule SowerWeb.DeploymentLive.Index do
         rows={@streams.deployments}
         row_click={fn {_id, deployment} -> JS.navigate(~p"/deployments/#{deployment}") end}
       >
-        <:col :let={{_id, deployment}} label="Result">
-          <.result result={deployment.result} />
+        <:col :let={{_id, deployment}} label="Status">
+          <.deployment_status state={deployment.state} result={deployment.result} />
         </:col>
         <:col :let={{_id, deployment}} label="sid">{deployment.sid}</:col>
         <:col :let={{_id, deployment}} label="agent">{get_in(deployment.agent.name) || "-"}</:col>
@@ -119,6 +119,6 @@ defmodule SowerWeb.DeploymentLive.Index do
   end
 
   defp retryable?(deployment) do
-    deployment.result in [:success, :failure]
+    deployment.state in [:completed, :stale]
   end
 end

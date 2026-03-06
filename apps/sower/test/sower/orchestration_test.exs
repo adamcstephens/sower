@@ -1021,6 +1021,7 @@ defmodule Sower.OrchestrationTest do
           seeds: [seed],
           subscriptions: [subscription],
           result: :success,
+          state: :completed,
           deployed_at: DateTime.utc_now()
         })
 
@@ -1069,6 +1070,7 @@ defmodule Sower.OrchestrationTest do
           agent_id: agent.id,
           result: nil,
           deployed_at: nil,
+          state: :dispatched,
           last_dispatched_at: old_dispatch
         })
 
@@ -1077,6 +1079,7 @@ defmodule Sower.OrchestrationTest do
           agent_id: agent.id,
           result: nil,
           deployed_at: nil,
+          state: :dispatched,
           last_dispatched_at: fresh_dispatch
         })
 
@@ -1089,10 +1092,12 @@ defmodule Sower.OrchestrationTest do
 
       stale = Orchestration.get_deployment_sid!(stale.sid)
       assert stale.result == :failure
+      assert stale.state == :stale
       assert stale.deployed_at == now
 
       fresh = Orchestration.get_deployment_sid!(fresh.sid)
       assert is_nil(fresh.result)
+      assert fresh.state == :dispatched
       assert is_nil(fresh.deployed_at)
     end
 
@@ -1108,6 +1113,7 @@ defmodule Sower.OrchestrationTest do
         deployment_fixture(%{
           agent_id: agent.id,
           result: :success,
+          state: :completed,
           deployed_at: DateTime.utc_now()
         })
 
@@ -1119,6 +1125,7 @@ defmodule Sower.OrchestrationTest do
           retried_by_user_id: user.id,
           retried_at: DateTime.utc_now(),
           result: nil,
+          state: :dispatched,
           deployed_at: nil,
           last_dispatched_at: old_dispatch
         })
@@ -1147,6 +1154,7 @@ defmodule Sower.OrchestrationTest do
         deployment_fixture(%{
           agent_id: agent.id,
           result: nil,
+          state: :dispatched,
           deployed_at: nil,
           last_dispatched_at: old_dispatch
         })
@@ -1170,6 +1178,7 @@ defmodule Sower.OrchestrationTest do
 
       refreshed = Orchestration.get_deployment_sid!(deployment.sid)
       assert refreshed.result == :success
+      assert refreshed.state == :completed
       assert refreshed.deployed_at == later
     end
   end

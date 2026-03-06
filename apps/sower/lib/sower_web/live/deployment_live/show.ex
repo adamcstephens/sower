@@ -11,7 +11,7 @@ defmodule SowerWeb.DeploymentLive.Show do
     <Layouts.app flash={@flash} current_user={@current_user}>
       <.header>
         <div class="flex items-center space-x-2">
-          <.result result={@deployment.result} />
+          <.deployment_status state={@deployment.state} result={@deployment.result} />
           <span>{@deployment.sid}</span>
         </div>
         <:actions>
@@ -237,7 +237,7 @@ defmodule SowerWeb.DeploymentLive.Show do
   end
 
   defp retryable?(deployment) do
-    deployment.result in [:success, :failure]
+    deployment.state in [:completed, :stale]
   end
 
   defp initialize_socket(socket) do
