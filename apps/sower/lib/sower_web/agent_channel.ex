@@ -135,12 +135,19 @@ defmodule SowerWeb.AgentChannel do
     &Sower.Orchestration.record_deployment/1
   )
 
+  handle_schema(SowerClient.Orchestration.SeedDeploymentResult, fn req, socket ->
+    Sower.Orchestration.SeedDeployment.record_seed_result(req, socket.assigns.agent)
+  end)
+
   handle_schema(SowerClient.Orchestration.AgentSeedsReport, fn report, socket ->
     Orchestration.update_agent_seed_generations(report, socket.assigns.agent)
   end)
 
-  handle_schema(SowerClient.Storage.DeploymentLogUploadRequest, fn req, socket ->
-    Sower.Storage.presign_deployment_log_upload(socket.assigns.agent, req)
+  # Kept for backward compatibility with old agents that still upload logs to S3.
+  # New agents send SeedDeploymentResult instead.
+  # remove 0.7.0
+  handle_schema(SowerClient.Storage.DeploymentLogUploadRequest, fn _req, _socket ->
+    {:error, :deprecated}
   end)
 
   @impl Phoenix.Channel

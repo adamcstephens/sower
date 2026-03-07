@@ -40,8 +40,6 @@ defmodule SowerWeb.Router do
   scope "/", SowerWeb do
     pipe_through [:browser, :require_authenticated_user]
 
-    get "/deployments/:sid/seeds/:seed_sid/log", DeploymentLogController, :show
-
     live_session :authenticated, on_mount: [{SowerWeb.UserAuth, :ensure_authenticated}] do
       live "/agents", AgentLive.Index, :index
       live "/agents/new", AgentLive.Index, :new

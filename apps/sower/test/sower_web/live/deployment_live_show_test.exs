@@ -23,6 +23,17 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
         subscriptions: []
       })
 
+    # Write a log to the seed_deployment
+    seed_deployment =
+      Sower.Repo.get_by!(Sower.Orchestration.SeedDeployment,
+        [deployment_id: deployment.id, seed_id: seed.id],
+        skip_org_id: true
+      )
+
+    seed_deployment
+    |> Ecto.Changeset.change(%{log: "test log output", result: :success})
+    |> Sower.Repo.update!(skip_org_id: true)
+
     {:ok, show_live, html} = live(conn, ~p"/deployments/#{deployment.sid}")
 
     assert html =~ "Seeds"
@@ -32,22 +43,14 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
 
     assert show_live |> element("#seed-log-#{seed.sid} button", "View log") |> render_click()
 
-    log_url = ~p"/deployments/#{deployment.sid}/seeds/#{seed.sid}/log"
-    assert has_element?(show_live, "#seed-log-#{seed.sid} iframe[src=\"#{log_url}\"]")
-    refute has_element?(show_live, "#seed-log-frame-#{seed.sid}.hidden")
-
-    assert has_element?(
-             show_live,
-             "#seed-log-#{seed.sid} a[href=\"#{log_url}\"]",
-             "Open in new tab"
-           )
+    assert has_element?(show_live, "#seed-log-content-#{seed.sid}")
+    assert render(show_live) =~ "test log output"
 
     assert show_live |> element("#seed-log-#{seed.sid} button", "Hide log") |> render_click()
-    assert has_element?(show_live, "#seed-log-#{seed.sid} iframe[src=\"#{log_url}\"]")
-    assert has_element?(show_live, "#seed-log-frame-#{seed.sid}.hidden")
+    refute has_element?(show_live, "#seed-log-content-#{seed.sid}")
   end
 
-  test "shows empty logs state when deployment has no seeds", %{conn: conn, user: user} do
+  test "shows empty state when deployment has no seeds", %{conn: conn, user: user} do
     Sower.Repo.put_org_id(user.org_id)
 
     agent = agent_fixture()

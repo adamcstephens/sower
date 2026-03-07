@@ -8,8 +8,7 @@ defmodule SowerAgent.Deployer do
   alias SowerClient.Orchestration.Deployment
   alias SowerClient.Orchestration.DeploymentProfile
   alias SowerClient.Orchestration.SeedDeployment
-  alias SowerClient.Storage.PresignedUploadReply
-  alias SowerClient.Storage.DeploymentLogUploadRequest
+  alias SowerClient.Orchestration.SeedDeploymentResult
 
   def run(%Deployment{} = deployment) do
     run_with_opts(deployment, upgrade_opts: [], reboot_opts: [])
@@ -18,14 +17,16 @@ defmodule SowerAgent.Deployer do
   def run_with_opts(%Deployment{} = deployment, opts) do
     upgrade_opts = Keyword.get(opts, :upgrade_opts, [])
     reboot_opts = Keyword.get(opts, :reboot_opts, [])
-    write_log_fun = Keyword.get(upgrade_opts, :write_log_fun, &maybe_write_log/3)
+
+    report_seed_result_fun =
+      Keyword.get(upgrade_opts, :report_seed_result_fun, &report_seed_result/4)
 
     result =
       deployment
       |> upgrade(upgrade_opts)
       |> deployment_result()
 
-    maybe_reboot(deployment, result, [{:write_log_fun, write_log_fun} | reboot_opts])
+    maybe_reboot(deployment, result, [{:report_seed_result_fun, report_seed_result_fun} | reboot_opts])
     result
   end
 
@@ -66,7 +67,9 @@ defmodule SowerAgent.Deployer do
       Keyword.get(opts, :get_deployment_profile_fun, &get_deployment_profile/1)
 
     activate_seed_fun = Keyword.get(opts, :activate_seed_fun, &SowerAgent.Seed.activate/2)
-    write_log_fun = Keyword.get(opts, :write_log_fun, &maybe_write_log/3)
+
+    report_seed_result_fun =
+      Keyword.get(opts, :report_seed_result_fun, &report_seed_result/4)
 
     async_stream_fun.(deployment.seed_deployments, fn %{seed: seed} = seed_deploy ->
       Logger.debug(
@@ -109,7 +112,7 @@ defmodule SowerAgent.Deployer do
               seed_sid: seed.sid
             )
 
-            write_log_fun.(deployment, seed, preamble ++ output)
+            report_seed_result_fun.(deployment, seed, :success, preamble ++ output)
 
           {:error, _code, output} ->
             Logger.error(
@@ -118,7 +121,7 @@ defmodule SowerAgent.Deployer do
               seed_sid: seed.sid
             )
 
-            write_log_fun.(deployment, seed, preamble ++ output)
+            report_seed_result_fun.(deployment, seed, :failure, preamble ++ output)
 
           {:error, reason} when reason in [:activator_unavailable, :cmd_not_found] ->
             Logger.error(
@@ -128,9 +131,10 @@ defmodule SowerAgent.Deployer do
               reason: inspect(reason)
             )
 
-            write_log_fun.(
+            report_seed_result_fun.(
               deployment,
               seed,
+              :failure,
               preamble ++
                 [
                   "FATAL: missing activator executable sower-activator; deployment cannot continue"
@@ -144,7 +148,7 @@ defmodule SowerAgent.Deployer do
         result
 
       {:ok, {:error, :failed_to_realize, %SeedDeployment{seed: seed} = _seed_deploy}} ->
-        write_log_fun.(deployment, seed, [
+        report_seed_result_fun.(deployment, seed, :failure, [
           decision_line("realization failed for #{seed.name} (#{seed.seed_type})")
         ])
 
@@ -345,7 +349,8 @@ defmodule SowerAgent.Deployer do
   end
 
   defp write_reboot_decision(%Deployment{} = deployment, opts, message) do
-    write_log_fun = Keyword.get(opts, :write_log_fun, &maybe_write_log/3)
+    report_seed_result_fun =
+      Keyword.get(opts, :report_seed_result_fun, &report_seed_result/4)
 
     last_seed =
       deployment.seed_deployments
@@ -353,7 +358,7 @@ defmodule SowerAgent.Deployer do
       |> List.last()
 
     if last_seed do
-      write_log_fun.(deployment, last_seed, [decision_line(message)])
+      report_seed_result_fun.(deployment, last_seed, nil, [decision_line(message)])
     end
   end
 
@@ -396,110 +401,34 @@ defmodule SowerAgent.Deployer do
     end
   end
 
-  defp maybe_write_log(_deployment, _seed, []), do: :ok
-
-  defp maybe_write_log(%Deployment{} = deployment, seed, output_lines) do
-    content =
+  defp report_seed_result(%Deployment{} = deployment, seed, result, output_lines) do
+    log =
       output_lines
       |> Enum.reject(&is_nil/1)
       |> Enum.map(&strip_ansi/1)
       |> Enum.join("\n")
 
-    checksum_sha256 = :crypto.hash(:sha256, content) |> Base.encode64()
-    object_path = SeedDeployment.log_path(deployment.sid, seed.sid)
-
-    request =
-      DeploymentLogUploadRequest.cast!(%{
+    seed_result =
+      SeedDeploymentResult.cast!(%{
         deployment_sid: deployment.sid,
         seed_sid: seed.sid,
-        checksum_sha256: checksum_sha256
+        result: result,
+        log: log
       })
 
-    case Client.call(DeploymentLogUploadRequest.event(), request, 15_000) do
-      {:ok, reply_payload} ->
-        case PresignedUploadReply.cast(reply_payload) do
-          {:ok, reply} ->
-            upload_deployment_log(reply, content, deployment.sid, seed.sid, object_path)
+    case Client.call(SeedDeploymentResult.event(), seed_result, 15_000) do
+      :ok ->
+        :ok
 
-          {:error, error} ->
-            Logger.error(
-              msg: "Failed to parse deployment log upload reply",
-              deployment_sid: deployment.sid,
-              seed_sid: seed.sid,
-              object_path: object_path,
-              error: inspect(error)
-            )
-        end
+      {:ok, _reply} ->
+        :ok
 
       {:error, error} ->
         Logger.error(
-          msg: "Failed to request deployment log upload URL",
+          msg: "Failed to report seed deployment result",
           deployment_sid: deployment.sid,
           seed_sid: seed.sid,
-          object_path: object_path,
-          error: inspect(error)
-        )
-    end
-  end
-
-  defp upload_deployment_log(
-         %PresignedUploadReply{} = reply,
-         content,
-         deployment_sid,
-         seed_sid,
-         object_path
-       ) do
-    case String.upcase(reply.method || "") do
-      "PUT" ->
-        do_upload_deployment_log(reply, content, deployment_sid, seed_sid, object_path)
-
-      method ->
-        Logger.error(
-          msg: "Unsupported presign upload method",
-          deployment_sid: deployment_sid,
-          seed_sid: seed_sid,
-          object_path: object_path,
-          method: method
-        )
-    end
-  end
-
-  defp do_upload_deployment_log(
-         %PresignedUploadReply{} = reply,
-         content,
-         deployment_sid,
-         seed_sid,
-         object_path
-       ) do
-    headers =
-      (reply.headers || %{})
-      |> Enum.to_list()
-
-    case Req.put(url: reply.url, headers: headers, body: content, retry: false) do
-      {:ok, %Req.Response{status: status}} when status in 200..299 ->
-        Logger.info(
-          msg: "Uploaded deployment log",
-          deployment_sid: deployment_sid,
-          seed_sid: seed_sid,
-          object_path: object_path
-        )
-
-      {:ok, %Req.Response{status: status, body: body}} ->
-        Logger.error(
-          msg: "Failed to upload deployment log",
-          deployment_sid: deployment_sid,
-          seed_sid: seed_sid,
-          object_path: object_path,
-          status: status,
-          body: inspect(body)
-        )
-
-      {:error, error} ->
-        Logger.error(
-          msg: "Failed to upload deployment log",
-          deployment_sid: deployment_sid,
-          seed_sid: seed_sid,
-          object_path: object_path,
+          result: result,
           error: inspect(error)
         )
     end

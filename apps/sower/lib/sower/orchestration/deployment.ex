@@ -27,6 +27,7 @@ defmodule Sower.Orchestration.Deployment do
 
     many_to_many :subscriptions, Subscription, join_through: Orchestration.SubscriptionDeployment
 
+    has_many :seed_deployments, Orchestration.SeedDeployment
     many_to_many :seeds, Seed, join_through: Orchestration.SeedDeployment
 
     field :deployed_at, :utc_datetime
