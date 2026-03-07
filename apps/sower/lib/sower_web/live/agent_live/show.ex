@@ -94,7 +94,7 @@ defmodule SowerWeb.AgentLive.Show do
       sub ->
         socket = assign(socket, deploying_sub: sub_sid, deploy_error: nil)
 
-        case Orchestration.deploy_subscription(sub) do
+        case Orchestration.deploy_subscription(sub, force: true) do
           {:ok, _request_id} ->
             {:noreply, socket}
 
