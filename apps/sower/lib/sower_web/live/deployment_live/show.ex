@@ -145,7 +145,8 @@ defmodule SowerWeb.DeploymentLive.Show do
          |> redirect(to: ~p"/deployments")}
 
       deployment ->
-        deployment = Sower.Repo.preload(deployment, [seed_deployments: :seed, subscriptions: [], agent: []])
+        deployment =
+          Sower.Repo.preload(deployment, seed_deployments: :seed, subscriptions: [], agent: [])
 
         {:noreply,
          socket
@@ -161,7 +162,9 @@ defmodule SowerWeb.DeploymentLive.Show do
         {:noreply, socket}
 
       deployment ->
-        deployment = Sower.Repo.preload(deployment, [seed_deployments: :seed, subscriptions: [], agent: []])
+        deployment =
+          Sower.Repo.preload(deployment, seed_deployments: :seed, subscriptions: [], agent: [])
+
         {:noreply, assign(socket, :deployment, deployment)}
     end
   end

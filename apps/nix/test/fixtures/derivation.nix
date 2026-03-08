@@ -4,5 +4,8 @@ derivation {
   name = "test-derivation";
   system = builtins.currentSystem;
   builder = "/bin/sh";
-  args = [ "-c" "echo hello > $out" ];
+  args = [
+    "-c"
+    "echo hello > $out"
+  ];
 }

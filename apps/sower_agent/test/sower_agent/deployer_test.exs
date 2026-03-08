@@ -447,7 +447,11 @@ defmodule SowerAgent.DeployerTest do
       assert_received {:seed_result, :success, _activation_lines}
       # Second call: reboot decision appended to last seed
       assert_received {:seed_result, nil, reboot_lines}
-      assert Enum.any?(reboot_lines, &(&1 =~ "[sower]" and &1 =~ "reboot initiated: policy_always"))
+
+      assert Enum.any?(
+               reboot_lines,
+               &(&1 =~ "[sower]" and &1 =~ "reboot initiated: policy_always")
+             )
     end
 
     test "includes reboot skipped in last seed log for failed deployment" do

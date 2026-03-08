@@ -6,13 +6,19 @@
       name = "hello";
       system = builtins.currentSystem;
       builder = "/bin/sh";
-      args = [ "-c" "echo hello > $out" ];
+      args = [
+        "-c"
+        "echo hello > $out"
+      ];
     };
     world = derivation {
       name = "world";
       system = builtins.currentSystem;
       builder = "/bin/sh";
-      args = [ "-c" "echo world > $out" ];
+      args = [
+        "-c"
+        "echo world > $out"
+      ];
     };
   };
 

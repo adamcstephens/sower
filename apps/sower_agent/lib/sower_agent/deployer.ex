@@ -26,7 +26,10 @@ defmodule SowerAgent.Deployer do
       |> upgrade(upgrade_opts)
       |> deployment_result()
 
-    maybe_reboot(deployment, result, [{:report_seed_result_fun, report_seed_result_fun} | reboot_opts])
+    maybe_reboot(deployment, result, [
+      {:report_seed_result_fun, report_seed_result_fun} | reboot_opts
+    ])
+
     result
   end
 

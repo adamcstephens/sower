@@ -25,7 +25,8 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
 
     # Write a log to the seed_deployment
     seed_deployment =
-      Sower.Repo.get_by!(Sower.Orchestration.SeedDeployment,
+      Sower.Repo.get_by!(
+        Sower.Orchestration.SeedDeployment,
         [deployment_id: deployment.id, seed_id: seed.id],
         skip_org_id: true
       )
