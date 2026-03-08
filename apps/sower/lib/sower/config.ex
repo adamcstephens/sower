@@ -13,7 +13,7 @@ defmodule Sower.Config do
 
   @schema %Schema{
     type: :object,
-    required: [:auth, :database],
+    required: [:database],
     properties: %{
       auth: %Schema{
         type: :object,
@@ -94,13 +94,17 @@ defmodule Sower.Config do
     public_url = json_config |> Keyword.fetch!(:public_url)
 
     json_config =
-      json_config
-      |> Keyword.put(
-        :auth,
+      if Keyword.has_key?(json_config, :auth) do
         json_config
-        |> Keyword.fetch!(:auth)
-        |> Keyword.put(:oidc_redirect_uri, ~s"#{public_url}/auth")
-      )
+        |> Keyword.put(
+          :auth,
+          json_config
+          |> Keyword.fetch!(:auth)
+          |> Keyword.put(:oidc_redirect_uri, ~s"#{public_url}/auth")
+        )
+      else
+        json_config
+      end
 
     secret_key_base =
       with {:ok, secret_key_base_file} <- json_config |> Keyword.fetch(:secret_key_base_file),
@@ -153,23 +157,27 @@ defmodule Sower.Config do
 
     # oidc client secret file
     json_config =
-      with {:ok, auth} <- json_config |> Keyword.fetch(:auth),
-           {:ok, oidc_client_secret_file} <- auth |> Keyword.fetch(:oidc_client_secret_file),
-           {:ok, oidc_client_secret} <- read_credential(oidc_client_secret_file) do
-        json_config
-        |> Keyword.put(:auth, auth |> Keyword.put(:oidc_client_secret, oidc_client_secret))
+      if Keyword.has_key?(json_config, :auth) do
+        with {:ok, auth} <- json_config |> Keyword.fetch(:auth),
+             {:ok, oidc_client_secret_file} <- auth |> Keyword.fetch(:oidc_client_secret_file),
+             {:ok, oidc_client_secret} <- read_credential(oidc_client_secret_file) do
+          json_config
+          |> Keyword.put(:auth, auth |> Keyword.put(:oidc_client_secret, oidc_client_secret))
+        else
+          {:error, err} ->
+            Logger.warning(
+              msg: "Failed to load oidc_client_secret from secret file",
+              error: err
+            )
+
+            Kernel.exit(1)
+
+          :error ->
+            Logger.warning("Configuration is missing `auth.oidc_client_secret_file`.")
+            Kernel.exit(1)
+        end
       else
-        {:error, err} ->
-          Logger.warning(
-            msg: "Failed to load oidc_client_secret from secret file",
-            error: err
-          )
-
-          Kernel.exit(1)
-
-        :error ->
-          Logger.warning("Configuration is missing `auth.oidc_client_secret_file`.")
-          Kernel.exit(1)
+        json_config
       end
 
     # s3 access key id
@@ -233,51 +241,55 @@ defmodule Sower.Config do
       persistent: true
     )
 
-    config :sower, Sower.Accounts.UserAuthentication,
-      issuer: "oidcc",
-      secret_key: secret_key_base
+    if Keyword.has_key?(json_config, :auth) do
+      config :sower, Sower.Accounts.UserAuthentication,
+        issuer: "oidcc",
+        secret_key: secret_key_base
 
-    config :ueberauth_oidcc, :issuers, [
-      %{
-        name: :oidcc_issuer,
-        issuer: json_config |> Keyword.fetch!(:auth) |> Keyword.fetch!(:oidc_base_url)
-      }
-    ]
-
-    config :ueberauth, Ueberauth,
-      providers: [
-        oidcc: {
-          Ueberauth.Strategy.Oidcc,
-          client_id: json_config |> Keyword.fetch!(:auth) |> Keyword.fetch!(:oidc_client_id),
-          client_secret:
-            json_config |> Keyword.fetch!(:auth) |> Keyword.fetch!(:oidc_client_secret),
-          issuer: :oidcc_issuer,
-          scopes: ["openid", "profile", "email"],
-          require_pkce: true
+      config :ueberauth_oidcc, :issuers, [
+        %{
+          name: :oidcc_issuer,
+          issuer: json_config |> Keyword.fetch!(:auth) |> Keyword.fetch!(:oidc_base_url)
         }
       ]
 
-    config :ex_aws,
-      region: get_in(json_config, [:s3, :region]),
-      host: get_in(json_config, [:s3, :host]),
-      access_key_id: [
-        get_in(json_config, [:s3, :access_key]),
-        {:system, "SOWER_AWS_ACCESS_KEY"}
-      ],
-      secret_access_key: [
-        get_in(json_config, [:s3, :secret_key]),
-        {:system, "SOWER_AWS_SECRET_KEY"}
-      ]
+      config :ueberauth, Ueberauth,
+        providers: [
+          oidcc: {
+            Ueberauth.Strategy.Oidcc,
+            client_id: json_config |> Keyword.fetch!(:auth) |> Keyword.fetch!(:oidc_client_id),
+            client_secret:
+              json_config |> Keyword.fetch!(:auth) |> Keyword.fetch!(:oidc_client_secret),
+            issuer: :oidcc_issuer,
+            scopes: ["openid", "profile", "email"],
+            require_pkce: true
+          }
+        ]
+    end
 
-    %URI{scheme: scheme, host: host, port: port} =
-      URI.parse(get_in(json_config, [:s3, :endpoint]))
+    if Keyword.has_key?(json_config, :s3) do
+      config :ex_aws,
+        region: get_in(json_config, [:s3, :region]),
+        host: get_in(json_config, [:s3, :host]),
+        access_key_id: [
+          get_in(json_config, [:s3, :access_key]),
+          {:system, "SOWER_AWS_ACCESS_KEY"}
+        ],
+        secret_access_key: [
+          get_in(json_config, [:s3, :secret_key]),
+          {:system, "SOWER_AWS_SECRET_KEY"}
+        ]
 
-    config :ex_aws, :s3,
-      scheme: scheme <> "://",
-      host: host,
-      port: port
+      %URI{scheme: scheme, host: host, port: port} =
+        URI.parse(get_in(json_config, [:s3, :endpoint]))
 
-    config :sower, Sower.Storage, s3: [bucket: get_in(json_config, [:s3, :bucket])]
+      config :ex_aws, :s3,
+        scheme: scheme <> "://",
+        host: host,
+        port: port
+
+      config :sower, Sower.Storage, s3: [bucket: get_in(json_config, [:s3, :bucket])]
+    end
 
     Logger.info("Finished loading configuration.")
   end

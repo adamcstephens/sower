@@ -83,12 +83,6 @@ testers.runNixOSTest {
                 encryption_key_file = "${pkgs.writeText "database-encryption-key" "b2s="}"; # ok in b64
               };
 
-              auth = {
-                oidc_client_id = "sower";
-                oidc_base_url = "http://localhost:9000";
-                oidc_client_secret_file = "${pkgs.writeText "oidc-secret" "ok"}";
-              };
-
               log_level = "debug";
 
               clients."${pkgs.stdenv.hostPlatform.system}".path =
@@ -148,6 +142,11 @@ testers.runNixOSTest {
           server.succeed("test -S /run/sower-activator/activator.sock")
           server.succeed("test \"$(stat -c '%a' /run/sower-activator/activator.sock)\" = 660")
           server.succeed("test \"$(stat -c '%G' /run/sower-activator/activator.sock)\" = sower-activator")
+
+      with subtest("get client token"):
+          token = server.succeed("cat /run/sower/test_token")
+          server.succeed("mkdir -p /run/sower")
+          server.succeed(f"echo -n {token} > /run/sower/test_token")
 
       # with subtest("basic submission"):
       #     server_profile = server.succeed("readlink -f /run/booted-system").strip()
