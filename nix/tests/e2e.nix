@@ -148,16 +148,14 @@ testers.runNixOSTest {
           server.succeed("mkdir -p /run/sower")
           server.succeed(f"echo -n {token} > /run/sower/test_token")
 
-      # with subtest("basic submission"):
-      #     server_profile = server.succeed("readlink -f /run/booted-system").strip()
-      #     server.succeed(f"sower seed submit --path {server_profile} --debug")
-      #
-      #     server.succeed("sower seed submit --name simple-service --type service --path ${simple-service} --debug")
-      #
-      # with subtest("activate seed"):
-      #     server.succeed("sower seed upgrade --debug")
+      with subtest("basic cli submission and activation"):
+          server_profile = server.succeed("readlink -f /run/booted-system").strip()
+          server.succeed(f"sower seed submit --name server --type nixos --artifact {server_profile} --debug")
+          server.succeed("sower seed upgrade --name server --type nixos --debug")
 
       # with subtest("activate services"):
+      #
+      #     server.succeed("sower seed submit --name simple-service --type service --path ${simple-service} --debug")
       #     server.succeed("sower services upgrade --debug")
       #     server.wait_for_unit("simple-oneshot.service")
       #     server.wait_for_unit("simple-sleep.service")
