@@ -81,6 +81,10 @@ defmodule SowerCli do
     SowerCli.Seed.Upgrade.run(flags, options)
   end
 
+  defp run({[:seed, :submit], %{flags: flags, options: options}}) do
+    SowerCli.Seed.Submit.run(flags, options)
+  end
+
   defp run({subcommands, _}) when is_list(subcommands) do
     print_usage(subcommands)
   end
@@ -369,6 +373,48 @@ defmodule SowerCli do
                   long: "--tag",
                   value_name: "KEY=VALUE",
                   help: "Filter by tag (can be repeated)",
+                  multiple: true
+                ]
+              ]
+            ],
+            submit: [
+              name: "submit",
+              about: "Submit a seed to the server",
+              flags: [
+                debug: [
+                  short: "-d",
+                  long: "--debug",
+                  help: "Enable debug logging"
+                ]
+              ],
+              options: [
+                type: [
+                  short: "-t",
+                  long: "--type",
+                  value_name: "TYPE",
+                  help: "Seed type (nixos, home-manager, nix-darwin, service)",
+                  required: true,
+                  parser: &parse_seed_type/1
+                ],
+                name: [
+                  short: "-n",
+                  long: "--name",
+                  value_name: "NAME",
+                  help: "Seed name",
+                  required: true
+                ],
+                artifact: [
+                  short: "-a",
+                  long: "--artifact",
+                  value_name: "PATH",
+                  help: "Nix store path (e.g., /nix/store/...)",
+                  required: true
+                ],
+                tag: [
+                  short: "-T",
+                  long: "--tag",
+                  value_name: "KEY=VALUE",
+                  help: "Add metadata tag (can be repeated)",
                   multiple: true
                 ]
               ]
