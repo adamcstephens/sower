@@ -79,7 +79,6 @@ release: set-version
 
 release-push:
     git tag -a -m v$(cat VERSION) v$(cat VERSION)
-    git push
     git push --tags
     jj git push
     just release

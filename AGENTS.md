@@ -9,6 +9,8 @@ If more than one of the rules conflict, ask before implementing.
 - Never break deployments or strand agents such that they cannot apply an upgrade.
 - You can access the dev server live over tidewave project_eval, allowing for introspection of a live environment.
 - Do not create worktrees unless explicitly asked. When asked, use: `git worktree add .worktrees/<name> -b <name>`
+- elixir dependencies are available in `deps`. Read code from there instead of using accessing the web or prompting the user.
+
 
 ## Worktree setup
 

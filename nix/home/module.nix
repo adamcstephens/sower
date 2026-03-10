@@ -5,48 +5,37 @@
   ...
 }:
 let
-  cfg = config.services.sower.client;
+  cfg = config.services.sower.agent;
   json = pkgs.formats.json { };
   jsonType = json.type;
+
+  jsonConfig = json.generate "sower-client.json" cfg.settings;
+
+  stateDir = "${config.xdg.stateHome}/sower-agent";
 in
 {
   options = {
-    services.sower.client = {
-      enable = lib.mkEnableOption "Sower client";
+    services.sower.agent = {
+      enable = lib.mkEnableOption "Sower agent";
 
       package = lib.mkOption { type = lib.types.package; };
 
-      onCalendar = lib.mkOption {
-        type = lib.types.str;
-        description = "OnCalendar for systemd timer on linux. See https://www.freedesktop.org/software/systemd/man/latest/systemd.time.html#Calendar%20Events";
-        default = "daily";
+      activatorPackage = lib.mkOption { type = lib.types.package; };
+
+      accessTokenFile = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        description = "Path to file containing access token";
+        default = null;
       };
 
-      config = lib.mkOption {
+      settings = lib.mkOption {
         type = lib.types.submodule {
           freeformType = jsonType;
 
-          options = {
-            seed = {
-              name = lib.mkOption {
-                type = lib.types.str;
-                description = "seed name";
-                default = config.home.username;
-              };
-
-              type = lib.mkOption {
-                type = lib.types.enum [
-                  "home-manager"
-                  "nix-darwin"
-                  "nixos"
-                ];
-                default = "home-manager";
-              };
-            };
-          };
+          options = { };
         };
-        description = "Sower configuration file";
-        default = null;
+        description = "Sower agent configuration file";
+        default = { };
       };
     };
   };
@@ -56,58 +45,91 @@ in
       {
         home.packages = [ cfg.package ];
 
-        xdg.configFile."sower/client.json".source = lib.mkIf (cfg.config != null) (
-          json.generate "sower-client.json" cfg.config
-        );
+        xdg.configFile."sower/client.json".source = lib.mkIf (cfg.settings != { }) jsonConfig;
       }
 
       (lib.mkIf pkgs.stdenv.isLinux {
-        systemd.user.services.sower-client = {
+        systemd.user.services.sower-agent = {
           Service = {
-            Environment = [
-              # prefer nix from the system
-              "PATH=/run/current-system/sw/bin:${lib.makeBinPath [ config.nix.package ]}"
-              "SOWER_CONFIG_FILE=%E/sower/client.json"
-            ];
-            ExecStart = "${lib.getExe cfg.package} seed upgrade";
-            Type = "oneshot";
+            Environment =
+              [
+                "PATH=/run/current-system/sw/bin:${lib.makeBinPath [ config.nix.package cfg.activatorPackage ]}"
+                "SOWER_CONFIG_FILE=%E/sower/client.json"
+                "RELEASE_MODE=interactive"
+                "SHELL=${lib.getExe pkgs.bash}"
+              ]
+              ++ lib.optionals (cfg.accessTokenFile != null) [
+                "SOWER_ACCESS_TOKEN_FILE=${cfg.accessTokenFile}"
+              ];
+
+            ExecStartPre = pkgs.writeShellScript "sower-agent-init" ''
+              mkdir -p ${stateDir}
+              if [ ! -e ${stateDir}/release-cookie ]; then
+                ${lib.getExe pkgs.openssl} rand -hex 48 > ${stateDir}/release-cookie
+              fi
+            '';
+            ExecStart = pkgs.writeShellScript "sower-agent-start" ''
+              RELEASE_COOKIE=$(cat ${stateDir}/release-cookie)
+              export RELEASE_COOKIE
+              exec ${lib.getExe cfg.package} start
+            '';
+            ExecStop = pkgs.writeShellScript "sower-agent-stop" ''
+              RELEASE_COOKIE=$(cat ${stateDir}/release-cookie)
+              export RELEASE_COOKIE
+              PID=$(${lib.getExe cfg.package} pid)
+              ${lib.getExe cfg.package} stop
+              while [ -d "/proc/$PID" ]; do sleep 1; done
+            '';
+            ExecReload = pkgs.writeShellScript "sower-agent-reload" ''
+              RELEASE_COOKIE=$(cat ${stateDir}/release-cookie)
+              export RELEASE_COOKIE
+              ${lib.getExe cfg.package} rpc "SowerAgent.request_reload()"
+            '';
+
+            Type = "notify";
+            WatchdogSec = "10s";
+
+            Restart = "always";
+            RestartSec = "5";
+            RestartMaxDelaySec = "120s";
+            RestartSteps = "7";
+
+            WorkingDirectory = stateDir;
+
+            MemoryAccounting = true;
+            MemoryMax = "200M";
           };
 
           Unit = {
-            # For sd-switch users, this prevents killing sower mid-upgrade
+            # For sd-switch users, this prevents killing sower mid-deployment
             X-SwitchMethod = "keep-old";
           };
-        };
 
-        systemd.user.timers.sower-client = {
-          Install.WantedBy = [ "timers.target" ];
-
-          Timer = {
-            OnCalendar = cfg.onCalendar;
-            Persistent = true;
-          };
+          Install.WantedBy = [ "default.target" ];
         };
       })
 
       (lib.mkIf pkgs.stdenv.isDarwin {
         launchd = {
-          agents.sower-client = {
+          agents.sower-agent = {
             enable = true;
             config = {
-              KeepAlive = false;
+              KeepAlive = true;
               ProgramArguments = [
                 (lib.getExe cfg.package)
-                "seed"
-                "upgrade"
+                "start"
               ];
-              StartCalendarInterval = [
+              EnvironmentVariables =
                 {
-                  Hour = 1;
-                  Minute = 0;
+                  PATH = "/run/current-system/sw/bin:${lib.makeBinPath [ config.nix.package cfg.activatorPackage ]}";
+                  SOWER_CONFIG_FILE = "${config.xdg.configHome}/sower/client.json";
+                  RELEASE_MODE = "interactive";
                 }
-              ];
-              StandardErrorPath = "${config.home.homeDirectory}/Library/Logs/sower-client-out.log";
-              StandardOutPath = "${config.home.homeDirectory}/Library/Logs/sower-client-err.log";
+                // lib.optionalAttrs (cfg.accessTokenFile != null) {
+                  SOWER_ACCESS_TOKEN_FILE = cfg.accessTokenFile;
+                };
+              StandardErrorPath = "${config.home.homeDirectory}/Library/Logs/sower-agent-err.log";
+              StandardOutPath = "${config.home.homeDirectory}/Library/Logs/sower-agent-out.log";
             };
           };
         };
