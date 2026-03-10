@@ -82,7 +82,8 @@ defmodule SowerWeb do
       # HTML escaping functionality
       import Phoenix.HTML
       # Core UI components and translation
-      import SowerWeb.CoreComponents
+      import SowerWeb.CoreComponents, except: [table: 1]
+      import SowerWeb.SowerComponents
       import SowerWeb.Gettext
 
       alias Phoenix.LiveView.JS

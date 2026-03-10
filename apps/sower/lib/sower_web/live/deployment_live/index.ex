@@ -4,8 +4,6 @@ defmodule SowerWeb.DeploymentLive.Index do
   alias Sower.Orchestration
   alias SowerWeb.Layouts
 
-  import SowerWeb.SowerComponents
-
   @impl true
   def render(assigns) do
     ~H"""
@@ -23,8 +21,10 @@ defmodule SowerWeb.DeploymentLive.Index do
           <.deployment_status state={deployment.state} result={deployment.result} />
         </:col>
         <:col :let={{_id, deployment}} label="sid">{deployment.sid}</:col>
-        <:col :let={{_id, deployment}} label="agent">{get_in(deployment.agent.name) || "-"}</:col>
-        <:col :let={{_id, deployment}} label="completed">
+        <:col :let={{_id, deployment}} label="agent" hide_on={:mobile}>
+          {get_in(deployment.agent.name) || "-"}
+        </:col>
+        <:col :let={{_id, deployment}} label="completed" hide_on={:mobile}>
           <.local_datetime datetime={deployment.deployed_at} user_timezone={@user_timezone} />
         </:col>
         <:action :let={{_id, deployment}}>

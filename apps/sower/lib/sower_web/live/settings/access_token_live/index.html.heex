@@ -31,8 +31,12 @@
     </:action>
 
     <:col :let={{_id, access_token}} label="Description">{access_token.description}</:col>
-    <:col :let={{_id, access_token}} label="Token">sower_{access_token.sid}_...</:col>
-    <:col :let={{_id, access_token}} label="Expires">{access_token.expires_at}</:col>
+    <:col :let={{_id, access_token}} label="Token" hide_on={:mobile}>
+      sower_{access_token.sid}_...
+    </:col>
+    <:col :let={{_id, access_token}} label="Expires" hide_on={:mobile}>
+      {access_token.expires_at}
+    </:col>
   </.table>
 
   <.modal

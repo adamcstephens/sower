@@ -3,8 +3,6 @@ defmodule SowerWeb.DeploymentLive.Show do
 
   alias Sower.Orchestration
 
-  import SowerWeb.SowerComponents
-
   @impl true
   def render(assigns) do
     ~H"""

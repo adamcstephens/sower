@@ -2,7 +2,6 @@ defmodule SowerWeb.SubscriptionLive.Show do
   use SowerWeb, :live_view
 
   alias Sower.Orchestration
-  import SowerWeb.SowerComponents
 
   @impl true
   def mount(_params, _session, socket) do

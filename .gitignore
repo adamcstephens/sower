@@ -51,3 +51,8 @@ cmd/sower-activator/sower-activator
 .workspaces/
 .worktrees/
 .gocache/
+
+# Ralph spec state files
+specs/.current-spec
+specs/.current-epic
+**/.progress.md

@@ -10,8 +10,8 @@
     row_click={fn {_id, seed} -> JS.navigate(~p"/seeds/#{seed}") end}
   >
     <:col :let={{_id, seed}} label="name">{seed.name}</:col>
-    <:col :let={{_id, seed}} label="seed_type">{seed.seed_type}</:col>
-    <:col :let={{_id, seed}} label="updated">
+    <:col :let={{_id, seed}} label="seed_type" hide_on={:mobile}>{seed.seed_type}</:col>
+    <:col :let={{_id, seed}} label="updated" hide_on={:mobile}>
       <.local_datetime datetime={seed.updated_at} user_timezone={@user_timezone} />
     </:col>
     <:action :let={{_id, seed}}>

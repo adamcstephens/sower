@@ -14,7 +14,7 @@
     row_click={fn {_id, cache} -> JS.navigate(~p"/nix/caches/#{cache}") end}
   >
     <:col :let={{_id, cache}} label="Url">{cache.url}</:col>
-    <:col :let={{_id, cache}} label="Public key">{cache.public_key}</:col>
+    <:col :let={{_id, cache}} label="Public key" hide_on={:mobile}>{cache.public_key}</:col>
     <:action :let={{_id, cache}}>
       <div class="sr-only">
         <.link navigate={~p"/nix/caches/#{cache}"}>Show</.link>

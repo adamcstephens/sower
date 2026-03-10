@@ -14,8 +14,8 @@
     row_click={fn {_id, connection} -> JS.navigate(~p"/forges/#{connection}") end}
   >
     <:col :let={{_id, connection}} label="Name">{connection.name}</:col>
-    <:col :let={{_id, connection}} label="Url">{connection.url}</:col>
-    <:col :let={{_id, connection}} label="Type">{connection.type}</:col>
+    <:col :let={{_id, connection}} label="Url" hide_on={:mobile}>{connection.url}</:col>
+    <:col :let={{_id, connection}} label="Type" hide_on={:mobile}>{connection.type}</:col>
     <:action :let={{_id, connection}}>
       <div class="sr-only">
         <.link navigate={~p"/forges/#{connection}"}>Show</.link>
