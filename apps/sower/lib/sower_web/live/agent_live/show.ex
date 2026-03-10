@@ -4,7 +4,6 @@ defmodule SowerWeb.AgentLive.Show do
   alias Phoenix.Socket.Broadcast
   alias Sower.Orchestration
   alias SowerWeb.Presence
-  import SowerWeb.SowerComponents
 
   @impl true
   def mount(_params, _session, socket) do
