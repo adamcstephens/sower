@@ -8,9 +8,9 @@ defmodule SowerWeb.DeploymentLive.Show do
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user}>
       <.header>
-        <div class="flex items-center space-x-2">
+        <div class="flex items-center space-x-2 min-w-0">
           <.deployment_status state={@deployment.state} result={@deployment.result} />
-          <span>{@deployment.sid}</span>
+          <span class="truncate" title={@deployment.sid}>{@deployment.sid}</span>
         </div>
         <:actions>
           <.button
@@ -70,8 +70,8 @@ defmodule SowerWeb.DeploymentLive.Show do
               id={"seed-log-#{sd.seed.sid}"}
               class="rounded-lg border border-zinc-200/50 dark:border-zinc-700/50 p-4"
             >
-              <div class="flex items-center justify-between gap-4">
-                <div class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 flex flex-wrap items-center gap-2">
+              <div class="flex flex-wrap items-center justify-between gap-2 sm:gap-4">
+                <div class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 flex flex-wrap items-center gap-2 min-w-0">
                   <.link
                     navigate={~p"/seeds/#{sd.seed.sid}"}
                     class="hover:text-orange-500 dark:hover:text-orange-400"

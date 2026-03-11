@@ -103,31 +103,41 @@
 
     <section>
       <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4">Deployments</h2>
-      <.responsive_table
+      <.table
         id="deployments"
         rows={@deployments}
         row_click={fn deployment -> JS.navigate(~p"/deployments/#{deployment.sid}") end}
       >
-        <:col :let={deployment} label="Status">
+        <:col :let={deployment} label="">
           <.deployment_status state={deployment.state} result={deployment.result} />
         </:col>
-        <:col :let={deployment} label="SID">{deployment.sid}</:col>
-        <:col :let={deployment} label="Created">
+        <:col :let={deployment} label="SID">
+          <span
+            class="sm:hidden truncate max-w-[8rem] inline-block align-bottom"
+            title={deployment.sid}
+          >
+            {deployment.sid}
+          </span>
+          <span class="hidden sm:inline">{deployment.sid}</span>
+        </:col>
+        <:col :let={deployment} label="Created" hide_on={:mobile}>
           <.local_datetime datetime={deployment.inserted_at} user_timezone={@user_timezone} />
         </:col>
-        <:col :let={deployment} label="">
-          <.button
+        <:action :let={deployment}>
+          <button
             :if={deployment.state in [:completed, :stale]}
             type="button"
             phx-click="retry_deployment"
             phx-value-deployment_sid={deployment.sid}
+            phx-stop-propagation
             phx-disable-with="Retrying..."
+            class="hidden sm:inline text-sm text-zinc-700 dark:text-zinc-200 hover:text-orange-500 dark:hover:text-orange-400 disabled:opacity-50"
             disabled={@retrying_deployment == deployment.sid}
           >
             Retry
-          </.button>
-        </:col>
-      </.responsive_table>
+          </button>
+        </:action>
+      </.table>
       <p
         :if={@deployments == []}
         class="text-sm text-zinc-500 dark:text-zinc-400 italic"

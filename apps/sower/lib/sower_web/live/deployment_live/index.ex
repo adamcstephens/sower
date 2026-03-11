@@ -17,11 +17,19 @@ defmodule SowerWeb.DeploymentLive.Index do
         rows={@streams.deployments}
         row_click={fn {_id, deployment} -> JS.navigate(~p"/deployments/#{deployment}") end}
       >
-        <:col :let={{_id, deployment}} label="Status">
+        <:col :let={{_id, deployment}} label="">
           <.deployment_status state={deployment.state} result={deployment.result} />
         </:col>
-        <:col :let={{_id, deployment}} label="sid">{deployment.sid}</:col>
-        <:col :let={{_id, deployment}} label="agent" hide_on={:mobile}>
+        <:col :let={{_id, deployment}} label="sid">
+          <span
+            class="sm:hidden truncate max-w-[8rem] inline-block align-bottom"
+            title={deployment.sid}
+          >
+            {deployment.sid}
+          </span>
+          <span class="hidden sm:inline">{deployment.sid}</span>
+        </:col>
+        <:col :let={{_id, deployment}} label="agent">
           {get_in(deployment.agent.name) || "-"}
         </:col>
         <:col :let={{_id, deployment}} label="completed" hide_on={:mobile}>
@@ -35,16 +43,11 @@ defmodule SowerWeb.DeploymentLive.Index do
             phx-value-sid={deployment.sid}
             phx-stop-propagation
             phx-disable-with="Retrying..."
-            class="text-sm text-zinc-700 dark:text-zinc-200 hover:text-orange-500 dark:hover:text-orange-400 disabled:opacity-50"
+            class="hidden sm:inline text-sm text-zinc-700 dark:text-zinc-200 hover:text-orange-500 dark:hover:text-orange-400 disabled:opacity-50"
             disabled={@retrying_deployment_sid == deployment.sid}
           >
             Retry
           </button>
-        </:action>
-        <:action :let={{_id, deployment}}>
-          <div class="sr-only">
-            <.link navigate={~p"/deployments/#{deployment}"}>Show</.link>
-          </div>
         </:action>
       </.table>
     </Layouts.app>
