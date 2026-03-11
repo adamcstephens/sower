@@ -24,6 +24,8 @@ config :sower, SowerWeb.Endpoint,
   pubsub_server: Sower.PubSub,
   live_view: [signing_salt: "nrwHFIM7"]
 
+config :flop, repo: Sower.Repo
+
 config :sower, Sower.Orchestration,
   stale_after_seconds: 2 * 60 * 60,
   stale_batch_size: 100
