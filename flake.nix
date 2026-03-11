@@ -77,7 +77,7 @@
                   pkgs.entr
                   pkgs.just
                   pkgs.mix2nix
-                  pkgs.nix-eval-jobs
+                  pkgs.npins
                   pkgs.nvfetcher
                   pkgs.postgresql
                   pkgs.process-compose

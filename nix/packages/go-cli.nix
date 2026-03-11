@@ -2,7 +2,6 @@
   lib,
   buildGoModule,
   makeWrapper,
-  nix-eval-jobs,
   sd-switch,
   version,
 }:
@@ -43,7 +42,6 @@ buildGoModule rec {
 
     wrapProgram $out/bin/sower --prefix PATH : ${
       lib.makeBinPath [
-        nix-eval-jobs
         sd-switch
       ]
     }

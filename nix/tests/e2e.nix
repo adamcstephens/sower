@@ -8,7 +8,31 @@
   testers,
 }:
 let
-  simple-service = flake.packages.${pkgs.stdenv.hostPlatform.system}.tests-simple-service;
+  inherit (pkgs) lib;
+  system = pkgs.stdenv.hostPlatform.system;
+
+  npins = import ./npins;
+
+  simple-service = flake.packages.${system}.tests-simple-service;
+  agentPkg = flake.packages.${system}.agent;
+  activatorPkg = flake.packages.${system}.activator;
+  cliPkg = flake.packages.${system}.cli;
+  serverPkg = flake.packages.${system}.server;
+
+  hmAgentStateDir = "/home/testuser/.local/state/sower-agent";
+
+  # Admin wrapper for home-manager agent RPC (must match RELEASE_NODE override)
+  hmAgentAdmin = pkgs.writeShellApplication {
+    name = "sower-hm-agent";
+    text = ''
+      export RELEASE_MODE="interactive"
+      export RELEASE_NODE="sower_agent_hm"
+      export SHELL="${lib.getExe pkgs.bash}"
+      RELEASE_COOKIE=$(cat ${hmAgentStateDir}/release-cookie)
+      export RELEASE_COOKIE
+      exec ${lib.getExe agentPkg} "$@"
+    '';
+  };
 in
 testers.runNixOSTest {
   name = "sower";
@@ -23,6 +47,7 @@ testers.runNixOSTest {
       {
         imports = [
           ../nixos/module.nix
+          "${npins.home-manager}/nixos"
         ];
 
         config = {
@@ -37,7 +62,8 @@ testers.runNixOSTest {
           ];
 
           environment.systemPackages = [
-            flake.packages.${pkgs.stdenv.hostPlatform.system}.cli
+            cliPkg
+            hmAgentAdmin
             pkgs.python3
           ];
 
@@ -51,15 +77,21 @@ testers.runNixOSTest {
           };
 
           services.sower = {
-            activator.package = flake.packages.${pkgs.stdenv.hostPlatform.system}.activator;
+            activator.package = activatorPkg;
 
             agent = {
               enable = true;
-              package = flake.packages.${pkgs.stdenv.hostPlatform.system}.agent;
+              package = agentPkg;
 
               settings = {
                 access_token_file = "/run/sower/test_token";
                 endpoint = "http://localhost:4000";
+                subscriptions = [
+                  {
+                    seed_name = "server";
+                    seed_type = "nixos";
+                  }
+                ];
               };
             };
           };
@@ -68,7 +100,7 @@ testers.runNixOSTest {
 
           services.sower.server = {
             enable = true;
-            package = flake.packages.${pkgs.stdenv.hostPlatform.system}.server;
+            package = serverPkg;
             initSecrets = true;
             e2eTest = true;
 
@@ -85,9 +117,7 @@ testers.runNixOSTest {
 
               log_level = "debug";
 
-              clients."${pkgs.stdenv.hostPlatform.system}".path =
-                builtins.toString
-                  flake.packages.${pkgs.stdenv.hostPlatform.system}.cli;
+              clients."${system}".path = builtins.toString cliPkg;
             };
           };
           # if server fails to start, fail immediately
@@ -102,31 +132,52 @@ testers.runNixOSTest {
             '';
           };
 
+          # Home-manager test user
+          users.users.testuser = {
+            isNormalUser = true;
+          };
+
+          home-manager.users.testuser = {
+            imports = [ ../home/module.nix ];
+
+            home.stateVersion = "24.11";
+
+            services.sower.agent = {
+              enable = true;
+              package = agentPkg;
+              activatorPackage = activatorPkg;
+              accessTokenFile = "/run/sower/test_token";
+
+              settings = {
+                endpoint = "http://localhost:4000";
+                subscriptions = [
+                  {
+                    seed_name = "testuser";
+                    seed_type = "home-manager";
+                    rules = [
+                      {
+                        key = "username";
+                        value = "testuser";
+                        op = "eq";
+                      }
+                    ];
+                  }
+                ];
+              };
+            };
+          };
+
+          # Test overrides for home-manager agent
+          home-manager.users.testuser.systemd.user.services.sower-agent.Service = {
+            Restart = lib.mkForce "no";
+            # Avoid Erlang node name clash with system-level agent
+            Environment = lib.mkAfter [ "RELEASE_NODE=sower_agent_hm" ];
+          };
+
           virtualisation.diskSize = 4096;
         };
 
       };
-
-    # client = {
-    #   imports = [
-    #     ../nixos/module.nix
-    #   ];
-    #
-    #   services.sower.client = {
-    #     enable = true;
-    #     package = flake.packages.${pkgs.stdenv.hostPlatform.system}.cli;
-    #
-    #     settings = {
-    #       api-token-file = "/run/sower/test_token";
-    #       endpoint = "http://server:4000";
-    #       debug = true;
-    #     };
-    #   };
-    #
-    #   virtualisation.additionalPaths = [
-    #     simple-service
-    #   ];
-    # };
   };
 
   testScript = # python
@@ -148,23 +199,65 @@ testers.runNixOSTest {
           server.succeed("mkdir -p /run/sower")
           server.succeed(f"echo -n {token} > /run/sower/test_token")
 
+      with subtest("nixos agent registration"):
+          server.wait_until_succeeds(
+              "journalctl --no-pager -u sower-agent"
+              " --grep='Joined channel topic'",
+              timeout=15,
+          )
+
       with subtest("basic cli submission and activation"):
           server_profile = server.succeed("readlink -f /run/booted-system").strip()
           server.succeed(f"sower seed submit --name server --type nixos --artifact {server_profile} --debug")
           server.succeed("sower seed upgrade --name server --type nixos --debug")
 
-      # with subtest("activate services"):
-      #
-      #     server.succeed("sower seed submit --name simple-service --type service --path ${simple-service} --debug")
-      #     server.succeed("sower services upgrade --debug")
-      #     server.wait_for_unit("simple-oneshot.service")
-      #     server.wait_for_unit("simple-sleep.service")
+      with subtest("nixos agent deployment"):
+          server.succeed('sower-agent rpc "SowerAgent.Admin.deploy(\\\"nixos\\\")"')
+          server.wait_until_succeeds(
+              "journalctl --no-pager -u sower-agent"
+              " --grep='Completed.activation'",
+              timeout=15,
+          )
 
-      # with subtest("check bootstrap"):
-      #     token = server.succeed("cat /run/sower/test_token")
-      #     client.succeed("mkdir /run/sower")
-      #     client.succeed(f"echo -n {token} > /run/sower/test_token")
-      #
-      #     client.succeed("curl http://server:4000/client/bootstrap | SOWER_ENDPOINT=http://server:4000 bash -s seed info --name client --type nixos")
+      with subtest("start home-manager agent"):
+          server.wait_for_unit("home-manager-testuser.service")
+          server.succeed("loginctl enable-linger testuser")
+          # HM activation ran before user manager was up, so reload and start manually
+          server.wait_until_succeeds(
+              "systemctl --user -M testuser@ daemon-reload",
+              timeout=15,
+          )
+          server.succeed("systemctl --user -M testuser@ start sower-agent.service")
+          server.wait_until_succeeds(
+              "systemctl --user -M testuser@ is-active sower-agent.service",
+              timeout=15,
+          )
+
+      with subtest("home-manager agent registration"):
+          server.wait_until_succeeds(
+              "su -l testuser -c '"
+              "journalctl --user --no-pager -u sower-agent"
+              " --grep=Joined.channel.topic'",
+              timeout=15,
+          )
+
+      with subtest("home-manager agent deployment"):
+          hm_generation = server.succeed(
+              "readlink -f /home/testuser/.local/state/home-manager/gcroots/current-home"
+          ).strip()
+          server.succeed(
+              f"sower seed submit --name testuser --type home-manager"
+              f" --artifact {hm_generation}"
+              f" --tag username=testuser"
+          )
+          server.succeed(
+              'sower-hm-agent rpc "SowerAgent.Admin.deploy(\\\"home-manager\\\")"'
+          )
+          server.wait_until_succeeds(
+              "su -l testuser -c '"
+              "journalctl --user --no-pager -u sower-agent"
+              " --grep=Completed.activation'",
+              timeout=15,
+          )
     '';
 }

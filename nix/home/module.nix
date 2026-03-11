@@ -94,7 +94,7 @@ in
             RestartMaxDelaySec = "120s";
             RestartSteps = "7";
 
-            WorkingDirectory = stateDir;
+            WorkingDirectory = "-${stateDir}";
 
             MemoryAccounting = true;
             MemoryMax = "200M";

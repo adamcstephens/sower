@@ -97,7 +97,7 @@ start-server:
 start-pry:
     iex --dbg pry -S mix phx.server
 
-update: update-nix update-elixir update-go
+update: update-nix update-elixir update-go update-npins
 
 update-nix:
     nix flake update --commit-lock-file
@@ -141,3 +141,7 @@ update-go-hash app:
     fi
 
     git diff ./nix/packages/{{ app }}.nix
+
+update-npins:
+    npins -d nix/tests/npins update
+    if jj diff --name-only | rg '^nix/tests/npins'; then jj commit -m 'chore: npins update' nix/tests/npins; fi
