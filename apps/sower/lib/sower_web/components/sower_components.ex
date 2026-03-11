@@ -29,7 +29,7 @@ defmodule SowerWeb.SowerComponents do
       end
 
     ~H"""
-    <div class="overflow-x-auto px-4 sm:overflow-visible sm:px-0">
+    <div class="px-4 sm:overflow-visible sm:px-0">
       <table class="w-full mt-11">
         <thead class="text-sm text-left leading-6 text-zinc-500 dark:text-zinc-400">
           <tr>

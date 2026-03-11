@@ -387,7 +387,7 @@ defmodule SowerWeb.CoreComponents do
   def header(assigns) do
     ~H"""
     <header class={[@actions != [] && "flex items-center justify-between gap-6", @class]}>
-      <div>
+      <div class="min-w-0">
         <h1 class="text-lg font-semibold leading-8 text-zinc-900 dark:text-zinc-300 ">
           {render_slot(@inner_block)}
         </h1>
