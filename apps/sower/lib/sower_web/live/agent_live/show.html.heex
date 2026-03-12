@@ -45,7 +45,7 @@
           </.link>
         </div>
       </div>
-      <.responsive_table
+      <.table
         id="generations"
         rows={@generations}
         row_click={fn gen -> JS.navigate(~p"/seeds/#{gen.seed.sid}") end}
@@ -56,10 +56,10 @@
         <:col :let={gen} label="Current">
           {(gen.is_current && "✓") || ""}
         </:col>
-        <:col :let={gen} label="Created">
+        <:col :let={gen} label="Created" hide_on={:sm}>
           <.local_datetime datetime={gen.created_at_generation} user_timezone={@user_timezone} />
         </:col>
-      </.responsive_table>
+      </.table>
       <p
         :if={@generations == []}
         class="text-sm text-zinc-500 dark:text-zinc-400 italic"
@@ -70,7 +70,7 @@
 
     <section>
       <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4">Subscriptions</h2>
-      <.responsive_table
+      <.table
         id="subscriptions"
         rows={@agent.subscriptions}
         row_click={
@@ -81,7 +81,7 @@
       >
         <:col :let={subscription} label="Name">{subscription.seed_name}</:col>
         <:col :let={subscription} label="Type">{subscription.seed_type}</:col>
-        <:col :let={subscription} label="Updated">
+        <:col :let={subscription} label="Updated" hide_on={:sm}>
           <.local_datetime datetime={subscription.updated_at} user_timezone={@user_timezone} />
         </:col>
         <:col :let={subscription} label="">
@@ -92,7 +92,7 @@
             deploy_error={if @deploying_sub == subscription.sid, do: @deploy_error}
           />
         </:col>
-      </.responsive_table>
+      </.table>
       <p
         :if={@agent.subscriptions == []}
         class="text-sm text-zinc-500 dark:text-zinc-400 italic"
@@ -113,14 +113,14 @@
         </:col>
         <:col :let={deployment} label="SID">
           <span
-            class="sm:hidden truncate max-w-[8rem] inline-block align-bottom"
+            class="sm:hidden truncate max-sm:max-w-[12rem] inline-block align-bottom"
             title={deployment.sid}
           >
             {deployment.sid}
           </span>
           <span class="hidden sm:inline">{deployment.sid}</span>
         </:col>
-        <:col :let={deployment} label="Created" hide_on={:mobile}>
+        <:col :let={deployment} label="Created" hide_on={:sm}>
           <.local_datetime datetime={deployment.inserted_at} user_timezone={@user_timezone} />
         </:col>
         <:action :let={deployment}>
@@ -131,7 +131,7 @@
             phx-value-deployment_sid={deployment.sid}
             phx-stop-propagation
             phx-disable-with="Retrying..."
-            class="hidden sm:inline text-sm text-zinc-700 dark:text-zinc-200 hover:text-orange-500 dark:hover:text-orange-400 disabled:opacity-50"
+            class="text-sm text-zinc-700 dark:text-zinc-200 hover:text-orange-500 dark:hover:text-orange-400 disabled:opacity-50"
             disabled={@retrying_deployment == deployment.sid}
           >
             Retry
