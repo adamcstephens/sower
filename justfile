@@ -3,6 +3,9 @@ default:
 
 check: check-elixir check-go
 
+check-e2e:
+    nix build .#checks.x86_64-linux.default --print-build-logs
+
 check-elixir: check-elixir-format check-elixir-test
 
 check-elixir-format:
@@ -19,9 +22,6 @@ check-go-lint:
 
 check-go-test:
     go test ./...
-
-check-nix:
-    nix build .#checks.x86_64-linux.default --print-build-logs
 
 clean:
     mix ecto.drop

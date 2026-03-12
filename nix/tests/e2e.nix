@@ -223,15 +223,9 @@ testers.runNixOSTest {
           server.wait_for_unit("home-manager-testuser.service")
           server.succeed("loginctl enable-linger testuser")
           # HM activation ran before user manager was up, so reload and start manually
-          server.wait_until_succeeds(
-              "systemctl --user -M testuser@ daemon-reload",
-              timeout=15,
-          )
-          server.succeed("systemctl --user -M testuser@ start sower-agent.service")
-          server.wait_until_succeeds(
-              "systemctl --user -M testuser@ is-active sower-agent.service",
-              timeout=15,
-          )
+          server.systemctl("daemon-reload", "testuser")
+          server.systemctl("start sower-agent.service", "testuser")
+          server.wait_for_unit("sower-agent.service", "testuser")
 
       with subtest("home-manager agent registration"):
           server.wait_until_succeeds(

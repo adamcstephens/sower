@@ -11,6 +11,10 @@ If more than one of the rules conflict, ask before implementing.
 - Do not create worktrees unless explicitly asked. When asked, use: `git worktree add .worktrees/<name> -b <name>`
 - elixir dependencies are available in `deps`. Read code from there instead of using accessing the web or prompting the user.
 
+## testing
+
+- test nix end to end with `just check-e2e`
+
 
 ## Worktree setup
 
