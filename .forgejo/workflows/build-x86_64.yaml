@@ -60,4 +60,4 @@ jobs:
 
       - run: |
           export HOME=$PWD
-          nix develop .# --command just check-nix
+          nix develop .# --command just check-e2e
