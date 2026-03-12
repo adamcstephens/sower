@@ -41,7 +41,7 @@ defmodule SowerWeb.DeploymentLive.Show do
 
         <section>
           <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4">Subscriptions</h2>
-          <.responsive_table
+          <.table
             id="subscriptions"
             rows={@deployment.subscriptions}
             row_click={
@@ -49,11 +49,12 @@ defmodule SowerWeb.DeploymentLive.Show do
                 JS.navigate(~p"/agents/#{@deployment.agent}/subscriptions/#{subscription.sid}")
               end
             }
+            header_border={false}
           >
-            <:col :let={subscription} label="Subscription">
+            <:col :let={subscription}>
               {subscription.seed_type}/{subscription.seed_name}
             </:col>
-          </.responsive_table>
+          </.table>
           <p
             :if={@deployment.subscriptions == []}
             class="text-sm text-zinc-500 dark:text-zinc-400 italic"

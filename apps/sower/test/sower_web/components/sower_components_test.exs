@@ -28,7 +28,7 @@ defmodule SowerWeb.SowerComponentsTest do
       refute html =~ "sm:table-cell"
     end
 
-    test "renders column with hide_on={:mobile} with hidden and sm:table-cell classes" do
+    test "renders column with hide_on={:sm} with hidden and sm:table-cell classes" do
       assigns = %{
         rows: [%{id: "1", name: "Alice", email: "alice@example.com"}]
       }
@@ -37,7 +37,7 @@ defmodule SowerWeb.SowerComponentsTest do
         rendered_to_string(~H"""
         <SowerComponents.table id="test-table" rows={@rows}>
           <:col :let={row} label="Name">{row.name}</:col>
-          <:col :let={row} label="Email" hide_on={:mobile}>{row.email}</:col>
+          <:col :let={row} label="Email" hide_on={:sm}>{row.email}</:col>
         </SowerComponents.table>
         """)
 

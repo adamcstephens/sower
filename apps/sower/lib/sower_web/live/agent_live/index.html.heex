@@ -12,19 +12,19 @@
     id="agents"
     rows={@streams.agents}
     row_click={fn {_id, agent} -> JS.navigate(~p"/agents/#{agent}") end}
+    action_hide_on={:sm}
   >
     <:col :let={{_id, agent}} label="Name">{agent.name}</:col>
-    <:col :let={{_id, agent}} label="Online" hide_on={:mobile}>
+    <:col :let={{_id, agent}} label="Online">
       <.online state={agent.sid in Map.keys(@agent_presence)} />
     </:col>
-    <:col :let={{_id, agent}} label="Latest Deployment" hide_on={:mobile}>
+    <:col :let={{_id, agent}} label="Deploy">
       <.result result={agent.latest_deployment && agent.latest_deployment.result} />
     </:col>
     <:action :let={{_id, agent}}>
       <div class="sr-only">
         <.link navigate={~p"/agents/#{agent}"}>Show</.link>
       </div>
-      <.link patch={~p"/agents/#{agent}/edit"}>Edit</.link>
     </:action>
     <:action :let={{id, agent}}>
       <.link

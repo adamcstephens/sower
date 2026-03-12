@@ -22,12 +22,6 @@ defmodule SowerWeb.AgentLive.Index do
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
   end
 
-  defp apply_action(socket, :edit, %{"sid" => sid}) do
-    socket
-    |> assign(:page_title, "Edit Agent")
-    |> assign(:agent, Orchestration.get_agent_sid!(sid))
-  end
-
   defp apply_action(socket, :new, _params) do
     socket
     |> assign(:page_title, "New Agent")

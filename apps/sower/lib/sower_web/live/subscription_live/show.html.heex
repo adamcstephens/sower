@@ -48,7 +48,7 @@
 
     <section>
       <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4">Matching Seeds</h2>
-      <.responsive_table
+      <.table
         id="matching-seeds"
         rows={@matching_seeds}
         row_click={fn seed -> JS.navigate(~p"/seeds/#{seed}") end}
@@ -61,7 +61,7 @@
         <:col :let={seed} label="Created">
           <.local_datetime datetime={seed.inserted_at} user_timezone={@user_timezone} />
         </:col>
-      </.responsive_table>
+      </.table>
       <p
         :if={@matching_seeds == []}
         class="text-sm text-zinc-500 dark:text-zinc-400 italic"
@@ -72,7 +72,7 @@
 
     <section>
       <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4">Deployments</h2>
-      <.responsive_table
+      <.table
         id="deployments"
         rows={@subscription.deployments}
         row_click={fn deployment -> JS.navigate(~p"/deployments/#{deployment.sid}") end}
@@ -84,7 +84,7 @@
         <:col :let={deployment} label="Created">
           <.local_datetime datetime={deployment.inserted_at} user_timezone={@user_timezone} />
         </:col>
-      </.responsive_table>
+      </.table>
       <p
         :if={@subscription.deployments == []}
         class="text-sm text-zinc-500 dark:text-zinc-400 italic"
