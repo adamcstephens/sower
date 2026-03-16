@@ -113,7 +113,8 @@ defmodule SowerWeb.Layouts do
 
           <div class="relative flex shrink-0 items-center md:order-2 md:space-x-0 rtl:space-x-reverse">
             <%= if @current_user || nil do %>
-              <button
+              <.button
+                variant={:icon}
                 type="button"
                 class="flex text-sm bg-zinc-800 rounded-full md:me-0 focus:ring-4 focus:ring-zinc-300 dark:focus:ring-zinc-600"
                 id="user-menu-button"
@@ -168,7 +169,7 @@ defmodule SowerWeb.Layouts do
                   >
                   </path>
                 </svg>
-              </button>
+              </.button>
               <div
                 class="absolute z-[1000] m-0 hidden top-8 right-8 whitespace-nowrap text-base list-none bg-white divide-y divide-zinc-100 rounded-lg shadow dark:bg-zinc-700 dark:divide-zinc-600"
                 id="user-dropdown"
@@ -206,11 +207,8 @@ defmodule SowerWeb.Layouts do
                 </ul>
               </div>
             <% else %>
-              <.link
-                navigate={~p"/auth/oidcc"}
-                class="inline-flex shrink-0 whitespace-nowrap rounded-lg bg-zinc-100 px-2 py-1 text-[0.8125rem] font-semibold leading-6 text-zinc-900 hover:bg-zinc-200/80 active:text-zinc-900/70"
-              >
-                Sign In
+              <.link navigate={~p"/auth/oidcc"}>
+                <.button variant={:secondary}>Sign In</.button>
               </.link>
             <% end %>
           </div>
@@ -300,29 +298,32 @@ defmodule SowerWeb.Layouts do
     <div class="card relative flex flex-row items-center border-2 border-base-300 bg-base-300 rounded-full">
       <div class="absolute w-1/3 h-full rounded-full border-1 border-base-200 bg-base-100 brightness-200 left-0 [[data-theme=light]_&]:left-1/3 [[data-theme=dark]_&]:left-2/3 transition-[left]" />
 
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
+      <.button
+        variant={:icon}
+        class="flex p-2 w-1/3"
         phx-click={JS.dispatch("phx:set-theme")}
         data-phx-theme="system"
       >
         <.icon name="hero-computer-desktop-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
+      </.button>
 
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
+      <.button
+        variant={:icon}
+        class="flex p-2 w-1/3"
         phx-click={JS.dispatch("phx:set-theme")}
         data-phx-theme="light"
       >
         <.icon name="hero-sun-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
+      </.button>
 
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
+      <.button
+        variant={:icon}
+        class="flex p-2 w-1/3"
         phx-click={JS.dispatch("phx:set-theme")}
         data-phx-theme="dark"
       >
         <.icon name="hero-moon-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
+      </.button>
     </div>
     """
   end

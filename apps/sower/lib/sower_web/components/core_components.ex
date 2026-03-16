@@ -73,14 +73,15 @@ defmodule SowerWeb.CoreComponents do
               class="shadow-zinc-700/10 ring-zinc-700/10 relative hidden rounded-2xl bg-zinc-200 dark:bg-zinc-300 p-14 shadow-lg ring-1 transition"
             >
               <div class="absolute top-6 right-5">
-                <button
+                <.button
+                  variant={:icon}
                   phx-click={JS.exec("data-cancel", to: "##{@id}")}
                   type="button"
                   class="-m-3 flex-none p-3 opacity-20 hover:opacity-40"
                   aria-label={gettext("close")}
                 >
                   <.icon name="hero-x-mark-solid" class="h-5 w-5" />
-                </button>
+                </.button>
               </div>
               <div id={"#{@id}-content"}>
                 {render_slot(@inner_block)}
@@ -129,9 +130,9 @@ defmodule SowerWeb.CoreComponents do
         {@title}
       </p>
       <p class="mt-2 text-sm leading-5">{msg}</p>
-      <button type="button" class="group absolute top-1 right-1 p-2" aria-label={gettext("close")}>
+      <.button variant={:icon} type="button" class="group absolute top-1 right-1 p-2" aria-label={gettext("close")}>
         <.icon name="hero-x-mark-solid" class="h-5 w-5 opacity-40 group-hover:opacity-70" />
-      </button>
+      </.button>
     </div>
     """
   end
@@ -179,8 +180,12 @@ defmodule SowerWeb.CoreComponents do
 
       <.button>Send!</.button>
       <.button phx-click="go" class="ml-2">Send!</.button>
+      <.button variant={:secondary}>Toggle</.button>
+      <.button variant={:danger}>Delete</.button>
+      <.button variant={:icon}><.icon name="hero-x-mark" /></.button>
   """
   attr :type, :string, default: nil
+  attr :variant, :atom, default: :primary, values: [:primary, :secondary, :danger, :icon]
   attr :class, :string, default: nil
   attr :rest, :global, include: ~w(disabled form name value)
 
@@ -191,8 +196,8 @@ defmodule SowerWeb.CoreComponents do
     <button
       type={@type}
       class={[
-        "phx-submit-loading:opacity-75 text-zinc-100 bg-zinc-500 dark:text-zinc-200 dark:bg-zinc-600 hover:text-zinc-800 hover:bg-orange-500 dark:hover:text-zinc-800 dark:hover:bg-orange-500 py-2 px-3 rounded",
-        "text-sm font-semibold leading-6 text-white active:text-white/80",
+        button_base_class(@variant),
+        button_variant_class(@variant),
         @class
       ]}
       {@rest}
@@ -201,6 +206,26 @@ defmodule SowerWeb.CoreComponents do
     </button>
     """
   end
+
+  defp button_base_class(:icon), do: "cursor-pointer disabled:opacity-50"
+
+  defp button_base_class(_variant) do
+    "phx-submit-loading:opacity-75 rounded-md px-3 py-1.5 text-sm font-semibold leading-6 disabled:opacity-50"
+  end
+
+  defp button_variant_class(:primary) do
+    "border border-zinc-600 dark:border-zinc-500 text-zinc-100 bg-zinc-500 dark:text-zinc-200 dark:bg-zinc-600 hover:text-zinc-800 hover:bg-orange-500 dark:hover:text-zinc-800 dark:hover:bg-orange-500 active:text-white/80"
+  end
+
+  defp button_variant_class(:secondary) do
+    "border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+  end
+
+  defp button_variant_class(:danger) do
+    "border border-red-600 dark:border-red-500 text-white bg-red-500 dark:bg-red-500 hover:bg-red-600 dark:hover:bg-red-600 active:text-white/80"
+  end
+
+  defp button_variant_class(:icon), do: ""
 
   @doc """
   Renders an input with label and error messages.

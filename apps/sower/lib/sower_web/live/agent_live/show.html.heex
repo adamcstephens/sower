@@ -124,18 +124,18 @@
           <.local_datetime datetime={deployment.inserted_at} user_timezone={@user_timezone} />
         </:col>
         <:action :let={deployment}>
-          <button
+          <.button
             :if={deployment.state in [:completed, :stale]}
+            variant={:secondary}
             type="button"
             phx-click="retry_deployment"
             phx-value-deployment_sid={deployment.sid}
             phx-stop-propagation
             phx-disable-with="Retrying..."
-            class="text-sm text-zinc-700 dark:text-zinc-200 hover:text-orange-500 dark:hover:text-orange-400 disabled:opacity-50"
             disabled={@retrying_deployment == deployment.sid}
           >
             Retry
-          </button>
+          </.button>
         </:action>
       </.table>
       <p

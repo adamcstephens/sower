@@ -15,6 +15,7 @@ defmodule SowerWeb.DeploymentLive.Show do
         <:actions>
           <.button
             :if={retryable?(@deployment)}
+            variant={:secondary}
             type="button"
             phx-click="retry"
             phx-disable-with="Retrying..."
@@ -89,17 +90,17 @@ defmodule SowerWeb.DeploymentLive.Show do
                     state={:completed}
                     result={sd.result}
                   />
-                  <button
+                  <.button
                     :if={sd.log}
+                    variant={:secondary}
                     type="button"
                     phx-click="toggle_seed_log"
                     phx-value-seed_sid={sd.seed.sid}
-                    class="rounded-md border border-zinc-300 dark:border-zinc-600 px-3 py-1.5 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800"
                   >
                     {if expanded_seed_log?(@expanded_seed_logs, sd.seed.sid),
                       do: "Hide log",
                       else: "View log"}
-                  </button>
+                  </.button>
                 </div>
               </div>
               <pre
