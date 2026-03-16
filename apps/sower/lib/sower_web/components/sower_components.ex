@@ -294,6 +294,7 @@ defmodule SowerWeb.SowerComponents do
     <div class="inline-flex items-center gap-2">
       <.button
         :if={@deployable}
+        variant={:secondary}
         type="button"
         phx-click="deploy_subscription"
         phx-value-subscription_sid={@subscription_sid}

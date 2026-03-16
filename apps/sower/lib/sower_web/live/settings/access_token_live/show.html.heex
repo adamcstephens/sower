@@ -12,7 +12,7 @@
         phx-click={JS.push("delete", value: %{id: @access_token.id})}
         data-confirm="Are you sure?"
       >
-        <.button class="bg-red-500 dark:bg-red-500">Delete</.button>
+        <.button variant={:danger}>Delete</.button>
       </.link>
     </:actions>
   </.header>

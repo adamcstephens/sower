@@ -36,18 +36,19 @@ defmodule SowerWeb.DeploymentLive.Index do
           <.local_datetime datetime={deployment.deployed_at} user_timezone={@user_timezone} />
         </:col>
         <:action :let={{_id, deployment}}>
-          <button
+          <.button
             :if={retryable?(deployment)}
+            variant={:secondary}
             type="button"
             phx-click="retry"
             phx-value-sid={deployment.sid}
             phx-stop-propagation
             phx-disable-with="Retrying..."
-            class="hidden sm:inline text-sm text-zinc-700 dark:text-zinc-200 hover:text-orange-500 dark:hover:text-orange-400 disabled:opacity-50"
+            class="hidden sm:inline"
             disabled={@retrying_deployment_sid == deployment.sid}
           >
             Retry
-          </button>
+          </.button>
         </:action>
       </.table>
     </Layouts.app>
