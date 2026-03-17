@@ -42,6 +42,14 @@ dev-services:
 get-incus-openapi:
     curl https://converter.swagger.io/api/convert?url=https://raw.githubusercontent.com/lxc/incus/refs/heads/main/doc/rest-api.yaml | jq . > apps/incus_client/priv/incus-rest-api.json
 
+format: format-elixir format-go
+
+format-elixir:
+    mix format
+
+format-go:
+    gofmt -w .
+
 mix-nix-lock:
     mix deps.get
     mix deps.nix --output nix/packages/deps.nix
