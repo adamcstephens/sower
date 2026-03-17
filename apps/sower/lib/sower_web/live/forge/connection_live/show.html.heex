@@ -25,7 +25,10 @@
       <.table id="repositories" rows={@connection.repositories}>
         <:col :let={repository}>{repository.owner}/{repository.repo}</:col>
         <:action :let={repository}>
-          <.button variant={:secondary} phx-click={JS.push("remove_repo", value: %{repo_id: repository.id})}>
+          <.button
+            variant={:secondary}
+            phx-click={JS.push("remove_repo", value: %{repo_id: repository.id})}
+          >
             Remove Repository
           </.button>
         </:action>

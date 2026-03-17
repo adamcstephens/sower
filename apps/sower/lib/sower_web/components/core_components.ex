@@ -130,7 +130,12 @@ defmodule SowerWeb.CoreComponents do
         {@title}
       </p>
       <p class="mt-2 text-sm leading-5">{msg}</p>
-      <.button variant={:icon} type="button" class="group absolute top-1 right-1 p-2" aria-label={gettext("close")}>
+      <.button
+        variant={:icon}
+        type="button"
+        class="group absolute top-1 right-1 p-2"
+        aria-label={gettext("close")}
+      >
         <.icon name="hero-x-mark-solid" class="h-5 w-5 opacity-40 group-hover:opacity-70" />
       </.button>
     </div>
