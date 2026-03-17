@@ -1,30 +1,41 @@
 <Layouts.app flash={@flash} current_user={@current_user}>
   <.header>
     {@seed.name}
-    <:subtitle>{@seed.seed_type}</:subtitle>
   </.header>
 
-  <.list>
-    <:item title="seed type">{@seed.seed_type}</:item>
-    <:item title="artifact">{@seed.artifact}</:item>
-    <:item title="tags">
-      <%= if Enum.empty?(@seed.tags) do %>
-        <span class="text-zinc-500 dark:text-zinc-400">No tags</span>
-      <% else %>
-        <ul class="list-disc list-inside space-y-0.5">
-          <%= for tag <- Enum.sort(@seed.tags) do %>
-            <li>
-              {tag.key}={tag.value}
-            </li>
-          <% end %>
-        </ul>
-      <% end %>
-    </:item>
-    <:item title="created">
+  <div class="mt-8 space-y-10">
+    <.detail_field label="Seed Type">{@seed.seed_type}</.detail_field>
+
+    <.detail_field label="Artifact">
+      <span class="font-mono text-sm break-all">{@seed.artifact}</span>
+    </.detail_field>
+
+    <section class="-mx-4 sm:mx-0">
+      <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4 px-4 sm:px-0">
+        Tags
+      </h2>
+      <.table id="seed-tags" rows={Enum.sort(@seed.tags)} bold_first={false} show_header={false}>
+        <:col :let={tag} label="Key">{tag.key}</:col>
+        <:col :let={tag} label="Value">
+          <span class="truncate block max-w-[200px] sm:max-w-md" title={tag.value}>
+            {tag.value}
+          </span>
+        </:col>
+      </.table>
+      <p
+        :if={Enum.empty?(@seed.tags)}
+        class="text-sm text-zinc-500 dark:text-zinc-400 italic"
+      >
+        No tags.
+      </p>
+    </section>
+
+    <.detail_field label="Created">
       <.local_datetime datetime={@seed.inserted_at} user_timezone={@user_timezone} />
-    </:item>
-    <:item title="updated">
+    </.detail_field>
+
+    <.detail_field label="Updated">
       <.local_datetime datetime={@seed.updated_at} user_timezone={@user_timezone} />
-    </:item>
-  </.list>
+    </.detail_field>
+  </div>
 </Layouts.app>

@@ -1,7 +1,6 @@
 <Layouts.app flash={@flash} current_user={@current_user}>
   <.header>
-    Subscription {@subscription.id}
-    <:subtitle>This is a subscription record from your database.</:subtitle>
+    {@subscription.sid}
     <:actions>
       <.deploy_button
         subscription_sid={@subscription.sid}
@@ -9,12 +8,6 @@
         deploying={@deploying}
         deploy_error={@deploy_error}
       />
-      <.link
-        patch={~p"/agents/#{@agent}/subscriptions/#{@subscription}/show/edit"}
-        phx-click={JS.push_focus()}
-      >
-        <.button>Edit subscription</.button>
-      </.link>
     </:actions>
   </.header>
 
@@ -32,19 +25,31 @@
 
     <.detail_field label="Seed Type">{@subscription.seed_type}</.detail_field>
 
-    <.detail_field label="Rules">
-      <%= if Enum.empty?(@subscription.rules) do %>
-        <span class="text-zinc-500 dark:text-zinc-400">No rules</span>
-      <% else %>
-        <ul class="list-disc list-inside space-y-0.5">
-          <%= for rule <- @subscription.rules do %>
-            <li>
-              {SowerClient.SubscriptionRuleFormat.print(rule)}
-            </li>
-          <% end %>
-        </ul>
-      <% end %>
-    </.detail_field>
+    <section class="-mx-4 sm:mx-0">
+      <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4 px-4 sm:px-0">
+        Rules
+      </h2>
+      <.table
+        id="subscription-rules"
+        rows={@subscription.rules}
+        bold_first={false}
+        show_header={false}
+      >
+        <:col :let={rule}>{rule.key}</:col>
+        <:col :let={rule}>{rule.op}</:col>
+        <:col :let={rule}>
+          <span class="truncate block max-w-[200px] sm:max-w-md" title={rule.value}>
+            {rule.value}
+          </span>
+        </:col>
+      </.table>
+      <p
+        :if={Enum.empty?(@subscription.rules)}
+        class="text-sm text-zinc-500 dark:text-zinc-400 italic"
+      >
+        No rules.
+      </p>
+    </section>
 
     <section>
       <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4">Matching Seeds</h2>
