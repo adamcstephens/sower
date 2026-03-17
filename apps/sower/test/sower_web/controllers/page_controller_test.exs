@@ -14,13 +14,12 @@ defmodule SowerWeb.PageControllerTest do
     assert html =~ ~s(href="/deployments")
   end
 
-  test "home keeps sign in action on one line", %{conn: conn} do
+  test "home renders sign in as a button", %{conn: conn} do
     conn = get(conn, ~p"/")
     html = html_response(conn, 200)
 
     assert html =~ "Sign In"
-    assert html =~ "whitespace-nowrap"
-    assert html =~ "shrink-0"
+    assert html =~ "<button"
   end
 
   test "mobile dropdown styles include open and closed states" do

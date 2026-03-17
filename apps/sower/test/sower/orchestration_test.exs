@@ -904,6 +904,7 @@ defmodule Sower.OrchestrationTest do
   describe "handle_deployment_request/2" do
     import Sower.OrchestrationFixtures
 
+    @tag :capture_log
     test "returns immediate request_id for valid deployment request", %{organization: _org} do
       agent = agent_fixture()
       _seed = seed_fixture(%{name: "testhost", seed_type: "nixos"})
@@ -922,9 +923,8 @@ defmodule Sower.OrchestrationTest do
         "force" => false
       }
 
-      assert {:ok, request_id, task} = Orchestration.handle_deployment_request(payload, agent)
+      assert {:ok, request_id} = Orchestration.handle_deployment_request(payload, agent)
       assert is_binary(request_id)
-      Task.await(task)
     end
 
     test "returns error for deployment request with unauthorized subscription", %{
@@ -952,6 +952,7 @@ defmodule Sower.OrchestrationTest do
       assert result == {:error, :unauthorized}
     end
 
+    @tag :capture_log
     test "process_deployment returns request_id and starts async task", %{organization: _org} do
       agent = agent_fixture()
       _seed = seed_fixture(%{name: "testhost", seed_type: "nixos"})
@@ -965,10 +966,8 @@ defmodule Sower.OrchestrationTest do
 
       request_id = "dr_test_#{System.unique_integer([:positive])}"
 
-      assert {:ok, ^request_id, task} =
+      assert {:ok, ^request_id} =
                Orchestration.process_deployment(request_id, [subscription], agent)
-
-      Task.await(task)
     end
 
     @tag :capture_log
@@ -985,10 +984,8 @@ defmodule Sower.OrchestrationTest do
 
       request_id = "dr_test_error_#{System.unique_integer([:positive])}"
 
-      assert {:ok, ^request_id, task} =
+      assert {:ok, ^request_id} =
                Orchestration.process_deployment(request_id, [subscription], agent)
-
-      Task.await(task)
     end
   end
 
