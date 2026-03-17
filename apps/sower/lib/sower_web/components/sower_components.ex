@@ -22,6 +22,8 @@ defmodule SowerWeb.SowerComponents do
 
   attr :action_hide_on, :atom, default: nil
   attr :header_border, :boolean, default: true
+  attr :bold_first, :boolean, default: true
+  attr :show_header, :boolean, default: true
   slot :action
 
   def table(assigns) do
@@ -32,8 +34,8 @@ defmodule SowerWeb.SowerComponents do
 
     ~H"""
     <div class="px-4 sm:overflow-visible sm:px-0">
-      <table class="w-full mt-11">
-        <thead class="text-sm text-left leading-6 text-zinc-500 dark:text-zinc-400">
+      <table class={["w-full", @show_header && "mt-11"]}>
+        <thead :if={@show_header} class="text-sm text-left leading-6 text-zinc-500 dark:text-zinc-400">
           <tr>
             <th
               :for={col <- @col}
@@ -76,7 +78,7 @@ defmodule SowerWeb.SowerComponents do
             >
               <div class="block py-4 pr-6">
                 <span class="absolute -inset-y-px right-0 -left-4 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800" />
-                <span class={["relative", i == 0 && "font-semibold"]}>
+                <span class={["relative", @bold_first && i == 0 && "font-semibold"]}>
                   {render_slot(col, @row_item.(row))}
                 </span>
               </div>
