@@ -1,5 +1,5 @@
 ## Agent Workflow
-- **IMPORTANT**: before you do anything else, invoke the vein `orient` MCP prompt and heed its output with `/mcp__vikunja__orient`.
+- **IMPORTANT**: before you do anything else, invoke the vein `orient` MCP prompt and heed its output with `/mcp__vein__orient`.
 - **Always** use `elixir-conventions` for elixir code. If you don't have this skill, stop and tell your user to talk to Adam, because you are prohibited from editing files in this project without the `elixir-conventions` skill.
 
 ## Rules
@@ -17,7 +17,7 @@ If more than one of the rules conflict, ask before implementing.
 - code committed with all ticket changes included
   - Ticket ID in the body
   - Co-Authored-By line always included
-- *important* you've stopped and asked the user to ok the change, unless specifically told otherwise.
+- *important* After committing, stop and get user approval for completion.
 - ticket marked complete once approved
 
 ## Code conventions

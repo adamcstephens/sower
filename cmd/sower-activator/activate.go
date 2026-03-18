@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"time"
 )
 
 // Seed type constants
@@ -167,6 +168,7 @@ func streamLines(r io.Reader, mirror io.Writer, callback OutputCallback, isError
 		if mirror != nil {
 			fmt.Fprintln(mirror, line)
 		}
-		callback(line, isError)
+		timestamped := time.Now().UTC().Format(time.RFC3339) + " " + line
+		callback(timestamped, isError)
 	}
 }

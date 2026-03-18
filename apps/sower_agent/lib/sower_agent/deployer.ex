@@ -437,7 +437,10 @@ defmodule SowerAgent.Deployer do
     end
   end
 
-  def decision_line(message), do: "[sower] #{message}"
+  def decision_line(message) do
+    timestamp = DateTime.utc_now() |> DateTime.to_iso8601()
+    "#{timestamp} [agent] #{message}"
+  end
 
   defp strip_ansi(text) do
     Regex.replace(~r/\x1b\[[0-9;]*[a-zA-Z]/, text, "")

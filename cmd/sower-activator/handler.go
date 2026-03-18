@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 )
 
 // ConnectionHandler handles a single client connection.
@@ -149,9 +150,8 @@ func (h *callbackSlogHandler) Enabled(ctx context.Context, level slog.Level) boo
 
 func (h *callbackSlogHandler) Handle(ctx context.Context, r slog.Record) error {
 	var sb strings.Builder
-	sb.WriteString("[activator] ")
-	sb.WriteString(r.Level.String())
-	sb.WriteString(" ")
+	sb.WriteString(r.Time.UTC().Format(time.RFC3339))
+	sb.WriteString(" [activator] ")
 	sb.WriteString(r.Message)
 	r.Attrs(func(a slog.Attr) bool {
 		sb.WriteString(" ")
