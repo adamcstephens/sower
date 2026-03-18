@@ -219,6 +219,12 @@ testers.runNixOSTest {
               timeout=15,
           )
 
+      with subtest("activator handled nixos request"):
+          server.succeed(
+              "journalctl --no-pager -u 'sower-activator@*'"
+              " --grep='Received request.*type=nixos'"
+          )
+
       with subtest("start home-manager agent"):
           server.wait_for_unit("home-manager-testuser.service")
           server.succeed("loginctl enable-linger testuser")
@@ -253,5 +259,6 @@ testers.runNixOSTest {
               " --grep=Completed.activation'",
               timeout=15,
           )
+
     '';
 }
