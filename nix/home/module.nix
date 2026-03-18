@@ -51,16 +51,20 @@ in
       (lib.mkIf pkgs.stdenv.isLinux {
         systemd.user.services.sower-agent = {
           Service = {
-            Environment =
-              [
-                "PATH=/run/current-system/sw/bin:${lib.makeBinPath [ config.nix.package cfg.activatorPackage ]}"
-                "SOWER_CONFIG_FILE=%E/sower/client.json"
-                "RELEASE_MODE=interactive"
-                "SHELL=${lib.getExe pkgs.bash}"
-              ]
-              ++ lib.optionals (cfg.accessTokenFile != null) [
-                "SOWER_ACCESS_TOKEN_FILE=${cfg.accessTokenFile}"
-              ];
+            Environment = [
+              "PATH=/run/current-system/sw/bin:${
+                lib.makeBinPath [
+                  config.nix.package
+                  cfg.activatorPackage
+                ]
+              }"
+              "SOWER_CONFIG_FILE=%E/sower/client.json"
+              "RELEASE_MODE=interactive"
+              "SHELL=${lib.getExe pkgs.bash}"
+            ]
+            ++ lib.optionals (cfg.accessTokenFile != null) [
+              "SOWER_ACCESS_TOKEN_FILE=${cfg.accessTokenFile}"
+            ];
 
             ExecStartPre = pkgs.writeShellScript "sower-agent-init" ''
               mkdir -p ${stateDir}
@@ -119,15 +123,19 @@ in
                 (lib.getExe cfg.package)
                 "start"
               ];
-              EnvironmentVariables =
-                {
-                  PATH = "/run/current-system/sw/bin:${lib.makeBinPath [ config.nix.package cfg.activatorPackage ]}";
-                  SOWER_CONFIG_FILE = "${config.xdg.configHome}/sower/client.json";
-                  RELEASE_MODE = "interactive";
-                }
-                // lib.optionalAttrs (cfg.accessTokenFile != null) {
-                  SOWER_ACCESS_TOKEN_FILE = cfg.accessTokenFile;
-                };
+              EnvironmentVariables = {
+                PATH = "/run/current-system/sw/bin:${
+                  lib.makeBinPath [
+                    config.nix.package
+                    cfg.activatorPackage
+                  ]
+                }";
+                SOWER_CONFIG_FILE = "${config.xdg.configHome}/sower/client.json";
+                RELEASE_MODE = "interactive";
+              }
+              // lib.optionalAttrs (cfg.accessTokenFile != null) {
+                SOWER_ACCESS_TOKEN_FILE = cfg.accessTokenFile;
+              };
               StandardErrorPath = "${config.home.homeDirectory}/Library/Logs/sower-agent-err.log";
               StandardOutPath = "${config.home.homeDirectory}/Library/Logs/sower-agent-out.log";
             };
