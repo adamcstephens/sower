@@ -105,6 +105,9 @@ start-server:
 start-pry:
     iex --dbg pry -S mix phx.server
 
+systemd-analyze unit:
+    systemd-analyze security --no-pager --offline=yes --root "$(nix build --no-link --print-out-paths .#checks.x86_64-linux.default.nodes.server.system.build.etc)" {{ unit }}
+
 update: update-nix update-elixir update-go update-npins
 
 update-nix:

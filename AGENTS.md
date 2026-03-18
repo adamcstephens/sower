@@ -14,10 +14,11 @@ If more than one of the rules conflict, ask before implementing.
 ## Definition of done
 - formatting done, `just format`
 - tests pass, `just check-elixir`, `just check-go`, or `just check-e2e`
-- ticket marked complete
 - code committed with all ticket changes included
   - Ticket ID in the body
   - Co-Authored-By line always included
+- *important* you've stopped and asked the user to ok the change, unless specifically told otherwise.
+- ticket marked complete once approved
 
 ## Code conventions
 
