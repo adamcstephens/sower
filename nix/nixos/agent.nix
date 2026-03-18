@@ -149,10 +149,43 @@ in
         LoadCredential = cfg.credentials;
 
         # DynamicUser = true;
-        ProtectSystem = "full";
-        ProtectHome = "tmpfs";
+        NoNewPrivileges = true;
+        ProtectSystem = "strict";
+        ProtectHome = true;
         PrivateTmp = true;
-        NoNewPrivileges = false;
+        ProtectKernelTunables = true;
+        ProtectKernelModules = true;
+        ProtectKernelLogs = true;
+        ProtectControlGroups = true;
+        ProtectClock = true;
+        ProtectHostname = true;
+        ProtectProc = "invisible";
+        ProcSubset = "pid";
+        PrivateDevices = true;
+        RestrictNamespaces = true;
+        RestrictRealtime = true;
+        RestrictSUIDSGID = true;
+        LockPersonality = true;
+        RemoveIPC = true;
+        CapabilityBoundingSet = "";
+        SystemCallArchitectures = "native";
+        # omit @privileged and @resources — BEAM VM may need them
+        SystemCallFilter = [
+          "~@mount"
+          "~@reboot"
+          "~@swap"
+          "~@obsolete"
+          "~@clock"
+          "~@cpu-emulation"
+          "~@debug"
+          "~@module"
+          "~@raw-io"
+        ];
+        RestrictAddressFamilies = [
+          "AF_UNIX"
+          "AF_INET"
+          "AF_INET6"
+        ];
         SupplementaryGroups = lib.optionals activatorCfg.enable [ activatorCfg.socketGroup ];
         User = "sower-agent";
         Group = "sower-agent";
