@@ -362,8 +362,9 @@ defmodule SowerAgent.DeployerTest do
   end
 
   describe "decision_line/1" do
-    test "formats message with [sower] prefix" do
-      assert Deployer.decision_line("reboot triggered") == "[sower] reboot triggered"
+    test "formats message with ISO 8601 timestamp and [agent] prefix" do
+      line = Deployer.decision_line("reboot triggered")
+      assert line =~ ~r/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z \[agent\] reboot triggered$/
     end
   end
 
@@ -378,7 +379,7 @@ defmodule SowerAgent.DeployerTest do
 
       assert Enum.any?(
                logged_lines,
-               &(&1 =~ "[sower]" and &1 =~ "realized" and &1 =~ "seed-seed_r1")
+               &(&1 =~ "[agent]" and &1 =~ "realized" and &1 =~ "seed-seed_r1")
              )
     end
 
@@ -393,7 +394,7 @@ defmodule SowerAgent.DeployerTest do
           realize_seed_fun: fn seed_deploy -> {:error, :failed_to_realize, seed_deploy} end
         )
 
-      assert Enum.any?(logged_lines, &(&1 =~ "[sower]" and &1 =~ "realization failed"))
+      assert Enum.any?(logged_lines, &(&1 =~ "[agent]" and &1 =~ "realization failed"))
     end
 
     test "includes activation mode decision line in log output" do
@@ -409,7 +410,7 @@ defmodule SowerAgent.DeployerTest do
           end
         )
 
-      assert Enum.any?(logged_lines, &(&1 =~ "[sower]" and &1 =~ "boot" and &1 =~ "seed-seed_m1"))
+      assert Enum.any?(logged_lines, &(&1 =~ "[agent]" and &1 =~ "boot" and &1 =~ "seed-seed_m1"))
     end
 
     test "includes reboot decision in last seed log" do
@@ -450,7 +451,7 @@ defmodule SowerAgent.DeployerTest do
 
       assert Enum.any?(
                reboot_lines,
-               &(&1 =~ "[sower]" and &1 =~ "reboot initiated: policy_always")
+               &(&1 =~ "[agent]" and &1 =~ "reboot initiated: policy_always")
              )
     end
 
@@ -483,7 +484,7 @@ defmodule SowerAgent.DeployerTest do
       assert_received {:seed_result, :failure, _activation_lines}
       # Second call: reboot decision
       assert_received {:seed_result, nil, reboot_lines}
-      assert Enum.any?(reboot_lines, &(&1 =~ "[sower]" and &1 =~ "reboot skipped"))
+      assert Enum.any?(reboot_lines, &(&1 =~ "[agent]" and &1 =~ "reboot skipped"))
     end
 
     test "includes default activation mode when none configured" do
@@ -496,7 +497,7 @@ defmodule SowerAgent.DeployerTest do
 
       assert Enum.any?(
                logged_lines,
-               &(&1 =~ "[sower]" and &1 =~ "switch" and &1 =~ "seed-seed_md1")
+               &(&1 =~ "[agent]" and &1 =~ "switch" and &1 =~ "seed-seed_md1")
              )
     end
   end
