@@ -4,12 +4,6 @@
       <.online state={@online} />
       <span>Agent: {@agent.name}</span>
     </div>
-
-    <:actions>
-      <.link patch={~p"/agents/#{@agent}/show/edit"} phx-click={JS.push_focus()}>
-        <.button>Edit agent</.button>
-      </.link>
-    </:actions>
   </.header>
 
   <div class="mt-8 space-y-10">
