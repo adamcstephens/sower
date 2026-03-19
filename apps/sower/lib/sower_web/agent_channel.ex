@@ -131,9 +131,18 @@ defmodule SowerWeb.AgentChannel do
   end)
 
   handle_schema(
+    SowerClient.Orchestration.DeploymentStatus,
+    &Sower.Orchestration.Deployment.record_deployment_status/1
+  )
+
+  handle_schema(
     SowerClient.Orchestration.DeploymentResult,
     &Sower.Orchestration.record_deployment/1
   )
+
+  handle_schema(SowerClient.Orchestration.SeedDeploymentStatus, fn req, socket ->
+    Sower.Orchestration.SeedDeployment.record_seed_status(req, socket.assigns.agent)
+  end)
 
   handle_schema(SowerClient.Orchestration.SeedDeploymentResult, fn req, socket ->
     Sower.Orchestration.SeedDeployment.record_seed_result(req, socket.assigns.agent)

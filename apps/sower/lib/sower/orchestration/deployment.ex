@@ -34,7 +34,7 @@ defmodule Sower.Orchestration.Deployment do
     field :result, Ecto.Enum, values: [:success, :failure, :partial]
 
     field :state, Ecto.Enum,
-      values: [:created, :dispatched, :completed, :stale],
+      values: [:created, :dispatched, :acknowledged, :completed, :stale],
       default: :created
 
     field :last_dispatched_at, :utc_datetime_usec
@@ -97,7 +97,7 @@ defmodule Sower.Orchestration.Deployment do
 
     query =
       from(d in __MODULE__,
-        where: d.agent_id == ^agent.id and d.state in [:created, :dispatched],
+        where: d.agent_id == ^agent.id and d.state in [:created, :dispatched, :acknowledged],
         order_by: [
           asc: fragment("COALESCE(?, ?)", d.last_dispatched_at, d.inserted_at),
           asc: d.inserted_at
@@ -193,7 +193,8 @@ defmodule Sower.Orchestration.Deployment do
           retry_in_progress? =
             from(d in __MODULE__,
               where:
-                d.parent_deployment_id == ^deployment.id and d.state in [:created, :dispatched],
+                d.parent_deployment_id == ^deployment.id and
+                  d.state in [:created, :dispatched, :acknowledged],
               limit: 1,
               select: d.id
             )
@@ -373,6 +374,16 @@ defmodule Sower.Orchestration.Deployment do
     {:ok, request_id}
   end
 
+  def record_deployment_status(%SowerClient.Orchestration.DeploymentStatus{} = status) do
+    case get_deployment_sid(status.deployment_sid) do
+      nil ->
+        {:error, :deployment_not_found}
+
+      deploy ->
+        update_deployment(deploy, %{state: status.status})
+    end
+  end
+
   def record_deployment(%SowerClient.Orchestration.DeploymentResult{} = result) do
     case get_deployment_sid(result.deployment_sid) do
       nil ->
@@ -401,7 +412,7 @@ defmodule Sower.Orchestration.Deployment do
 
       stale_deployments =
         from(d in __MODULE__,
-          where: d.state in [:created, :dispatched],
+          where: d.state in [:created, :dispatched, :acknowledged],
           where: fragment("COALESCE(?, ?) <= ?", d.last_dispatched_at, d.inserted_at, ^cutoff),
           order_by: [
             asc: fragment("COALESCE(?, ?)", d.last_dispatched_at, d.inserted_at),
@@ -586,7 +597,7 @@ defmodule Sower.Orchestration.Deployment do
         where:
           d.agent_id == ^agent_id and
             d.content_hash == ^content_hash and
-            (d.result == :success or d.state in [:created, :dispatched]),
+            (d.result == :success or d.state in [:created, :dispatched, :acknowledged]),
         order_by: [desc: d.inserted_at],
         limit: 1
       )
@@ -632,7 +643,7 @@ defmodule Sower.Orchestration.Deployment do
     now = DateTime.utc_now()
 
     from(d in __MODULE__,
-      where: d.id in ^ids and d.state in [:created, :dispatched]
+      where: d.id in ^ids and d.state in [:created, :dispatched, :acknowledged]
     )
     |> Repo.update_all(
       set: [last_dispatched_at: dispatched_at, state: :dispatched, updated_at: now]
@@ -650,7 +661,8 @@ defmodule Sower.Orchestration.Deployment do
         nil ->
           :ignore
 
-        %__MODULE__{state: state} = unresolved when state in [:created, :dispatched] ->
+        %__MODULE__{state: state} = unresolved
+        when state in [:created, :dispatched, :acknowledged] ->
           update_deployment(unresolved, %{deployed_at: now, result: :failure, state: :stale})
 
         %__MODULE__{} ->

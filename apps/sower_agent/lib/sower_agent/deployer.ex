@@ -9,6 +9,7 @@ defmodule SowerAgent.Deployer do
   alias SowerClient.Orchestration.DeploymentProfile
   alias SowerClient.Orchestration.SeedDeployment
   alias SowerClient.Orchestration.SeedDeploymentResult
+  alias SowerClient.Orchestration.SeedDeploymentStatus
 
   def run(%Deployment{} = deployment) do
     run_with_opts(deployment, upgrade_opts: [], reboot_opts: [])
@@ -74,6 +75,9 @@ defmodule SowerAgent.Deployer do
     report_seed_result_fun =
       Keyword.get(opts, :report_seed_result_fun, &report_seed_result/4)
 
+    report_seed_status_fun =
+      Keyword.get(opts, :report_seed_status_fun, &report_seed_status/3)
+
     async_stream_fun.(deployment.seed_deployments, fn %{seed: seed} = seed_deploy ->
       Logger.debug(
         msg: "Realizing seed",
@@ -83,6 +87,7 @@ defmodule SowerAgent.Deployer do
         artifact: seed.artifact
       )
 
+      report_seed_status_fun.(deployment, seed, :downloading)
       realize_seed_fun.(seed_deploy)
     end)
     |> async_stream_fun.(fn
@@ -105,6 +110,7 @@ defmodule SowerAgent.Deployer do
           activation_args: get_in(profile.activation_args)
         )
 
+        report_seed_status_fun.(deployment, seed, :activating)
         result = activate_seed_fun.(seed, profile)
 
         case result do
@@ -115,6 +121,7 @@ defmodule SowerAgent.Deployer do
               seed_sid: seed.sid
             )
 
+            report_seed_status_fun.(deployment, seed, :completed)
             report_seed_result_fun.(deployment, seed, :success, preamble ++ output)
 
           {:error, _code, output} ->
@@ -402,6 +409,17 @@ defmodule SowerAgent.Deployer do
       true ->
         nil
     end
+  end
+
+  defp report_seed_status(%Deployment{} = deployment, seed, status) do
+    seed_status =
+      SeedDeploymentStatus.cast!(%{
+        deployment_sid: deployment.sid,
+        seed_sid: seed.sid,
+        status: status
+      })
+
+    Client.cast(:seed_status, seed_status)
   end
 
   defp report_seed_result(%Deployment{} = deployment, seed, result, output_lines) do
