@@ -1,11 +1,6 @@
 <Layouts.app flash={@flash} current_user={@current_user}>
   <.header>
     Listing Agents
-    <:actions>
-      <.link patch={~p"/agents/new"}>
-        <.button>New Agent</.button>
-      </.link>
-    </:actions>
   </.header>
 
   <.table
