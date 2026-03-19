@@ -138,6 +138,7 @@ defmodule SowerAgent.DeployerTest do
                  {:ok, []}
                end,
                activation_enabled_fun: fn -> true end,
+               report_seed_status_fun: fn _, _, _ -> :ok end,
                report_seed_result_fun: fn _, _, _, _ -> :ok end
              ) == :ok
 
@@ -155,6 +156,7 @@ defmodule SowerAgent.DeployerTest do
                end,
                reboot_fun: fn _ -> flunk("reboot should not be requested") end,
                activation_enabled_fun: fn -> true end,
+               report_seed_status_fun: fn _, _, _ -> :ok end,
                report_seed_result_fun: fn _, _, _, _ -> :ok end
              ) == :ok
 
@@ -174,6 +176,7 @@ defmodule SowerAgent.DeployerTest do
                  {:ok, ["ok"]}
                end,
                activation_enabled_fun: fn -> true end,
+               report_seed_status_fun: fn _, _, _ -> :ok end,
                report_seed_result_fun: fn _, _, _, _ -> :ok end
              ) == :ok
 
@@ -287,6 +290,7 @@ defmodule SowerAgent.DeployerTest do
                      realize_seed_fun: fn seed_deploy -> {:ok, seed_deploy} end,
                      get_deployment_profile_fun: fn _ -> %DeploymentProfile{} end,
                      activate_seed_fun: fn _seed, _profile -> {:error, :activator_unavailable} end,
+                     report_seed_status_fun: fn _, _, _ -> :ok end,
                      report_seed_result_fun: fn _deployment, _seed, result, output_lines ->
                        send(test_pid, {:seed_result, result, output_lines})
                      end
@@ -318,6 +322,7 @@ defmodule SowerAgent.DeployerTest do
                    realize_seed_fun: fn seed_deploy -> {:ok, seed_deploy} end,
                    get_deployment_profile_fun: fn _ -> %DeploymentProfile{} end,
                    activate_seed_fun: fn _seed, _profile -> {:ok, ["activation complete"]} end,
+                   report_seed_status_fun: fn _, _, _ -> :ok end,
                    report_seed_result_fun: fn _deployment, _seed, result, _output_lines ->
                      send(test_pid, {:seed_result, result})
                    end
@@ -347,6 +352,7 @@ defmodule SowerAgent.DeployerTest do
                      realize_seed_fun: fn seed_deploy -> {:ok, seed_deploy} end,
                      get_deployment_profile_fun: fn _ -> %DeploymentProfile{} end,
                      activate_seed_fun: fn _seed, _profile -> {:error, :cmd_not_found} end,
+                     report_seed_status_fun: fn _, _, _ -> :ok end,
                      report_seed_result_fun: fn _deployment, _seed, result, output_lines ->
                        send(test_pid, {:seed_result, result, output_lines})
                      end
@@ -517,6 +523,7 @@ defmodule SowerAgent.DeployerTest do
           Keyword.get(opts, :activate_seed_fun, fn _seed, _profile ->
             {:ok, ["activation output"]}
           end),
+        report_seed_status_fun: fn _, _, _ -> :ok end,
         report_seed_result_fun: fn _deployment, _seed, _result, output_lines ->
           send(test_pid, {:seed_result_lines, output_lines})
         end

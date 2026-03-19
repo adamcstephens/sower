@@ -22,7 +22,9 @@ If more than one of the rules conflict, ask before implementing.
 
 ## Code conventions
 
+- Prefer red/green TDD. If unsure what style of testing, stop and ask.
 - Always read code for project elixir dependencies from `deps`. Never query hexdocs or hex.
+- SowerClient schemas must *always* be added to `sower_client.ex`
 
 ## Testing
 

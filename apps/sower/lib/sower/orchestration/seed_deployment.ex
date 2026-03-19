@@ -12,13 +12,34 @@ defmodule Sower.Orchestration.SeedDeployment do
     field :log, :string
     field :result, Ecto.Enum, values: [:success, :failure]
 
+    field :state, Ecto.Enum,
+      values: [:pending, :downloading, :activating, :completed],
+      default: :pending
+
     timestamps()
   end
 
   @doc false
   def changeset(seed_deployment, attrs) do
     seed_deployment
-    |> cast(attrs, [:log, :result])
+    |> cast(attrs, [:log, :result, :state])
+  end
+
+  def record_seed_status(
+        %SowerClient.Orchestration.SeedDeploymentStatus{} = status,
+        %Sower.Orchestration.Agent{} = agent
+      ) do
+    with {:ok, deployment} <- fetch_deployment(status.deployment_sid),
+         :ok <- verify_ownership(deployment, agent),
+         {:ok, seed_deployment} <- fetch_seed_deployment(deployment.id, status.seed_sid) do
+      seed_deployment
+      |> changeset(%{state: status.status})
+      |> Repo.update(skip_org_id: true)
+      |> case do
+        {:ok, _} -> {:ok, %{}}
+        error -> error
+      end
+    end
   end
 
   def record_seed_result(

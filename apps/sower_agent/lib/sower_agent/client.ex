@@ -5,6 +5,8 @@ defmodule SowerAgent.Client do
 
   alias SowerAgent.Scheduler
   alias SowerAgent.Storage
+  alias SowerClient.Orchestration.DeploymentStatus
+  alias SowerClient.Orchestration.SeedDeploymentStatus
 
   def deploy(%SowerClient.Orchestration.Subscription{} = sub, opts \\ []) do
     force? = Keyword.get(opts, :force, false)
@@ -54,6 +56,12 @@ defmodule SowerAgent.Client do
 
       {:noreply, socket}
     end
+  end
+
+  @impl Slipstream
+  def handle_cast({:seed_status, %SeedDeploymentStatus{} = status}, socket) do
+    {:ok, _} = push(socket, private_channel(socket), SeedDeploymentStatus.event(), status)
+    {:noreply, socket}
   end
 
   @impl Slipstream
@@ -287,6 +295,15 @@ defmodule SowerAgent.Client do
         {:noreply, socket}
 
       deployment ->
+        {:ok, _} =
+          push_message(
+            socket,
+            DeploymentStatus.cast!(%{
+              deployment_sid: deployment.sid,
+              status: :acknowledged
+            })
+          )
+
         Task.Supervisor.start_child(SowerAgent.TaskSupervisor, fn ->
           result =
             try do

@@ -209,6 +209,14 @@ defmodule SowerWeb.SowerComponents do
           </span>
           Dispatched
         </span>
+      <% :acknowledged -> %>
+        <span class="inline-flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400">
+          <span class="relative flex h-2.5 w-2.5">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75" />
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
+          </span>
+          Acknowledged
+        </span>
       <% :completed -> %>
         <.result result={@result} />
       <% :stale -> %>
