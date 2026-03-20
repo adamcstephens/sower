@@ -106,3 +106,7 @@ Controls for what happens when the deploy occurs.
   users.users.adam.extraGroups = [ "sower-activator" ];
 };
 ```
+
+## Disclaimer
+
+This project uses coding agents for assisting and producing code.
