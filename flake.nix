@@ -71,6 +71,7 @@
                   pkgs.oapi-codegen
 
                   pkgs.attic-client
+                  pkgs.niks3
                   pkgs.nushell
 
                   # dev tools
