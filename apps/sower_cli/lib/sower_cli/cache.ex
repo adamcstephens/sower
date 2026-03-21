@@ -14,6 +14,10 @@ defmodule SowerCli.Cache do
       iex> SowerCli.Cache.parse_url("ssh://user@host")
       {:ok, {Nix.Cache.NixCopy, %{destination: "ssh://user@host"}}}
   """
+  def parse_url("niks3://" <> _rest) do
+    {:ok, {Nix.Cache.Niks3, %{}}}
+  end
+
   def parse_url("attic://" <> rest) do
     {:ok, {Nix.Cache.Attic, %{cache: rest}}}
   end
