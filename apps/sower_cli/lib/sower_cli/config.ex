@@ -3,7 +3,7 @@ defmodule SowerCli.Config do
   CLI configuration management.
 
   Delegates to `SowerClient.Config` for loading and validation.
-  All fields are optional - CLI arguments can override config file values.
+  All gardens are optional - CLI arguments can override config file values.
   """
 
   @app :sower_cli
@@ -26,7 +26,7 @@ defmodule SowerCli.Config do
   @doc """
   Validate that endpoint and access_token are present for server operations.
 
-  Returns `:ok` when valid, or `{:error, messages}` when fields are missing.
+  Returns `:ok` when valid, or `{:error, messages}` when gardens are missing.
   """
   def require_server_connection(%SowerClient.Config{} = config) do
     errors = []

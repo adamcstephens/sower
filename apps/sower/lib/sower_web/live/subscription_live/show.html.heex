@@ -12,12 +12,12 @@
   </.header>
 
   <div class="mt-8 space-y-10">
-    <.detail_field label="Agent">
+    <.detail_field label="Garden">
       <.link
-        navigate={~p"/agents/#{@subscription.agent}"}
+        navigate={~p"/gardens/#{@subscription.garden}"}
         class="hover:text-orange-500 dark:hover:text-orange-400"
       >
-        {@subscription.agent.name}
+        {@subscription.garden.name}
       </.link>
     </.detail_field>
 
@@ -103,7 +103,7 @@
     :if={@live_action == :edit}
     id="subscription-modal"
     show
-    on_cancel={JS.patch(~p"/agents/#{@agent}/subscriptions/#{@subscription}")}
+    on_cancel={JS.patch(~p"/gardens/#{@garden}/subscriptions/#{@subscription}")}
   >
     <.live_component
       module={SowerWeb.SubscriptionLive.FormComponent}
@@ -111,7 +111,7 @@
       title={@page_title}
       action={@live_action}
       subscription={@subscription}
-      patch={~p"/agents/#{@agent}/subscriptions/#{@subscription}"}
+      patch={~p"/gardens/#{@garden}/subscriptions/#{@subscription}"}
     />
   </.modal>
 </Layouts.app>

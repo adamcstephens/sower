@@ -1,3 +1,5 @@
+# Deprecated: use SowerClient.GardenHello
+# Kept as alias for 0.7.0 backward compatibility
 defmodule SowerClient.AgentHello do
   use SowerClient.Schema
   use SowerClient.ChannelMessage, event: "agent:hello", topic_type: :lobby
@@ -21,6 +23,6 @@ defmodule SowerClient.AgentHello do
         description: "Name of agent"
       }
     },
-    required: ~w(local_sid name)a
+    required: [:local_sid, :name]
   })
 end

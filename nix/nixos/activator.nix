@@ -46,8 +46,7 @@ in
       description = "Sower Activator Socket";
       wantedBy = [ "sockets.target" ];
 
-      # Start before agent so socket is ready
-      before = [ "sower-agent.service" ];
+      before = [ "sower-garden.service" ];
 
       socketConfig = {
         ListenStream = cfg.socketPath;

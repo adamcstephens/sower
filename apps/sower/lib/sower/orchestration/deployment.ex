@@ -6,7 +6,7 @@ defmodule Sower.Orchestration.Deployment do
   alias Sower.Repo
   alias Sower.Accounts.User
   alias Sower.Orchestration
-  alias Sower.Orchestration.{Agent, Seed, Subscription, DeploymentPubSub}
+  alias Sower.Orchestration.{Garden, Seed, Subscription, DeploymentPubSub}
 
   require Logger
 
@@ -20,7 +20,7 @@ defmodule Sower.Orchestration.Deployment do
     field :sid, SowerClient.Sid, autogenerate: true
     field :org_id, Ecto.UUID
 
-    belongs_to :agent, Agent
+    belongs_to :garden, Garden
     belongs_to :parent_deployment, __MODULE__
     has_many :retries, __MODULE__, foreign_key: :parent_deployment_id
     belongs_to :retried_by_user, User
@@ -53,7 +53,7 @@ defmodule Sower.Orchestration.Deployment do
       :result,
       :state,
       :last_dispatched_at,
-      :agent_id,
+      :garden_id,
       :content_hash,
       :parent_deployment_id,
       :retried_by_user_id,
@@ -81,23 +81,23 @@ defmodule Sower.Orchestration.Deployment do
     Repo.all(query)
   end
 
-  def list_deployments(%Agent{} = agent, opts \\ []) do
+  def list_deployments(%Garden{} = garden, opts \\ []) do
     limit = Keyword.get(opts, :limit, 10)
 
     from(d in __MODULE__,
-      where: d.agent_id == ^agent.id,
+      where: d.garden_id == ^garden.id,
       order_by: [desc: d.inserted_at],
       limit: ^limit
     )
     |> Repo.all()
   end
 
-  def list_unresolved_deployments_for_agent(%Agent{} = agent, opts \\ []) do
+  def list_unresolved_deployments_for_garden(%Garden{} = garden, opts \\ []) do
     limit = Keyword.get(opts, :limit)
 
     query =
       from(d in __MODULE__,
-        where: d.agent_id == ^agent.id and d.state in [:created, :dispatched, :acknowledged],
+        where: d.garden_id == ^garden.id and d.state in [:created, :dispatched, :acknowledged],
         order_by: [
           asc: fragment("COALESCE(?, ?)", d.last_dispatched_at, d.inserted_at),
           asc: d.inserted_at
@@ -211,7 +211,7 @@ defmodule Sower.Orchestration.Deployment do
               |> Repo.one() || 0
 
             attrs = %{
-              agent_id: deployment.agent_id,
+              garden_id: deployment.garden_id,
               content_hash: deployment.content_hash,
               seeds: deployment.seeds,
               subscriptions: deployment.subscriptions,
@@ -226,12 +226,19 @@ defmodule Sower.Orchestration.Deployment do
             case create_deployment(attrs) do
               {:ok, retry_deployment} ->
                 retry_deployment =
-                  Repo.preload(retry_deployment, [:agent, :subscriptions, seeds: [:tags]])
+                  Repo.preload(retry_deployment, [:garden, :subscriptions, seeds: [:tags]])
 
                 request_id = SowerClient.Sid.generate("request")
 
                 SowerWeb.Endpoint.broadcast(
-                  "agent:#{retry_deployment.agent.sid}",
+                  "garden:#{retry_deployment.garden.sid}",
+                  "deployment",
+                  deployment_event_payload(retry_deployment, request_id)
+                )
+
+                # Backward compatibility: 0.7.0 gardens join "agent:*"
+                SowerWeb.Endpoint.broadcast(
+                  "agent:#{retry_deployment.garden.sid}",
                   "deployment",
                   deployment_event_payload(retry_deployment, request_id)
                 )
@@ -248,7 +255,7 @@ defmodule Sower.Orchestration.Deployment do
 
   # Replay
 
-  def replay_unresolved_deployments(%Agent{} = agent, opts \\ []) do
+  def replay_unresolved_deployments(%Garden{} = garden, opts \\ []) do
     broadcast_fun = Keyword.get(opts, :broadcast_fun, &SowerWeb.Endpoint.broadcast/3)
 
     request_id_fun =
@@ -256,18 +263,20 @@ defmodule Sower.Orchestration.Deployment do
 
     now = Keyword.get(opts, :now, DateTime.utc_now())
 
-    deployments = list_unresolved_deployments_for_agent(agent)
+    deployments = list_unresolved_deployments_for_garden(garden)
     mark_deployments_dispatched(deployments, now)
 
     Enum.each(deployments, fn deployment ->
       payload = deployment_event_payload(deployment, request_id_fun.())
-      broadcast_fun.("agent:#{agent.sid}", "deployment", payload)
+      broadcast_fun.("garden:#{garden.sid}", "deployment", payload)
+      # Backward compatibility: 0.7.0 gardens join "agent:*"
+      broadcast_fun.("agent:#{garden.sid}", "deployment", payload)
     end)
 
     if deployments != [] do
       Logger.info(
         msg: "Replayed unresolved deployments",
-        agent_sid: agent.sid,
+        garden_sid: garden.sid,
         deployment_count: length(deployments),
         deployment_sids: Enum.map(deployments, & &1.sid)
       )
@@ -299,15 +308,15 @@ defmodule Sower.Orchestration.Deployment do
   # Deployment request handling
 
   def deploy_subscription(%Subscription{} = sub, opts \\ []) do
-    subscription = Repo.preload(sub, :agent)
+    subscription = Repo.preload(sub, :garden)
 
-    case subscription.agent do
+    case subscription.garden do
       nil ->
-        {:error, :agent_not_found}
+        {:error, :garden_not_found}
 
-      %Agent{} = agent ->
+      %Garden{} = garden ->
         request_id = SowerClient.Sid.generate("request")
-        {:ok, request_id} = process_deployment(request_id, [subscription], agent, opts)
+        {:ok, request_id} = process_deployment(request_id, [subscription], garden, opts)
         {:ok, request_id}
     end
   end
@@ -322,23 +331,23 @@ defmodule Sower.Orchestration.Deployment do
     end
   end
 
-  def handle_deployment_request(payload, agent) do
+  def handle_deployment_request(payload, garden) do
     with {:ok, request} <- SowerClient.Orchestration.DeploymentRequest.cast(payload),
-         {:ok, subscriptions} <- validate_deployment_request(request, agent.id),
+         {:ok, subscriptions} <- validate_deployment_request(request, garden.id),
          {:ok, request_id} <-
-           process_deployment(request.request_id, subscriptions, agent, force: request.force) do
+           process_deployment(request.request_id, subscriptions, garden, force: request.force) do
       {:ok, request_id}
     end
   end
 
-  def process_deployment(request_id, subscriptions, %Agent{} = agent, opts \\ []) do
+  def process_deployment(request_id, subscriptions, %Garden{} = garden, opts \\ []) do
     Task.Supervisor.start_child(Sower.TaskSupervisor, fn ->
-      Repo.put_org_id(agent.org_id)
+      Repo.put_org_id(garden.org_id)
 
       Logger.info(
         msg: "Deployment processing started",
         request_id: request_id,
-        agent_id: agent.id
+        garden_id: garden.id
       )
 
       case do_deployment(request_id, subscriptions, opts) do
@@ -351,7 +360,14 @@ defmodule Sower.Orchestration.Deployment do
           )
 
           SowerWeb.Endpoint.broadcast(
-            "agent:#{agent.sid}",
+            "garden:#{garden.sid}",
+            "deployment",
+            Map.from_struct(deployment)
+          )
+
+          # Backward compatibility: 0.7.0 gardens join "agent:*"
+          SowerWeb.Endpoint.broadcast(
+            "agent:#{garden.sid}",
             "deployment",
             Map.from_struct(deployment)
           )
@@ -364,7 +380,14 @@ defmodule Sower.Orchestration.Deployment do
           )
 
           SowerWeb.Endpoint.broadcast(
-            "agent:#{agent.sid}",
+            "garden:#{garden.sid}",
+            "deployment:error",
+            %{request_id: request_id, reason: to_string(reason)}
+          )
+
+          # Backward compatibility: 0.7.0 gardens join "agent:*"
+          SowerWeb.Endpoint.broadcast(
+            "agent:#{garden.sid}",
             "deployment:error",
             %{request_id: request_id, reason: to_string(reason)}
           )
@@ -447,7 +470,7 @@ defmodule Sower.Orchestration.Deployment do
 
   defp validate_request_subscriptions(sids) when is_list(sids) and length(sids) > 0 do
     subs = Subscription.get_subscription_sids(sids)
-    subs = Repo.preload(subs, :agent)
+    subs = Repo.preload(subs, :garden)
 
     if subs == [] do
       {:error, :subscription_not_found}
@@ -460,7 +483,7 @@ defmodule Sower.Orchestration.Deployment do
 
   defp validate_deployment_request(
          %SowerClient.Orchestration.DeploymentRequest{} = request,
-         agent_id
+         garden_id
        ) do
     subs = Subscription.get_subscription_sids(request.subscription_sids)
 
@@ -468,17 +491,17 @@ defmodule Sower.Orchestration.Deployment do
       subs == [] ->
         {:error, :subscription_not_found}
 
-      not Enum.all?(subs, &(&1.agent_id == agent_id)) ->
+      not Enum.all?(subs, &(&1.garden_id == garden_id)) ->
         {:error, :unauthorized}
 
       true ->
-        {:ok, Repo.preload(subs, :agent)}
+        {:ok, Repo.preload(subs, :garden)}
     end
   end
 
   defp do_deployment(request_id, subscriptions, opts) do
     force? = Keyword.get(opts, :force, false)
-    agent_id = hd(subscriptions).agent_id
+    garden_id = hd(subscriptions).garden_id
 
     seed_deploys =
       subscriptions
@@ -518,7 +541,7 @@ defmodule Sower.Orchestration.Deployment do
         content_hash: content_hash
       )
 
-      case find_duplicate_deployment(agent_id, content_hash, force?) do
+      case find_duplicate_deployment(garden_id, content_hash, force?) do
         {:skip, existing} ->
           existing = Repo.preload(existing, [:seeds])
 
@@ -541,11 +564,11 @@ defmodule Sower.Orchestration.Deployment do
           Logger.debug(
             msg: "Creating new deployment record",
             request_id: request_id,
-            agent_id: agent_id
+            garden_id: garden_id
           )
 
           case create_deployment(%{
-                 agent_id: agent_id,
+                 garden_id: garden_id,
                  content_hash: content_hash,
                  last_dispatched_at: DateTime.utc_now(),
                  state: :dispatched,
@@ -589,13 +612,13 @@ defmodule Sower.Orchestration.Deployment do
     |> Base.encode16(case: :lower)
   end
 
-  defp find_duplicate_deployment(_agent_id, _content_hash, true), do: :proceed
+  defp find_duplicate_deployment(_garden_id, _content_hash, true), do: :proceed
 
-  defp find_duplicate_deployment(agent_id, content_hash, false) do
+  defp find_duplicate_deployment(garden_id, content_hash, false) do
     query =
       from(d in __MODULE__,
         where:
-          d.agent_id == ^agent_id and
+          d.garden_id == ^garden_id and
             d.content_hash == ^content_hash and
             (d.result == :success or d.state in [:created, :dispatched, :acknowledged]),
         order_by: [desc: d.inserted_at],

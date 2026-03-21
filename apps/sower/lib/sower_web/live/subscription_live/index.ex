@@ -10,13 +10,13 @@ defmodule SowerWeb.SubscriptionLive.Index do
   end
 
   @impl true
-  def handle_params(%{"agent_sid" => agent_sid} = params, _url, socket) do
-    agent = Orchestration.get_agent_sid!(agent_sid)
+  def handle_params(%{"garden_sid" => garden_sid} = params, _url, socket) do
+    garden = Orchestration.get_garden_sid!(garden_sid)
 
     socket =
       socket
-      |> assign(:agent, agent)
-      |> stream(:subscriptions, Orchestration.list_subscriptions_for_agent(agent))
+      |> assign(:garden, garden)
+      |> stream(:subscriptions, Orchestration.list_subscriptions_for_garden(garden))
 
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
   end
@@ -30,7 +30,7 @@ defmodule SowerWeb.SubscriptionLive.Index do
   defp apply_action(socket, :new, _params) do
     socket
     |> assign(:page_title, "New Subscription")
-    |> assign(:subscription, %Subscription{agent_id: socket.assigns.agent.id})
+    |> assign(:subscription, %Subscription{garden_id: socket.assigns.garden.id})
   end
 
   defp apply_action(socket, :index, _params) do

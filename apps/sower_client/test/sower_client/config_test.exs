@@ -68,14 +68,14 @@ defmodule SowerClient.ConfigTest do
   describe "xdg_state_path/1" do
     test "respects XDG_STATE_HOME when set" do
       with_env(%{"XDG_STATE_HOME" => "/custom/state"}, fn ->
-        result = Config.xdg_state_path("sower_agent")
-        assert result =~ "/custom/state/sower_agent"
+        result = Config.xdg_state_path("sower-garden")
+        assert result =~ "/custom/state/sower-garden"
       end)
     end
   end
 
   describe "default_client_name/0" do
-    test "returns USER@HOST for non-sower-agent users" do
+    test "returns USER@HOST for non-sower-garden users" do
       {:ok, hostname} = :inet.gethostname()
       hostname = to_string(hostname)
 
@@ -84,11 +84,11 @@ defmodule SowerClient.ConfigTest do
       end)
     end
 
-    test "returns HOST for sower-agent user" do
+    test "returns HOST for sower-garden user" do
       {:ok, hostname} = :inet.gethostname()
       hostname = to_string(hostname)
 
-      with_env(%{"USER" => "sower-agent"}, fn ->
+      with_env(%{"USER" => "sower-garden"}, fn ->
         assert Config.default_client_name() == hostname
       end)
     end

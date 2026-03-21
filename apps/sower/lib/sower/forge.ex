@@ -106,10 +106,10 @@ defmodule Sower.Forge do
 
   ## Examples
 
-      iex> create_connection(%{field: value})
+      iex> create_connection(%{garden: value})
       {:ok, %Connection{}}
 
-      iex> create_connection(%{field: bad_value})
+      iex> create_connection(%{garden: bad_value})
       {:error, %Ecto.Changeset{}}
 
   """
@@ -126,10 +126,10 @@ defmodule Sower.Forge do
 
   ## Examples
 
-      iex> update_connection(connection, %{field: new_value})
+      iex> update_connection(connection, %{garden: new_value})
       {:ok, %Connection{}}
 
-      iex> update_connection(connection, %{field: bad_value})
+      iex> update_connection(connection, %{garden: bad_value})
       {:error, %Ecto.Changeset{}}
 
   """
@@ -254,10 +254,10 @@ defmodule Sower.Forge do
 
   ## Examples
 
-      iex> create_repository(%{field: value})
+      iex> create_repository(%{garden: value})
       {:ok, %Repository{}}
 
-      iex> create_repository(%{field: bad_value})
+      iex> create_repository(%{garden: bad_value})
       {:error, %Ecto.Changeset{}}
 
   """
@@ -275,10 +275,10 @@ defmodule Sower.Forge do
 
   ## Examples
 
-      iex> update_repository(repository, %{field: new_value})
+      iex> update_repository(repository, %{garden: new_value})
       {:ok, %Repository{}}
 
-      iex> update_repository(repository, %{field: bad_value})
+      iex> update_repository(repository, %{garden: bad_value})
       {:error, %Ecto.Changeset{}}
 
   """

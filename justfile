@@ -96,8 +96,8 @@ start: dev-services start-all
 start-all:
     nix shell ".#activator" -c iex --sname dev1 -S mix phx.server
 
-start-agent:
-    nix shell ".#activator" -c iex --sname agent1 --dot-iex ./.iex-agent.exs -S mix run --no-start
+start-garden:
+    nix shell ".#activator" -c iex --sname garden1 --dot-iex ./.iex-garden.exs -S mix run --no-start
 
 start-server:
     iex --sname server1 --dot-iex ./.iex-server.exs -S mix phx.server --no-start

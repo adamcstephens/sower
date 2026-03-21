@@ -27,10 +27,10 @@ defmodule Sower.Orchestration.SeedDeployment do
 
   def record_seed_status(
         %SowerClient.Orchestration.SeedDeploymentStatus{} = status,
-        %Sower.Orchestration.Agent{} = agent
+        %Sower.Orchestration.Garden{} = garden
       ) do
     with {:ok, deployment} <- fetch_deployment(status.deployment_sid),
-         :ok <- verify_ownership(deployment, agent),
+         :ok <- verify_ownership(deployment, garden),
          {:ok, seed_deployment} <- fetch_seed_deployment(deployment.id, status.seed_sid) do
       seed_deployment
       |> changeset(%{state: status.status})
@@ -44,10 +44,10 @@ defmodule Sower.Orchestration.SeedDeployment do
 
   def record_seed_result(
         %SowerClient.Orchestration.SeedDeploymentResult{} = result,
-        %Sower.Orchestration.Agent{} = agent
+        %Sower.Orchestration.Garden{} = garden
       ) do
     with {:ok, deployment} <- fetch_deployment(result.deployment_sid),
-         :ok <- verify_ownership(deployment, agent),
+         :ok <- verify_ownership(deployment, garden),
          {:ok, seed_deployment} <- fetch_seed_deployment(deployment.id, result.seed_sid) do
       attrs = build_update_attrs(seed_deployment, result)
 
@@ -82,8 +82,8 @@ defmodule Sower.Orchestration.SeedDeployment do
     end
   end
 
-  defp verify_ownership(deployment, agent) do
-    if deployment.agent_id == agent.id do
+  defp verify_ownership(deployment, garden) do
+    if deployment.garden_id == garden.id do
       :ok
     else
       {:error, :unauthorized}

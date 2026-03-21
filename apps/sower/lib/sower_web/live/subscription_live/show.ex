@@ -9,15 +9,15 @@ defmodule SowerWeb.SubscriptionLive.Show do
   end
 
   @impl true
-  def handle_params(%{"agent_sid" => agent_sid, "sid" => sid}, _, socket) do
-    agent = Orchestration.get_agent_sid!(agent_sid)
+  def handle_params(%{"garden_sid" => garden_sid, "sid" => sid}, _, socket) do
+    garden = Orchestration.get_garden_sid!(garden_sid)
 
     case Orchestration.get_subscription_sid_with_deployments(sid) do
       nil ->
         {:noreply,
          socket
          |> put_flash(:error, "Subscription not found")
-         |> redirect(to: ~p"/agents/#{agent}/subscriptions")}
+         |> redirect(to: ~p"/gardens/#{garden}/subscriptions")}
 
       subscription ->
         matching_seeds = Orchestration.list_matching_seeds(subscription, 5)
@@ -31,7 +31,7 @@ defmodule SowerWeb.SubscriptionLive.Show do
 
         {:noreply,
          socket
-         |> assign(:agent, agent)
+         |> assign(:garden, garden)
          |> assign(:page_title, page_title(socket.assigns.live_action))
          |> assign(:subscription, subscription)
          |> assign(:matching_seeds, matching_seeds)
@@ -90,6 +90,6 @@ defmodule SowerWeb.SubscriptionLive.Show do
   defp page_title(:show), do: "Show Subscription"
   defp page_title(:edit), do: "Edit Subscription"
 
-  defp deploy_error_message(:agent_not_found), do: "Agent not found"
+  defp deploy_error_message(:garden_not_found), do: "Garden not found"
   defp deploy_error_message(_), do: "Deployment failed"
 end

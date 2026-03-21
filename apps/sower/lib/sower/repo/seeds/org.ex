@@ -47,7 +47,7 @@ defmodule Sower.Repo.Seeds.Org do
               "role" => "seed:write"
             },
             %{
-              "role" => "agent:register"
+              "role" => "garden:register"
             }
           ],
           "user_id" => user.id,

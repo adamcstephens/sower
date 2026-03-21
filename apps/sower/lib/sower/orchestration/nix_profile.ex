@@ -7,7 +7,7 @@ defmodule Sower.Orchestration.NixProfile do
   schema "nix_profiles" do
     field :profile_path, :string
 
-    has_many :agent_seed_generations, Sower.Orchestration.AgentSeedGeneration,
+    has_many :garden_seed_generations, Sower.Orchestration.GardenSeedGeneration,
       foreign_key: :profile_id
 
     timestamps()

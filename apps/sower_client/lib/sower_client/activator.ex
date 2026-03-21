@@ -374,7 +374,7 @@ defmodule SowerClient.Activator do
         {:ok, response}
 
       {:ok, _data} ->
-        {:error, :missing_required_fields}
+        {:error, :missing_required_gardens}
 
       {:error, reason} ->
         {:error, {:json_decode_failed, reason}}

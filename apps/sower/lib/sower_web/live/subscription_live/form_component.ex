@@ -33,7 +33,7 @@ defmodule SowerWeb.SubscriptionLive.FormComponent do
      socket
      |> assign(assigns)
      |> assign_new(:form, fn ->
-       to_form(Orchestration.change_subscription(subscription, %{agent: nil}))
+       to_form(Orchestration.change_subscription(subscription, %{garden: nil}))
      end)}
   end
 

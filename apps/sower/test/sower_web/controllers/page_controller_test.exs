@@ -9,7 +9,7 @@ defmodule SowerWeb.PageControllerTest do
     assert html =~ "<summary"
     assert html =~ "Menu"
     assert html =~ "mobile-nav-dropdown-panel"
-    assert html =~ ~s(href="/agents")
+    assert html =~ ~s(href="/gardens")
     assert html =~ ~s(href="/seeds")
     assert html =~ ~s(href="/deployments")
   end

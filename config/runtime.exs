@@ -1,9 +1,9 @@
 import Config
 
 if config_env() == :dev do
-  config :sower_agent, SowerAgent.Scheduler, timezone: SowerAgent.Scheduler.get_timezone()
+  config :garden, Garden.Scheduler, timezone: Garden.Scheduler.get_timezone()
 
-  SowerAgent.Config.load(%{
+  Garden.Config.load(%{
     access_token_file: Path.expand("../.dev-api-token", __DIR__),
     endpoint: "http://localhost:7150",
     state_directory: Path.expand("../_build", __DIR__)
@@ -13,8 +13,8 @@ if config_env() == :dev do
 end
 
 if config_env() == :test do
-  if Code.loaded?(SowerAgent.Config) do
-    SowerAgent.Config.load(
+  if Code.loaded?(Garden.Config) do
+    Garden.Config.load(
       %{
         state_directory: Path.expand("../_build", __DIR__),
         subscriptions: [

@@ -38,12 +38,12 @@ defmodule SowerClient.Orchestration.Subscription do
       },
       schedule: %Schema{
         type: :string,
-        description: "Cron expression for polling schedule (agent-only)",
+        description: "Cron expression for polling schedule (garden-only)",
         nullable: true
       },
       poll_on_connect: %Schema{
         type: :boolean,
-        description: "Whether to request deployment immediately on connect (agent-only)",
+        description: "Whether to request deployment immediately on connect (garden-only)",
         default: false
       }
     },

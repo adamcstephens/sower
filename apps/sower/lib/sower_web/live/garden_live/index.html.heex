@@ -1,0 +1,49 @@
+<Layouts.app flash={@flash} current_user={@current_user}>
+  <.header>
+    Listing Gardens
+  </.header>
+
+  <.table
+    id="gardens"
+    rows={@streams.gardens}
+    row_click={fn {_id, garden} -> JS.navigate(~p"/gardens/#{garden}") end}
+    action_hide_on={:sm}
+  >
+    <:col :let={{_id, garden}} label="Name">{garden.name}</:col>
+    <:col :let={{_id, garden}} label="Online">
+      <.online state={garden.sid in Map.keys(@garden_presence)} />
+    </:col>
+    <:col :let={{_id, garden}} label="Deploy">
+      <.result result={garden.latest_deployment && garden.latest_deployment.result} />
+    </:col>
+    <:action :let={{_id, garden}}>
+      <div class="sr-only">
+        <.link navigate={~p"/gardens/#{garden}"}>Show</.link>
+      </div>
+    </:action>
+    <:action :let={{id, garden}}>
+      <.link
+        phx-click={JS.push("delete", value: %{id: garden.id}) |> hide("##{id}")}
+        data-confirm="Are you sure?"
+      >
+        Delete
+      </.link>
+    </:action>
+  </.table>
+
+  <.modal
+    :if={@live_action in [:new, :edit]}
+    id="garden-modal"
+    show
+    on_cancel={JS.patch(~p"/gardens")}
+  >
+    <.live_component
+      module={SowerWeb.GardenLive.FormComponent}
+      id={@garden.id || :new}
+      title={@page_title}
+      action={@live_action}
+      garden={@garden}
+      patch={~p"/gardens"}
+    />
+  </.modal>
+</Layouts.app>

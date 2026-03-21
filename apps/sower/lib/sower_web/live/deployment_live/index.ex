@@ -29,8 +29,8 @@ defmodule SowerWeb.DeploymentLive.Index do
           </span>
           <span class="hidden sm:inline">{deployment.sid}</span>
         </:col>
-        <:col :let={{_id, deployment}} label="agent">
-          {get_in(deployment.agent.name) || "-"}
+        <:col :let={{_id, deployment}} label="garden">
+          {get_in(deployment.garden.name) || "-"}
         </:col>
         <:col :let={{_id, deployment}} label="completed" hide_on={:sm}>
           <.local_datetime datetime={deployment.deployed_at} user_timezone={@user_timezone} />
@@ -65,19 +65,19 @@ defmodule SowerWeb.DeploymentLive.Index do
      socket
      |> assign(:page_title, "Listing Deployments")
      |> assign(:retrying_deployment_sid, nil)
-     |> stream(:deployments, Orchestration.list_deployments() |> Sower.Repo.preload([:agent]))}
+     |> stream(:deployments, Orchestration.list_deployments() |> Sower.Repo.preload([:garden]))}
   end
 
   @impl Phoenix.LiveView
   def handle_info({:deployment, :created, deployment}, socket) do
-    deployment = Sower.Repo.preload(deployment, [:agent])
+    deployment = Sower.Repo.preload(deployment, [:garden])
 
     # Insert new deployment at the top of the stream
     {:noreply, stream_insert(socket, :deployments, deployment, at: 0)}
   end
 
   def handle_info({:deployment, :updated, deployment}, socket) do
-    deployment = Sower.Repo.preload(deployment, [:agent])
+    deployment = Sower.Repo.preload(deployment, [:garden])
 
     # Update existing deployment in the stream
     {:noreply, stream_insert(socket, :deployments, deployment)}

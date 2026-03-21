@@ -176,9 +176,9 @@ defmodule Sower.SeedTest do
   describe "find_or_register/3" do
     test "returns existing seed when artifact already exists" do
       existing = seed_fixture()
-      agent = agent_fixture()
+      garden = garden_fixture()
 
-      generation = %SowerClient.Orchestration.AgentSeedGeneration{
+      generation = %SowerClient.Orchestration.GardenSeedGeneration{
         path: existing.artifact,
         link: "/nix/var/nix/profiles/system-1-link",
         created: DateTime.to_iso8601(DateTime.utc_now()),
@@ -186,21 +186,21 @@ defmodule Sower.SeedTest do
         is_current: true
       }
 
-      profile = %SowerClient.Orchestration.AgentSeedProfile{
+      profile = %SowerClient.Orchestration.GardenSeedProfile{
         profile_path: "/nix/var/nix/profiles/system",
         tags: [],
         generations: [generation]
       }
 
-      assert {:ok, seed} = Seed.find_or_register(agent, generation, profile)
+      assert {:ok, seed} = Seed.find_or_register(garden, generation, profile)
       assert seed.id == existing.id
     end
 
     test "creates new seed when artifact is unknown" do
-      agent = agent_fixture()
+      garden = garden_fixture()
       artifact = "/nix/store/#{unique_hash()}-nixos-system-testhost-25.11"
 
-      generation = %SowerClient.Orchestration.AgentSeedGeneration{
+      generation = %SowerClient.Orchestration.GardenSeedGeneration{
         path: artifact,
         link: "/nix/var/nix/profiles/system-42-link",
         created: DateTime.to_iso8601(DateTime.utc_now()),
@@ -208,23 +208,23 @@ defmodule Sower.SeedTest do
         is_current: true
       }
 
-      profile = %SowerClient.Orchestration.AgentSeedProfile{
+      profile = %SowerClient.Orchestration.GardenSeedProfile{
         profile_path: "/nix/var/nix/profiles/system",
         tags: [],
         generations: [generation]
       }
 
-      assert {:ok, seed} = Seed.find_or_register(agent, generation, profile)
+      assert {:ok, seed} = Seed.find_or_register(garden, generation, profile)
       assert seed.artifact == artifact
       assert seed.name == "testhost"
       assert seed.seed_type == "nixos"
     end
 
-    test "adds agent_source tag when auto-registering" do
-      agent = agent_fixture()
+    test "adds garden_source tag when auto-registering" do
+      garden = garden_fixture()
       artifact = "/nix/store/#{unique_hash()}-nixos-system-testhost-25.11"
 
-      generation = %SowerClient.Orchestration.AgentSeedGeneration{
+      generation = %SowerClient.Orchestration.GardenSeedGeneration{
         path: artifact,
         link: "/nix/var/nix/profiles/system-42-link",
         created: DateTime.to_iso8601(DateTime.utc_now()),
@@ -232,24 +232,24 @@ defmodule Sower.SeedTest do
         is_current: true
       }
 
-      profile = %SowerClient.Orchestration.AgentSeedProfile{
+      profile = %SowerClient.Orchestration.GardenSeedProfile{
         profile_path: "/nix/var/nix/profiles/system",
         tags: [],
         generations: [generation]
       }
 
-      assert {:ok, seed} = Seed.find_or_register(agent, generation, profile)
+      assert {:ok, seed} = Seed.find_or_register(garden, generation, profile)
 
       assert Enum.any?(seed.tags, fn tag ->
-               tag.key == "agent_source" && tag.value == agent.sid
+               tag.key == "garden_source" && tag.value == garden.sid
              end)
     end
 
     test "includes profile tags when auto-registering" do
-      agent = agent_fixture()
+      garden = garden_fixture()
       artifact = "/nix/store/#{unique_hash()}-home-manager-generation"
 
-      generation = %SowerClient.Orchestration.AgentSeedGeneration{
+      generation = %SowerClient.Orchestration.GardenSeedGeneration{
         path: artifact,
         link: "/home/alice/.local/state/nix/profiles/home-manager-5-link",
         created: DateTime.to_iso8601(DateTime.utc_now()),
@@ -257,23 +257,23 @@ defmodule Sower.SeedTest do
         is_current: true
       }
 
-      profile = %SowerClient.Orchestration.AgentSeedProfile{
+      profile = %SowerClient.Orchestration.GardenSeedProfile{
         profile_path: "/home/alice/.local/state/nix/profiles/home-manager",
         tags: [{"user", "alice"}],
         generations: [generation]
       }
 
-      assert {:ok, seed} = Seed.find_or_register(agent, generation, profile)
+      assert {:ok, seed} = Seed.find_or_register(garden, generation, profile)
       assert seed.seed_type == "home-manager"
       assert Enum.any?(seed.tags, fn tag -> tag.key == "user" && tag.value == "alice" end)
-      assert Enum.any?(seed.tags, fn tag -> tag.key == "agent_source" end)
+      assert Enum.any?(seed.tags, fn tag -> tag.key == "garden_source" end)
     end
 
     test "determines seed_type from home-manager profile path" do
-      agent = agent_fixture()
+      garden = garden_fixture()
       artifact = "/nix/store/#{unique_hash()}-home-manager-generation"
 
-      generation = %SowerClient.Orchestration.AgentSeedGeneration{
+      generation = %SowerClient.Orchestration.GardenSeedGeneration{
         path: artifact,
         link: "/home/alice/.local/state/nix/profiles/home-manager-5-link",
         created: DateTime.to_iso8601(DateTime.utc_now()),
@@ -281,13 +281,13 @@ defmodule Sower.SeedTest do
         is_current: true
       }
 
-      profile = %SowerClient.Orchestration.AgentSeedProfile{
+      profile = %SowerClient.Orchestration.GardenSeedProfile{
         profile_path: "/home/alice/.local/state/nix/profiles/home-manager",
         tags: [],
         generations: [generation]
       }
 
-      assert {:ok, seed} = Seed.find_or_register(agent, generation, profile)
+      assert {:ok, seed} = Seed.find_or_register(garden, generation, profile)
       assert seed.seed_type == "home-manager"
     end
   end
