@@ -234,42 +234,42 @@ defmodule Sower.Orchestration.Seed do
   end
 
   @doc """
-  Finds an existing seed by artifact path, or registers a new one from agent-reported data.
+  Finds an existing seed by artifact path, or registers a new one from garden-reported data.
 
-  When an agent reports a generation that doesn't match any known seed, this function
-  auto-registers it with the `agent_source` tag set to the agent's SID.
+  When a garden reports a generation that doesn't match any known seed, this function
+  auto-registers it with the `garden_source` tag set to the garden's SID.
 
   ## Parameters
-    - `agent` - The Agent struct reporting the generation
-    - `generation` - The AgentSeedGeneration with path, link, etc.
-    - `profile` - The AgentSeedProfile containing profile_path and tags
+    - `garden` - The Garden struct reporting the generation
+    - `generation` - The GardenSeedGeneration with path, link, etc.
+    - `profile` - The GardenSeedProfile containing profile_path and tags
 
   ## Returns
     - `{:ok, seed}` on success (existing or newly created)
     - `{:error, changeset}` on validation failure
   """
   def find_or_register(
-        %Sower.Orchestration.Agent{} = agent,
-        %SowerClient.Orchestration.AgentSeedGeneration{} = generation,
-        %SowerClient.Orchestration.AgentSeedProfile{} = profile
+        %Sower.Orchestration.Garden{} = garden,
+        %SowerClient.Orchestration.GardenSeedGeneration{} = generation,
+        %SowerClient.Orchestration.GardenSeedProfile{} = profile
       ) do
     case get_by_artifact(generation.path) do
       nil ->
-        register(agent, generation, profile)
+        register(garden, generation, profile)
 
       seed ->
         {:ok, seed}
     end
   end
 
-  defp register(agent, generation, profile) do
+  defp register(garden, generation, profile) do
     {name, path_tags} = extract_info_from_store_path(generation.path)
     seed_type = seed_type_from_profile_path(profile.profile_path)
 
-    # Build tags: agent_source + any profile tags
+    # Build tags: garden_source + any profile tags
     tags =
       path_tags ++
-        [%{key: "agent_source", value: agent.sid}] ++
+        [%{key: "garden_source", value: garden.sid}] ++
         Enum.map(profile.tags || [], fn {k, v} -> %{key: to_string(k), value: to_string(v)} end)
 
     name =
@@ -279,7 +279,7 @@ defmodule Sower.Orchestration.Seed do
                _ -> nil
              end) do
           nil -> name
-          user_name -> "#{user_name}@#{agent.name}"
+          user_name -> "#{user_name}@#{garden.name}"
         end
       else
         name

@@ -6,13 +6,13 @@ With sower we sow the seeds of our systems.
 
 - A seed is an extra bundle of metadata for an artifact path, e.g. a Nix store path.
 - Seed metadata includes a set of tags, with git and user-provided tags.
-- An agent defines seeds they want to subscribe to.
+- A garden defines seeds they want to subscribe to.
 - Seeds are submitted to a server to be used for deployments.
 
 **WARNING**
 This project is experimental and is not recommended for production installation.
 One of the goals is never break deployments, but it is **not guaranteed yet**.
-I'm only using this in a homelab with approximately a dozen agents.
+I'm only using this in a homelab with approximately a dozen gardens.
 This means the risk to me of breaking deployments is moderately low.
 
 I'd love for others to get value out of what I'm building here.
@@ -20,24 +20,24 @@ Please reach out if you're a user, I want to chat. :)
 
 ## Installation
 
-Read the NixOS modules for the server and the agent. There is an example in nix/tests/e2e.nix
+Read the NixOS modules for the server and the garden. There is an example in nix/tests/e2e.nix
 
 1. An example server config exists in nix/tests/e2e.nix
-2. An example agent config is below.
+2. An example garden config is below.
 
 Good luck, everyone's counting on you.
 
 ## Components
 
 - Server including Phoenix LiveView web interface.
-- Always-on Agent with bi-directional communication with the Server over WebSockets.
-- Activator used by the Agent for running specific actions as root, over a systemd initiated socket.
+- Always-on end-system daemon (Garden) with bi-directional communication to the Server over real-time WebSocket connection.
+- Activator used by the Garden for running limited, specific actions as root, over a systemd initiated socket.
 - CLI for submitting seeds including a full code to submitted builder.
 
-### Agents
+### Gardens
 
-Agents have full control over what the seeds from the server can or will do.
-This is managed through their configuration.
+Gardens are an always on client, which have full control over what the seeds from the server can or will do.
+Through the garden's configuration, you can determine what the garden should subscribe to and what should happen when working with seeds for deployment.
 
 #### Subscriptions
 
@@ -54,13 +54,13 @@ Controls for what happens when the deploy occurs.
 - Arguments to pass to activation
 - Rules about rebooting (NixOS seeds only)
 
-#### Example agent config
+#### Example garden config
 
 ```nix
 {
   age.secrets.sower-next-api-token = {
     file = cfg.access_token_secret;
-    owner = "sower-agent";
+    owner = "sower-garden";
   };
 
   services.sower = {
@@ -69,10 +69,10 @@ Controls for what happens when the deploy occurs.
       allowedGroups = [ "users" ];
     };
 
-    agent = {
+    garden = {
       enable = true;
       accessTokenFile = config.age.secrets.sower-next-api-token.path;
-      package = inputs.sower-next.packages.${pkgs.stdenv.hostPlatform.system}.agent;
+      package = inputs.sower-next.packages.${pkgs.stdenv.hostPlatform.system}.garden;
 
       settings = {
         access_token_file = config.age.secrets.sower-next-api-token.path;

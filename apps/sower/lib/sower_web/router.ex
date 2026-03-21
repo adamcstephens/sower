@@ -41,17 +41,17 @@ defmodule SowerWeb.Router do
     pipe_through [:browser, :require_authenticated_user]
 
     live_session :authenticated, on_mount: [{SowerWeb.UserAuth, :ensure_authenticated}] do
-      live "/agents", AgentLive.Index, :index
-      live "/agents/new", AgentLive.Index, :new
-      live "/agents/:sid/edit", AgentLive.Index, :edit
-      live "/agents/:sid", AgentLive.Show, :show
-      live "/agents/:sid/show/edit", AgentLive.Show, :edit
+      live "/gardens", GardenLive.Index, :index
+      live "/gardens/new", GardenLive.Index, :new
+      live "/gardens/:sid/edit", GardenLive.Index, :edit
+      live "/gardens/:sid", GardenLive.Show, :show
+      live "/gardens/:sid/show/edit", GardenLive.Show, :edit
 
-      live "/agents/:agent_sid/subscriptions", SubscriptionLive.Index, :index
-      live "/agents/:agent_sid/subscriptions/new", SubscriptionLive.Index, :new
-      live "/agents/:agent_sid/subscriptions/:sid/edit", SubscriptionLive.Index, :edit
-      live "/agents/:agent_sid/subscriptions/:sid", SubscriptionLive.Show, :show
-      live "/agents/:agent_sid/subscriptions/:sid/show/edit", SubscriptionLive.Show, :edit
+      live "/gardens/:garden_sid/subscriptions", SubscriptionLive.Index, :index
+      live "/gardens/:garden_sid/subscriptions/new", SubscriptionLive.Index, :new
+      live "/gardens/:garden_sid/subscriptions/:sid/edit", SubscriptionLive.Index, :edit
+      live "/gardens/:garden_sid/subscriptions/:sid", SubscriptionLive.Show, :show
+      live "/gardens/:garden_sid/subscriptions/:sid/show/edit", SubscriptionLive.Show, :edit
 
       live "/deployments", DeploymentLive.Index, :index
       live "/deployments/:sid", DeploymentLive.Show, :show

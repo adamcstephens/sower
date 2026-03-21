@@ -74,22 +74,22 @@ defmodule PeerNode do
     start(node.instance)
   end
 
-  def start_agent(%__MODULE__{} = node) do
+  def start_garden(%__MODULE__{} = node) do
     set_config(node)
 
-    call(node, Application, :ensure_all_started, [:sower_agent])
+    call(node, Application, :ensure_all_started, [:garden])
   end
 
   def get_env(%__MODULE__{} = node, name) do
     call(node, Application, :get_env, [
-      :sower_agent,
+      :garden,
       name
     ])
   end
 
   def put_env(%__MODULE__{} = node, name, value) do
     call(node, Application, :put_env, [
-      :sower_agent,
+      :garden,
       name,
       value
     ])
@@ -101,7 +101,7 @@ defmodule PeerNode do
     put_env(
       node,
       :config,
-      Application.get_env(:sower_agent, :config)
+      Application.get_env(:garden, :config)
     )
 
     storage_dir = "/tmp/#{node.name}"
@@ -110,13 +110,13 @@ defmodule PeerNode do
 
     put_env(
       node,
-      SowerAgent.Storage,
+      Garden.Storage,
       file: "#{storage_dir}/storage.etf"
     )
 
     put_env(
       node,
-      SowerAgent.Client,
+      Garden.Socket,
       uri: "ws://#{:inet.ntoa(central_node_ip())}:7150/agent/websocket",
       reconnect_after_msec: [200, 500, 1000, 2000]
     )

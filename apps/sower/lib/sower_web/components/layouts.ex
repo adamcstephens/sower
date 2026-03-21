@@ -51,10 +51,10 @@ defmodule SowerWeb.Layouts do
               <ul class="mobile-nav-dropdown-panel absolute left-0 top-full z-50 mt-2 w-56 rounded-lg border border-zinc-300 bg-zinc-100 p-2 shadow-lg dark:border-zinc-600 dark:bg-zinc-700">
                 <li>
                   <.link
-                    navigate={~p"/agents"}
+                    navigate={~p"/gardens"}
                     class="block rounded-md px-3 py-2 hover:text-orange-700 hover:bg-zinc-200 dark:hover:text-orange-300 dark:hover:bg-zinc-600"
                   >
-                    Agents
+                    Gardens
                   </.link>
                 </li>
                 <li>
@@ -78,8 +78,11 @@ defmodule SowerWeb.Layouts do
 
             <ul class="hidden font-medium md:flex md:items-center md:space-x-8 rtl:space-x-reverse">
               <li>
-                <.link navigate={~p"/agents"} class="hover:text-orange-700 dark:hover:text-orange-300">
-                  Agents
+                <.link
+                  navigate={~p"/gardens"}
+                  class="hover:text-orange-700 dark:hover:text-orange-300"
+                >
+                  Gardens
                 </.link>
               </li>
               <li>

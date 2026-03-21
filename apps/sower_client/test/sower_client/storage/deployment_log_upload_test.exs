@@ -76,7 +76,7 @@ defmodule SowerClient.Storage.DeploymentLogUploadTest do
       assert reply.headers == %{}
     end
 
-    test "cast/1 with missing required fields fails" do
+    test "cast/1 with missing required gardens fails" do
       assert {:error, _} =
                PresignedUploadReply.cast(%{
                  "method" => "PUT",

@@ -1,7 +1,7 @@
 {
   imports = [
     ./activator.nix
-    ./agent.nix
+    ./garden.nix
     ./seed.nix
     ./server.nix
   ];

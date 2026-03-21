@@ -9,8 +9,12 @@ defmodule SowerClient do
       components: %OpenApiSpex.Components{schemas: %{}}
     }
     |> OpenApiSpex.add_schemas([
+      SowerClient.GardenHello,
       SowerClient.AgentHello,
       SowerClient.Auth.TokenInfo,
+      SowerClient.Orchestration.GardenSeedGeneration,
+      SowerClient.Orchestration.GardenSeedProfile,
+      SowerClient.Orchestration.GardenSeedsReport,
       SowerClient.Orchestration.AgentSeedGeneration,
       SowerClient.Orchestration.AgentSeedProfile,
       SowerClient.Orchestration.AgentSeedsReport,

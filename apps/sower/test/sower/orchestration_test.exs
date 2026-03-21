@@ -12,58 +12,58 @@ defmodule Sower.OrchestrationTest do
     %{organization: org}
   end
 
-  describe "agents" do
-    alias Sower.Orchestration.Agent
+  describe "gardens" do
+    alias Sower.Orchestration.Garden
 
     import Sower.OrchestrationFixtures
 
     @invalid_attrs %{name: nil}
 
-    test "list_agents/0 returns all agents" do
-      agent = agent_fixture()
-      assert Orchestration.list_agents() == [agent]
+    test "list_gardens/0 returns all gardens" do
+      garden = garden_fixture()
+      assert Orchestration.list_gardens() == [garden]
     end
 
-    test "get_agent!/1 returns the agent with given id" do
-      agent = agent_fixture()
-      assert Orchestration.get_agent!(agent.id) == agent
+    test "get_garden!/1 returns the garden with given id" do
+      garden = garden_fixture()
+      assert Orchestration.get_garden!(garden.id) == garden
     end
 
-    test "create_agent/1 with valid data creates a agent" do
-      valid_attrs = %{name: "some agent", local_sid: "some local_sid"}
+    test "create_garden/1 with valid data creates a garden" do
+      valid_attrs = %{name: "some garden", local_sid: "some local_sid"}
 
-      assert {:ok, %Agent{} = agent} = Orchestration.create_agent(valid_attrs)
-      assert agent.name == "some agent"
-      assert agent.local_sid == "some local_sid"
+      assert {:ok, %Garden{} = garden} = Orchestration.create_garden(valid_attrs)
+      assert garden.name == "some garden"
+      assert garden.local_sid == "some local_sid"
     end
 
-    test "create_agent/1 with invalid data returns error changeset" do
-      assert {:error, %Ecto.Changeset{}} = Orchestration.create_agent(@invalid_attrs)
+    test "create_garden/1 with invalid data returns error changeset" do
+      assert {:error, %Ecto.Changeset{}} = Orchestration.create_garden(@invalid_attrs)
     end
 
-    test "update_agent/2 with valid data updates the agent" do
-      agent = agent_fixture()
+    test "update_garden/2 with valid data updates the garden" do
+      garden = garden_fixture()
       update_attrs = %{local_sid: "some updated local_sid"}
 
-      assert {:ok, %Agent{} = agent} = Orchestration.update_agent(agent, update_attrs)
-      assert agent.local_sid == "some updated local_sid"
+      assert {:ok, %Garden{} = garden} = Orchestration.update_garden(garden, update_attrs)
+      assert garden.local_sid == "some updated local_sid"
     end
 
-    test "update_agent/2 with invalid data returns error changeset" do
-      agent = agent_fixture()
-      assert {:error, %Ecto.Changeset{}} = Orchestration.update_agent(agent, @invalid_attrs)
-      assert agent == Orchestration.get_agent!(agent.id)
+    test "update_garden/2 with invalid data returns error changeset" do
+      garden = garden_fixture()
+      assert {:error, %Ecto.Changeset{}} = Orchestration.update_garden(garden, @invalid_attrs)
+      assert garden == Orchestration.get_garden!(garden.id)
     end
 
-    test "delete_agent/1 deletes the agent" do
-      agent = agent_fixture()
-      assert {:ok, %Agent{}} = Orchestration.delete_agent(agent)
-      assert_raise Ecto.NoResultsError, fn -> Orchestration.get_agent!(agent.id) end
+    test "delete_garden/1 deletes the garden" do
+      garden = garden_fixture()
+      assert {:ok, %Garden{}} = Orchestration.delete_garden(garden)
+      assert_raise Ecto.NoResultsError, fn -> Orchestration.get_garden!(garden.id) end
     end
 
-    test "change_agent/1 returns a agent changeset" do
-      agent = agent_fixture()
-      assert %Ecto.Changeset{} = Orchestration.change_agent(agent)
+    test "change_garden/1 returns a garden changeset" do
+      garden = garden_fixture()
+      assert %Ecto.Changeset{} = Orchestration.change_garden(garden)
     end
   end
 
@@ -71,12 +71,12 @@ defmodule Sower.OrchestrationTest do
     import Sower.OrchestrationFixtures
 
     test "create_subscription/1 updates rules on conflict" do
-      agent = agent_fixture()
+      garden = garden_fixture()
 
       # Create initial subscription with rules
       {:ok, sub1} =
         Orchestration.create_subscription(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           seed_name: "myhost",
           seed_type: "nixos",
           rules: [%{key: "branch", op: "eq", value: "main"}]
@@ -85,10 +85,10 @@ defmodule Sower.OrchestrationTest do
       assert length(sub1.rules) == 1
       assert hd(sub1.rules).value == "main"
 
-      # Re-create with different rules (same agent, seed_name, seed_type)
+      # Re-create with different rules (same garden, seed_name, seed_type)
       {:ok, sub2} =
         Orchestration.create_subscription(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           seed_name: "myhost",
           seed_type: "nixos",
           rules: [%{key: "branch", op: "eq", value: "develop"}]
@@ -111,11 +111,11 @@ defmodule Sower.OrchestrationTest do
     import Sower.OrchestrationFixtures
 
     test "returns nil when no seed matches name and type" do
-      agent = agent_fixture()
+      garden = garden_fixture()
 
       subscription =
         subscription_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           seed_name: "nonexistent",
           seed_type: "nixos"
         })
@@ -124,12 +124,12 @@ defmodule Sower.OrchestrationTest do
     end
 
     test "returns seed when name and type match with no rules" do
-      agent = agent_fixture()
+      garden = garden_fixture()
       seed = seed_fixture(%{name: "myhost", seed_type: "nixos"})
 
       subscription =
         subscription_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           seed_name: "myhost",
           seed_type: "nixos"
         })
@@ -139,7 +139,7 @@ defmodule Sower.OrchestrationTest do
     end
 
     test "returns seed when single rule matches" do
-      agent = agent_fixture()
+      garden = garden_fixture()
 
       seed =
         seed_fixture(%{
@@ -150,7 +150,7 @@ defmodule Sower.OrchestrationTest do
 
       subscription =
         subscription_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           seed_name: "myhost",
           seed_type: "nixos",
           rules: [%{key: "branch", op: :eq, value: "main"}]
@@ -161,7 +161,7 @@ defmodule Sower.OrchestrationTest do
     end
 
     test "returns seed when all rules match" do
-      agent = agent_fixture()
+      garden = garden_fixture()
 
       seed =
         seed_fixture(%{
@@ -175,7 +175,7 @@ defmodule Sower.OrchestrationTest do
 
       subscription =
         subscription_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           seed_name: "myhost",
           seed_type: "nixos",
           rules: [
@@ -190,7 +190,7 @@ defmodule Sower.OrchestrationTest do
     end
 
     test "returns seed when all rules match even if seed has more tags" do
-      agent = agent_fixture()
+      garden = garden_fixture()
 
       seed =
         seed_fixture(%{
@@ -205,7 +205,7 @@ defmodule Sower.OrchestrationTest do
 
       subscription =
         subscription_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           seed_name: "myhost",
           seed_type: "nixos",
           rules: [
@@ -219,7 +219,7 @@ defmodule Sower.OrchestrationTest do
     end
 
     test "returns nil when rule does not match" do
-      agent = agent_fixture()
+      garden = garden_fixture()
 
       seed_fixture(%{
         name: "myhost",
@@ -229,7 +229,7 @@ defmodule Sower.OrchestrationTest do
 
       subscription =
         subscription_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           seed_name: "myhost",
           seed_type: "nixos",
           rules: [%{key: "branch", op: :eq, value: "main"}]
@@ -239,7 +239,7 @@ defmodule Sower.OrchestrationTest do
     end
 
     test "returns nil when only some rules match" do
-      agent = agent_fixture()
+      garden = garden_fixture()
 
       seed_fixture(%{
         name: "myhost",
@@ -251,7 +251,7 @@ defmodule Sower.OrchestrationTest do
 
       subscription =
         subscription_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           seed_name: "myhost",
           seed_type: "nixos",
           rules: [
@@ -264,7 +264,7 @@ defmodule Sower.OrchestrationTest do
     end
 
     test "returns latest seed when multiple seeds match" do
-      agent = agent_fixture()
+      garden = garden_fixture()
 
       artifact1 = random_nix_artifact()
       artifact2 = random_nix_artifact()
@@ -290,7 +290,7 @@ defmodule Sower.OrchestrationTest do
 
       subscription =
         subscription_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           seed_name: "myhost",
           seed_type: "nixos",
           rules: [%{key: "branch", op: :eq, value: "main"}]
@@ -306,7 +306,7 @@ defmodule Sower.OrchestrationTest do
   describe "nix_profiles" do
     alias Sower.Orchestration.NixProfile
 
-    test "changeset/2 validates required fields" do
+    test "changeset/2 validates required gardens" do
       changeset = NixProfile.changeset(%NixProfile{}, %{})
       refute changeset.valid?
       assert "can't be blank" in errors_on(changeset).profile_path
@@ -349,32 +349,32 @@ defmodule Sower.OrchestrationTest do
     end
   end
 
-  describe "agent_seed_generations" do
-    alias Sower.Orchestration.{AgentSeedGeneration, NixProfile}
+  describe "garden_seed_generations" do
+    alias Sower.Orchestration.{GardenSeedGeneration, NixProfile}
 
     import Sower.OrchestrationFixtures
 
-    test "changeset/2 validates required fields" do
-      changeset = AgentSeedGeneration.changeset(%AgentSeedGeneration{}, %{})
+    test "changeset/2 validates required gardens" do
+      changeset = GardenSeedGeneration.changeset(%GardenSeedGeneration{}, %{})
       refute changeset.valid?
 
       errors = errors_on(changeset)
       assert "can't be blank" in errors.org_id
-      assert "can't be blank" in errors.agent_id
+      assert "can't be blank" in errors.garden_id
       assert "can't be blank" in errors.seed_id
       assert "can't be blank" in errors.profile_id
       assert "can't be blank" in errors.created_at_generation
     end
 
     test "changeset/2 accepts valid attributes" do
-      agent = agent_fixture()
+      garden = garden_fixture()
       seed = seed_fixture()
       profile = nix_profile_fixture()
 
       changeset =
-        AgentSeedGeneration.changeset(%AgentSeedGeneration{}, %{
+        GardenSeedGeneration.changeset(%GardenSeedGeneration{}, %{
           org_id: Sower.Repo.get_org_id(),
-          agent_id: agent.id,
+          garden_id: garden.id,
           seed_id: seed.id,
           profile_id: profile.id,
           generation_number: 42,
@@ -385,16 +385,16 @@ defmodule Sower.OrchestrationTest do
       assert changeset.valid?
     end
 
-    test "list_for_agent/1 returns all profiles for agent ordered by generation_number desc" do
-      agent = agent_fixture()
+    test "list_for_garden/1 returns all profiles for garden ordered by generation_number desc" do
+      garden = garden_fixture()
       seed1 = seed_fixture()
       seed2 = seed_fixture()
       profile = nix_profile_fixture()
       now = DateTime.utc_now()
 
       asp1 =
-        agent_seed_generation_fixture(%{
-          agent_id: agent.id,
+        garden_seed_generation_fixture(%{
+          garden_id: garden.id,
           seed_id: seed1.id,
           profile_id: profile.id,
           generation_number: 1,
@@ -403,8 +403,8 @@ defmodule Sower.OrchestrationTest do
         })
 
       asp2 =
-        agent_seed_generation_fixture(%{
-          agent_id: agent.id,
+        garden_seed_generation_fixture(%{
+          garden_id: garden.id,
           seed_id: seed2.id,
           profile_id: profile.id,
           generation_number: 2,
@@ -412,23 +412,23 @@ defmodule Sower.OrchestrationTest do
           created_at_generation: now
         })
 
-      result = Orchestration.list_agent_seed_generation(agent)
+      result = Orchestration.list_garden_seed_generation(garden)
 
       assert length(result) == 2
       assert Enum.at(result, 0).id == asp2.id
       assert Enum.at(result, 1).id == asp1.id
     end
 
-    test "list_agent_seed_generation/1 returns only current profiles" do
-      agent = agent_fixture()
+    test "list_current_seed_generation/1 returns only current profiles" do
+      garden = garden_fixture()
       seed1 = seed_fixture()
       seed2 = seed_fixture()
       profile = nix_profile_fixture()
       now = DateTime.utc_now()
 
       _asp1 =
-        agent_seed_generation_fixture(%{
-          agent_id: agent.id,
+        garden_seed_generation_fixture(%{
+          garden_id: garden.id,
           seed_id: seed1.id,
           profile_id: profile.id,
           generation_number: 1,
@@ -437,8 +437,8 @@ defmodule Sower.OrchestrationTest do
         })
 
       asp2 =
-        agent_seed_generation_fixture(%{
-          agent_id: agent.id,
+        garden_seed_generation_fixture(%{
+          garden_id: garden.id,
           seed_id: seed2.id,
           profile_id: profile.id,
           generation_number: 2,
@@ -446,14 +446,14 @@ defmodule Sower.OrchestrationTest do
           created_at_generation: now
         })
 
-      result = Orchestration.list_current_seed_generation(agent)
+      result = Orchestration.list_current_seed_generation(garden)
 
       assert length(result) == 1
       assert hd(result).id == asp2.id
     end
 
-    test "list_for_agent_profile/2 returns profiles for specific agent and profile" do
-      agent = agent_fixture()
+    test "list_for_garden_profile/2 returns profiles for specific garden and profile" do
+      garden = garden_fixture()
       seed1 = seed_fixture()
       seed2 = seed_fixture()
       profile1 = nix_profile_fixture(%{profile_path: "/nix/var/nix/profiles/system"})
@@ -461,8 +461,8 @@ defmodule Sower.OrchestrationTest do
       now = DateTime.utc_now()
 
       asp1 =
-        agent_seed_generation_fixture(%{
-          agent_id: agent.id,
+        garden_seed_generation_fixture(%{
+          garden_id: garden.id,
           seed_id: seed1.id,
           profile_id: profile1.id,
           generation_number: 1,
@@ -471,8 +471,8 @@ defmodule Sower.OrchestrationTest do
         })
 
       _asp2 =
-        agent_seed_generation_fixture(%{
-          agent_id: agent.id,
+        garden_seed_generation_fixture(%{
+          garden_id: garden.id,
           seed_id: seed2.id,
           profile_id: profile2.id,
           generation_number: 1,
@@ -480,14 +480,14 @@ defmodule Sower.OrchestrationTest do
           created_at_generation: now
         })
 
-      result = Orchestration.list_agent_seed_generation_profile(agent.id, profile1.id)
+      result = Orchestration.list_garden_seed_generation_profile(garden.id, profile1.id)
 
       assert length(result) == 1
       assert hd(result).id == asp1.id
     end
 
     test "upsert_from_report/4 inserts new profile" do
-      agent = agent_fixture()
+      garden = garden_fixture()
       seed = seed_fixture()
       profile = nix_profile_fixture()
       now = DateTime.utc_now()
@@ -499,14 +499,14 @@ defmodule Sower.OrchestrationTest do
       }
 
       assert {:ok, asp} =
-               Orchestration.upsert_agent_generation(agent.id, profile.id, seed.id, attrs)
+               Orchestration.upsert_garden_generation(garden.id, profile.id, seed.id, attrs)
 
       assert asp.generation_number == 42
       assert asp.is_current == true
     end
 
     test "upsert_from_report/4 updates existing profile on conflict" do
-      agent = agent_fixture()
+      garden = garden_fixture()
       seed = seed_fixture()
       profile = nix_profile_fixture()
       now = DateTime.utc_now()
@@ -517,7 +517,7 @@ defmodule Sower.OrchestrationTest do
         created_at_generation: now
       }
 
-      {:ok, asp1} = Orchestration.upsert_agent_generation(agent.id, profile.id, seed.id, attrs1)
+      {:ok, asp1} = Orchestration.upsert_garden_generation(garden.id, profile.id, seed.id, attrs1)
       assert asp1.generation_number == 41
 
       attrs2 = %{
@@ -526,21 +526,21 @@ defmodule Sower.OrchestrationTest do
         created_at_generation: now
       }
 
-      {:ok, asp2} = Orchestration.upsert_agent_generation(agent.id, profile.id, seed.id, attrs2)
+      {:ok, asp2} = Orchestration.upsert_garden_generation(garden.id, profile.id, seed.id, attrs2)
       assert asp2.id == asp1.id
       assert asp2.generation_number == 42
       assert asp2.is_current == true
     end
 
-    test "unique constraint on agent_id and seed_id" do
-      agent = agent_fixture()
+    test "unique constraint on garden_id and seed_id" do
+      garden = garden_fixture()
       seed = seed_fixture()
       profile = nix_profile_fixture()
       now = DateTime.utc_now()
 
       _asp1 =
-        agent_seed_generation_fixture(%{
-          agent_id: agent.id,
+        garden_seed_generation_fixture(%{
+          garden_id: garden.id,
           seed_id: seed.id,
           profile_id: profile.id,
           generation_number: 1,
@@ -550,10 +550,10 @@ defmodule Sower.OrchestrationTest do
 
       # Attempting to insert a duplicate should fail
       result =
-        %AgentSeedGeneration{}
-        |> AgentSeedGeneration.changeset(%{
+        %GardenSeedGeneration{}
+        |> GardenSeedGeneration.changeset(%{
           org_id: Sower.Repo.get_org_id(),
-          agent_id: agent.id,
+          garden_id: garden.id,
           seed_id: seed.id,
           profile_id: profile.id,
           generation_number: 2,
@@ -563,18 +563,18 @@ defmodule Sower.OrchestrationTest do
         |> Sower.Repo.insert()
 
       assert {:error, changeset} = result
-      assert "has already been taken" in errors_on(changeset).agent_id
+      assert "has already been taken" in errors_on(changeset).garden_id
     end
 
-    test "deleting agent cascades to agent_seed_generations" do
-      agent = agent_fixture()
+    test "deleting garden cascades to garden_seed_generations" do
+      garden = garden_fixture()
       seed = seed_fixture()
       profile = nix_profile_fixture()
       now = DateTime.utc_now()
 
       asp =
-        agent_seed_generation_fixture(%{
-          agent_id: agent.id,
+        garden_seed_generation_fixture(%{
+          garden_id: garden.id,
           seed_id: seed.id,
           profile_id: profile.id,
           generation_number: 1,
@@ -582,30 +582,30 @@ defmodule Sower.OrchestrationTest do
           created_at_generation: now
         })
 
-      {:ok, _} = Orchestration.delete_agent(agent)
+      {:ok, _} = Orchestration.delete_garden(garden)
 
-      assert Orchestration.list_agent_seed_generation(agent) == []
-      assert Sower.Repo.get(AgentSeedGeneration, asp.id) == nil
+      assert Orchestration.list_garden_seed_generation(garden) == []
+      assert Sower.Repo.get(GardenSeedGeneration, asp.id) == nil
     end
   end
 
-  describe "update_agent_seed_generations/2 with auto-registration" do
-    alias Sower.Orchestration.{AgentSeedGeneration, NixProfile}
+  describe "update_garden_seed_generations/2 with auto-registration" do
+    alias Sower.Orchestration.{GardenSeedGeneration, NixProfile}
     alias Sower.Orchestration.Seed
 
     import Sower.OrchestrationFixtures
 
     test "auto-registers unknown artifacts as seeds" do
-      agent = agent_fixture()
+      garden = garden_fixture()
       artifact = "/nix/store/#{unique_hash()}-nixos-system-testhost-25.11"
 
-      report = %SowerClient.Orchestration.AgentSeedsReport{
+      report = %SowerClient.Orchestration.GardenSeedsReport{
         profiles: [
-          %SowerClient.Orchestration.AgentSeedProfile{
+          %SowerClient.Orchestration.GardenSeedProfile{
             profile_path: "/nix/var/nix/profiles/system",
             tags: %{},
             generations: [
-              %SowerClient.Orchestration.AgentSeedGeneration{
+              %SowerClient.Orchestration.GardenSeedGeneration{
                 path: artifact,
                 link: "/nix/var/nix/profiles/system-42-link",
                 created: DateTime.to_iso8601(DateTime.utc_now()),
@@ -617,7 +617,7 @@ defmodule Sower.OrchestrationTest do
         ]
       }
 
-      assert {:ok, :ok} = Orchestration.update_agent_seed_generations(report, agent)
+      assert {:ok, :ok} = Orchestration.update_garden_seed_generations(report, garden)
 
       # Verify seed was auto-registered
       seed = Seed.get_by_artifact(artifact)
@@ -626,39 +626,39 @@ defmodule Sower.OrchestrationTest do
       assert seed.seed_type == "nixos"
 
       assert Enum.any?(seed.tags, fn tag ->
-               tag.key == "agent_source" && tag.value == agent.sid
+               tag.key == "garden_source" && tag.value == garden.sid
              end)
 
       assert Enum.any?(seed.tags, fn tag ->
                tag.key == "nixos_version" && tag.value == "25.11"
              end)
 
-      # Verify agent_seed_generation was created
-      profiles = Orchestration.list_agent_seed_generation(agent)
+      # Verify garden_seed_generation was created
+      profiles = Orchestration.list_garden_seed_generation(garden)
       assert length(profiles) == 1
       assert hd(profiles).seed_id == seed.id
       assert hd(profiles).is_current == true
     end
 
     test "auto-registers multiple generations and sets is_current correctly" do
-      agent = agent_fixture()
+      garden = garden_fixture()
       artifact_current = "/nix/store/#{unique_hash()}-nixos-system-testhost-25.11"
       artifact_previous = "/nix/store/#{unique_hash()}-nixos-system-testhost-24.04"
 
-      report = %SowerClient.Orchestration.AgentSeedsReport{
+      report = %SowerClient.Orchestration.GardenSeedsReport{
         profiles: [
-          %SowerClient.Orchestration.AgentSeedProfile{
+          %SowerClient.Orchestration.GardenSeedProfile{
             profile_path: "/nix/var/nix/profiles/system",
             tags: %{},
             generations: [
-              %SowerClient.Orchestration.AgentSeedGeneration{
+              %SowerClient.Orchestration.GardenSeedGeneration{
                 path: artifact_current,
                 link: "/nix/var/nix/profiles/system-42-link",
                 created: DateTime.to_iso8601(DateTime.utc_now()),
                 generation_number: 42,
                 is_current: true
               },
-              %SowerClient.Orchestration.AgentSeedGeneration{
+              %SowerClient.Orchestration.GardenSeedGeneration{
                 path: artifact_previous,
                 link: "/nix/var/nix/profiles/system-41-link",
                 created: DateTime.to_iso8601(DateTime.add(DateTime.utc_now(), -86400, :second)),
@@ -670,14 +670,14 @@ defmodule Sower.OrchestrationTest do
         ]
       }
 
-      assert {:ok, :ok} = Orchestration.update_agent_seed_generations(report, agent)
+      assert {:ok, :ok} = Orchestration.update_garden_seed_generations(report, garden)
 
       # Both seeds should be auto-registered
       assert Seed.get_by_artifact(artifact_current) != nil
       assert Seed.get_by_artifact(artifact_previous) != nil
 
-      # Both should have agent_seed_generations
-      profiles = Orchestration.list_agent_seed_generation(agent)
+      # Both should have garden_seed_generations
+      profiles = Orchestration.list_garden_seed_generation(garden)
       assert length(profiles) == 2
 
       # Only one should be current
@@ -687,16 +687,16 @@ defmodule Sower.OrchestrationTest do
     end
 
     test "includes profile tags in auto-registered seeds" do
-      agent = agent_fixture()
+      garden = garden_fixture()
       artifact = "/nix/store/#{unique_hash()}-home-manager-generation"
 
-      report = %SowerClient.Orchestration.AgentSeedsReport{
+      report = %SowerClient.Orchestration.GardenSeedsReport{
         profiles: [
-          %SowerClient.Orchestration.AgentSeedProfile{
+          %SowerClient.Orchestration.GardenSeedProfile{
             profile_path: "/home/alice/.local/state/nix/profiles/home-manager",
             tags: %{"user" => "alice"},
             generations: [
-              %SowerClient.Orchestration.AgentSeedGeneration{
+              %SowerClient.Orchestration.GardenSeedGeneration{
                 path: artifact,
                 link: "/home/alice/.local/state/nix/profiles/home-manager-5-link",
                 created: DateTime.to_iso8601(DateTime.utc_now()),
@@ -708,25 +708,25 @@ defmodule Sower.OrchestrationTest do
         ]
       }
 
-      assert {:ok, :ok} = Orchestration.update_agent_seed_generations(report, agent)
+      assert {:ok, :ok} = Orchestration.update_garden_seed_generations(report, garden)
 
       seed = Seed.get_by_artifact(artifact)
       assert seed.seed_type == "home-manager"
       assert Enum.any?(seed.tags, fn tag -> tag.key == "user" && tag.value == "alice" end)
-      assert Enum.any?(seed.tags, fn tag -> tag.key == "agent_source" end)
+      assert Enum.any?(seed.tags, fn tag -> tag.key == "garden_source" end)
     end
 
     test "uses existing seed when artifact is already known" do
-      agent = agent_fixture()
+      garden = garden_fixture()
       existing = seed_fixture()
 
-      report = %SowerClient.Orchestration.AgentSeedsReport{
+      report = %SowerClient.Orchestration.GardenSeedsReport{
         profiles: [
-          %SowerClient.Orchestration.AgentSeedProfile{
+          %SowerClient.Orchestration.GardenSeedProfile{
             profile_path: "/nix/var/nix/profiles/system",
             tags: %{},
             generations: [
-              %SowerClient.Orchestration.AgentSeedGeneration{
+              %SowerClient.Orchestration.GardenSeedGeneration{
                 path: existing.artifact,
                 link: "/nix/var/nix/profiles/system-1-link",
                 created: DateTime.to_iso8601(DateTime.utc_now()),
@@ -738,34 +738,34 @@ defmodule Sower.OrchestrationTest do
         ]
       }
 
-      assert {:ok, :ok} = Orchestration.update_agent_seed_generations(report, agent)
+      assert {:ok, :ok} = Orchestration.update_garden_seed_generations(report, garden)
 
       # Should use existing seed, not create a new one
-      profiles = Orchestration.list_agent_seed_generation(agent)
+      profiles = Orchestration.list_garden_seed_generation(garden)
       assert length(profiles) == 1
       assert hd(profiles).seed_id == existing.id
     end
 
-    test "deletes stale agent_seed_generations for removed generations" do
-      agent = agent_fixture()
+    test "deletes stale garden_seed_generations for removed generations" do
+      garden = garden_fixture()
       artifact1 = "/nix/store/#{unique_hash()}-nixos-system-testhost-1"
       artifact2 = "/nix/store/#{unique_hash()}-nixos-system-testhost-2"
 
       # First report with two generations
-      report1 = %SowerClient.Orchestration.AgentSeedsReport{
+      report1 = %SowerClient.Orchestration.GardenSeedsReport{
         profiles: [
-          %SowerClient.Orchestration.AgentSeedProfile{
+          %SowerClient.Orchestration.GardenSeedProfile{
             profile_path: "/nix/var/nix/profiles/system",
             tags: %{},
             generations: [
-              %SowerClient.Orchestration.AgentSeedGeneration{
+              %SowerClient.Orchestration.GardenSeedGeneration{
                 path: artifact1,
                 link: "/nix/var/nix/profiles/system-1-link",
                 created: DateTime.to_iso8601(DateTime.utc_now()),
                 generation_number: 1,
                 is_current: false
               },
-              %SowerClient.Orchestration.AgentSeedGeneration{
+              %SowerClient.Orchestration.GardenSeedGeneration{
                 path: artifact2,
                 link: "/nix/var/nix/profiles/system-2-link",
                 created: DateTime.to_iso8601(DateTime.utc_now()),
@@ -777,17 +777,17 @@ defmodule Sower.OrchestrationTest do
         ]
       }
 
-      assert {:ok, :ok} = Orchestration.update_agent_seed_generations(report1, agent)
-      assert length(Orchestration.list_agent_seed_generation(agent)) == 2
+      assert {:ok, :ok} = Orchestration.update_garden_seed_generations(report1, garden)
+      assert length(Orchestration.list_garden_seed_generation(garden)) == 2
 
       # Second report with only one generation (simulating garbage collection)
-      report2 = %SowerClient.Orchestration.AgentSeedsReport{
+      report2 = %SowerClient.Orchestration.GardenSeedsReport{
         profiles: [
-          %SowerClient.Orchestration.AgentSeedProfile{
+          %SowerClient.Orchestration.GardenSeedProfile{
             profile_path: "/nix/var/nix/profiles/system",
             tags: %{},
             generations: [
-              %SowerClient.Orchestration.AgentSeedGeneration{
+              %SowerClient.Orchestration.GardenSeedGeneration{
                 path: artifact2,
                 link: "/nix/var/nix/profiles/system-2-link",
                 created: DateTime.to_iso8601(DateTime.utc_now()),
@@ -799,26 +799,26 @@ defmodule Sower.OrchestrationTest do
         ]
       }
 
-      assert {:ok, :ok} = Orchestration.update_agent_seed_generations(report2, agent)
+      assert {:ok, :ok} = Orchestration.update_garden_seed_generations(report2, garden)
 
-      # Should only have one agent_seed_generation now
-      profiles = Orchestration.list_agent_seed_generation(agent)
+      # Should only have one garden_seed_generation now
+      profiles = Orchestration.list_garden_seed_generation(garden)
       assert length(profiles) == 1
       assert hd(profiles).generation_number == 2
     end
 
     test "repeated identical reports do not advance generation id sequence" do
-      agent = agent_fixture()
+      garden = garden_fixture()
       artifact = "/nix/store/#{unique_hash()}-nixos-system-testhost-25.11"
       created_at = DateTime.to_iso8601(DateTime.utc_now())
 
-      report = %SowerClient.Orchestration.AgentSeedsReport{
+      report = %SowerClient.Orchestration.GardenSeedsReport{
         profiles: [
-          %SowerClient.Orchestration.AgentSeedProfile{
+          %SowerClient.Orchestration.GardenSeedProfile{
             profile_path: "/nix/var/nix/profiles/system",
             tags: %{},
             generations: [
-              %SowerClient.Orchestration.AgentSeedGeneration{
+              %SowerClient.Orchestration.GardenSeedGeneration{
                 path: artifact,
                 link: "/nix/var/nix/profiles/system-42-link",
                 created: created_at,
@@ -830,32 +830,32 @@ defmodule Sower.OrchestrationTest do
         ]
       }
 
-      assert {:ok, :ok} = Orchestration.update_agent_seed_generations(report, agent)
-      first_sequence_value = agent_seed_generation_sequence_last_value()
+      assert {:ok, :ok} = Orchestration.update_garden_seed_generations(report, garden)
+      first_sequence_value = garden_seed_generation_sequence_last_value()
 
-      [first_row] = Orchestration.list_agent_seed_generation(agent)
+      [first_row] = Orchestration.list_garden_seed_generation(garden)
 
-      assert {:ok, :ok} = Orchestration.update_agent_seed_generations(report, agent)
-      second_sequence_value = agent_seed_generation_sequence_last_value()
+      assert {:ok, :ok} = Orchestration.update_garden_seed_generations(report, garden)
+      second_sequence_value = garden_seed_generation_sequence_last_value()
 
-      [second_row] = Orchestration.list_agent_seed_generation(agent)
+      [second_row] = Orchestration.list_garden_seed_generation(garden)
 
       assert second_row.id == first_row.id
       assert second_sequence_value == first_sequence_value
     end
 
     test "handles multiple profiles (NixOS + home-manager)" do
-      agent = agent_fixture()
+      garden = garden_fixture()
       nixos_artifact = "/nix/store/#{unique_hash()}-nixos-system-testhost"
       hm_artifact = "/nix/store/#{unique_hash()}-home-manager-generation"
 
-      report = %SowerClient.Orchestration.AgentSeedsReport{
+      report = %SowerClient.Orchestration.GardenSeedsReport{
         profiles: [
-          %SowerClient.Orchestration.AgentSeedProfile{
+          %SowerClient.Orchestration.GardenSeedProfile{
             profile_path: "/nix/var/nix/profiles/system",
             tags: %{},
             generations: [
-              %SowerClient.Orchestration.AgentSeedGeneration{
+              %SowerClient.Orchestration.GardenSeedGeneration{
                 path: nixos_artifact,
                 link: "/nix/var/nix/profiles/system-42-link",
                 created: DateTime.to_iso8601(DateTime.utc_now()),
@@ -864,11 +864,11 @@ defmodule Sower.OrchestrationTest do
               }
             ]
           },
-          %SowerClient.Orchestration.AgentSeedProfile{
+          %SowerClient.Orchestration.GardenSeedProfile{
             profile_path: "/home/testuser/.local/state/nix/profiles/home-manager",
             tags: %{"user" => "testuser"},
             generations: [
-              %SowerClient.Orchestration.AgentSeedGeneration{
+              %SowerClient.Orchestration.GardenSeedGeneration{
                 path: hm_artifact,
                 link: "/home/testuser/.local/state/nix/profiles/home-manager-10-link",
                 created: DateTime.to_iso8601(DateTime.utc_now()),
@@ -880,9 +880,9 @@ defmodule Sower.OrchestrationTest do
         ]
       }
 
-      assert {:ok, :ok} = Orchestration.update_agent_seed_generations(report, agent)
+      assert {:ok, :ok} = Orchestration.update_garden_seed_generations(report, garden)
 
-      profiles = Orchestration.list_agent_seed_generation(agent)
+      profiles = Orchestration.list_garden_seed_generation(garden)
       assert length(profiles) == 2
 
       nixos_seed = Seed.get_by_artifact(nixos_artifact)
@@ -906,12 +906,12 @@ defmodule Sower.OrchestrationTest do
 
     @tag :capture_log
     test "returns immediate request_id for valid deployment request", %{organization: _org} do
-      agent = agent_fixture()
+      garden = garden_fixture()
       _seed = seed_fixture(%{name: "testhost", seed_type: "nixos"})
 
       subscription =
         subscription_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           seed_name: "testhost",
           seed_type: "nixos"
         })
@@ -923,43 +923,43 @@ defmodule Sower.OrchestrationTest do
         "force" => false
       }
 
-      assert {:ok, request_id} = Orchestration.handle_deployment_request(payload, agent)
+      assert {:ok, request_id} = Orchestration.handle_deployment_request(payload, garden)
       assert is_binary(request_id)
     end
 
     test "returns error for deployment request with unauthorized subscription", %{
       organization: _org
     } do
-      agent1 = agent_fixture()
-      agent2 = agent_fixture()
+      garden1 = garden_fixture()
+      garden2 = garden_fixture()
 
-      # Create subscription for agent1
+      # Create subscription for garden1
       subscription =
         subscription_fixture(%{
-          agent_id: agent1.id,
+          garden_id: garden1.id,
           seed_name: "testhost",
           seed_type: "nixos"
         })
 
-      # Try to use agent2's subscription with agent1's context (should fail)
+      # Try to use garden2's subscription with garden1's context (should fail)
       payload = %{
         "subscription_sids" => [subscription.sid],
         "force" => false
       }
 
-      # This should be rejected because agent2 doesn't own the subscription
-      result = Orchestration.handle_deployment_request(payload, agent2)
+      # This should be rejected because garden2 doesn't own the subscription
+      result = Orchestration.handle_deployment_request(payload, garden2)
       assert result == {:error, :unauthorized}
     end
 
     @tag :capture_log
     test "process_deployment returns request_id and starts async task", %{organization: _org} do
-      agent = agent_fixture()
+      garden = garden_fixture()
       _seed = seed_fixture(%{name: "testhost", seed_type: "nixos"})
 
       subscription =
         subscription_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           seed_name: "testhost",
           seed_type: "nixos"
         })
@@ -967,17 +967,17 @@ defmodule Sower.OrchestrationTest do
       request_id = "dr_test_#{System.unique_integer([:positive])}"
 
       assert {:ok, ^request_id} =
-               Orchestration.process_deployment(request_id, [subscription], agent)
+               Orchestration.process_deployment(request_id, [subscription], garden)
     end
 
     @tag :capture_log
     test "process_deployment handles error case with no matching seeds", %{organization: _org} do
-      agent = agent_fixture()
+      garden = garden_fixture()
 
       # Create subscription with no matching seed
       subscription =
         subscription_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           seed_name: "nonexistent",
           seed_type: "nixos"
         })
@@ -985,7 +985,7 @@ defmodule Sower.OrchestrationTest do
       request_id = "dr_test_error_#{System.unique_integer([:positive])}"
 
       assert {:ok, ^request_id} =
-               Orchestration.process_deployment(request_id, [subscription], agent)
+               Orchestration.process_deployment(request_id, [subscription], garden)
     end
   end
 
@@ -993,19 +993,19 @@ defmodule Sower.OrchestrationTest do
     import Sower.OrchestrationFixtures
 
     test "replays unresolved deployments and updates dispatch timestamp", %{organization: _org} do
-      agent = agent_fixture()
+      garden = garden_fixture()
       seed = seed_fixture(%{name: "replay-host", seed_type: "nixos"})
 
       subscription =
         subscription_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           seed_name: seed.name,
           seed_type: seed.seed_type
         })
 
       unresolved =
         deployment_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           seeds: [seed],
           subscriptions: [subscription],
           result: nil,
@@ -1014,7 +1014,7 @@ defmodule Sower.OrchestrationTest do
 
       _terminal =
         deployment_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           seeds: [seed],
           subscriptions: [subscription],
           result: :success,
@@ -1023,10 +1023,10 @@ defmodule Sower.OrchestrationTest do
         })
 
       replayed_at = DateTime.utc_now() |> DateTime.truncate(:second)
-      Phoenix.PubSub.subscribe(Sower.PubSub, "agent:#{agent.sid}")
+      Phoenix.PubSub.subscribe(Sower.PubSub, "agent:#{garden.sid}")
 
       assert {:ok, deployments} =
-               Orchestration.replay_unresolved_deployments(agent,
+               Orchestration.replay_unresolved_deployments(garden,
                  now: replayed_at,
                  request_id_fun: fn -> "request_replay_1" end
                )
@@ -1039,7 +1039,7 @@ defmodule Sower.OrchestrationTest do
         payload: payload
       }
 
-      assert topic == "agent:#{agent.sid}"
+      assert topic == "agent:#{garden.sid}"
       assert payload.sid == unresolved.sid
       assert payload.skipped == false
       assert payload.request_id == "request_replay_1"
@@ -1060,11 +1060,11 @@ defmodule Sower.OrchestrationTest do
       now = DateTime.utc_now() |> DateTime.truncate(:second)
       old_dispatch = DateTime.add(now, -8_000, :second)
       fresh_dispatch = DateTime.add(now, -100, :second)
-      agent = agent_fixture()
+      garden = garden_fixture()
 
       stale =
         deployment_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           result: nil,
           deployed_at: nil,
           state: :dispatched,
@@ -1073,7 +1073,7 @@ defmodule Sower.OrchestrationTest do
 
       fresh =
         deployment_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           result: nil,
           deployed_at: nil,
           state: :dispatched,
@@ -1104,11 +1104,11 @@ defmodule Sower.OrchestrationTest do
       user = user_fixture(%{org_id: org.org_id})
       now = DateTime.utc_now() |> DateTime.truncate(:second)
       old_dispatch = DateTime.add(now, -10_000, :second)
-      agent = agent_fixture()
+      garden = garden_fixture()
 
       parent =
         deployment_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           result: :success,
           state: :completed,
           deployed_at: DateTime.utc_now()
@@ -1116,7 +1116,7 @@ defmodule Sower.OrchestrationTest do
 
       _child =
         deployment_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           parent_deployment_id: parent.id,
           retry_ordinal: 1,
           retried_by_user_id: user.id,
@@ -1145,11 +1145,11 @@ defmodule Sower.OrchestrationTest do
       now = DateTime.utc_now() |> DateTime.truncate(:second)
       old_dispatch = DateTime.add(now, -8_000, :second)
       later = DateTime.add(now, 60, :second)
-      agent = agent_fixture()
+      garden = garden_fixture()
 
       deployment =
         deployment_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           result: nil,
           state: :dispatched,
           deployed_at: nil,
@@ -1184,12 +1184,12 @@ defmodule Sower.OrchestrationTest do
     import Sower.OrchestrationFixtures
 
     test "non-force request skips duplicate successful deployment", %{organization: _org} do
-      agent = agent_fixture()
+      garden = garden_fixture()
       _seed = seed_fixture(%{name: "retry-host", seed_type: "nixos"})
 
       subscription =
         subscription_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           seed_name: "retry-host",
           seed_type: "nixos"
         })
@@ -1216,12 +1216,12 @@ defmodule Sower.OrchestrationTest do
          %{
            organization: _org
          } do
-      agent = agent_fixture()
+      garden = garden_fixture()
       _seed = seed_fixture(%{name: "retry-host", seed_type: "nixos"})
 
       subscription =
         subscription_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           seed_name: "retry-host",
           seed_type: "nixos"
         })
@@ -1251,19 +1251,19 @@ defmodule Sower.OrchestrationTest do
 
     test "creates retry deployment for successful deployment", %{organization: org} do
       user = user_fixture(%{org_id: org.org_id})
-      agent = agent_fixture()
+      garden = garden_fixture()
       seed = seed_fixture()
 
       subscription =
         subscription_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           seed_name: seed.name,
           seed_type: seed.seed_type
         })
 
       deployment =
         deployment_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           seeds: [seed],
           subscriptions: [subscription],
           result: :success,
@@ -1282,11 +1282,11 @@ defmodule Sower.OrchestrationTest do
 
     test "creates retry deployment for failed deployment", %{organization: org} do
       user = user_fixture(%{org_id: org.org_id})
-      agent = agent_fixture()
+      garden = garden_fixture()
 
       deployment =
         deployment_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           result: :failure,
           deployed_at: DateTime.utc_now()
         })
@@ -1297,11 +1297,11 @@ defmodule Sower.OrchestrationTest do
 
     test "rejects retries for non-terminal deployment", %{organization: org} do
       user = user_fixture(%{org_id: org.org_id})
-      agent = agent_fixture()
+      garden = garden_fixture()
 
       deployment =
         deployment_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           result: nil,
           deployed_at: nil
         })
@@ -1315,11 +1315,11 @@ defmodule Sower.OrchestrationTest do
       owner_org_id = owner_user.org_id
       Sower.Repo.put_org_id(owner_org_id)
 
-      agent = agent_fixture()
+      garden = garden_fixture()
 
       deployment =
         deployment_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           result: :success,
           deployed_at: DateTime.utc_now()
         })
@@ -1332,11 +1332,11 @@ defmodule Sower.OrchestrationTest do
 
     test "blocks concurrent duplicate retries while retry is in progress", %{organization: org} do
       user = user_fixture(%{org_id: org.org_id})
-      agent = agent_fixture()
+      garden = garden_fixture()
 
       deployment =
         deployment_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           result: :success,
           deployed_at: DateTime.utc_now()
         })
@@ -1347,26 +1347,26 @@ defmodule Sower.OrchestrationTest do
 
     test "broadcasts deployment event to agent topic when retry is created", %{organization: org} do
       user = user_fixture(%{org_id: org.org_id})
-      agent = agent_fixture()
+      garden = garden_fixture()
       seed = seed_fixture(%{name: "kale", seed_type: "home-manager"})
 
       subscription =
         subscription_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           seed_name: seed.name,
           seed_type: seed.seed_type
         })
 
       deployment =
         deployment_fixture(%{
-          agent_id: agent.id,
+          garden_id: garden.id,
           seeds: [seed],
           subscriptions: [subscription],
           result: :success,
           deployed_at: DateTime.utc_now()
         })
 
-      Phoenix.PubSub.subscribe(Sower.PubSub, "agent:#{agent.sid}")
+      Phoenix.PubSub.subscribe(Sower.PubSub, "agent:#{garden.sid}")
 
       assert {:ok, retried} = Orchestration.retry_deployment(deployment, user.id)
 
@@ -1376,7 +1376,7 @@ defmodule Sower.OrchestrationTest do
         payload: payload
       }
 
-      assert topic == "agent:#{agent.sid}"
+      assert topic == "agent:#{garden.sid}"
       assert payload.sid == retried.sid
       assert payload.skipped == false
       assert is_binary(payload.request_id)
@@ -1388,7 +1388,7 @@ defmodule Sower.OrchestrationTest do
     :crypto.strong_rand_bytes(16) |> Base.encode32(case: :lower) |> String.slice(0, 32)
   end
 
-  defp agent_seed_generation_sequence_last_value do
+  defp garden_seed_generation_sequence_last_value do
     %Postgrex.Result{rows: [[last_value]]} =
       Ecto.Adapters.SQL.query!(
         Sower.Repo,

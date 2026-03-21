@@ -15,12 +15,12 @@ defmodule Sower.Orchestration.DeploymentPubSubTest do
   end
 
   test "broadcast_deployment_change/2 publishes per-deployment topic", %{organization: org} do
-    agent = agent_fixture(%{org_id: org.org_id})
+    garden = garden_fixture(%{org_id: org.org_id})
     seed = seed_fixture(%{org_id: org.org_id, name: "seed", seed_type: "nixos"})
 
     subscription =
       subscription_fixture(%{
-        agent_id: agent.id,
+        garden_id: garden.id,
         seed_name: seed.name,
         seed_type: seed.seed_type
       })
@@ -28,14 +28,14 @@ defmodule Sower.Orchestration.DeploymentPubSubTest do
     deployment =
       deployment_fixture(%{
         org_id: org.org_id,
-        agent_id: agent.id,
+        garden_id: garden.id,
         seeds: [seed],
         subscriptions: [subscription]
       })
 
     Phoenix.PubSub.subscribe(Sower.PubSub, "deployments")
     Phoenix.PubSub.subscribe(Sower.PubSub, "deployment:#{deployment.sid}")
-    Phoenix.PubSub.subscribe(Sower.PubSub, "deployments:agent:#{agent.sid}")
+    Phoenix.PubSub.subscribe(Sower.PubSub, "deployments:garden:#{garden.sid}")
     Phoenix.PubSub.subscribe(Sower.PubSub, "deployments:subscription:#{subscription.sid}")
 
     assert {:ok, _deployment} = DeploymentPubSub.broadcast_deployment_change(deployment, :updated)

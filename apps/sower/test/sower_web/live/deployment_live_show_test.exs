@@ -13,12 +13,12 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
   test "renders seed deployment logs and toggles inline log panel", %{conn: conn, user: user} do
     Sower.Repo.put_org_id(user.org_id)
 
-    agent = agent_fixture()
+    garden = garden_fixture()
     seed = seed_fixture()
 
     deployment =
       deployment_fixture(%{
-        agent_id: agent.id,
+        garden_id: garden.id,
         seeds: [seed],
         subscriptions: []
       })
@@ -54,11 +54,11 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
   test "shows empty state when deployment has no seeds", %{conn: conn, user: user} do
     Sower.Repo.put_org_id(user.org_id)
 
-    agent = agent_fixture()
+    garden = garden_fixture()
 
     deployment =
       deployment_fixture(%{
-        agent_id: agent.id,
+        garden_id: garden.id,
         seeds: [],
         subscriptions: []
       })
@@ -71,11 +71,11 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
 
   test "subscribes to per-deployment topic on mount", %{conn: conn, user: user} do
     Sower.Repo.put_org_id(user.org_id)
-    agent = agent_fixture()
+    garden = garden_fixture()
 
     current_deployment =
       deployment_fixture(%{
-        agent_id: agent.id,
+        garden_id: garden.id,
         result: nil,
         state: :dispatched,
         deployed_at: nil
@@ -83,7 +83,7 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
 
     other_deployment =
       deployment_fixture(%{
-        agent_id: agent.id,
+        garden_id: garden.id,
         result: nil,
         state: :dispatched,
         deployed_at: nil
@@ -104,11 +104,11 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
 
   test "refreshes deployment when update is broadcast", %{conn: conn, user: user} do
     Sower.Repo.put_org_id(user.org_id)
-    agent = agent_fixture()
+    garden = garden_fixture()
 
     deployment =
       deployment_fixture(%{
-        agent_id: agent.id,
+        garden_id: garden.id,
         result: nil,
         state: :dispatched,
         deployed_at: nil
@@ -132,11 +132,11 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
 
   test "cleans up PubSub subscription on LiveView termination", %{conn: conn, user: user} do
     Sower.Repo.put_org_id(user.org_id)
-    agent = agent_fixture()
+    garden = garden_fixture()
 
     deployment =
       deployment_fixture(%{
-        agent_id: agent.id,
+        garden_id: garden.id,
         result: nil,
         state: :dispatched,
         deployed_at: nil
@@ -175,11 +175,11 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
 
   test "shows retry button only for terminal deployments", %{conn: conn, user: user} do
     Sower.Repo.put_org_id(user.org_id)
-    agent = agent_fixture()
+    garden = garden_fixture()
 
     successful_deployment =
       deployment_fixture(%{
-        agent_id: agent.id,
+        garden_id: garden.id,
         result: :success,
         state: :completed,
         deployed_at: DateTime.utc_now()
@@ -187,7 +187,7 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
 
     running_deployment =
       deployment_fixture(%{
-        agent_id: agent.id,
+        garden_id: garden.id,
         result: nil,
         state: :dispatched,
         deployed_at: nil
@@ -204,11 +204,11 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
 
   test "creates a retry deployment from the show page", %{conn: conn, user: user} do
     Sower.Repo.put_org_id(user.org_id)
-    agent = agent_fixture()
+    garden = garden_fixture()
 
     deployment =
       deployment_fixture(%{
-        agent_id: agent.id,
+        garden_id: garden.id,
         result: :success,
         state: :completed,
         deployed_at: DateTime.utc_now()
@@ -228,18 +228,18 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
 
   test "shows error when retry is already in progress", %{conn: conn, user: user} do
     Sower.Repo.put_org_id(user.org_id)
-    agent = agent_fixture()
+    garden = garden_fixture()
 
     parent =
       deployment_fixture(%{
-        agent_id: agent.id,
+        garden_id: garden.id,
         result: :success,
         state: :completed,
         deployed_at: DateTime.utc_now()
       })
 
     deployment_fixture(%{
-      agent_id: agent.id,
+      garden_id: garden.id,
       parent_deployment_id: parent.id,
       retry_ordinal: 1,
       retried_by_user_id: user.id,

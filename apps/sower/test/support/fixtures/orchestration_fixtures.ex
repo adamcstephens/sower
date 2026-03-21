@@ -5,19 +5,19 @@ defmodule Sower.OrchestrationFixtures do
   """
 
   @doc """
-  Generate a agent.
+  Generate a garden.
   """
-  def agent_fixture(attrs \\ %{}) do
-    {:ok, agent} =
+  def garden_fixture(attrs \\ %{}) do
+    {:ok, garden} =
       attrs
       |> Enum.into(%{
-        name: SowerClient.Sid.generate("agent"),
+        name: SowerClient.Sid.generate("grdn"),
         local_sid: "some local_sid",
         sid: "some sid"
       })
-      |> Sower.Orchestration.create_agent()
+      |> Sower.Orchestration.create_garden()
 
-    agent
+    garden
   end
 
   @doc """
@@ -54,10 +54,10 @@ defmodule Sower.OrchestrationFixtures do
   end
 
   @doc """
-  Generate an agent_seed_generation.
+  Generate a garden_seed_generation.
   """
-  def agent_seed_generation_fixture(attrs \\ %{}) do
-    alias Sower.Orchestration.AgentSeedGeneration
+  def garden_seed_generation_fixture(attrs \\ %{}) do
+    alias Sower.Orchestration.GardenSeedGeneration
 
     attrs =
       attrs
@@ -68,8 +68,8 @@ defmodule Sower.OrchestrationFixtures do
         created_at_generation: DateTime.utc_now()
       })
 
-    %AgentSeedGeneration{}
-    |> AgentSeedGeneration.changeset(attrs)
+    %GardenSeedGeneration{}
+    |> GardenSeedGeneration.changeset(attrs)
     |> Sower.Repo.insert!()
   end
 end

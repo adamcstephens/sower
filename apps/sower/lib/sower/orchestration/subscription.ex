@@ -4,7 +4,7 @@ defmodule Sower.Orchestration.Subscription do
   import Ecto.Query, warn: false
 
   alias Sower.Repo
-  alias Sower.Orchestration.{Agent, Deployment, SubscriptionDeployment}
+  alias Sower.Orchestration.{Garden, Deployment, SubscriptionDeployment}
 
   @derive {Jason.Encoder, only: [:sid]}
   @derive {Phoenix.Param, key: :sid}
@@ -13,7 +13,7 @@ defmodule Sower.Orchestration.Subscription do
     field :sid, SowerClient.Sid, autogenerate: true
     field :org_id, Ecto.UUID
 
-    belongs_to :agent, Agent
+    belongs_to :garden, Garden
 
     many_to_many :deployments, Deployment, join_through: SubscriptionDeployment
 
@@ -27,25 +27,25 @@ defmodule Sower.Orchestration.Subscription do
   @doc false
   def changeset(subscription, attrs) do
     subscription
-    |> cast(attrs, [:agent_id, :seed_name, :seed_type])
+    |> cast(attrs, [:garden_id, :seed_name, :seed_type])
     |> cast_embed(:rules, with: &__MODULE__.Rule.changeset/2)
-    |> unique_constraint([:agent_id, :org_id, :seed_name, :seed_type])
+    |> unique_constraint([:garden_id, :org_id, :seed_name, :seed_type])
   end
 
   def list_subscriptions do
     Repo.all(__MODULE__)
-    |> Repo.preload([:agent])
+    |> Repo.preload([:garden])
   end
 
-  def list_subscriptions_for_agent(%Agent{} = agent) do
+  def list_subscriptions_for_garden(%Garden{} = garden) do
     __MODULE__
-    |> where([s], s.agent_id == ^agent.id)
+    |> where([s], s.garden_id == ^garden.id)
     |> Repo.all()
   end
 
   def get_subscription!(id) do
     Repo.get!(__MODULE__, id)
-    |> Repo.preload(:agent)
+    |> Repo.preload(:garden)
   end
 
   def get_subscription_sid!(sid), do: Repo.get_by!(__MODULE__, sid: sid)
@@ -59,7 +59,7 @@ defmodule Sower.Orchestration.Subscription do
     subscription = get_subscription_sid!(sid)
 
     Repo.preload(subscription, [
-      :agent,
+      :garden,
       deployments:
         from(d in Deployment,
           order_by: [
@@ -74,7 +74,7 @@ defmodule Sower.Orchestration.Subscription do
   def get_subscription_sid_with_deployments(sid) do
     get_subscription_sid(sid)
     |> Repo.preload([
-      :agent,
+      :garden,
       deployments:
         from(d in Deployment,
           order_by: [
@@ -131,7 +131,7 @@ defmodule Sower.Orchestration.Subscription do
          |> changeset(attrs)
          |> Repo.insert(
            on_conflict: {:replace, [:updated_at, :rules]},
-           conflict_target: [:agent_id, :org_id, :seed_name, :seed_type],
+           conflict_target: [:garden_id, :org_id, :seed_name, :seed_type],
            returning: true
          ) do
       {:ok, sub} -> {:ok, Repo.reload(sub)}
@@ -145,10 +145,10 @@ defmodule Sower.Orchestration.Subscription do
           seed_type: seed_type,
           rules: rules
         },
-        agent_id
+        garden_id
       ) do
     case create_subscription(%{
-           agent_id: agent_id,
+           garden_id: garden_id,
            seed_name: seed_name,
            seed_type: seed_type,
            rules: rules
@@ -161,11 +161,11 @@ defmodule Sower.Orchestration.Subscription do
     end
   end
 
-  def sync_subscriptions(subscriptions, agent_id) do
+  def sync_subscriptions(subscriptions, garden_id) do
     Repo.transaction(fn ->
       registered =
         Enum.map(subscriptions, fn sub ->
-          case register_subscription(sub, agent_id) do
+          case register_subscription(sub, garden_id) do
             {:ok, s} -> s
             {:error, reason} -> Repo.rollback(reason)
           end
@@ -174,7 +174,7 @@ defmodule Sower.Orchestration.Subscription do
       registered_sids = Enum.map(registered, & &1.sid)
 
       from(s in __MODULE__,
-        where: s.agent_id == ^agent_id,
+        where: s.garden_id == ^garden_id,
         where: s.sid not in ^registered_sids
       )
       |> Repo.delete_all()
@@ -195,7 +195,7 @@ defmodule Sower.Orchestration.Subscription do
 
   def change_subscription(%__MODULE__{} = subscription, attrs \\ %{}) do
     subscription
-    |> Repo.preload(:agent)
+    |> Repo.preload(:garden)
     |> changeset(attrs)
   end
 

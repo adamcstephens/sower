@@ -5,18 +5,69 @@
   ...
 }:
 let
-  cfg = config.services.sower.agent;
+  cfg = config.services.sower.garden;
   json = pkgs.formats.json { };
   jsonType = json.type;
 
   jsonConfig = json.generate "sower-client.json" cfg.settings;
 
-  stateDir = "${config.xdg.stateHome}/sower-agent";
+  stateDir = "${config.xdg.stateHome}/sower-garden";
+
+  oldStateDir = "${config.xdg.stateHome}/sower-agent";
+
+  migrationScript = pkgs.writeShellApplication {
+    name = "sower-garden-migrate";
+    text = ''
+      if [ -d ${oldStateDir} ] && [ ! -d ${stateDir} ]; then
+        mv ${oldStateDir} ${stateDir}
+      fi
+    '';
+  };
+
+  secretsScript = pkgs.writeShellApplication {
+    name = "sower-garden-init-secrets";
+    runtimeInputs = [ pkgs.openssl ];
+    text = ''
+      mkdir -p ${stateDir}
+      if [ ! -e ${stateDir}/release-cookie ]; then
+        openssl rand -hex 48 > ${stateDir}/release-cookie
+      fi
+    '';
+  };
+
+  startScript = pkgs.writeShellApplication {
+    name = "sower-garden-start";
+    text = ''
+      RELEASE_COOKIE=$(cat ${stateDir}/release-cookie)
+      export RELEASE_COOKIE
+      exec ${lib.getExe cfg.package} start
+    '';
+  };
+
+  stopScript = pkgs.writeShellApplication {
+    name = "sower-garden-stop";
+    text = ''
+      RELEASE_COOKIE=$(cat ${stateDir}/release-cookie)
+      export RELEASE_COOKIE
+      PID=$(${lib.getExe cfg.package} pid)
+      ${lib.getExe cfg.package} stop
+      while [ -d "/proc/$PID" ]; do sleep 1; done
+    '';
+  };
+
+  reloadScript = pkgs.writeShellApplication {
+    name = "sower-garden-reload";
+    text = ''
+      RELEASE_COOKIE=$(cat ${stateDir}/release-cookie)
+      export RELEASE_COOKIE
+      ${lib.getExe cfg.package} rpc "Garden.request_reload()"
+    '';
+  };
 in
 {
   options = {
-    services.sower.agent = {
-      enable = lib.mkEnableOption "Sower agent";
+    services.sower.garden = {
+      enable = lib.mkEnableOption "Sower garden";
 
       package = lib.mkOption { type = lib.types.package; };
 
@@ -34,7 +85,7 @@ in
 
           options = { };
         };
-        description = "Sower agent configuration file";
+        description = "Sower garden configuration file";
         default = { };
       };
     };
@@ -49,7 +100,7 @@ in
       }
 
       (lib.mkIf pkgs.stdenv.isLinux {
-        systemd.user.services.sower-agent = {
+        systemd.user.services.sower-garden = {
           Service = {
             Environment = [
               "PATH=/run/current-system/sw/bin:${
@@ -66,29 +117,13 @@ in
               "SOWER_ACCESS_TOKEN_FILE=${cfg.accessTokenFile}"
             ];
 
-            ExecStartPre = pkgs.writeShellScript "sower-agent-init" ''
-              mkdir -p ${stateDir}
-              if [ ! -e ${stateDir}/release-cookie ]; then
-                ${lib.getExe pkgs.openssl} rand -hex 48 > ${stateDir}/release-cookie
-              fi
-            '';
-            ExecStart = pkgs.writeShellScript "sower-agent-start" ''
-              RELEASE_COOKIE=$(cat ${stateDir}/release-cookie)
-              export RELEASE_COOKIE
-              exec ${lib.getExe cfg.package} start
-            '';
-            ExecStop = pkgs.writeShellScript "sower-agent-stop" ''
-              RELEASE_COOKIE=$(cat ${stateDir}/release-cookie)
-              export RELEASE_COOKIE
-              PID=$(${lib.getExe cfg.package} pid)
-              ${lib.getExe cfg.package} stop
-              while [ -d "/proc/$PID" ]; do sleep 1; done
-            '';
-            ExecReload = pkgs.writeShellScript "sower-agent-reload" ''
-              RELEASE_COOKIE=$(cat ${stateDir}/release-cookie)
-              export RELEASE_COOKIE
-              ${lib.getExe cfg.package} rpc "SowerAgent.request_reload()"
-            '';
+            ExecStartPre = [
+              (lib.getExe migrationScript)
+              (lib.getExe secretsScript)
+            ];
+            ExecStart = lib.getExe startScript;
+            ExecStop = lib.getExe stopScript;
+            ExecReload = lib.getExe reloadScript;
 
             Type = "notify";
             WatchdogSec = "10s";
@@ -115,7 +150,7 @@ in
 
       (lib.mkIf pkgs.stdenv.isDarwin {
         launchd = {
-          agents.sower-agent = {
+          agents.sower-garden = {
             enable = true;
             config = {
               KeepAlive = true;
@@ -136,8 +171,8 @@ in
               // lib.optionalAttrs (cfg.accessTokenFile != null) {
                 SOWER_ACCESS_TOKEN_FILE = cfg.accessTokenFile;
               };
-              StandardErrorPath = "${config.home.homeDirectory}/Library/Logs/sower-agent-err.log";
-              StandardOutPath = "${config.home.homeDirectory}/Library/Logs/sower-agent-out.log";
+              StandardErrorPath = "${config.home.homeDirectory}/Library/Logs/sower-garden-err.log";
+              StandardOutPath = "${config.home.homeDirectory}/Library/Logs/sower-garden-out.log";
             };
           };
         };

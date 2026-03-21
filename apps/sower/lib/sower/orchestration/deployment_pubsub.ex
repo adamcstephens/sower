@@ -12,18 +12,24 @@ defmodule Sower.Orchestration.DeploymentPubSub do
   Broadcasts to multiple topics:
   - "deployments" - Global topic for all deployments
   - "deployment:<deployment_sid>" - Per-deployment topic
-  - "deployments:agent:<agent_sid>" - Per-agent topic
+  - "deployments:garden:<garden_sid>" - Per-garden topic
   - "deployments:subscription:<subscription_sid>" - Per-subscription topics
   """
   def broadcast_deployment_change(%Deployment{} = deployment, event \\ :updated) do
-    deployment = Sower.Repo.preload(deployment, [:agent, :subscriptions])
+    deployment = Sower.Repo.preload(deployment, [:garden, :subscriptions])
 
     broadcast("deployments", {:deployment, event, deployment})
     broadcast("deployment:#{deployment.sid}", {:deployment, event, deployment})
 
-    if deployment.agent do
+    if deployment.garden do
       broadcast(
-        "deployments:agent:#{deployment.agent.sid}",
+        "deployments:garden:#{deployment.garden.sid}",
+        {:deployment, event, deployment}
+      )
+
+      # Deprecated: kept for 0.7.0 LiveView backward compatibility
+      broadcast(
+        "deployments:agent:#{deployment.garden.sid}",
         {:deployment, event, deployment}
       )
     end

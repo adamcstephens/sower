@@ -14,23 +14,23 @@ let
   npins = import ./npins;
 
   simple-service = flake.packages.${system}.tests-simple-service;
-  agentPkg = flake.packages.${system}.agent;
+  gardenPkg = flake.packages.${system}.garden;
   activatorPkg = flake.packages.${system}.activator;
   cliPkg = flake.packages.${system}.cli;
   serverPkg = flake.packages.${system}.server;
 
-  hmAgentStateDir = "/home/testuser/.local/state/sower-agent";
+  hmGardenStateDir = "/home/testuser/.local/state/sower-garden";
 
-  # Admin wrapper for home-manager agent RPC (must match RELEASE_NODE override)
-  hmAgentAdmin = pkgs.writeShellApplication {
-    name = "sower-hm-agent";
+  # Admin wrapper for home-manager garden RPC (must match RELEASE_NODE override)
+  hmGardenAdmin = pkgs.writeShellApplication {
+    name = "sower-hm-garden";
     text = ''
       export RELEASE_MODE="interactive"
-      export RELEASE_NODE="sower_agent_hm"
+      export RELEASE_NODE="garden_hm"
       export SHELL="${lib.getExe pkgs.bash}"
-      RELEASE_COOKIE=$(cat ${hmAgentStateDir}/release-cookie)
+      RELEASE_COOKIE=$(cat ${hmGardenStateDir}/release-cookie)
       export RELEASE_COOKIE
-      exec ${lib.getExe agentPkg} "$@"
+      exec ${lib.getExe gardenPkg} "$@"
     '';
   };
 in
@@ -63,7 +63,7 @@ testers.runNixOSTest {
 
           environment.systemPackages = [
             cliPkg
-            hmAgentAdmin
+            hmGardenAdmin
             pkgs.python3
           ];
 
@@ -79,9 +79,9 @@ testers.runNixOSTest {
           services.sower = {
             activator.package = activatorPkg;
 
-            agent = {
+            garden = {
               enable = true;
-              package = agentPkg;
+              package = gardenPkg;
 
               settings = {
                 access_token_file = "/run/sower/test_token";
@@ -95,8 +95,8 @@ testers.runNixOSTest {
               };
             };
           };
-          # if agent fails to start, fail immediately
-          systemd.services.sower-agent.serviceConfig.Restart = "no";
+          # if garden fails to start, fail immediately
+          systemd.services.sower-garden.serviceConfig.Restart = "no";
 
           services.sower.server = {
             enable = true;
@@ -142,9 +142,9 @@ testers.runNixOSTest {
 
             home.stateVersion = "24.11";
 
-            services.sower.agent = {
+            services.sower.garden = {
               enable = true;
-              package = agentPkg;
+              package = gardenPkg;
               activatorPackage = activatorPkg;
               accessTokenFile = "/run/sower/test_token";
 
@@ -167,11 +167,11 @@ testers.runNixOSTest {
             };
           };
 
-          # Test overrides for home-manager agent
-          home-manager.users.testuser.systemd.user.services.sower-agent.Service = {
+          # Test overrides for home-manager garden
+          home-manager.users.testuser.systemd.user.services.sower-garden.Service = {
             Restart = lib.mkForce "no";
-            # Avoid Erlang node name clash with system-level agent
-            Environment = lib.mkAfter [ "RELEASE_NODE=sower_agent_hm" ];
+            # Avoid Erlang node name clash with system-level garden
+            Environment = lib.mkAfter [ "RELEASE_NODE=garden_hm" ];
           };
 
           virtualisation.diskSize = 4096;
@@ -186,7 +186,7 @@ testers.runNixOSTest {
       server.wait_for_unit("postgresql.service")
       server.wait_for_unit("sower.service")
       server.wait_for_unit("sower-activator.socket")
-      server.wait_for_unit("sower-agent.service")
+      server.wait_for_unit("sower-garden.service")
       server.wait_for_open_port(4000)
 
       with subtest("activator socket activation"):
@@ -199,9 +199,9 @@ testers.runNixOSTest {
           server.succeed("mkdir -p /run/sower")
           server.succeed(f"echo -n {token} > /run/sower/test_token")
 
-      with subtest("nixos agent registration"):
+      with subtest("nixos garden registration"):
           server.wait_until_succeeds(
-              "journalctl --no-pager -u sower-agent"
+              "journalctl --no-pager -u sower-garden"
               " --grep='Joined channel topic'",
               timeout=15,
           )
@@ -211,10 +211,10 @@ testers.runNixOSTest {
           server.succeed(f"sower seed submit --name server --type nixos --artifact {server_profile} --debug")
           server.succeed("sower seed upgrade --name server --type nixos --debug")
 
-      with subtest("nixos agent deployment"):
-          server.succeed('sower-agent rpc "SowerAgent.Admin.deploy(\\\"nixos\\\")"')
+      with subtest("nixos garden deployment"):
+          server.succeed('sower-garden rpc "Garden.Admin.deploy(\\\"nixos\\\")"')
           server.wait_until_succeeds(
-              "journalctl --no-pager -u sower-agent"
+              "journalctl --no-pager -u sower-garden"
               " --grep='Completed.activation'",
               timeout=15,
           )
@@ -225,23 +225,23 @@ testers.runNixOSTest {
               " --grep='Received request.*type=nixos'"
           )
 
-      with subtest("start home-manager agent"):
+      with subtest("start home-manager garden"):
           server.wait_for_unit("home-manager-testuser.service")
           server.succeed("loginctl enable-linger testuser")
           # HM activation ran before user manager was up, so reload and start manually
           server.systemctl("daemon-reload", "testuser")
-          server.systemctl("start sower-agent.service", "testuser")
-          server.wait_for_unit("sower-agent.service", "testuser")
+          server.systemctl("start sower-garden.service", "testuser")
+          server.wait_for_unit("sower-garden.service", "testuser")
 
-      with subtest("home-manager agent registration"):
+      with subtest("home-manager garden registration"):
           server.wait_until_succeeds(
               "su -l testuser -c '"
-              "journalctl --user --no-pager -u sower-agent"
+              "journalctl --user --no-pager -u sower-garden"
               " --grep=Joined.channel.topic'",
               timeout=15,
           )
 
-      with subtest("home-manager agent deployment"):
+      with subtest("home-manager garden deployment"):
           hm_generation = server.succeed(
               "readlink -f /home/testuser/.local/state/home-manager/gcroots/current-home"
           ).strip()
@@ -251,11 +251,11 @@ testers.runNixOSTest {
               f" --tag username=testuser"
           )
           server.succeed(
-              'sower-hm-agent rpc "SowerAgent.Admin.deploy(\\\"home-manager\\\")"'
+              'sower-hm-garden rpc "Garden.Admin.deploy(\\\"home-manager\\\")"'
           )
           server.wait_until_succeeds(
               "su -l testuser -c '"
-              "journalctl --user --no-pager -u sower-agent"
+              "journalctl --user --no-pager -u sower-garden"
               " --grep=Completed.activation'",
               timeout=15,
           )

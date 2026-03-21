@@ -8,10 +8,10 @@ defmodule SowerUmbrella.MixProject do
       apps_path: "apps",
       deps: deps(),
       releases: [
-        agent: [
+        garden: [
           version: version,
-          applications: [sower_agent: :permanent],
-          runtime_config_path: "config/runtime_agent.exs",
+          applications: [garden: :permanent],
+          runtime_config_path: "config/runtime_garden.exs",
           include_executables_for: [:unix]
         ],
         cli: [

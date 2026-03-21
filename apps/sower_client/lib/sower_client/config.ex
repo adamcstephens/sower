@@ -1,6 +1,6 @@
 defmodule SowerClient.Config do
   @moduledoc """
-  Shared configuration for Sower tools (agent, CLI).
+  Shared configuration for Sower tools (garden, CLI).
 
   Supports `_file` suffix for reading secrets from files.
 
@@ -44,11 +44,11 @@ defmodule SowerClient.Config do
       },
       name: %Schema{
         type: :string,
-        description: "Agent name (agent-only)"
+        description: "Garden name (garden-only)"
       },
       state_directory: %Schema{
         type: :string,
-        description: "Directory where state files are written (agent-only)"
+        description: "Directory where state files are written (garden-only)"
       },
       default_deployment_profile: %Schema{
         type: :string,
@@ -59,13 +59,13 @@ defmodule SowerClient.Config do
         type: :object,
         additionalProperties: SowerClient.Orchestration.DeploymentProfile,
         nullable: true,
-        description: "Deployment policies (agent-only)"
+        description: "Deployment policies (garden-only)"
       },
       subscriptions: %Schema{
         type: :array,
         items: SowerClient.Orchestration.Subscription,
         default: [],
-        description: "Subscriptions (agent-only)"
+        description: "Subscriptions (garden-only)"
       }
     },
     required: []
@@ -122,7 +122,7 @@ defmodule SowerClient.Config do
     %{
       "name" => default_client_name(),
       "state_directory" => default_state_dir(),
-      "default" => "/var/lib/sower-agent"
+      "default" => "/var/lib/sower-garden"
     }
   end
 
@@ -196,7 +196,7 @@ defmodule SowerClient.Config do
       user when is_binary(user) ->
         user = String.trim(user)
 
-        if user == "" or user == "sower-agent" do
+        if user == "" or user == "sower-garden" do
           hostname
         else
           "#{user}@#{hostname}"
@@ -208,7 +208,7 @@ defmodule SowerClient.Config do
   end
 
   def default_state_dir do
-    SowerClient.Config.xdg_state_path("sower_agent")
+    SowerClient.Config.xdg_state_path("sower-garden")
   end
 
   def xdg_config_path(app_name, filename) do

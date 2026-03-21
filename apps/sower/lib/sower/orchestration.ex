@@ -3,24 +3,24 @@ defmodule Sower.Orchestration do
   The Orchestration context.
   """
 
-  alias Sower.Orchestration.Agent
-  alias Sower.Orchestration.AgentSeedGeneration
+  alias Sower.Orchestration.Garden
+  alias Sower.Orchestration.GardenSeedGeneration
   alias Sower.Orchestration.Deployment
   alias Sower.Orchestration.Subscription
 
-  # Agent delegates
-  defdelegate change_agent(agent, attrs \\ %{}), to: Agent
-  defdelegate create_agent(attrs \\ %{}), to: Agent
-  defdelegate delete_agent(agent), to: Agent
-  defdelegate get_agent!(id), to: Agent
-  defdelegate get_agent(hello, socket), to: Agent
-  defdelegate get_agent_local_sid!(local_sid), to: Agent
-  defdelegate get_agent_local_sid(local_sid), to: Agent
-  defdelegate get_agent_sid!(sid), to: Agent
-  defdelegate get_agent_sid(sid), to: Agent
-  defdelegate list_agents(), to: Agent
-  defdelegate list_agents_with_latest_deployment(), to: Agent
-  defdelegate update_agent(agent, attrs), to: Agent
+  # Garden delegates
+  defdelegate change_garden(garden, attrs \\ %{}), to: Garden
+  defdelegate create_garden(attrs \\ %{}), to: Garden
+  defdelegate delete_garden(garden), to: Garden
+  defdelegate get_garden!(id), to: Garden
+  defdelegate get_garden(hello, socket), to: Garden
+  defdelegate get_garden_local_sid!(local_sid), to: Garden
+  defdelegate get_garden_local_sid(local_sid), to: Garden
+  defdelegate get_garden_sid!(sid), to: Garden
+  defdelegate get_garden_sid(sid), to: Garden
+  defdelegate list_gardens(), to: Garden
+  defdelegate list_gardens_with_latest_deployment(), to: Garden
+  defdelegate update_garden(garden, attrs), to: Garden
 
   # Subscription delegates
   defdelegate change_subscription(subscription, attrs \\ %{}), to: Subscription
@@ -34,9 +34,9 @@ defmodule Sower.Orchestration do
   defdelegate get_subscription_sid_with_deployments(sid), to: Subscription
   defdelegate get_subscription_sids(sids), to: Subscription
   defdelegate list_subscriptions(), to: Subscription
-  defdelegate list_subscriptions_for_agent(agent), to: Subscription
-  defdelegate register_subscription(req, agent_id), to: Subscription
-  defdelegate sync_subscriptions(subscriptions, agent_id), to: Subscription
+  defdelegate list_subscriptions_for_garden(garden), to: Subscription
+  defdelegate register_subscription(req, garden_id), to: Subscription
+  defdelegate sync_subscriptions(subscriptions, garden_id), to: Subscription
   defdelegate update_subscription(subscription, attrs), to: Subscription
 
   # Deployment delegates
@@ -48,25 +48,25 @@ defmodule Sower.Orchestration do
   defdelegate get_deployment!(id), to: Deployment
   defdelegate get_deployment_sid!(sid), to: Deployment
   defdelegate get_deployment_sid(sid), to: Deployment
-  defdelegate handle_deployment_request(payload, agent), to: Deployment
+  defdelegate handle_deployment_request(payload, garden), to: Deployment
   defdelegate list_deployments(), to: Deployment
-  defdelegate list_deployments(agent, opts \\ []), to: Deployment
+  defdelegate list_deployments(garden, opts \\ []), to: Deployment
   defdelegate list_matching_seeds(subscription, limit \\ 10), to: Deployment
-  defdelegate list_unresolved_deployments_for_agent(agent, opts \\ []), to: Deployment
+  defdelegate list_unresolved_deployments_for_garden(garden, opts \\ []), to: Deployment
   defdelegate match_seed(subscription), to: Deployment
-  defdelegate process_deployment(request_id, subscriptions, agent, opts \\ []), to: Deployment
+  defdelegate process_deployment(request_id, subscriptions, garden, opts \\ []), to: Deployment
   defdelegate record_deployment(result), to: Deployment
-  defdelegate replay_unresolved_deployments(agent, opts \\ []), to: Deployment
+  defdelegate replay_unresolved_deployments(garden, opts \\ []), to: Deployment
   defdelegate request_deployment(request), to: Deployment
   defdelegate retry_deployment(deployment, user_id), to: Deployment
   defdelegate update_deployment(deployment, attrs), to: Deployment
 
-  # AgentSeedGeneration delegates
-  defdelegate list_agent_seed_generation(agent), to: AgentSeedGeneration
-  defdelegate list_agent_seed_generation_profile(agent_id, profile_id), to: AgentSeedGeneration
-  defdelegate list_current_seed_generation(agent), to: AgentSeedGeneration
-  defdelegate update_agent_seed_generations(report, agent), to: AgentSeedGeneration
+  # GardenSeedGeneration delegates
+  defdelegate list_garden_seed_generation(garden), to: GardenSeedGeneration
+  defdelegate list_garden_seed_generation_profile(garden_id, profile_id), to: GardenSeedGeneration
+  defdelegate list_current_seed_generation(garden), to: GardenSeedGeneration
+  defdelegate update_garden_seed_generations(report, garden), to: GardenSeedGeneration
 
-  defdelegate upsert_agent_generation(agent_id, profile_id, seed_id, attrs),
-    to: AgentSeedGeneration
+  defdelegate upsert_garden_generation(garden_id, profile_id, seed_id, attrs),
+    to: GardenSeedGeneration
 end

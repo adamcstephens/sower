@@ -24,7 +24,13 @@ defmodule Sower.Accounts.AccessToken do
 
     embeds_many :permissions, Permission, on_replace: :delete do
       field :role, Ecto.Enum,
-        values: [:"seed:read", :"seed:write", :"nix-cache:read", :"agent:register"]
+        values: [
+          :"seed:read",
+          :"seed:write",
+          :"nix-cache:read",
+          :"garden:register",
+          :"agent:register"
+        ]
     end
 
     timestamps()
@@ -51,13 +57,13 @@ defmodule Sower.Accounts.AccessToken do
   end
 
   def validate_expires_at(changeset) do
-    validate_change(changeset, :expires_at, fn field, value ->
+    validate_change(changeset, :expires_at, fn garden, value ->
       {:ok, expire} =
         value
         |> DateTime.new(Time.new!(0, 0, 0), "Etc/UTC")
 
       if DateTime.before?(expire, DateTime.utc_now()) do
-        [{field, "must be at least 24 hours"}]
+        [{garden, "must be at least 24 hours"}]
       else
         []
       end

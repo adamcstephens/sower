@@ -74,10 +74,10 @@ defmodule Sower.Nix do
 
   ## Examples
 
-      iex> create_cache(%{field: value})
+      iex> create_cache(%{garden: value})
       {:ok, %Cache{}}
 
-      iex> create_cache(%{field: bad_value})
+      iex> create_cache(%{garden: bad_value})
       {:error, %Ecto.Changeset{}}
 
   """
@@ -94,10 +94,10 @@ defmodule Sower.Nix do
 
   ## Examples
 
-      iex> update_cache(cache, %{field: new_value})
+      iex> update_cache(cache, %{garden: new_value})
       {:ok, %Cache{}}
 
-      iex> update_cache(cache, %{field: bad_value})
+      iex> update_cache(cache, %{garden: bad_value})
       {:error, %Ecto.Changeset{}}
 
   """

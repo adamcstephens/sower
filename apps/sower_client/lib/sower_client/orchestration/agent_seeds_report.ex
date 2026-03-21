@@ -1,7 +1,9 @@
+# Deprecated: use SowerClient.Orchestration.GardenSeedsReport
+# Kept as alias for 0.7.0 backward compatibility
 defmodule SowerClient.Orchestration.AgentSeedsReport do
   @moduledoc """
-  Container for all Nix profiles reported by an agent.
-  Sent when agent connects and after deployments complete.
+  Deprecated: use SowerClient.Orchestration.GardenSeedsReport.
+  Kept for backward compatibility with 0.7.0 gardens.
   """
   use SowerClient.Schema
   use SowerClient.ChannelMessage, event: "agent:seeds:report"
@@ -12,7 +14,7 @@ defmodule SowerClient.Orchestration.AgentSeedsReport do
     properties: %{
       profiles: %Schema{
         type: :array,
-        items: SowerClient.Orchestration.AgentSeedProfile,
+        items: SowerClient.Orchestration.GardenSeedProfile,
         description: "All Nix profiles with their generations"
       }
     },

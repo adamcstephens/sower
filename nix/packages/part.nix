@@ -21,7 +21,7 @@
           inherit version;
         };
 
-        agent = pkgs.callPackage ./agent.nix {
+        garden = pkgs.callPackage ./garden.nix {
           inherit beamPackages version;
         };
 

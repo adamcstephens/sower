@@ -31,12 +31,12 @@ defmodule SowerWeb.DeploymentLive.Show do
           <.local_datetime datetime={@deployment.deployed_at} user_timezone={@user_timezone} />
         </.detail_field>
 
-        <.detail_field label="Agent">
+        <.detail_field label="Garden">
           <.link
-            navigate={~p"/agents/#{@deployment.agent}"}
+            navigate={~p"/gardens/#{@deployment.garden}"}
             class="hover:text-orange-500 dark:hover:text-orange-400"
           >
-            {@deployment.agent.name}
+            {@deployment.garden.name}
           </.link>
         </.detail_field>
 
@@ -47,7 +47,7 @@ defmodule SowerWeb.DeploymentLive.Show do
             rows={@deployment.subscriptions}
             row_click={
               fn subscription ->
-                JS.navigate(~p"/agents/#{@deployment.agent}/subscriptions/#{subscription.sid}")
+                JS.navigate(~p"/gardens/#{@deployment.garden}/subscriptions/#{subscription.sid}")
               end
             }
             header_border={false}
@@ -146,7 +146,7 @@ defmodule SowerWeb.DeploymentLive.Show do
 
       deployment ->
         deployment =
-          Sower.Repo.preload(deployment, seed_deployments: :seed, subscriptions: [], agent: [])
+          Sower.Repo.preload(deployment, seed_deployments: :seed, subscriptions: [], garden: [])
 
         {:noreply,
          socket
@@ -163,7 +163,7 @@ defmodule SowerWeb.DeploymentLive.Show do
 
       deployment ->
         deployment =
-          Sower.Repo.preload(deployment, seed_deployments: :seed, subscriptions: [], agent: [])
+          Sower.Repo.preload(deployment, seed_deployments: :seed, subscriptions: [], garden: [])
 
         {:noreply, assign(socket, :deployment, deployment)}
     end

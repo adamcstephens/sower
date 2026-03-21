@@ -6,8 +6,8 @@
 
 If more than one of the rules conflict, ask before implementing.
 
-- Never break deployments or strand agents such that they cannot apply an upgrade.
-- Ensure backwards compatibility or migration paths for changes that affect contracts between components (e.g. agent/server), but otherwise assume breaking changes are ok.
+- Never break deployments or strand gardens such that they cannot apply an upgrade.
+- Ensure backwards compatibility or migration paths for changes that affect contracts between components (e.g. garden/server), but otherwise assume breaking changes are ok.
 - Evolve the code without planning for every possible future or edge case.
 - Delete abandoned paths by default when changing direction, except when required by compatibility/migration. Ask before keeping more than one implementation.
 

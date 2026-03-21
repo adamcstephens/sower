@@ -9,50 +9,50 @@ defmodule SowerWeb.SubscriptionLive.ShowTest do
 
   defp create_subscription_with_seed(user) do
     Sower.Repo.put_org_id(user.org_id)
-    agent = agent_fixture()
+    garden = garden_fixture()
     seed = seed_fixture()
 
     subscription =
       subscription_fixture(%{
-        agent_id: agent.id,
+        garden_id: garden.id,
         seed_name: seed.name,
         seed_type: seed.seed_type
       })
 
-    %{agent: agent, subscription: subscription, seed: seed}
+    %{garden: garden, subscription: subscription, seed: seed}
   end
 
   test "shows deploy button when subscription matches latest seed", %{conn: conn, user: user} do
-    %{agent: agent, subscription: subscription} = create_subscription_with_seed(user)
+    %{garden: garden, subscription: subscription} = create_subscription_with_seed(user)
 
     {:ok, show_live, _html} =
-      live(conn, ~p"/agents/#{agent}/subscriptions/#{subscription}")
+      live(conn, ~p"/gardens/#{garden}/subscriptions/#{subscription}")
 
     assert has_element?(show_live, "button", "Deploy")
   end
 
   test "does not show deploy button when no matching seed", %{conn: conn, user: user} do
     Sower.Repo.put_org_id(user.org_id)
-    agent = agent_fixture()
+    garden = garden_fixture()
 
     subscription =
       subscription_fixture(%{
-        agent_id: agent.id,
+        garden_id: garden.id,
         seed_name: "nonexistent-seed",
         seed_type: "nixos"
       })
 
     {:ok, show_live, _html} =
-      live(conn, ~p"/agents/#{agent}/subscriptions/#{subscription}")
+      live(conn, ~p"/gardens/#{garden}/subscriptions/#{subscription}")
 
     refute has_element?(show_live, "button", "Deploy")
   end
 
   test "clicking deploy triggers deployment and redirects", %{conn: conn, user: user} do
-    %{agent: agent, subscription: subscription} = create_subscription_with_seed(user)
+    %{garden: garden, subscription: subscription} = create_subscription_with_seed(user)
 
     {:ok, show_live, _html} =
-      live(conn, ~p"/agents/#{agent}/subscriptions/#{subscription}")
+      live(conn, ~p"/gardens/#{garden}/subscriptions/#{subscription}")
 
     show_live
     |> element("button", "Deploy")
@@ -60,7 +60,7 @@ defmodule SowerWeb.SubscriptionLive.ShowTest do
 
     deployment =
       eventually(fn ->
-        [d | _] = Sower.Orchestration.list_deployments(agent, limit: 1)
+        [d | _] = Sower.Orchestration.list_deployments(garden, limit: 1)
         d
       end)
 
