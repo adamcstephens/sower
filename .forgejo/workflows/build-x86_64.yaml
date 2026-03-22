@@ -2,8 +2,7 @@ on:
   push:
 
 env:
-  ATTIC_URL: ${{ vars.ATTIC_URL }}
-  ATTIC_CACHE: ${{ vars.ATTIC_CACHE }}
+  NIKS3_URL: ${{ vars.NIKS3_URL }}
   SOWER_ENDPOINT: ${{ vars.SOWER_ENDPOINT }}
 
 jobs:
@@ -17,10 +16,9 @@ jobs:
         run: |
           export HOME=$PWD
 
-          nix develop .#ci --command attic login junco $ATTIC_URL --set-default $ATTIC_KEY
-          nix develop .#ci --command sower build --cache attic://junco:$ATTIC_CACHE --eval-jobs 12 .#sowerJobs.x86_64-linux --push
+          nix develop .#ci --command sower build --cache niks3:// --eval-jobs 12 .#sowerJobs.x86_64-linux --push
         env:
-          ATTIC_KEY: ${{ secrets.ATTIC_KEY }}
+          NIKS3_AUTH_TOKEN: ${{ secrets.NIKS3_AUTH_TOKEN }}
 
   elixir-format:
     runs-on: local/x86_64-linux
