@@ -63,21 +63,7 @@ defmodule Garden.Socket do
     subscriptions =
       case await_reply(ref) do
         {:ok, %{"subscriptions" => registered}} ->
-          # Build a map of (seed_name, seed_type) -> sid for quick lookup
-          sid_map =
-            registered
-            |> Enum.map(&SowerClient.Orchestration.Subscription.cast!/1)
-            |> Map.new(&{{&1.seed_name, &1.seed_type}, &1.sid})
-
-          # Merge server-assigned sids back into original subscriptions
-          # to preserve garden-only gardens like schedule and poll_on_connect
-          Enum.map(config_subscriptions, fn sub ->
-            case Map.get(sid_map, {sub.seed_name, sub.seed_type}) do
-              nil -> nil
-              sid -> %{sub | sid: sid}
-            end
-          end)
-          |> Enum.reject(&is_nil/1)
+          State.merge_subscriptions(config_subscriptions, registered)
 
         {:error, error} ->
           Logger.error(msg: "Failed to sync subscriptions", error: error)
@@ -85,11 +71,9 @@ defmodule Garden.Socket do
       end
 
     Scheduler.refresh_subscriptions(subscriptions)
-
     Garden.Storage.put(:subscriptions, subscriptions)
 
-    subscriptions
-    |> Enum.filter(& &1.poll_on_connect)
+    State.poll_on_connect_subscriptions(subscriptions)
     |> Enum.each(fn sub ->
       Task.Supervisor.start_child(Garden.TaskSupervisor, fn ->
         deploy(sub)

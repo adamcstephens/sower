@@ -4,6 +4,7 @@ defmodule Garden.Socket.StateTest do
   alias Garden.Socket.State
   alias SowerClient.Orchestration.DeploymentRequest
   alias SowerClient.Orchestration.GardenSeedsReport
+  alias SowerClient.Orchestration.Subscription
 
   describe "build_deployment_request/2" do
     test "builds request with subscription sid" do
@@ -50,6 +51,78 @@ defmodule Garden.Socket.StateTest do
       report = GardenSeedsReport.cast!(%{profiles: []})
 
       assert {:report, ^report} = State.build_seed_report([], fn _subs -> report end)
+    end
+  end
+
+  describe "merge_subscriptions/2" do
+    test "merges server-assigned sids into config subscriptions" do
+      config_subs = [
+        Subscription.cast!(%{seed_name: "host", seed_type: "nixos", poll_on_connect: true}),
+        Subscription.cast!(%{seed_name: "user", seed_type: "home-manager"})
+      ]
+
+      registered = [
+        %{"seed_name" => "host", "seed_type" => "nixos", "sid" => "sub_abc"},
+        %{"seed_name" => "user", "seed_type" => "home-manager", "sid" => "sub_def"}
+      ]
+
+      result = State.merge_subscriptions(config_subs, registered)
+
+      assert length(result) == 2
+      assert Enum.find(result, &(&1.seed_name == "host")).sid == "sub_abc"
+      assert Enum.find(result, &(&1.seed_name == "host")).poll_on_connect == true
+      assert Enum.find(result, &(&1.seed_name == "user")).sid == "sub_def"
+    end
+
+    test "drops config subscriptions not registered on server" do
+      config_subs = [
+        Subscription.cast!(%{seed_name: "host", seed_type: "nixos"}),
+        Subscription.cast!(%{seed_name: "orphan", seed_type: "nixos"})
+      ]
+
+      registered = [
+        %{"seed_name" => "host", "seed_type" => "nixos", "sid" => "sub_abc"}
+      ]
+
+      result = State.merge_subscriptions(config_subs, registered)
+
+      assert length(result) == 1
+      assert hd(result).seed_name == "host"
+    end
+
+    test "returns empty list for empty registered" do
+      config_subs = [
+        Subscription.cast!(%{seed_name: "host", seed_type: "nixos"})
+      ]
+
+      assert State.merge_subscriptions(config_subs, []) == []
+    end
+  end
+
+  describe "poll_on_connect_subscriptions/1" do
+    test "filters to subscriptions with poll_on_connect true" do
+      subs = [
+        Subscription.cast!(%{
+          seed_name: "host",
+          seed_type: "nixos",
+          poll_on_connect: true,
+          sid: "sub_1"
+        }),
+        Subscription.cast!(%{seed_name: "user", seed_type: "home-manager", sid: "sub_2"})
+      ]
+
+      result = State.poll_on_connect_subscriptions(subs)
+
+      assert length(result) == 1
+      assert hd(result).seed_name == "host"
+    end
+
+    test "returns empty list when none have poll_on_connect" do
+      subs = [
+        Subscription.cast!(%{seed_name: "host", seed_type: "nixos", sid: "sub_1"})
+      ]
+
+      assert State.poll_on_connect_subscriptions(subs) == []
     end
   end
 end
