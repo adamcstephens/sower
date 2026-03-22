@@ -83,6 +83,13 @@ defmodule SowerWeb.GardenLive.Show do
   end
 
   @impl true
+  def handle_event("delete", %{"id" => id}, socket) do
+    garden = Orchestration.get_garden!(id)
+    {:ok, _} = Orchestration.delete_garden(garden)
+
+    {:noreply, push_navigate(socket, to: ~p"/gardens")}
+  end
+
   def handle_event("deploy_subscription", %{"subscription_sid" => sub_sid}, socket) do
     subscription = Enum.find(socket.assigns.garden.subscriptions, &(&1.sid == sub_sid))
 

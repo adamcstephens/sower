@@ -4,6 +4,14 @@
       <.online state={@online} />
       <span>Garden: {@garden.name}</span>
     </div>
+    <:actions>
+      <.link
+        phx-click={JS.push("delete", value: %{id: @garden.id})}
+        data-confirm="Are you sure?"
+      >
+        <.button variant={:danger}>Delete</.button>
+      </.link>
+    </:actions>
   </.header>
 
   <div class="mt-8 space-y-10">
