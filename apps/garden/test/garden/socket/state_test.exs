@@ -255,4 +255,21 @@ defmodule Garden.Socket.StateTest do
       refute State.should_reload?(%{}, false)
     end
   end
+
+  describe "process_hello_reply/2" do
+    test "returns persist true when garden_sid differs from stored" do
+      assert {:join, "garden_new", persist?: true} =
+               State.process_hello_reply("garden_new", "garden_old")
+    end
+
+    test "returns persist false when garden_sid matches stored" do
+      assert {:join, "garden_same", persist?: false} =
+               State.process_hello_reply("garden_same", "garden_same")
+    end
+
+    test "returns persist true when stored is nil" do
+      assert {:join, "garden_new", persist?: true} =
+               State.process_hello_reply("garden_new", nil)
+    end
+  end
 end

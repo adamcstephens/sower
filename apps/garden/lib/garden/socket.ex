@@ -235,7 +235,10 @@ defmodule Garden.Socket do
     Logger.debug(msg: "Received hello reply", garden: reply)
     storage = Garden.Storage.read()
 
-    if storage.garden_sid != garden_sid do
+    {:join, garden_sid, persist?: persist?} =
+      State.process_hello_reply(garden_sid, storage.garden_sid)
+
+    if persist? do
       storage |> Map.put(:garden_sid, garden_sid) |> Garden.Storage.write()
     end
 
