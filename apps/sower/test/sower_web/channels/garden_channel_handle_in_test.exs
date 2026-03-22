@@ -354,4 +354,88 @@ defmodule SowerWeb.GardenChannelHandleInTest do
       assert_reply ref, :error, :deployment_not_found
     end
   end
+
+  describe "subscriptions:sync" do
+    test "creates new subscriptions and returns them" do
+      %{socket: socket} = connect_and_join_garden()
+
+      ref =
+        push(socket, "subscriptions:sync", %{
+          "subscriptions" => [
+            %{"seed_name" => "sync-host-1", "seed_type" => "nixos"},
+            %{"seed_name" => "sync-host-2", "seed_type" => "nixos"}
+          ]
+        })
+
+      assert_reply ref, :ok, %{subscriptions: subscriptions}
+      assert length(subscriptions) == 2
+
+      names = Enum.map(subscriptions, & &1.seed_name) |> Enum.sort()
+      assert names == ["sync-host-1", "sync-host-2"]
+    end
+
+    test "removes subscriptions not in the sync list" do
+      %{socket: socket, garden: garden} = connect_and_join_garden()
+
+      subscription_fixture(%{
+        garden_id: garden.id,
+        seed_name: "to-remove",
+        seed_type: "nixos"
+      })
+
+      ref =
+        push(socket, "subscriptions:sync", %{
+          "subscriptions" => [
+            %{"seed_name" => "to-keep", "seed_type" => "nixos"}
+          ]
+        })
+
+      assert_reply ref, :ok, %{subscriptions: subscriptions}
+      assert length(subscriptions) == 1
+      assert hd(subscriptions).seed_name == "to-keep"
+
+      remaining = Sower.Orchestration.list_subscriptions_for_garden(garden)
+      assert length(remaining) == 1
+      assert hd(remaining).seed_name == "to-keep"
+    end
+  end
+
+  describe "garden:seeds:report" do
+    test "records garden seed generations" do
+      %{socket: socket} = connect_and_join_garden()
+
+      seed = seed_fixture(%{name: "report-seed", seed_type: "nixos"})
+
+      ref =
+        push(socket, "garden:seeds:report", %{
+          "profiles" => [
+            %{
+              "profile_path" => "/nix/var/nix/profiles/system",
+              "generations" => [
+                %{
+                  "path" => seed.artifact,
+                  "link" => "/nix/var/nix/profiles/system-1-link",
+                  "created" => DateTime.utc_now() |> DateTime.to_iso8601(),
+                  "generation_number" => 1,
+                  "is_current" => true
+                }
+              ]
+            }
+          ]
+        })
+
+      assert_reply ref, :ok, :ok
+    end
+
+    test "handles empty profiles list" do
+      %{socket: socket} = connect_and_join_garden()
+
+      ref =
+        push(socket, "garden:seeds:report", %{
+          "profiles" => []
+        })
+
+      assert_reply ref, :ok, :ok
+    end
+  end
 end
