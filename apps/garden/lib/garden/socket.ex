@@ -261,12 +261,12 @@ defmodule Garden.Socket do
 
   @impl Slipstream
   def handle_info({:run_deployment, sid}, socket) do
-    case Map.get(socket.active_deployments, sid) do
-      nil ->
+    case State.lookup_deployment(sid, socket.active_deployments) do
+      :not_found ->
         Logger.warning(msg: "Deployment not found", sid: sid)
         {:noreply, socket}
 
-      deployment ->
+      {:ok, deployment} ->
         {:ok, _} =
           push_message(
             socket,

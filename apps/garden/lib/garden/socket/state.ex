@@ -57,6 +57,13 @@ defmodule Garden.Socket.State do
     Enum.filter(subscriptions, & &1.poll_on_connect)
   end
 
+  def lookup_deployment(sid, active_deployments) do
+    case Map.get(active_deployments, sid) do
+      nil -> :not_found
+      deployment -> {:ok, deployment}
+    end
+  end
+
   def receive_deployment(%Deployment{skipped: true}, _active_deployments) do
     :skipped
   end
