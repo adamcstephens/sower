@@ -83,6 +83,10 @@ defmodule Garden.Socket.State do
     end
   end
 
+  def process_hello_reply(garden_sid, stored_garden_sid) do
+    {:join, garden_sid, persist?: garden_sid != stored_garden_sid}
+  end
+
   def should_reload?(active_deployments, pending_reload) do
     map_size(active_deployments) == 0 and pending_reload
   end
