@@ -6,6 +6,7 @@ defmodule SowerWeb.ChannelCase do
       import Phoenix.ChannelTest
       import Sower.AccountsFixtures
       import Sower.OrchestrationFixtures
+      import Sower.SeedFixtures
       import SowerWeb.ChannelCase
 
       @endpoint SowerWeb.Endpoint
