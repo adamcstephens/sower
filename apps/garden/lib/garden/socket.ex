@@ -4,7 +4,7 @@ defmodule Garden.Socket do
   require Logger
 
   alias Garden.Scheduler
-  alias Garden.Socket.State
+  alias Garden.Socket.Lifecycle
   alias Garden.Storage
   alias SowerClient.Orchestration.DeploymentStatus
   alias SowerClient.Orchestration.SeedDeploymentStatus
@@ -16,7 +16,7 @@ defmodule Garden.Socket do
 
   @impl Slipstream
   def handle_cast({:deployment_request, %{sid: sid}, force?}, socket) do
-    {:ok, upgrade_request} = State.build_deployment_request(sid, force?)
+    {:ok, upgrade_request} = Lifecycle.build_deployment_request(sid, force?)
     {:ok, _ref} = push_message(socket, upgrade_request)
 
     {:noreply, socket}
@@ -26,7 +26,7 @@ defmodule Garden.Socket do
   def handle_cast(:report_seeds, socket) do
     subscriptions = Map.get(Storage.read(), :subscriptions, [])
 
-    case State.build_seed_report(subscriptions) do
+    case Lifecycle.build_seed_report(subscriptions) do
       :no_profiles ->
         Logger.debug(
           msg: "No profiles found for any targets",
@@ -63,7 +63,7 @@ defmodule Garden.Socket do
     subscriptions =
       case await_reply(ref) do
         {:ok, %{"subscriptions" => registered}} ->
-          State.merge_subscriptions(config_subscriptions, registered)
+          Lifecycle.merge_subscriptions(config_subscriptions, registered)
 
         {:error, error} ->
           Logger.error(msg: "Failed to sync subscriptions", error: error)
@@ -73,7 +73,7 @@ defmodule Garden.Socket do
     Scheduler.refresh_subscriptions(subscriptions)
     Garden.Storage.put(:subscriptions, subscriptions)
 
-    State.poll_on_connect_subscriptions(subscriptions)
+    Lifecycle.poll_on_connect_subscriptions(subscriptions)
     |> Enum.each(fn sub ->
       Task.Supervisor.start_child(Garden.TaskSupervisor, fn ->
         deploy(sub)
@@ -168,7 +168,7 @@ defmodule Garden.Socket do
       when topic == garden_sid do
     case SowerClient.Orchestration.Deployment.cast(payload) do
       {:ok, deployment} ->
-        case State.receive_deployment(deployment, socket.active_deployments) do
+        case Lifecycle.receive_deployment(deployment, socket.active_deployments) do
           {:enqueue, active_deployments} ->
             Logger.debug(
               msg: "Received deployment",
@@ -236,7 +236,7 @@ defmodule Garden.Socket do
     storage = Garden.Storage.read()
 
     {:join, garden_sid, persist?: persist?} =
-      State.process_hello_reply(garden_sid, storage.garden_sid)
+      Lifecycle.process_hello_reply(garden_sid, storage.garden_sid)
 
     if persist? do
       storage |> Map.put(:garden_sid, garden_sid) |> Garden.Storage.write()
@@ -264,7 +264,7 @@ defmodule Garden.Socket do
 
   @impl Slipstream
   def handle_info({:run_deployment, sid}, socket) do
-    case State.lookup_deployment(sid, socket.active_deployments) do
+    case Lifecycle.lookup_deployment(sid, socket.active_deployments) do
       :not_found ->
         Logger.warning(msg: "Deployment not found", sid: sid)
         {:noreply, socket}
@@ -312,7 +312,7 @@ defmodule Garden.Socket do
   end
 
   def handle_info({:deployment_completed, sid, result}, socket) do
-    case State.complete_deployment(sid, result, socket.active_deployments) do
+    case Lifecycle.complete_deployment(sid, result, socket.active_deployments) do
       :not_found ->
         Logger.warning(msg: "Deployment not found during completion", sid: sid)
         {:noreply, socket}
@@ -328,7 +328,7 @@ defmodule Garden.Socket do
   end
 
   def handle_info(:check_pending_reload, socket) do
-    if State.should_reload?(socket.active_deployments, Garden.take_pending_reload()) do
+    if Lifecycle.should_reload?(socket.active_deployments, Garden.take_pending_reload()) do
       reload_garden_service()
     end
 
