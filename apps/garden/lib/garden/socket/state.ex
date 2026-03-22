@@ -8,6 +8,7 @@ defmodule Garden.Socket.State do
   """
 
   alias SowerClient.Orchestration.DeploymentRequest
+  alias SowerClient.Orchestration.Subscription
 
   def build_seed_report(
         subscriptions,
@@ -33,5 +34,25 @@ defmodule Garden.Socket.State do
       end
 
     DeploymentRequest.new(payload)
+  end
+
+  def merge_subscriptions(config_subscriptions, registered) do
+    sid_map =
+      registered
+      |> Enum.map(&Subscription.cast!/1)
+      |> Map.new(&{{&1.seed_name, &1.seed_type}, &1.sid})
+
+    config_subscriptions
+    |> Enum.map(fn sub ->
+      case Map.get(sid_map, {sub.seed_name, sub.seed_type}) do
+        nil -> nil
+        sid -> %{sub | sid: sid}
+      end
+    end)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  def poll_on_connect_subscriptions(subscriptions) do
+    Enum.filter(subscriptions, & &1.poll_on_connect)
   end
 end
