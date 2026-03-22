@@ -57,6 +57,7 @@
                   # elixir
                   beamPackages.erlang
                   beamPackages.elixir
+                  beamPackages.expert
                   beamPackages.hex
 
                   # elixir deps build deps

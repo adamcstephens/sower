@@ -4,6 +4,7 @@ defmodule Garden.Socket do
   require Logger
 
   alias Garden.Scheduler
+  alias Garden.Socket.State
   alias Garden.Storage
   alias SowerClient.Orchestration.DeploymentStatus
   alias SowerClient.Orchestration.SeedDeploymentStatus
@@ -15,16 +16,7 @@ defmodule Garden.Socket do
 
   @impl Slipstream
   def handle_cast({:deployment_request, %{sid: sid}, force?}, socket) do
-    request_payload =
-      if force? do
-        %{subscription_sids: [sid], force: true}
-      else
-        %{subscription_sids: [sid]}
-      end
-
-    {:ok, upgrade_request} =
-      SowerClient.Orchestration.DeploymentRequest.new(request_payload)
-
+    {:ok, upgrade_request} = State.build_deployment_request(sid, force?)
     {:ok, _ref} = push_message(socket, upgrade_request)
 
     {:noreply, socket}
@@ -32,30 +24,26 @@ defmodule Garden.Socket do
 
   @impl Slipstream
   def handle_cast(:report_seeds, socket) do
-    storage = Storage.read()
-    subscriptions = Map.get(storage, :subscriptions, [])
+    subscriptions = Map.get(Storage.read(), :subscriptions, [])
 
-    report = Garden.Profile.collect_profiles_for_subscriptions(subscriptions)
+    case State.build_seed_report(subscriptions) do
+      :no_profiles ->
+        Logger.debug(
+          msg: "No profiles found for any targets",
+          subscription_count: length(subscriptions)
+        )
 
-    if not Enum.empty?(subscriptions) and Enum.empty?(report.profiles) do
-      Logger.debug(
-        msg: "No profiles found for any targets",
-        subscription_count: length(subscriptions)
-      )
+      {:report, report} ->
+        Logger.debug(
+          msg: "Reporting seed profiles",
+          profile_count: length(report.profiles),
+          subscription_count: length(subscriptions)
+        )
 
-      {:noreply, socket}
-    else
-      Logger.debug(
-        msg: "Reporting seed profiles",
-        profile_count: length(report.profiles),
-        subscription_count: length(subscriptions)
-      )
-
-      topic = private_channel(socket)
-      {:ok, _ref} = push(socket, topic, "garden:seeds:report", report)
-
-      {:noreply, socket}
+        {:ok, _ref} = push(socket, private_channel(socket), "garden:seeds:report", report)
     end
+
+    {:noreply, socket}
   end
 
   @impl Slipstream
