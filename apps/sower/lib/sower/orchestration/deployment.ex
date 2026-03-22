@@ -331,9 +331,11 @@ defmodule Sower.Orchestration.Deployment do
     end
   end
 
-  def handle_deployment_request(payload, garden) do
-    with {:ok, request} <- SowerClient.Orchestration.DeploymentRequest.cast(payload),
-         {:ok, subscriptions} <- validate_deployment_request(request, garden.id),
+  def handle_deployment_request(
+        %SowerClient.Orchestration.DeploymentRequest{} = request,
+        garden
+      ) do
+    with {:ok, subscriptions} <- validate_deployment_request(request, garden.id),
          {:ok, request_id} <-
            process_deployment(request.request_id, subscriptions, garden, force: request.force) do
       {:ok, request_id}

@@ -916,14 +916,13 @@ defmodule Sower.OrchestrationTest do
           seed_type: "nixos"
         })
 
-      # Payload with provided request_id (as the client would generate)
-      payload = %{
-        "subscription_sids" => [subscription.sid],
-        "request_id" => "req_test_#{System.unique_integer([:positive])}",
-        "force" => false
-      }
+      {:ok, request} =
+        SowerClient.Orchestration.DeploymentRequest.new(%{
+          subscription_sids: [subscription.sid],
+          force: false
+        })
 
-      assert {:ok, request_id} = Orchestration.handle_deployment_request(payload, garden)
+      assert {:ok, request_id} = Orchestration.handle_deployment_request(request, garden)
       assert is_binary(request_id)
     end
 
@@ -942,13 +941,14 @@ defmodule Sower.OrchestrationTest do
         })
 
       # Try to use garden2's subscription with garden1's context (should fail)
-      payload = %{
-        "subscription_sids" => [subscription.sid],
-        "force" => false
-      }
+      {:ok, request} =
+        SowerClient.Orchestration.DeploymentRequest.new(%{
+          subscription_sids: [subscription.sid],
+          force: false
+        })
 
       # This should be rejected because garden2 doesn't own the subscription
-      result = Orchestration.handle_deployment_request(payload, garden2)
+      result = Orchestration.handle_deployment_request(request, garden2)
       assert result == {:error, :unauthorized}
     end
 
