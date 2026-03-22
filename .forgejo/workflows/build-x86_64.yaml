@@ -2,7 +2,7 @@ on:
   push:
 
 env:
-  NIKS3_URL: ${{ vars.NIKS3_URL }}
+  NIKS3_SERVER_URL: ${{ vars.NIKS3_SERVER_URL }}
   SOWER_ENDPOINT: ${{ vars.SOWER_ENDPOINT }}
 
 jobs:
@@ -14,11 +14,9 @@ jobs:
 
       - name: go cli
         run: |
-          export HOME=$PWD
-
+          printf '%s' '${{ secrets.NIKS3_AUTH_TOKEN }}' > ../niks3-token
+          export NIKS3_AUTH_TOKEN_FILE="$PWD/../niks3-token"
           nix develop .#ci --command sower build --cache niks3:// --eval-jobs 12 .#sowerJobs.x86_64-linux --push
-        env:
-          NIKS3_AUTH_TOKEN: ${{ secrets.NIKS3_AUTH_TOKEN }}
 
   elixir-format:
     runs-on: local/x86_64-linux
