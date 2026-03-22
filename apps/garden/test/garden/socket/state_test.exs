@@ -3,6 +3,7 @@ defmodule Garden.Socket.StateTest do
 
   alias Garden.Socket.State
   alias SowerClient.Orchestration.DeploymentRequest
+  alias SowerClient.Orchestration.Deployment
   alias SowerClient.Orchestration.GardenSeedsReport
   alias SowerClient.Orchestration.Subscription
 
@@ -123,6 +124,55 @@ defmodule Garden.Socket.StateTest do
       ]
 
       assert State.poll_on_connect_subscriptions(subs) == []
+    end
+  end
+
+  describe "receive_deployment/2" do
+    test "enqueues new deployment" do
+      deployment = %Deployment{
+        sid: "deploy_123",
+        request_id: "dr_456",
+        seed_deployments: [],
+        skipped: false
+      }
+
+      assert {:enqueue, active} = State.receive_deployment(deployment, %{})
+      assert Map.has_key?(active, "deploy_123")
+      assert active["deploy_123"].sid == "deploy_123"
+    end
+
+    test "returns duplicate for already active deployment" do
+      deployment = %Deployment{
+        sid: "deploy_123",
+        request_id: "dr_456",
+        seed_deployments: [],
+        skipped: false
+      }
+
+      active = %{"deploy_123" => deployment}
+
+      assert :duplicate = State.receive_deployment(deployment, active)
+    end
+
+    test "returns skipped for skipped deployment" do
+      deployment = %Deployment{
+        sid: "deploy_123",
+        request_id: "dr_456",
+        seed_deployments: [],
+        skipped: true
+      }
+
+      assert :skipped = State.receive_deployment(deployment, %{})
+    end
+
+    test "allows simultaneous deployments for different sids" do
+      d1 = %Deployment{sid: "deploy_1", request_id: "dr_1", seed_deployments: [], skipped: false}
+      d2 = %Deployment{sid: "deploy_2", request_id: "dr_2", seed_deployments: [], skipped: false}
+
+      {:enqueue, active} = State.receive_deployment(d1, %{})
+      {:enqueue, active} = State.receive_deployment(d2, active)
+
+      assert map_size(active) == 2
     end
   end
 end

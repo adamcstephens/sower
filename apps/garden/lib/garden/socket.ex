@@ -167,35 +167,35 @@ defmodule Garden.Socket do
       )
       when topic == garden_sid do
     case SowerClient.Orchestration.Deployment.cast(payload) do
-      {:ok, %{skipped: true} = deployment} ->
-        Logger.info(
-          msg: "Deployment skipped by server",
-          request_id: deployment.request_id,
-          deployment_sid: deployment.sid
-        )
-
-        {:ok, socket}
-
       {:ok, deployment} ->
-        if Map.has_key?(socket.active_deployments, deployment.sid) do
-          Logger.debug(
-            msg: "Ignoring duplicate deployment event",
-            request_id: deployment.request_id,
-            deployment_sid: deployment.sid
-          )
+        case State.receive_deployment(deployment, socket.active_deployments) do
+          {:enqueue, active_deployments} ->
+            Logger.debug(
+              msg: "Received deployment",
+              request_id: deployment.request_id,
+              deployment_sid: deployment.sid
+            )
 
-          {:ok, socket}
-        else
-          Logger.debug(
-            msg: "Received deployment",
-            request_id: deployment.request_id,
-            deployment_sid: deployment.sid
-          )
+            send(self(), {:run_deployment, deployment.sid})
+            {:ok, %{socket | active_deployments: active_deployments}}
 
-          socket = put_in(socket.active_deployments[deployment.sid], deployment)
-          send(self(), {:run_deployment, deployment.sid})
+          :duplicate ->
+            Logger.debug(
+              msg: "Ignoring duplicate deployment event",
+              request_id: deployment.request_id,
+              deployment_sid: deployment.sid
+            )
 
-          {:ok, socket}
+            {:ok, socket}
+
+          :skipped ->
+            Logger.info(
+              msg: "Deployment skipped by server",
+              request_id: deployment.request_id,
+              deployment_sid: deployment.sid
+            )
+
+            {:ok, socket}
         end
 
       {:error, error} ->
