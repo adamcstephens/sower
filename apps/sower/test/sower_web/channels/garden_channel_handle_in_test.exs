@@ -194,4 +194,164 @@ defmodule SowerWeb.GardenChannelHandleInTest do
       assert_reply ref, :error, :deployment_not_found
     end
   end
+
+  describe "deployment:seed_status" do
+    test "updates seed deployment state" do
+      %{socket: socket, garden: garden} = connect_and_join_garden()
+
+      seed = seed_fixture(%{name: "seed-status-seed", seed_type: "nixos"})
+
+      subscription =
+        subscription_fixture(%{
+          garden_id: garden.id,
+          seed_name: seed.name,
+          seed_type: seed.seed_type
+        })
+
+      deployment =
+        deployment_fixture(%{
+          garden_id: garden.id,
+          seeds: [seed],
+          subscriptions: [subscription]
+        })
+
+      ref =
+        push(socket, "deployment:seed_status", %{
+          "deployment_sid" => deployment.sid,
+          "seed_sid" => seed.sid,
+          "status" => "downloading"
+        })
+
+      assert_reply ref, :ok, %{}
+    end
+
+    test "returns error for unknown deployment" do
+      %{socket: socket} = connect_and_join_garden()
+
+      ref =
+        push(socket, "deployment:seed_status", %{
+          "deployment_sid" => "nonexistent_sid",
+          "seed_sid" => "nonexistent_seed",
+          "status" => "downloading"
+        })
+
+      assert_reply ref, :error, :deployment_not_found
+    end
+
+    test "returns error for seed not in deployment" do
+      %{socket: socket, garden: garden} = connect_and_join_garden()
+
+      seed = seed_fixture(%{name: "seed-status-miss", seed_type: "nixos"})
+      other_seed = seed_fixture(%{name: "seed-status-other", seed_type: "nixos"})
+
+      subscription =
+        subscription_fixture(%{
+          garden_id: garden.id,
+          seed_name: seed.name,
+          seed_type: seed.seed_type
+        })
+
+      deployment =
+        deployment_fixture(%{
+          garden_id: garden.id,
+          seeds: [seed],
+          subscriptions: [subscription]
+        })
+
+      ref =
+        push(socket, "deployment:seed_status", %{
+          "deployment_sid" => deployment.sid,
+          "seed_sid" => other_seed.sid,
+          "status" => "downloading"
+        })
+
+      assert_reply ref, :error, :seed_not_in_deployment
+    end
+  end
+
+  describe "deployment:seed_result" do
+    test "records seed deployment result and updates DB" do
+      %{socket: socket, garden: garden} = connect_and_join_garden()
+
+      seed = seed_fixture(%{name: "seed-result-seed", seed_type: "nixos"})
+
+      subscription =
+        subscription_fixture(%{
+          garden_id: garden.id,
+          seed_name: seed.name,
+          seed_type: seed.seed_type
+        })
+
+      deployment =
+        deployment_fixture(%{
+          garden_id: garden.id,
+          seeds: [seed],
+          subscriptions: [subscription]
+        })
+
+      ref =
+        push(socket, "deployment:seed_result", %{
+          "deployment_sid" => deployment.sid,
+          "seed_sid" => seed.sid,
+          "result" => "success",
+          "log" => "deployment completed successfully"
+        })
+
+      assert_reply ref, :ok, %{}
+
+      [seed_deployment] =
+        Sower.Repo.preload(deployment, :seed_deployments, force: true).seed_deployments
+
+      assert seed_deployment.result == :success
+      assert seed_deployment.log == "deployment completed successfully"
+    end
+
+    test "appends log without setting result (log-only update)" do
+      %{socket: socket, garden: garden} = connect_and_join_garden()
+
+      seed = seed_fixture(%{name: "seed-result-logonly", seed_type: "nixos"})
+
+      subscription =
+        subscription_fixture(%{
+          garden_id: garden.id,
+          seed_name: seed.name,
+          seed_type: seed.seed_type
+        })
+
+      deployment =
+        deployment_fixture(%{
+          garden_id: garden.id,
+          seeds: [seed],
+          subscriptions: [subscription]
+        })
+
+      ref =
+        push(socket, "deployment:seed_result", %{
+          "deployment_sid" => deployment.sid,
+          "seed_sid" => seed.sid,
+          "log" => "partial output"
+        })
+
+      assert_reply ref, :ok, %{}
+
+      [seed_deployment] =
+        Sower.Repo.preload(deployment, :seed_deployments, force: true).seed_deployments
+
+      assert seed_deployment.result == nil
+      assert seed_deployment.log == "partial output"
+    end
+
+    test "returns error for unknown deployment" do
+      %{socket: socket} = connect_and_join_garden()
+
+      ref =
+        push(socket, "deployment:seed_result", %{
+          "deployment_sid" => "nonexistent_sid",
+          "seed_sid" => "nonexistent_seed",
+          "result" => "success"
+        })
+
+      assert_reply ref, :error, :deployment_not_found
+    end
+  end
 end
