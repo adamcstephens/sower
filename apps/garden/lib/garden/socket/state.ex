@@ -9,6 +9,7 @@ defmodule Garden.Socket.State do
 
   alias SowerClient.Orchestration.Deployment
   alias SowerClient.Orchestration.DeploymentRequest
+  alias SowerClient.Orchestration.DeploymentResult
   alias SowerClient.Orchestration.Subscription
 
   def build_seed_report(
@@ -55,6 +56,24 @@ defmodule Garden.Socket.State do
 
   def poll_on_connect_subscriptions(subscriptions) do
     Enum.filter(subscriptions, & &1.poll_on_connect)
+  end
+
+  def complete_deployment(sid, result, active_deployments) do
+    case Map.get(active_deployments, sid) do
+      nil ->
+        :not_found
+
+      deployment ->
+        {:ok, deployment_result} =
+          DeploymentResult.cast(%{
+            request_id: deployment.request_id,
+            deployment_sid: deployment.sid,
+            result: result,
+            deployed_at: DateTime.utc_now() |> DateTime.to_iso8601()
+          })
+
+        {:ok, deployment_result, Map.delete(active_deployments, sid)}
+    end
   end
 
   def lookup_deployment(sid, active_deployments) do
