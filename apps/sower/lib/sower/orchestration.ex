@@ -48,7 +48,7 @@ defmodule Sower.Orchestration do
   defdelegate get_deployment!(id), to: Deployment
   defdelegate get_deployment_sid!(sid), to: Deployment
   defdelegate get_deployment_sid(sid), to: Deployment
-  defdelegate handle_deployment_request(payload, garden), to: Deployment
+  defdelegate handle_deployment_request(request, garden), to: Deployment
   defdelegate list_deployments(), to: Deployment
   defdelegate list_deployments(garden, opts \\ []), to: Deployment
   defdelegate list_matching_seeds(subscription, limit \\ 10), to: Deployment
