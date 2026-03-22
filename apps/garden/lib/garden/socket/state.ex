@@ -83,6 +83,10 @@ defmodule Garden.Socket.State do
     end
   end
 
+  def should_reload?(active_deployments, pending_reload) do
+    map_size(active_deployments) == 0 and pending_reload
+  end
+
   def receive_deployment(%Deployment{skipped: true}, _active_deployments) do
     :skipped
   end

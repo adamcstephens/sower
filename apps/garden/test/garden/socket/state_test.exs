@@ -232,4 +232,27 @@ defmodule Garden.Socket.StateTest do
       assert Map.has_key?(updated_active, "deploy_2")
     end
   end
+
+  describe "should_reload?/2" do
+    test "returns true when no active deployments and pending reload" do
+      assert State.should_reload?(%{}, true)
+    end
+
+    test "returns false when active deployments exist" do
+      active = %{
+        "deploy_1" => %Deployment{
+          sid: "deploy_1",
+          request_id: "dr_1",
+          seed_deployments: [],
+          skipped: false
+        }
+      }
+
+      refute State.should_reload?(active, true)
+    end
+
+    test "returns false when no pending reload" do
+      refute State.should_reload?(%{}, false)
+    end
+  end
 end

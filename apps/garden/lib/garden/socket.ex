@@ -325,8 +325,8 @@ defmodule Garden.Socket do
   end
 
   def handle_info(:check_pending_reload, socket) do
-    if map_size(socket.active_deployments) == 0 do
-      if Garden.take_pending_reload(), do: reload_garden_service()
+    if State.should_reload?(socket.active_deployments, Garden.take_pending_reload()) do
+      reload_garden_service()
     end
 
     {:noreply, socket}
