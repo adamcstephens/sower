@@ -1,7 +1,8 @@
-defmodule Garden.Socket.StateTest do
+defmodule Garden.Socket.LifecycleTest do
   use ExUnit.Case, async: true
 
-  alias Garden.Socket.State
+  alias Garden.Socket.Lifecycle
+
   alias SowerClient.Orchestration.DeploymentRequest
   alias SowerClient.Orchestration.Deployment
   alias SowerClient.Orchestration.GardenSeedsReport
@@ -9,20 +10,20 @@ defmodule Garden.Socket.StateTest do
 
   describe "build_deployment_request/2" do
     test "builds request with subscription sid" do
-      {:ok, %DeploymentRequest{} = request} = State.build_deployment_request("sub_123", false)
+      {:ok, %DeploymentRequest{} = request} = Lifecycle.build_deployment_request("sub_123", false)
 
       assert request.subscription_sids == ["sub_123"]
       assert request.request_id != nil
     end
 
     test "sets force flag when true" do
-      {:ok, %DeploymentRequest{} = request} = State.build_deployment_request("sub_123", true)
+      {:ok, %DeploymentRequest{} = request} = Lifecycle.build_deployment_request("sub_123", true)
 
       assert request.force == true
     end
 
     test "omits force flag when false" do
-      {:ok, %DeploymentRequest{} = request} = State.build_deployment_request("sub_123", false)
+      {:ok, %DeploymentRequest{} = request} = Lifecycle.build_deployment_request("sub_123", false)
 
       assert request.force == false
     end
@@ -38,20 +39,20 @@ defmodule Garden.Socket.StateTest do
         })
 
       assert {:report, ^report} =
-               State.build_seed_report(subscriptions, fn _subs -> report end)
+               Lifecycle.build_seed_report(subscriptions, fn _subs -> report end)
     end
 
     test "returns no_profiles when subscriptions exist but no profiles found" do
       subscriptions = [%{seed_type: "nixos", seed_name: "host", rules: []}]
       report = GardenSeedsReport.cast!(%{profiles: []})
 
-      assert :no_profiles = State.build_seed_report(subscriptions, fn _subs -> report end)
+      assert :no_profiles = Lifecycle.build_seed_report(subscriptions, fn _subs -> report end)
     end
 
     test "returns report when subscriptions are empty" do
       report = GardenSeedsReport.cast!(%{profiles: []})
 
-      assert {:report, ^report} = State.build_seed_report([], fn _subs -> report end)
+      assert {:report, ^report} = Lifecycle.build_seed_report([], fn _subs -> report end)
     end
   end
 
@@ -67,7 +68,7 @@ defmodule Garden.Socket.StateTest do
         %{"seed_name" => "user", "seed_type" => "home-manager", "sid" => "sub_def"}
       ]
 
-      result = State.merge_subscriptions(config_subs, registered)
+      result = Lifecycle.merge_subscriptions(config_subs, registered)
 
       assert length(result) == 2
       assert Enum.find(result, &(&1.seed_name == "host")).sid == "sub_abc"
@@ -85,7 +86,7 @@ defmodule Garden.Socket.StateTest do
         %{"seed_name" => "host", "seed_type" => "nixos", "sid" => "sub_abc"}
       ]
 
-      result = State.merge_subscriptions(config_subs, registered)
+      result = Lifecycle.merge_subscriptions(config_subs, registered)
 
       assert length(result) == 1
       assert hd(result).seed_name == "host"
@@ -96,7 +97,7 @@ defmodule Garden.Socket.StateTest do
         Subscription.cast!(%{seed_name: "host", seed_type: "nixos"})
       ]
 
-      assert State.merge_subscriptions(config_subs, []) == []
+      assert Lifecycle.merge_subscriptions(config_subs, []) == []
     end
   end
 
@@ -112,7 +113,7 @@ defmodule Garden.Socket.StateTest do
         Subscription.cast!(%{seed_name: "user", seed_type: "home-manager", sid: "sub_2"})
       ]
 
-      result = State.poll_on_connect_subscriptions(subs)
+      result = Lifecycle.poll_on_connect_subscriptions(subs)
 
       assert length(result) == 1
       assert hd(result).seed_name == "host"
@@ -123,7 +124,7 @@ defmodule Garden.Socket.StateTest do
         Subscription.cast!(%{seed_name: "host", seed_type: "nixos", sid: "sub_1"})
       ]
 
-      assert State.poll_on_connect_subscriptions(subs) == []
+      assert Lifecycle.poll_on_connect_subscriptions(subs) == []
     end
   end
 
@@ -136,7 +137,7 @@ defmodule Garden.Socket.StateTest do
         skipped: false
       }
 
-      assert {:enqueue, active} = State.receive_deployment(deployment, %{})
+      assert {:enqueue, active} = Lifecycle.receive_deployment(deployment, %{})
       assert Map.has_key?(active, "deploy_123")
       assert active["deploy_123"].sid == "deploy_123"
     end
@@ -151,7 +152,7 @@ defmodule Garden.Socket.StateTest do
 
       active = %{"deploy_123" => deployment}
 
-      assert :duplicate = State.receive_deployment(deployment, active)
+      assert :duplicate = Lifecycle.receive_deployment(deployment, active)
     end
 
     test "returns skipped for skipped deployment" do
@@ -162,15 +163,15 @@ defmodule Garden.Socket.StateTest do
         skipped: true
       }
 
-      assert :skipped = State.receive_deployment(deployment, %{})
+      assert :skipped = Lifecycle.receive_deployment(deployment, %{})
     end
 
     test "allows simultaneous deployments for different sids" do
       d1 = %Deployment{sid: "deploy_1", request_id: "dr_1", seed_deployments: [], skipped: false}
       d2 = %Deployment{sid: "deploy_2", request_id: "dr_2", seed_deployments: [], skipped: false}
 
-      {:enqueue, active} = State.receive_deployment(d1, %{})
-      {:enqueue, active} = State.receive_deployment(d2, active)
+      {:enqueue, active} = Lifecycle.receive_deployment(d1, %{})
+      {:enqueue, active} = Lifecycle.receive_deployment(d2, active)
 
       assert map_size(active) == 2
     end
@@ -187,11 +188,11 @@ defmodule Garden.Socket.StateTest do
 
       active = %{"deploy_123" => deployment}
 
-      assert {:ok, ^deployment} = State.lookup_deployment("deploy_123", active)
+      assert {:ok, ^deployment} = Lifecycle.lookup_deployment("deploy_123", active)
     end
 
     test "returns not_found when missing" do
-      assert :not_found = State.lookup_deployment("deploy_123", %{})
+      assert :not_found = Lifecycle.lookup_deployment("deploy_123", %{})
     end
   end
 
@@ -207,7 +208,7 @@ defmodule Garden.Socket.StateTest do
       active = %{"deploy_123" => deployment}
 
       assert {:ok, result, updated_active} =
-               State.complete_deployment("deploy_123", :success, active)
+               Lifecycle.complete_deployment("deploy_123", :success, active)
 
       assert result.request_id == "dr_456"
       assert result.deployment_sid == "deploy_123"
@@ -217,7 +218,7 @@ defmodule Garden.Socket.StateTest do
     end
 
     test "returns not_found when deployment missing" do
-      assert :not_found = State.complete_deployment("deploy_123", :success, %{})
+      assert :not_found = Lifecycle.complete_deployment("deploy_123", :success, %{})
     end
 
     test "preserves other deployments in map" do
@@ -226,7 +227,7 @@ defmodule Garden.Socket.StateTest do
 
       active = %{"deploy_1" => d1, "deploy_2" => d2}
 
-      {:ok, _result, updated_active} = State.complete_deployment("deploy_1", :success, active)
+      {:ok, _result, updated_active} = Lifecycle.complete_deployment("deploy_1", :success, active)
 
       assert map_size(updated_active) == 1
       assert Map.has_key?(updated_active, "deploy_2")
@@ -235,7 +236,7 @@ defmodule Garden.Socket.StateTest do
 
   describe "should_reload?/2" do
     test "returns true when no active deployments and pending reload" do
-      assert State.should_reload?(%{}, true)
+      assert Lifecycle.should_reload?(%{}, true)
     end
 
     test "returns false when active deployments exist" do
@@ -248,28 +249,28 @@ defmodule Garden.Socket.StateTest do
         }
       }
 
-      refute State.should_reload?(active, true)
+      refute Lifecycle.should_reload?(active, true)
     end
 
     test "returns false when no pending reload" do
-      refute State.should_reload?(%{}, false)
+      refute Lifecycle.should_reload?(%{}, false)
     end
   end
 
   describe "process_hello_reply/2" do
     test "returns persist true when garden_sid differs from stored" do
       assert {:join, "garden_new", persist?: true} =
-               State.process_hello_reply("garden_new", "garden_old")
+               Lifecycle.process_hello_reply("garden_new", "garden_old")
     end
 
     test "returns persist false when garden_sid matches stored" do
       assert {:join, "garden_same", persist?: false} =
-               State.process_hello_reply("garden_same", "garden_same")
+               Lifecycle.process_hello_reply("garden_same", "garden_same")
     end
 
     test "returns persist true when stored is nil" do
       assert {:join, "garden_new", persist?: true} =
-               State.process_hello_reply("garden_new", nil)
+               Lifecycle.process_hello_reply("garden_new", nil)
     end
   end
 end

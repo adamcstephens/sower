@@ -1,6 +1,6 @@
-defmodule Garden.Socket.State do
+defmodule Garden.Socket.Lifecycle do
   @moduledoc """
-  Pure state transition functions for Garden.Socket.
+  Pure lifecycle transition functions for Garden.Socket.
 
   Each function takes relevant state and returns a result without
   performing side effects. The socket callbacks are thin wrappers
