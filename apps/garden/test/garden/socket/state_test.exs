@@ -175,4 +175,23 @@ defmodule Garden.Socket.StateTest do
       assert map_size(active) == 2
     end
   end
+
+  describe "lookup_deployment/2" do
+    test "returns deployment when found" do
+      deployment = %Deployment{
+        sid: "deploy_123",
+        request_id: "dr_456",
+        seed_deployments: [],
+        skipped: false
+      }
+
+      active = %{"deploy_123" => deployment}
+
+      assert {:ok, ^deployment} = State.lookup_deployment("deploy_123", active)
+    end
+
+    test "returns not_found when missing" do
+      assert :not_found = State.lookup_deployment("deploy_123", %{})
+    end
+  end
 end
