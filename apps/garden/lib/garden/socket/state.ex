@@ -7,6 +7,7 @@ defmodule Garden.Socket.State do
   that call these functions and execute the returned effects.
   """
 
+  alias SowerClient.Orchestration.Deployment
   alias SowerClient.Orchestration.DeploymentRequest
   alias SowerClient.Orchestration.Subscription
 
@@ -54,5 +55,17 @@ defmodule Garden.Socket.State do
 
   def poll_on_connect_subscriptions(subscriptions) do
     Enum.filter(subscriptions, & &1.poll_on_connect)
+  end
+
+  def receive_deployment(%Deployment{skipped: true}, _active_deployments) do
+    :skipped
+  end
+
+  def receive_deployment(%Deployment{} = deployment, active_deployments) do
+    if Map.has_key?(active_deployments, deployment.sid) do
+      :duplicate
+    else
+      {:enqueue, Map.put(active_deployments, deployment.sid, deployment)}
+    end
   end
 end
