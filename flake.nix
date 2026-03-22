@@ -47,7 +47,7 @@
             devShells = {
               ci = pkgs.mkShell {
                 packages = [
-                  pkgs.attic-client
+                  pkgs.niks3
                   self'.packages.cli
                 ];
               };
