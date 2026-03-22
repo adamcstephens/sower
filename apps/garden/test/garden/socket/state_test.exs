@@ -194,4 +194,42 @@ defmodule Garden.Socket.StateTest do
       assert :not_found = State.lookup_deployment("deploy_123", %{})
     end
   end
+
+  describe "complete_deployment/3" do
+    test "returns result and removes deployment from active map" do
+      deployment = %Deployment{
+        sid: "deploy_123",
+        request_id: "dr_456",
+        seed_deployments: [],
+        skipped: false
+      }
+
+      active = %{"deploy_123" => deployment}
+
+      assert {:ok, result, updated_active} =
+               State.complete_deployment("deploy_123", :success, active)
+
+      assert result.request_id == "dr_456"
+      assert result.deployment_sid == "deploy_123"
+      assert result.result == :success
+      assert result.deployed_at != nil
+      assert updated_active == %{}
+    end
+
+    test "returns not_found when deployment missing" do
+      assert :not_found = State.complete_deployment("deploy_123", :success, %{})
+    end
+
+    test "preserves other deployments in map" do
+      d1 = %Deployment{sid: "deploy_1", request_id: "dr_1", seed_deployments: [], skipped: false}
+      d2 = %Deployment{sid: "deploy_2", request_id: "dr_2", seed_deployments: [], skipped: false}
+
+      active = %{"deploy_1" => d1, "deploy_2" => d2}
+
+      {:ok, _result, updated_active} = State.complete_deployment("deploy_1", :success, active)
+
+      assert map_size(updated_active) == 1
+      assert Map.has_key?(updated_active, "deploy_2")
+    end
+  end
 end

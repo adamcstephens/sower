@@ -309,28 +309,18 @@ defmodule Garden.Socket do
   end
 
   def handle_info({:deployment_completed, sid, result}, socket) do
-    case Map.get(socket.active_deployments, sid) do
-      nil ->
+    case State.complete_deployment(sid, result, socket.active_deployments) do
+      :not_found ->
         Logger.warning(msg: "Deployment not found during completion", sid: sid)
         {:noreply, socket}
 
-      deployment ->
-        {:ok, deployment_result} =
-          SowerClient.Orchestration.DeploymentResult.cast(%{
-            request_id: deployment.request_id,
-            deployment_sid: deployment.sid,
-            result: result,
-            deployed_at: DateTime.utc_now() |> DateTime.to_iso8601()
-          })
-
+      {:ok, deployment_result, active_deployments} ->
         {:ok, _result_ref} = push_message(socket, deployment_result)
-
-        socket = update_in(socket.active_deployments, &Map.delete(&1, sid))
 
         cast(:report_seeds)
         send(self(), :check_pending_reload)
 
-        {:noreply, socket}
+        {:noreply, %{socket | active_deployments: active_deployments}}
     end
   end
 
