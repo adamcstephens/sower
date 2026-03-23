@@ -157,3 +157,87 @@ fn main() {
     // Don't wait for stdin thread — it'll die when we exit
     drop(stdin_thread);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    // --- Unit tests for packet protocol ---
+
+    #[test]
+    fn send_packet_encodes_tag_and_data() {
+        let buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+        send_packet(&buf, TAG_STDOUT, b"hello");
+
+        let output = buf.lock().unwrap();
+        // length = 1 (tag) + 5 (data) = 6
+        assert_eq!(&output[0..4], &6u32.to_be_bytes());
+        assert_eq!(output[4], TAG_STDOUT);
+        assert_eq!(&output[5..], b"hello");
+    }
+
+    #[test]
+    fn send_packet_empty_data() {
+        let buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+        send_packet(&buf, TAG_PID, &[]);
+
+        let output = buf.lock().unwrap();
+        // length = 1 (tag only)
+        assert_eq!(&output[0..4], &1u32.to_be_bytes());
+        assert_eq!(output[4], TAG_PID);
+        assert_eq!(output.len(), 5);
+    }
+
+    #[test]
+    fn read_packet_decodes_correctly() {
+        let mut data = Vec::new();
+        // Write a packet: length=3, payload=[0x01, 0xAA, 0xBB]
+        data.extend_from_slice(&3u32.to_be_bytes());
+        data.extend_from_slice(&[0x01, 0xAA, 0xBB]);
+
+        let mut cursor = Cursor::new(data);
+        let packet = read_packet(&mut cursor).unwrap();
+        assert_eq!(packet, vec![0x01, 0xAA, 0xBB]);
+    }
+
+    #[test]
+    fn read_packet_empty_payload() {
+        let mut data = Vec::new();
+        data.extend_from_slice(&0u32.to_be_bytes());
+
+        let mut cursor = Cursor::new(data);
+        let packet = read_packet(&mut cursor).unwrap();
+        assert!(packet.is_empty());
+    }
+
+    #[test]
+    fn read_packet_truncated_length_errors() {
+        let mut cursor = Cursor::new(vec![0x00, 0x01]); // only 2 bytes, need 4
+        assert!(read_packet(&mut cursor).is_err());
+    }
+
+    #[test]
+    fn read_packet_truncated_payload_errors() {
+        let mut data = Vec::new();
+        data.extend_from_slice(&10u32.to_be_bytes()); // claims 10 bytes
+        data.extend_from_slice(&[0x01, 0x02]); // only 2 bytes
+
+        let mut cursor = Cursor::new(data);
+        assert!(read_packet(&mut cursor).is_err());
+    }
+
+    #[test]
+    fn send_then_read_roundtrip() {
+        let buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+        send_packet(&buf, TAG_STDERR, b"error msg");
+
+        let data = buf.lock().unwrap().clone();
+        let mut cursor = Cursor::new(data);
+        let packet = read_packet(&mut cursor).unwrap();
+
+        assert_eq!(packet[0], TAG_STDERR);
+        assert_eq!(&packet[1..], b"error msg");
+    }
+
+}
