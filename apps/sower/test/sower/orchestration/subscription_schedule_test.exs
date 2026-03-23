@@ -41,8 +41,16 @@ defmodule Sower.Orchestration.SubscriptionScheduleTest do
           schedule: "0 3 * * *"
         })
 
-      # Deploy 30 minutes ago — within the current schedule window
-      deployed_at = DateTime.add(DateTime.utc_now(), -30 * 60, :second)
+      # Compute a stable now: 30 minutes after the most recent 3am UTC
+      {:ok, cron} = Crontab.CronExpression.Parser.parse("0 3 * * *")
+      previous_run = Crontab.Scheduler.get_previous_run_date!(cron, NaiveDateTime.utc_now())
+      now = DateTime.from_naive!(previous_run, "Etc/UTC") |> DateTime.add(30 * 60, :second)
+
+      # Deploy 15 minutes after the cron run — within the current window
+      deployed_at =
+        DateTime.from_naive!(previous_run, "Etc/UTC")
+        |> DateTime.add(15 * 60, :second)
+        |> DateTime.truncate(:second)
 
       deployment_fixture(%{
         garden_id: garden.id,
@@ -50,13 +58,8 @@ defmodule Sower.Orchestration.SubscriptionScheduleTest do
         subscriptions: [sub],
         state: :completed,
         result: :success,
-        deployed_at: DateTime.truncate(deployed_at, :second)
+        deployed_at: deployed_at
       })
-
-      # Set now to 30 minutes after the most recent 3am UTC
-      {:ok, cron} = Crontab.CronExpression.Parser.parse("0 3 * * *")
-      previous_run = Crontab.Scheduler.get_previous_run_date!(cron, NaiveDateTime.utc_now())
-      now = DateTime.from_naive!(previous_run, "Etc/UTC") |> DateTime.add(30 * 60, :second)
 
       overdue = Subscription.catch_up_overdue_schedules(garden, now: now)
 

@@ -98,7 +98,7 @@ defmodule SowerWeb.GardenChannelTest do
     end
   end
 
-  describe "replay_unresolved_deployments on join" do
+  describe "reconcile_deployments on join" do
     test "replays unresolved deployments and skips terminal ones" do
       user = user_fixture()
       Sower.Repo.put_org_id(user.org_id)

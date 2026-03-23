@@ -78,7 +78,7 @@ defmodule SowerWeb.GardenChannel do
 
       garden when garden.local_sid == local_sid ->
         send(self(), :track_presence)
-        send(self(), :replay_unresolved_deployments)
+        send(self(), :reconcile_deployments)
         {:ok, %{conn_sid: conn_sid}, assign(socket, :garden, garden)}
 
       _ ->
@@ -133,7 +133,6 @@ defmodule SowerWeb.GardenChannel do
   handle_schema(SowerClient.Orchestration.SubscriptionSync, fn req, socket ->
     case Sower.Orchestration.sync_subscriptions(req.subscriptions, socket.assigns.garden.id) do
       {:ok, subscriptions} ->
-        send(self(), :catch_up_overdue_schedules)
         {:ok, %{subscriptions: subscriptions}}
 
       {:error, error} ->
@@ -210,33 +209,10 @@ defmodule SowerWeb.GardenChannel do
   end
 
   def handle_info(
-        :replay_unresolved_deployments,
+        :reconcile_deployments,
         %Phoenix.Socket{assigns: %{garden: garden}} = socket
       ) do
-    {:ok, deployments} = Orchestration.replay_unresolved_deployments(garden)
-
-    if deployments != [] do
-      Logger.debug(
-        msg: "Replayed unresolved deployments after garden join",
-        garden_sid: garden.sid,
-        deployment_count: length(deployments)
-      )
-    end
-
-    {:noreply, socket}
-  end
-
-  def handle_info(
-        :catch_up_overdue_schedules,
-        %Phoenix.Socket{assigns: %{garden: garden}} = socket
-      ) do
-    Sower.Repo.put_org_id(garden.org_id)
-    overdue = Orchestration.catch_up_overdue_schedules(garden)
-
-    Enum.each(overdue, fn sub ->
-      Orchestration.Deployment.deploy_subscription(sub)
-    end)
-
+    Orchestration.Deployment.reconcile_deployments_on_connect(garden)
     {:noreply, socket}
   end
 

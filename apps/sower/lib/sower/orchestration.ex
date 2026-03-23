@@ -57,7 +57,6 @@ defmodule Sower.Orchestration do
   defdelegate match_seed(subscription), to: Deployment
   defdelegate process_deployment(request_id, subscriptions, garden, opts \\ []), to: Deployment
   defdelegate record_deployment(result), to: Deployment
-  defdelegate replay_unresolved_deployments(garden, opts \\ []), to: Deployment
   defdelegate request_deployment(request), to: Deployment
   defdelegate retry_deployment(deployment, user_id), to: Deployment
   defdelegate update_deployment(deployment, attrs), to: Deployment

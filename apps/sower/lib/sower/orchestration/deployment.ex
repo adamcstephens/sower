@@ -253,36 +253,53 @@ defmodule Sower.Orchestration.Deployment do
     end)
   end
 
-  # Replay
+  # Reconcile
 
-  def replay_unresolved_deployments(%Garden{} = garden, opts \\ []) do
-    broadcast_fun = Keyword.get(opts, :broadcast_fun, &SowerWeb.Endpoint.broadcast/3)
-
-    request_id_fun =
-      Keyword.get(opts, :request_id_fun, fn -> SowerClient.Sid.generate("request") end)
-
+  def reconcile_deployments_on_connect(%Garden{} = garden, opts \\ []) do
     now = Keyword.get(opts, :now, DateTime.utc_now())
 
-    deployments = list_unresolved_deployments_for_garden(garden)
-    mark_deployments_dispatched(deployments, now)
+    # 1. Gather what needs attention
+    overdue = Subscription.catch_up_overdue_schedules(garden, now: now)
+    overdue_sub_ids = MapSet.new(overdue, & &1.id)
+    unresolved = list_unresolved_deployments_for_garden(garden)
 
-    Enum.each(deployments, fn deployment ->
-      payload = deployment_event_payload(deployment, request_id_fun.())
-      broadcast_fun.("garden:#{garden.sid}", "deployment", payload)
-      # Backward compatibility: 0.7.0 gardens join "agent:*"
-      broadcast_fun.("agent:#{garden.sid}", "deployment", payload)
+    # 2. Partition unresolved: replay those not superseded, cancel those that are
+    {to_cancel, to_replay} =
+      Enum.split_with(unresolved, fn deployment ->
+        deployment.subscriptions
+        |> Enum.any?(fn sub -> MapSet.member?(overdue_sub_ids, sub.id) end)
+      end)
+
+    Enum.each(to_cancel, fn deployment ->
+      update_deployment(deployment, %{state: :stale, result: :failure})
     end)
 
-    if deployments != [] do
+    # 3. Replay valid unresolved deployments
+    mark_deployments_dispatched(to_replay, now)
+
+    Enum.each(to_replay, fn deployment ->
+      request_id = SowerClient.Sid.generate("request")
+      payload = deployment_event_payload(deployment, request_id)
+      SowerWeb.Endpoint.broadcast("garden:#{garden.sid}", "deployment", payload)
+      SowerWeb.Endpoint.broadcast("agent:#{garden.sid}", "deployment", payload)
+    end)
+
+    # 4. Deploy fresh for all overdue subscriptions
+    Enum.each(overdue, fn sub ->
+      deploy_subscription(sub)
+    end)
+
+    if to_replay != [] or overdue != [] or to_cancel != [] do
       Logger.info(
-        msg: "Replayed unresolved deployments",
+        msg: "Reconciled deployments on connect",
         garden_sid: garden.sid,
-        deployment_count: length(deployments),
-        deployment_sids: Enum.map(deployments, & &1.sid)
+        replayed_count: length(to_replay),
+        cancelled_count: length(to_cancel),
+        overdue_count: length(overdue)
       )
     end
 
-    {:ok, deployments}
+    {:ok, %{replayed: to_replay, cancelled: to_cancel, overdue: overdue}}
   end
 
   # Seed matching
