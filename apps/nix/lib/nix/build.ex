@@ -96,14 +96,7 @@ defmodule Nix.Build do
       drv_path: state.build.drv_path
     )
 
-    {:ok, pid, ospid} =
-      :exec.run_link(
-        cmd,
-        [
-          :stdout,
-          :stderr
-        ]
-      )
+    {:ok, pid, ospid} = Rexec.run_link(cmd)
 
     state = %{
       state

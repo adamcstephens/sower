@@ -170,8 +170,6 @@ in
       ];
 
       environment = {
-        # erlexec needs a shell
-        SHELL = lib.getExe pkgs.bash;
         # load code on demand, reduces memory requirement
         RELEASE_MODE = "interactive";
 

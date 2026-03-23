@@ -35,6 +35,24 @@ callPackages ./deps.nix {
     #   env.DIAGNOSTIC = "1";
     # });
 
+    rexec = prev.rexec.override (
+      old:
+      let
+        native = rustPlatform.buildRustPackage {
+          pname = "rexec-native";
+          version = old.version;
+          src = "${old.src}/native/rexec_native";
+          cargoLock.lockFile = "${old.src}/native/rexec_native/Cargo.lock";
+        };
+      in
+      {
+        preBuild = ''
+          mkdir -p priv/
+          cp ${native}/bin/rexec_native priv/
+        '';
+      }
+    );
+
     esbuild = prev.esbuild.override (old: {
       patches = [ ./esbuild-loadpaths.patch ];
     });
