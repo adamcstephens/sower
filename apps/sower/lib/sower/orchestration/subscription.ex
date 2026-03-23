@@ -3,6 +3,8 @@ defmodule Sower.Orchestration.Subscription do
   import Ecto.Changeset
   import Ecto.Query, warn: false
 
+  require Logger
+
   alias Sower.Repo
   alias Sower.Orchestration.{Garden, Deployment, SubscriptionDeployment}
 
@@ -19,6 +21,8 @@ defmodule Sower.Orchestration.Subscription do
 
     field :seed_name, :string
     field :seed_type, :string
+    field :schedule, :string
+    field :timezone, :string
     embeds_many :rules, __MODULE__.Rule
 
     timestamps(type: :utc_datetime)
@@ -27,7 +31,7 @@ defmodule Sower.Orchestration.Subscription do
   @doc false
   def changeset(subscription, attrs) do
     subscription
-    |> cast(attrs, [:garden_id, :seed_name, :seed_type])
+    |> cast(attrs, [:garden_id, :seed_name, :seed_type, :schedule, :timezone])
     |> cast_embed(:rules, with: &__MODULE__.Rule.changeset/2)
     |> unique_constraint([:garden_id, :org_id, :seed_name, :seed_type])
   end
@@ -130,7 +134,7 @@ defmodule Sower.Orchestration.Subscription do
          }
          |> changeset(attrs)
          |> Repo.insert(
-           on_conflict: {:replace, [:updated_at, :rules]},
+           on_conflict: {:replace, [:updated_at, :rules, :schedule, :timezone]},
            conflict_target: [:garden_id, :org_id, :seed_name, :seed_type],
            returning: true
          ) do
@@ -143,7 +147,9 @@ defmodule Sower.Orchestration.Subscription do
         %SowerClient.Orchestration.Subscription{
           seed_name: seed_name,
           seed_type: seed_type,
-          rules: rules
+          rules: rules,
+          schedule: schedule,
+          timezone: timezone
         },
         garden_id
       ) do
@@ -151,7 +157,9 @@ defmodule Sower.Orchestration.Subscription do
            garden_id: garden_id,
            seed_name: seed_name,
            seed_type: seed_type,
-           rules: rules
+           rules: rules,
+           schedule: schedule,
+           timezone: timezone
          }) do
       {:ok, subscription} ->
         {:ok, SowerClient.Orchestration.Subscription.cast!(subscription)}
@@ -197,6 +205,103 @@ defmodule Sower.Orchestration.Subscription do
     subscription
     |> Repo.preload(:garden)
     |> changeset(attrs)
+  end
+
+  # Schedule catch-up
+
+  def catch_up_overdue_schedules(%Garden{} = garden, opts \\ []) do
+    now = Keyword.get(opts, :now, DateTime.utc_now())
+
+    scheduled_subscriptions = list_scheduled_subscriptions_for_garden(garden)
+
+    overdue =
+      Enum.filter(scheduled_subscriptions, fn sub ->
+        schedule_is_overdue?(sub, now)
+      end)
+
+    if overdue != [] do
+      Logger.info(
+        msg: "Found overdue scheduled subscriptions",
+        garden_sid: garden.sid,
+        count: length(overdue),
+        subscription_sids: Enum.map(overdue, & &1.sid)
+      )
+    end
+
+    overdue
+  end
+
+  defp list_scheduled_subscriptions_for_garden(%Garden{} = garden) do
+    from(s in __MODULE__,
+      where: s.garden_id == ^garden.id,
+      where: not is_nil(s.schedule),
+      preload: [:garden]
+    )
+    |> Repo.all()
+  end
+
+  defp schedule_is_overdue?(%__MODULE__{schedule: schedule, timezone: timezone} = sub, now) do
+    case Crontab.CronExpression.Parser.parse(schedule) do
+      {:ok, %{reboot: true}} ->
+        false
+
+      {:ok, cron} ->
+        naive_now = to_local_naive(now, timezone)
+
+        previous_run =
+          Crontab.Scheduler.get_previous_run_date!(cron, naive_now)
+          |> from_local_naive(timezone)
+
+        last_deployed = last_successful_deployment_time(sub.id)
+
+        case last_deployed do
+          nil -> true
+          deployed_at -> DateTime.compare(previous_run, deployed_at) == :gt
+        end
+
+      {:error, error} ->
+        Logger.warning(
+          msg: "Failed to parse schedule for catch-up",
+          subscription_sid: sub.sid,
+          schedule: schedule,
+          error: error
+        )
+
+        false
+    end
+  end
+
+  defp last_successful_deployment_time(subscription_id) do
+    from(d in Deployment,
+      join: sd in SubscriptionDeployment,
+      on: sd.deployment_id == d.id,
+      where: sd.subscription_id == ^subscription_id,
+      where: d.state == :completed and d.result == :success,
+      order_by: [desc: d.deployed_at],
+      limit: 1,
+      select: d.deployed_at
+    )
+    |> Repo.one()
+  end
+
+  defp to_local_naive(datetime, nil), do: DateTime.to_naive(datetime)
+  defp to_local_naive(datetime, "Etc/UTC"), do: DateTime.to_naive(datetime)
+
+  defp to_local_naive(datetime, tz) do
+    datetime
+    |> DateTime.shift_zone!(tz)
+    |> DateTime.to_naive()
+  end
+
+  defp from_local_naive(naive, nil), do: DateTime.from_naive!(naive, "Etc/UTC")
+  defp from_local_naive(naive, "Etc/UTC"), do: DateTime.from_naive!(naive, "Etc/UTC")
+
+  defp from_local_naive(naive, tz) do
+    case DateTime.from_naive(naive, tz) do
+      {:ok, dt} -> DateTime.shift_zone!(dt, "Etc/UTC")
+      {:ambiguous, dt, _} -> DateTime.shift_zone!(dt, "Etc/UTC")
+      {:gap, _, just_after} -> DateTime.shift_zone!(just_after, "Etc/UTC")
+    end
   end
 
   defmodule Rule do

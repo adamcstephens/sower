@@ -38,6 +38,7 @@ defmodule Sower.Orchestration do
   defdelegate register_subscription(req, garden_id), to: Subscription
   defdelegate sync_subscriptions(subscriptions, garden_id), to: Subscription
   defdelegate update_subscription(subscription, attrs), to: Subscription
+  defdelegate catch_up_overdue_schedules(garden, opts \\ []), to: Subscription
 
   # Deployment delegates
   defdelegate change_deployment(deployment, attrs \\ %{}), to: Deployment

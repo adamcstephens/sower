@@ -133,6 +133,7 @@ defmodule SowerWeb.GardenChannel do
   handle_schema(SowerClient.Orchestration.SubscriptionSync, fn req, socket ->
     case Sower.Orchestration.sync_subscriptions(req.subscriptions, socket.assigns.garden.id) do
       {:ok, subscriptions} ->
+        send(self(), :catch_up_overdue_schedules)
         {:ok, %{subscriptions: subscriptions}}
 
       {:error, error} ->
@@ -221,6 +222,20 @@ defmodule SowerWeb.GardenChannel do
         deployment_count: length(deployments)
       )
     end
+
+    {:noreply, socket}
+  end
+
+  def handle_info(
+        :catch_up_overdue_schedules,
+        %Phoenix.Socket{assigns: %{garden: garden}} = socket
+      ) do
+    Sower.Repo.put_org_id(garden.org_id)
+    overdue = Orchestration.catch_up_overdue_schedules(garden)
+
+    Enum.each(overdue, fn sub ->
+      Orchestration.Deployment.deploy_subscription(sub)
+    end)
 
     {:noreply, socket}
   end
