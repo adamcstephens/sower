@@ -1,4 +1,4 @@
-Application.ensure_all_started([:erlexec, :exsync, :garden])
+Application.ensure_all_started([:exsync, :garden])
 
 IEx.configure(
   inspect: [
