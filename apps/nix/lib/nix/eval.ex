@@ -121,14 +121,7 @@ defmodule Nix.Eval do
 
     Logger.debug(msg: "Running command", cmd: Enum.join(cmd, " "))
 
-    {:ok, pid, ospid} =
-      :exec.run_link(
-        cmd,
-        [
-          :stdout,
-          :stderr
-        ]
-      )
+    {:ok, pid, ospid} = Rexec.run_link(cmd)
 
     state = %{
       state
@@ -164,7 +157,7 @@ defmodule Nix.Eval do
             active_memory_kb: mem
           )
 
-          :exec.kill(state.pid, :sigterm)
+          Rexec.kill(state.pid, :sigterm)
 
         true ->
           :ok

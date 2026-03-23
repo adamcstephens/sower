@@ -28,8 +28,8 @@ defmodule Nix.MixProject do
   defp deps do
     [
       {:cuid2_ex, "~> 0.2"},
-      {:erlexec, "~> 2.0"},
       {:jason, "~> 1.0"},
+      {:rexec, path: "../../libs/rexec"},
       {:typedstruct, "~> 0.5.4"}
     ]
   end

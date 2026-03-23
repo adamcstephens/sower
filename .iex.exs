@@ -4,7 +4,7 @@ if Code.loaded?(Sower.Accounts.Organization) do
   |> Map.get(:org_id)
   |> Sower.Repo.put_org_id()
 else
-  Application.ensure_all_started([:erlexec, :exsync])
+  Application.ensure_all_started([:exsync])
 end
 
 IEx.configure(
