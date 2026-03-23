@@ -55,6 +55,13 @@ defmodule Garden.Socket do
   @impl Slipstream
   def handle_cast(:sync_subscriptions, socket) do
     config_subscriptions = Garden.Config.get().subscriptions
+    tz = Scheduler.get_timezone()
+
+    config_subscriptions =
+      Enum.map(config_subscriptions, fn sub ->
+        if sub.schedule, do: %{sub | timezone: tz}, else: sub
+      end)
+
     sync_payload = %{subscriptions: Enum.map(config_subscriptions, &Map.from_struct/1)}
 
     topic = private_channel(socket)

@@ -38,7 +38,12 @@ defmodule SowerClient.Orchestration.Subscription do
       },
       schedule: %Schema{
         type: :string,
-        description: "Cron expression for polling schedule (garden-only)",
+        description: "Cron expression for polling schedule",
+        nullable: true
+      },
+      timezone: %Schema{
+        type: :string,
+        description: "IANA timezone for schedule evaluation",
         nullable: true
       },
       poll_on_connect: %Schema{
