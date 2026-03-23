@@ -91,14 +91,16 @@ defmodule Garden.Deployer do
       realize_seed_fun.(seed_deploy)
     end)
     |> async_stream_fun.(fn
-      {:ok, {:ok, %SeedDeployment{seed: seed} = seed_deploy}} ->
+      {:ok, {:ok, %SeedDeployment{seed: seed} = seed_deploy, download_output}} ->
         profile = get_deployment_profile_fun.(seed_deploy.subscription_sid)
         mode = Garden.Seed.activation_mode(profile)
 
-        preamble = [
-          decision_line("realized #{seed.name} (#{seed.seed_type})"),
-          decision_line("activating #{seed.name} (#{seed.seed_type}) with mode: #{mode}")
-        ]
+        preamble =
+          download_output ++
+            [
+              decision_line("realized #{seed.name} (#{seed.seed_type})"),
+              decision_line("activating #{seed.name} (#{seed.seed_type}) with mode: #{mode}")
+            ]
 
         Logger.info(
           msg: "Activating seed",
@@ -157,10 +159,17 @@ defmodule Garden.Deployer do
 
         result
 
-      {:ok, {:error, :failed_to_realize, %SeedDeployment{seed: seed} = _seed_deploy}} ->
-        report_seed_result_fun.(deployment, seed, :failure, [
-          decision_line("realization failed for #{seed.name} (#{seed.seed_type})")
-        ])
+      {:ok,
+       {:error, :failed_to_realize, %SeedDeployment{seed: seed} = _seed_deploy, download_output}} ->
+        report_seed_result_fun.(
+          deployment,
+          seed,
+          :failure,
+          download_output ++
+            [
+              decision_line("realization failed for #{seed.name} (#{seed.seed_type})")
+            ]
+        )
 
         {:error, :failed_to_realize, seed}
 
@@ -179,7 +188,7 @@ defmodule Garden.Deployer do
            into: [],
            lines: 1024
          ) do
-      {_output, 0} ->
+      {output, 0} ->
         Logger.info(
           msg: "Successfully realized seed",
           name: seed.name,
@@ -188,15 +197,10 @@ defmodule Garden.Deployer do
           artifact: seed.artifact
         )
 
-        {:ok, seed_deploy}
+        {:ok, seed_deploy, filter_realize_output(output)}
 
       {output, exit_code} ->
-        output =
-          Enum.filter(output, fn line ->
-            line not in [
-              "warning: you did not specify '--add-root'; the result might be removed by the garbage collector"
-            ]
-          end)
+        output = filter_realize_output(output)
 
         Logger.error(
           msg: "Failed to realize seed",
@@ -208,7 +212,7 @@ defmodule Garden.Deployer do
           output: output
         )
 
-        {:error, :failed_to_realize, seed_deploy}
+        {:error, :failed_to_realize, seed_deploy, output}
     end
   end
 
@@ -458,6 +462,14 @@ defmodule Garden.Deployer do
   def decision_line(message) do
     timestamp = DateTime.utc_now() |> DateTime.to_iso8601()
     "#{timestamp} [garden] #{message}"
+  end
+
+  defp filter_realize_output(output) do
+    Enum.filter(output, fn line ->
+      line not in [
+        "warning: you did not specify '--add-root'; the result might be removed by the garbage collector"
+      ]
+    end)
   end
 
   defp strip_ansi(text) do

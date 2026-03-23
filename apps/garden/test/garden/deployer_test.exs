@@ -287,7 +287,7 @@ defmodule Garden.DeployerTest do
                      async_stream_fun: fn enumerable, func ->
                        Enum.map(enumerable, fn item -> {:ok, func.(item)} end)
                      end,
-                     realize_seed_fun: fn seed_deploy -> {:ok, seed_deploy} end,
+                     realize_seed_fun: fn seed_deploy -> {:ok, seed_deploy, []} end,
                      get_deployment_profile_fun: fn _ -> %DeploymentProfile{} end,
                      activate_seed_fun: fn _seed, _profile -> {:error, :activator_unavailable} end,
                      report_seed_status_fun: fn _, _, _ -> :ok end,
@@ -319,7 +319,7 @@ defmodule Garden.DeployerTest do
                    async_stream_fun: fn enumerable, func ->
                      Enum.map(enumerable, fn item -> {:ok, func.(item)} end)
                    end,
-                   realize_seed_fun: fn seed_deploy -> {:ok, seed_deploy} end,
+                   realize_seed_fun: fn seed_deploy -> {:ok, seed_deploy, []} end,
                    get_deployment_profile_fun: fn _ -> %DeploymentProfile{} end,
                    activate_seed_fun: fn _seed, _profile -> {:ok, ["activation complete"]} end,
                    report_seed_status_fun: fn _, _, _ -> :ok end,
@@ -349,7 +349,7 @@ defmodule Garden.DeployerTest do
                      async_stream_fun: fn enumerable, func ->
                        Enum.map(enumerable, fn item -> {:ok, func.(item)} end)
                      end,
-                     realize_seed_fun: fn seed_deploy -> {:ok, seed_deploy} end,
+                     realize_seed_fun: fn seed_deploy -> {:ok, seed_deploy, []} end,
                      get_deployment_profile_fun: fn _ -> %DeploymentProfile{} end,
                      activate_seed_fun: fn _seed, _profile -> {:error, :cmd_not_found} end,
                      report_seed_status_fun: fn _, _, _ -> :ok end,
@@ -399,7 +399,7 @@ defmodule Garden.DeployerTest do
 
       logged_lines =
         capture_seed_result_lines(deployment,
-          realize_seed_fun: fn seed_deploy -> {:error, :failed_to_realize, seed_deploy} end
+          realize_seed_fun: fn seed_deploy -> {:error, :failed_to_realize, seed_deploy, []} end
         )
 
       assert Enum.any?(logged_lines, &(&1 =~ "[garden]" and &1 =~ "realization failed"))
@@ -438,7 +438,7 @@ defmodule Garden.DeployerTest do
             async_stream_fun: fn enumerable, func ->
               Enum.map(enumerable, fn item -> {:ok, func.(item)} end)
             end,
-            realize_seed_fun: fn sd -> {:ok, sd} end,
+            realize_seed_fun: fn sd -> {:ok, sd, []} end,
             get_deployment_profile_fun: fn _ ->
               %DeploymentProfile{reboot_policy: "always"}
             end,
@@ -480,7 +480,7 @@ defmodule Garden.DeployerTest do
             async_stream_fun: fn enumerable, func ->
               Enum.map(enumerable, fn item -> {:ok, func.(item)} end)
             end,
-            realize_seed_fun: fn sd -> {:ok, sd} end,
+            realize_seed_fun: fn sd -> {:ok, sd, []} end,
             get_deployment_profile_fun: fn _ -> %DeploymentProfile{} end,
             activate_seed_fun: fn _seed, _profile -> {:error, 1, ["failed"]} end,
             report_seed_result_fun: fn _deployment, _seed, result, output_lines ->
@@ -496,6 +496,41 @@ defmodule Garden.DeployerTest do
       # Second call: reboot decision
       assert_received {:seed_result, nil, reboot_lines}
       assert Enum.any?(reboot_lines, &(&1 =~ "[garden]" and &1 =~ "reboot skipped"))
+    end
+
+    test "includes download output in log before decision lines" do
+      deployment = %Deployment{
+        sid: "dep_dl_log",
+        seed_deployments: [seed_deploy_with_identity("seed_dl1")]
+      }
+
+      download_lines = ["copying path '/nix/store/abc123'", "copying path '/nix/store/def456'"]
+
+      logged_lines =
+        capture_seed_result_lines(deployment,
+          realize_seed_fun: fn sd -> {:ok, sd, download_lines} end
+        )
+
+      assert Enum.at(logged_lines, 0) == "copying path '/nix/store/abc123'"
+      assert Enum.at(logged_lines, 1) == "copying path '/nix/store/def456'"
+      assert Enum.any?(logged_lines, &(&1 =~ "[garden]" and &1 =~ "realized"))
+    end
+
+    test "includes download output in failure log" do
+      deployment = %Deployment{
+        sid: "dep_dl_fail",
+        seed_deployments: [seed_deploy_with_identity("seed_dlf1")]
+      }
+
+      download_lines = ["error: path '/nix/store/missing' is not valid"]
+
+      logged_lines =
+        capture_seed_result_lines(deployment,
+          realize_seed_fun: fn sd -> {:error, :failed_to_realize, sd, download_lines} end
+        )
+
+      assert Enum.at(logged_lines, 0) == "error: path '/nix/store/missing' is not valid"
+      assert Enum.any?(logged_lines, &(&1 =~ "[garden]" and &1 =~ "realization failed"))
     end
 
     test "includes default activation mode when none configured" do
@@ -521,7 +556,7 @@ defmodule Garden.DeployerTest do
         async_stream_fun: fn enumerable, func ->
           Enum.map(enumerable, fn item -> {:ok, func.(item)} end)
         end,
-        realize_seed_fun: Keyword.get(opts, :realize_seed_fun, fn sd -> {:ok, sd} end),
+        realize_seed_fun: Keyword.get(opts, :realize_seed_fun, fn sd -> {:ok, sd, []} end),
         get_deployment_profile_fun:
           Keyword.get(opts, :get_deployment_profile_fun, fn _ -> %DeploymentProfile{} end),
         activate_seed_fun:
