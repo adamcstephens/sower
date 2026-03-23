@@ -989,7 +989,7 @@ defmodule Sower.OrchestrationTest do
     end
   end
 
-  describe "replay_unresolved_deployments/2" do
+  describe "reconcile_deployments_on_connect/2" do
     import Sower.OrchestrationFixtures
 
     test "replays unresolved deployments and updates dispatch timestamp", %{organization: _org} do
@@ -1025,13 +1025,10 @@ defmodule Sower.OrchestrationTest do
       replayed_at = DateTime.utc_now() |> DateTime.truncate(:second)
       Phoenix.PubSub.subscribe(Sower.PubSub, "agent:#{garden.sid}")
 
-      assert {:ok, deployments} =
-               Orchestration.replay_unresolved_deployments(garden,
-                 now: replayed_at,
-                 request_id_fun: fn -> "request_replay_1" end
-               )
+      assert {:ok, %{replayed: replayed, cancelled: [], overdue: []}} =
+               Orchestration.Deployment.reconcile_deployments_on_connect(garden, now: replayed_at)
 
-      assert Enum.map(deployments, & &1.sid) == [unresolved.sid]
+      assert Enum.map(replayed, & &1.sid) == [unresolved.sid]
 
       assert_receive %Phoenix.Socket.Broadcast{
         topic: topic,
@@ -1042,12 +1039,46 @@ defmodule Sower.OrchestrationTest do
       assert topic == "agent:#{garden.sid}"
       assert payload.sid == unresolved.sid
       assert payload.skipped == false
-      assert payload.request_id == "request_replay_1"
+      assert is_binary(payload.request_id)
 
       refreshed = Orchestration.get_deployment_sid!(unresolved.sid)
 
       assert DateTime.truncate(refreshed.last_dispatched_at, :second) ==
                DateTime.truncate(replayed_at, :second)
+    end
+
+    test "cancels unresolved deployments superseded by overdue schedules", %{organization: _org} do
+      garden = garden_fixture()
+      seed = seed_fixture(%{name: "cancel-host", seed_type: "nixos"})
+
+      subscription =
+        subscription_fixture(%{
+          garden_id: garden.id,
+          seed_name: seed.name,
+          seed_type: seed.seed_type,
+          schedule: "* * * * *"
+        })
+
+      unresolved =
+        deployment_fixture(%{
+          garden_id: garden.id,
+          seeds: [seed],
+          subscriptions: [subscription],
+          result: nil,
+          deployed_at: nil
+        })
+
+      assert {:ok, %{replayed: [], cancelled: cancelled, overdue: overdue}} =
+               Orchestration.Deployment.reconcile_deployments_on_connect(garden)
+
+      assert length(cancelled) == 1
+      assert hd(cancelled).sid == unresolved.sid
+      assert length(overdue) == 1
+      assert hd(overdue).sid == subscription.sid
+
+      refreshed = Orchestration.get_deployment_sid!(unresolved.sid)
+      assert refreshed.state == :stale
+      assert refreshed.result == :failure
     end
   end
 
