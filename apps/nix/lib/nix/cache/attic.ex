@@ -106,34 +106,34 @@ defmodule Nix.Cache.Attic do
   end
 
   defp run_with_stdin(cmd, stdin_data) do
-    case :exec.run(cmd, [:stdin, :stdout, :stderr, :monitor]) do
-      {:ok, _pid, ospid} ->
-        :ok = :exec.send(ospid, stdin_data)
-        :ok = :exec.send(ospid, :eof)
-        await_completion(ospid, [], [])
+    case Rexec.run(cmd) do
+      {:ok, pid, ospid} ->
+        :ok = Rexec.send(pid, stdin_data)
+        :ok = Rexec.send(pid, :eof)
+        await_completion(pid, ospid, [], [])
 
       {:error, reason} ->
         {:error, %{exit_status: 1, stderr: to_string(reason), stdout: ""}}
     end
   end
 
-  defp await_completion(ospid, stdout, stderr) do
+  defp await_completion(pid, ospid, stdout, stderr) do
     receive do
       {:stdout, ^ospid, data} ->
-        await_completion(ospid, [data | stdout], stderr)
+        await_completion(pid, ospid, [data | stdout], stderr)
 
       {:stderr, ^ospid, data} ->
-        await_completion(ospid, stdout, [data | stderr])
+        await_completion(pid, ospid, stdout, [data | stderr])
 
       {:DOWN, _ospid, :process, _pid, :normal} ->
         {:ok, finalize_output(stdout, stderr)}
 
-      {:DOWN, _ospid, :process, _pid, {:exit_status, status}} ->
+      {:DOWN, _ospid, :process, _pid, {:shutdown, {:exit_status, status}}} ->
         {:error, finalize_output(stdout, stderr) |> Map.put(:exit_status, status)}
     after
       # 30 minute timeout for large uploads
       30 * 60 * 1000 ->
-        :exec.kill(ospid, :sigterm)
+        Rexec.kill(pid, :sigterm)
         {:error, %{exit_status: 1, stderr: "timeout", stdout: ""}}
     end
   end

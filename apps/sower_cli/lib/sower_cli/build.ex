@@ -80,7 +80,6 @@ defmodule SowerCli.Build do
   defp run_steps([:eval | rest], %__MODULE__{} = state) do
     Output.step("Evaluating #{state.request.path}")
 
-    Application.ensure_all_started([:erlexec])
     Output.init(debug: state.flags.debug)
 
     opts = [

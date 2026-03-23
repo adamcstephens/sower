@@ -26,11 +26,7 @@
         };
 
         server = pkgs.callPackage ./server.nix {
-          inherit
-            beamPackages
-            version
-            sowerServicesHook
-            ;
+          inherit beamPackages version sowerServicesHook;
 
           sowerLib = self.lib;
         };
