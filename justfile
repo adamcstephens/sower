@@ -82,7 +82,8 @@ setup:
     # just dev-seed-from-local
 
 release: set-version
-    git add VERSION openapi.json
+    mix sower.update_contract_baseline
+    git add VERSION openapi.json apps/sower_client/test/fixtures/contract_baseline.json
     jj commit -m "release: version $(cat VERSION)"
 
 release-push:

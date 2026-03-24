@@ -1,0 +1,112 @@
+{
+  "Deployment": {
+    "properties": {
+      "deployed_at": {
+        "has_default": true,
+        "type": "string"
+      },
+      "request_id": {
+        "type": "string"
+      },
+      "seed_deployments": {
+        "items_ref": "SeedDeployment",
+        "type": "array"
+      },
+      "sid": {
+        "type": "string"
+      },
+      "skipped": {
+        "has_default": true,
+        "type": "boolean"
+      }
+    },
+    "required": []
+  },
+  "DeploymentProfile": {
+    "properties": {
+      "activation_args": {
+        "has_default": true,
+        "type": "array"
+      },
+      "reboot_policy": {
+        "has_default": true,
+        "type": "string"
+      }
+    },
+    "required": []
+  },
+  "PresignedUploadReply": {
+    "properties": {
+      "headers": {
+        "has_default": true,
+        "type": "object"
+      },
+      "method": {
+        "has_default": true,
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "headers",
+      "method",
+      "url"
+    ]
+  },
+  "Seed": {
+    "properties": {
+      "artifact": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "seed_type": {
+        "type": "string"
+      },
+      "sid": {
+        "nullable": true,
+        "type": "string"
+      },
+      "tags": {
+        "has_default": true,
+        "items_ref": "SeedTag",
+        "type": "array"
+      }
+    },
+    "required": [
+      "artifact",
+      "name",
+      "seed_type"
+    ]
+  },
+  "SeedDeployment": {
+    "properties": {
+      "seed": {
+        "ref": "Seed",
+        "type": "object"
+      },
+      "subscription_sid": {
+        "nullable": true,
+        "type": "string"
+      }
+    },
+    "required": []
+  },
+  "SeedTag": {
+    "properties": {
+      "key": {
+        "type": "string"
+      },
+      "value": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "key",
+      "value"
+    ]
+  }
+}
