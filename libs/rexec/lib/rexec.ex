@@ -129,7 +129,7 @@ defmodule Rexec do
       {:args, args}
     ]
 
-    port_opts = add_env_opts(port_opts, opts)
+    port_opts = add_spawn_opts(port_opts, opts)
 
     port =
       Port.open({:spawn_executable, executable}, port_opts)
@@ -223,7 +223,13 @@ defmodule Rexec do
 
   # --- Private helpers ---
 
-  defp add_env_opts(port_opts, opts) do
+  defp add_spawn_opts(port_opts, opts) do
+    port_opts
+    |> add_env_opt(opts)
+    |> add_cd_opt(opts)
+  end
+
+  defp add_env_opt(port_opts, opts) do
     case Keyword.get(opts, :env) do
       nil ->
         port_opts
@@ -236,6 +242,13 @@ defmodule Rexec do
           end)
 
         [{:env, erlang_env} | port_opts]
+    end
+  end
+
+  defp add_cd_opt(port_opts, opts) do
+    case Keyword.get(opts, :cd) do
+      nil -> port_opts
+      dir when is_binary(dir) -> [{:cd, String.to_charlist(dir)} | port_opts]
     end
   end
 

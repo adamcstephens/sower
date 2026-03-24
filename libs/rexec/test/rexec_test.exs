@@ -61,6 +61,14 @@ defmodule RexecTest do
       assert_receive {:EXIT, ^pid, :normal}, 5000
     end
 
+    test "runs command in specified working directory" do
+      Process.flag(:trap_exit, true)
+      {:ok, pid, ospid} = Rexec.run_link(["pwd"], cd: "/tmp")
+
+      assert_receive {:stdout, ^ospid, "/tmp\n"}, 5000
+      assert_receive {:EXIT, ^pid, :normal}, 5000
+    end
+
     test "removes environment variable when value is false" do
       Process.flag(:trap_exit, true)
 
