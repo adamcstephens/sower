@@ -1,4 +1,18 @@
 defmodule SowerClient do
+  # Schemas the server pushes TO gardens (broadcasts + replies).
+  # Changes to these can break old gardens that haven't upgraded.
+  # Used by contract evolution tests and baseline generation.
+  @server_pushed_schema_titles [
+    "Deployment",
+    "SeedDeployment",
+    "DeploymentProfile",
+    "Seed",
+    "SeedTag",
+    "PresignedUploadReply"
+  ]
+
+  def server_pushed_schema_titles, do: @server_pushed_schema_titles
+
   def spec() do
     %OpenApiSpex.OpenApi{
       info: %OpenApiSpex.Info{
