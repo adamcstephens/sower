@@ -40,9 +40,9 @@ defmodule Rexec do
   - `{:EXIT, pid, reason}` when the process exits (caller must trap exits)
   """
   @spec run_link(list(), keyword()) :: {:ok, pid(), integer()}
-  def run_link(cmd, _opts \\ []) do
+  def run_link(cmd, opts \\ []) do
     caller = self()
-    {:ok, pid} = GenServer.start_link(__MODULE__, {cmd, caller, :link})
+    {:ok, pid} = GenServer.start_link(__MODULE__, {cmd, caller, :link, opts})
     ospid = GenServer.call(pid, :get_ospid)
     {:ok, pid, ospid}
   end
@@ -59,10 +59,10 @@ defmodule Rexec do
   - `{:DOWN, ref, :process, pid, reason}` when the process exits
   """
   @spec run(list(), keyword()) :: {:ok, pid(), integer()} | {:error, term()}
-  def run(cmd, _opts \\ []) do
+  def run(cmd, opts \\ []) do
     caller = self()
 
-    case GenServer.start(__MODULE__, {cmd, caller, :monitor}) do
+    case GenServer.start(__MODULE__, {cmd, caller, :monitor, opts}) do
       {:ok, pid} ->
         Process.monitor(pid)
         ospid = GenServer.call(pid, :get_ospid)
@@ -103,7 +103,7 @@ defmodule Rexec do
   # --- GenServer callbacks ---
 
   @impl true
-  def init({cmd, caller, mode}) do
+  def init({cmd, caller, mode, opts}) do
     Process.flag(:trap_exit, true)
     ensure_registry()
 
@@ -122,13 +122,17 @@ defmodule Rexec do
           String.split(cmd)
       end
 
+    port_opts = [
+      :binary,
+      :use_stdio,
+      {:packet, 4},
+      {:args, args}
+    ]
+
+    port_opts = add_env_opts(port_opts, opts)
+
     port =
-      Port.open({:spawn_executable, executable}, [
-        :binary,
-        :use_stdio,
-        {:packet, 4},
-        {:args, args}
-      ])
+      Port.open({:spawn_executable, executable}, port_opts)
 
     state = %__MODULE__{port: port, caller: caller, mode: mode}
     {:ok, state}
@@ -218,6 +222,22 @@ defmodule Rexec do
   end
 
   # --- Private helpers ---
+
+  defp add_env_opts(port_opts, opts) do
+    case Keyword.get(opts, :env) do
+      nil ->
+        port_opts
+
+      env when is_list(env) ->
+        erlang_env =
+          Enum.map(env, fn
+            {name, false} -> {String.to_charlist(name), false}
+            {name, value} -> {String.to_charlist(name), String.to_charlist(value)}
+          end)
+
+        [{:env, erlang_env} | port_opts]
+    end
+  end
 
   defp native_path do
     Application.app_dir(:rexec, "priv/rexec_native")

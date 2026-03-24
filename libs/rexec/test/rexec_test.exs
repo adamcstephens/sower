@@ -48,6 +48,28 @@ defmodule RexecTest do
       assert stdout =~ "out"
       assert stderr =~ "err"
     end
+
+    test "passes environment variables to child" do
+      Process.flag(:trap_exit, true)
+
+      {:ok, pid, ospid} =
+        Rexec.run_link(["sh", "-c", "echo $REXEC_TEST_VAR"],
+          env: [{"REXEC_TEST_VAR", "hello_from_env"}]
+        )
+
+      assert_receive {:stdout, ^ospid, "hello_from_env\n"}, 5000
+      assert_receive {:EXIT, ^pid, :normal}, 5000
+    end
+
+    test "removes environment variable when value is false" do
+      Process.flag(:trap_exit, true)
+
+      {:ok, pid, ospid} =
+        Rexec.run_link(["sh", "-c", "echo ${HOME:-unset}"], env: [{"HOME", false}])
+
+      assert_receive {:stdout, ^ospid, "unset\n"}, 5000
+      assert_receive {:EXIT, ^pid, :normal}, 5000
+    end
   end
 
   describe "run/2" do
