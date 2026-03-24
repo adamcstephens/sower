@@ -39,7 +39,8 @@ defmodule Mix.Tasks.Compile.RexecNative do
       target_mtime = File.stat!(target).mtime
 
       Path.wildcard(Path.join(native_dir, "src/**/*.rs"))
-      |> Enum.concat([Path.join(native_dir, "Cargo.toml")])
+      |> Enum.concat([Path.join(native_dir, "Cargo.toml"), Path.join(native_dir, "Cargo.lock")])
+      |> Enum.filter(&File.exists?/1)
       |> Enum.any?(fn src ->
         File.stat!(src).mtime > target_mtime
       end)

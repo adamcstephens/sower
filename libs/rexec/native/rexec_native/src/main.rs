@@ -4,6 +4,9 @@ use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+use nix::sys::signal::{self, Signal};
+use nix::unistd::Pid;
+
 // Protocol tags: Rust -> Elixir
 const TAG_PID: u8 = 0x00;
 const TAG_STDOUT: u8 = 0x01;
@@ -122,19 +125,19 @@ fn main() {
                             *stdin_handle.lock().unwrap() = None;
                         }
                         CMD_KILL => {
-                            if !data.is_empty() {
-                                let signal = data[0] as i32;
-                                unsafe {
-                                    libc::kill(child_pid as i32, signal);
+                            if data.len() >= 4 {
+                                let sig_num = i32::from_be_bytes([data[0], data[1], data[2], data[3]]);
+                                if let Ok(sig) = Signal::try_from(sig_num) {
+                                    let _ = signal::kill(Pid::from_raw(child_pid as i32), sig);
                                 }
                             }
                         }
                         CMD_KILL_GROUP => {
-                            if !data.is_empty() {
-                                let signal = data[0] as i32;
-                                // Negative PID sends signal to entire process group
-                                unsafe {
-                                    libc::kill(-(child_pid as i32), signal);
+                            if data.len() >= 4 {
+                                let sig_num = i32::from_be_bytes([data[0], data[1], data[2], data[3]]);
+                                if let Ok(sig) = Signal::try_from(sig_num) {
+                                    // Negative PID sends signal to entire process group
+                                    let _ = signal::kill(Pid::from_raw(-(child_pid as i32)), sig);
                                 }
                             }
                         }

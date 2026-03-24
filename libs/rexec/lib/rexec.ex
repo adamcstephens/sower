@@ -41,12 +41,15 @@ defmodule Rexec do
   - `{:stderr, ospid, data}` for stderr output
   - `{:EXIT, pid, reason}` when the process exits (caller must trap exits)
   """
-  @spec run_link(list(), keyword()) :: {:ok, pid(), integer()}
+  @spec run_link(list(), keyword()) :: {:ok, pid(), integer()} | {:error, term()}
   def run_link(cmd, opts \\ []) do
     caller = self()
     {:ok, pid} = GenServer.start_link(__MODULE__, {cmd, caller, :link, opts})
-    ospid = GenServer.call(pid, :get_ospid)
-    {:ok, pid, ospid}
+
+    case GenServer.call(pid, :get_ospid) do
+      {:error, reason} -> {:error, reason}
+      ospid when is_integer(ospid) -> {:ok, pid, ospid}
+    end
   end
 
   @doc """
@@ -67,8 +70,11 @@ defmodule Rexec do
     case GenServer.start(__MODULE__, {cmd, caller, :monitor, opts}) do
       {:ok, pid} ->
         Process.monitor(pid)
-        ospid = GenServer.call(pid, :get_ospid)
-        {:ok, pid, ospid}
+
+        case GenServer.call(pid, :get_ospid) do
+          {:error, reason} -> {:error, reason}
+          ospid when is_integer(ospid) -> {:ok, pid, ospid}
+        end
 
       {:error, reason} ->
         {:error, reason}
@@ -163,12 +169,12 @@ defmodule Rexec do
   end
 
   def handle_cast({:kill, signal}, state) do
-    Port.command(state.port, <<@cmd_kill, signal::8>>)
+    Port.command(state.port, <<@cmd_kill, signal::big-signed-32>>)
     {:noreply, state}
   end
 
   def handle_cast({:kill_group, signal}, state) do
-    Port.command(state.port, <<@cmd_kill_group, signal::8>>)
+    Port.command(state.port, <<@cmd_kill_group, signal::big-signed-32>>)
     {:noreply, state}
   end
 

@@ -18,6 +18,7 @@ beamPackages.mixRelease {
       ../../config
       ../../mix.exs
       ../../mix.lock
+      ../../libs/rexec
       ../../VERSION
     ];
   };

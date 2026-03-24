@@ -4,12 +4,18 @@ defmodule Nix.Store do
   def realize(path) do
     Logger.debug(msg: "Realizing path", path: path)
 
-    cmd = [System.find_executable("nix-store"), "--realize", path]
+    case System.find_executable("nix-store") do
+      nil ->
+        {:error, "nix-store command not found in PATH"}
 
-    Process.flag(:trap_exit, true)
-    {:ok, pid, ospid} = Rexec.run_link(cmd)
+      nix_store ->
+        cmd = [nix_store, "--realize", path]
 
-    collect_output(pid, ospid, [])
+        Process.flag(:trap_exit, true)
+        {:ok, pid, ospid} = Rexec.run_link(cmd)
+
+        collect_output(pid, ospid, [])
+    end
   end
 
   defp collect_output(pid, ospid, lines) do

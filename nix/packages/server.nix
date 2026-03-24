@@ -7,6 +7,7 @@
   esbuild,
   tailwindcss,
   stdenv,
+  rexec-native,
   version,
   sowerServicesHook,
 }:
@@ -24,6 +25,7 @@ beamPackages.mixRelease rec {
       ../../apps/nix
       ../../apps/sower
       ../../apps/sower_client
+      ../../libs/rexec
       ../../config
       ../../mix.exs
       ../../mix.lock
@@ -53,6 +55,11 @@ beamPackages.mixRelease rec {
   };
 
   mixNixDeps = callPackages ./umbrella-deps.nix { inherit beamPackages; };
+
+  preBuild = ''
+    mkdir -p libs/rexec/priv
+    cp ${rexec-native}/bin/rexec_native libs/rexec/priv/
+  '';
 
   postBuild = ''
     # prevent mix from trying to download binaries

@@ -25,7 +25,8 @@ Rust → Elixir:
 Elixir → Rust:
 - `0x01 ++ <data>` — forward data to child stdin
 - `0x02` — close child stdin (eof)
-- `0x03 ++ <1-byte signal number>` — send signal to child (e.g. 15 = SIGTERM)
+- `0x03 ++ <4-byte big-endian signal number>` — send signal to child (e.g. 15 = SIGTERM)
+- `0x04 ++ <4-byte big-endian signal number>` — send signal to child's process group
 
 **Elixir wrapper module** (`Rexec`) — a GenServer per child that:
 - Opens a port to the Rust binary via `Port.open({:spawn_executable, path}, ...)`
@@ -57,7 +58,7 @@ Elixir → Rust:
 - `libs/rexec/lib/rexec.ex` — GenServer that:
   - `run_link(cmd, opts)` — starts GenServer linked to caller, opens port, returns `{:ok, pid, ospid}`
   - `run(cmd, opts)` — starts GenServer (unlinked), caller monitors, returns `{:ok, pid, ospid}`
-  - `send(ospid, data)` / `send(ospid, :eof)` — forwards stdin data or EOF
+  - `send(pid, data)` / `send(pid, :eof)` — forwards stdin data or EOF
   - `kill(pid, signal)` — sends kill command via port
   - Handles `{port, {:data, packet}}` messages, decodes protocol, forwards to caller
   - On exit status message: stops GenServer with appropriate reason
@@ -87,4 +88,4 @@ Elixir → Rust:
 - **Per-child process, not daemon**: simpler, no multiplexing, no process table. Startup cost of the Rust binary is trivial (~1ms) vs nix commands (~200ms+).
 - **Protocol-compatible messages**: callers keep their existing `handle_info` pattern matches unchanged.
 - **ospid comes from Rust**: the Rust binary sends the actual child PID as the first packet, so /proc monitoring works.
-- **No unsafe Rust needed**: `std::process::Command` handles fork/exec, `std::thread` for I/O multiplexing.
+- **Minimal unsafe Rust**: limited to signal delivery via `nix` crate's safe wrappers; `std::process::Command` handles fork/exec, `std::thread` for I/O multiplexing.
