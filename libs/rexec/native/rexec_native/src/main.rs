@@ -52,12 +52,7 @@ fn main() {
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
-        unsafe {
-            cmd.pre_exec(|| {
-                libc::setpgid(0, 0);
-                Ok(())
-            });
-        }
+        cmd.process_group(0);
     }
 
     let mut child = cmd.spawn().unwrap_or_else(|e| {

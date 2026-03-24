@@ -27,8 +27,6 @@ defmodule Rexec do
   @cmd_kill 0x03
   @cmd_kill_group 0x04
 
-  @registry :rexec_ospid_registry
-
   @env_allowlist_exact MapSet.new(~w(PATH HOME USER LANG LC_ALL))
   @env_allowlist_prefixes ~w(NIX_ XDG_ LC_)
 
@@ -117,22 +115,15 @@ defmodule Rexec do
   @impl true
   def init({cmd, caller, mode, opts}) do
     Process.flag(:trap_exit, true)
-    ensure_registry()
 
     executable = native_path()
 
     args =
-      case cmd do
-        cmd when is_list(cmd) ->
-          Enum.map(cmd, fn
-            arg when is_binary(arg) -> arg
-            arg when is_list(arg) -> List.to_string(arg)
-            arg -> to_string(arg)
-          end)
-
-        cmd when is_binary(cmd) ->
-          String.split(cmd)
-      end
+      Enum.map(cmd, fn
+        arg when is_binary(arg) -> arg
+        arg when is_list(arg) -> List.to_string(arg)
+        arg -> to_string(arg)
+      end)
 
     port_opts = [
       :binary,
@@ -290,33 +281,21 @@ defmodule Rexec do
     Application.app_dir(:rexec, "priv/rexec_native")
   end
 
-  defp ensure_registry do
-    if :ets.whereis(@registry) == :undefined do
-      :ets.new(@registry, [:named_table, :public, :set])
-    end
-  rescue
-    ArgumentError -> :ok
-  end
-
   defp register_ospid(ospid) do
-    :ets.insert(@registry, {ospid, self()})
+    Registry.register(Rexec.Registry, {:ospid, ospid}, nil)
   end
 
   defp deregister_ospid(nil), do: :ok
 
   defp deregister_ospid(ospid) do
-    :ets.delete(@registry, ospid)
-  rescue
-    ArgumentError -> :ok
+    Registry.unregister(Rexec.Registry, {:ospid, ospid})
   end
 
   defp lookup_ospid(ospid) do
-    case :ets.lookup(@registry, ospid) do
-      [{^ospid, pid}] -> pid
+    case Registry.lookup(Rexec.Registry, {:ospid, ospid}) do
+      [{pid, _}] -> pid
       [] -> nil
     end
-  rescue
-    ArgumentError -> nil
   end
 
   defp signal_to_int(:sigterm), do: 15
