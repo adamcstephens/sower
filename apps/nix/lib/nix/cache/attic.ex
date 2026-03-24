@@ -108,8 +108,8 @@ defmodule Nix.Cache.Attic do
   defp run_with_stdin(cmd, stdin_data) do
     case Rexec.run(cmd) do
       {:ok, pid, ospid} ->
-        :ok = Rexec.send(ospid, stdin_data)
-        :ok = Rexec.send(ospid, :eof)
+        :ok = Rexec.send(pid, stdin_data)
+        :ok = Rexec.send(pid, :eof)
         await_completion(pid, ospid, [], [])
 
       {:error, reason} ->

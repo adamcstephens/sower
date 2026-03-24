@@ -76,22 +76,16 @@ defmodule Rexec do
   end
 
   @doc """
-  Sends data to the stdin of the child process identified by `ospid`.
+  Sends data to the stdin of the child process.
   Pass `:eof` to close stdin.
   """
-  @spec send(integer(), binary() | :eof) :: :ok
-  def send(ospid, :eof) do
-    case lookup_ospid(ospid) do
-      nil -> {:error, :not_found}
-      pid -> GenServer.cast(pid, :send_eof)
-    end
+  @spec send(pid(), binary() | :eof) :: :ok
+  def send(pid, :eof) do
+    GenServer.cast(pid, :send_eof)
   end
 
-  def send(ospid, data) when is_binary(data) do
-    case lookup_ospid(ospid) do
-      nil -> {:error, :not_found}
-      pid -> GenServer.cast(pid, {:send_stdin, data})
-    end
+  def send(pid, data) when is_binary(data) do
+    GenServer.cast(pid, {:send_stdin, data})
   end
 
   @doc """
@@ -148,7 +142,6 @@ defmodule Rexec do
     else
       receive do
         {port, {:data, <<@tag_pid, pid::big-unsigned-32>>}} when port == state.port ->
-          register_ospid(pid)
           state = %{state | ospid: pid}
           {:reply, pid, state}
       after
@@ -194,8 +187,6 @@ defmodule Rexec do
         {port, {:data, <<@tag_exit, code::big-signed-32>>}},
         %{port: port} = state
       ) do
-    deregister_ospid(state.ospid)
-
     reason =
       if code == 0 do
         :normal
@@ -210,17 +201,14 @@ defmodule Rexec do
         {port, {:data, <<@tag_signal, signal::8>>}},
         %{port: port} = state
       ) do
-    deregister_ospid(state.ospid)
     {:stop, {:exit_status, 128 + signal}, state}
   end
 
   def handle_info({port, {:data, <<@tag_pid, pid::big-unsigned-32>>}}, %{port: port} = state) do
-    register_ospid(pid)
     {:noreply, %{state | ospid: pid}}
   end
 
   def handle_info({:EXIT, port, reason}, %{port: port} = state) do
-    deregister_ospid(state.ospid)
     {:stop, reason, state}
   end
 
@@ -279,23 +267,6 @@ defmodule Rexec do
 
   defp native_path do
     Application.app_dir(:rexec, "priv/rexec_native")
-  end
-
-  defp register_ospid(ospid) do
-    Registry.register(Rexec.Registry, {:ospid, ospid}, nil)
-  end
-
-  defp deregister_ospid(nil), do: :ok
-
-  defp deregister_ospid(ospid) do
-    Registry.unregister(Rexec.Registry, {:ospid, ospid})
-  end
-
-  defp lookup_ospid(ospid) do
-    case Registry.lookup(Rexec.Registry, {:ospid, ospid}) do
-      [{pid, _}] -> pid
-      [] -> nil
-    end
   end
 
   defp signal_to_int(:sigterm), do: 15

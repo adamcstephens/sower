@@ -14,8 +14,7 @@ defmodule Rexec.MixProject do
 
   def application do
     [
-      extra_applications: [:logger],
-      mod: {Rexec.Application, []}
+      extra_applications: [:logger]
     ]
   end
 

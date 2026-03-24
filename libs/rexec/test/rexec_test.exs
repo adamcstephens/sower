@@ -142,16 +142,11 @@ defmodule RexecTest do
       Process.flag(:trap_exit, true)
       {:ok, pid, ospid} = Rexec.run_link(["cat"])
 
-      :ok = Rexec.send(ospid, "hello world")
-      :ok = Rexec.send(ospid, :eof)
+      :ok = Rexec.send(pid, "hello world")
+      :ok = Rexec.send(pid, :eof)
 
       assert_receive {:stdout, ^ospid, "hello world"}, 5000
       assert_receive {:EXIT, ^pid, :normal}, 5000
-    end
-
-    test "returns error for unknown ospid" do
-      assert {:error, :not_found} = Rexec.send(999_999_999, "data")
-      assert {:error, :not_found} = Rexec.send(999_999_999, :eof)
     end
   end
 
