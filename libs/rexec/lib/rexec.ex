@@ -25,6 +25,7 @@ defmodule Rexec do
   @cmd_stdin 0x01
   @cmd_eof 0x02
   @cmd_kill 0x03
+  @cmd_kill_group 0x04
 
   @registry :rexec_ospid_registry
 
@@ -100,6 +101,14 @@ defmodule Rexec do
     GenServer.cast(pid, {:kill, signal_to_int(signal)})
   end
 
+  @doc """
+  Sends a signal to the child's entire process group.
+  """
+  @spec kill_group(pid(), signal()) :: :ok
+  def kill_group(pid, signal) do
+    GenServer.cast(pid, {:kill_group, signal_to_int(signal)})
+  end
+
   # --- GenServer callbacks ---
 
   @impl true
@@ -168,6 +177,11 @@ defmodule Rexec do
 
   def handle_cast({:kill, signal}, state) do
     Port.command(state.port, <<@cmd_kill, signal::8>>)
+    {:noreply, state}
+  end
+
+  def handle_cast({:kill_group, signal}, state) do
+    Port.command(state.port, <<@cmd_kill_group, signal::8>>)
     {:noreply, state}
   end
 

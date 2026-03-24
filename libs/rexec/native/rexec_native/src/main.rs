@@ -15,6 +15,7 @@ const TAG_SIGNAL: u8 = 0x04;
 const CMD_STDIN: u8 = 0x01;
 const CMD_EOF: u8 = 0x02;
 const CMD_KILL: u8 = 0x03;
+const CMD_KILL_GROUP: u8 = 0x04;
 
 fn send_packet(writer: &Mutex<impl Write>, tag: u8, data: &[u8]) {
     let mut w = writer.lock().unwrap();
@@ -41,16 +42,28 @@ fn main() {
         std::process::exit(1);
     }
 
-    let mut child = Command::new(&args[0])
-        .args(&args[1..])
+    let mut cmd = Command::new(&args[0]);
+    cmd.args(&args[1..])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap_or_else(|e| {
-            eprintln!("failed to spawn: {e}");
-            std::process::exit(1);
-        });
+        .stderr(Stdio::piped());
+
+    // Make child a process group leader so we can kill the whole group
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        unsafe {
+            cmd.pre_exec(|| {
+                libc::setpgid(0, 0);
+                Ok(())
+            });
+        }
+    }
+
+    let mut child = cmd.spawn().unwrap_or_else(|e| {
+        eprintln!("failed to spawn: {e}");
+        std::process::exit(1);
+    });
 
     let child_pid = child.id();
     let stdout_writer = Arc::new(Mutex::new(io::stdout()));
@@ -118,6 +131,15 @@ fn main() {
                                 let signal = data[0] as i32;
                                 unsafe {
                                     libc::kill(child_pid as i32, signal);
+                                }
+                            }
+                        }
+                        CMD_KILL_GROUP => {
+                            if !data.is_empty() {
+                                let signal = data[0] as i32;
+                                // Negative PID sends signal to entire process group
+                                unsafe {
+                                    libc::kill(-(child_pid as i32), signal);
                                 }
                             }
                         }
@@ -239,5 +261,4 @@ mod tests {
         assert_eq!(packet[0], TAG_STDERR);
         assert_eq!(&packet[1..], b"error msg");
     }
-
 }

@@ -140,6 +140,22 @@ defmodule RexecTest do
     end
   end
 
+  describe "kill_group/2" do
+    test "kills entire process group including children" do
+      Process.flag(:trap_exit, true)
+
+      # Spawn a shell that launches a background child, then waits.
+      # The shell and its child form a process group.
+      {:ok, pid, ospid} =
+        Rexec.run_link(["sh", "-c", "sleep 60 & sleep 60 & wait"])
+
+      assert is_integer(ospid)
+
+      Rexec.kill_group(pid, :sigterm)
+      assert_receive {:EXIT, ^pid, _reason}, 5000
+    end
+  end
+
   # Helpers
 
   defp collect_stdout(ospid, pid) do
