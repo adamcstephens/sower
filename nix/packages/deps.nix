@@ -1244,6 +1244,18 @@ let
         in
         drv;
 
+      rexec =
+        let
+          version = "0.1.0";
+          drv = buildMix {
+            inherit version;
+            name = "rexec";
+
+            src = ../../libs/rexec;
+          };
+        in
+        drv;
+
       rustler =
         let
           version = "0.36.2";

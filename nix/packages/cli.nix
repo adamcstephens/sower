@@ -4,7 +4,6 @@
   callPackages,
   lib,
   makeWrapper,
-  rexec-native,
   version,
 }:
 
@@ -29,11 +28,6 @@ beamPackages.mixRelease {
   mixReleaseName = "cli";
 
   mixNixDeps = callPackages ./umbrella-deps.nix { inherit beamPackages; };
-
-  preBuild = ''
-    mkdir -p libs/rexec/priv
-    cp ${rexec-native}/bin/rexec_native libs/rexec/priv/
-  '';
 
   removeCookie = false;
 

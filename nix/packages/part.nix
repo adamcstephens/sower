@@ -9,21 +9,12 @@
     }:
     {
       packages = rec {
-        rexec-native = pkgs.callPackage ./rexec-native.nix {
-          inherit version;
-        };
-
         activator = pkgs.callPackage ./activator.nix {
           inherit version;
         };
 
         cli = pkgs.callPackage ./cli.nix {
-          inherit
-            activator
-            beamPackages
-            rexec-native
-            version
-            ;
+          inherit activator beamPackages version;
         };
 
         go-cli = pkgs.callPackage ./go-cli.nix {
@@ -31,16 +22,11 @@
         };
 
         garden = pkgs.callPackage ./garden.nix {
-          inherit beamPackages rexec-native version;
+          inherit beamPackages version;
         };
 
         server = pkgs.callPackage ./server.nix {
-          inherit
-            beamPackages
-            rexec-native
-            version
-            sowerServicesHook
-            ;
+          inherit beamPackages version sowerServicesHook;
 
           sowerLib = self.lib;
         };

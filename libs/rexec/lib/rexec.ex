@@ -168,13 +168,23 @@ defmodule Rexec do
     {:noreply, state}
   end
 
-  def handle_cast({:kill, signal}, state) do
+  def handle_cast({:kill, signal}, %{ospid: ospid} = state) when is_integer(ospid) do
     Port.command(state.port, <<@cmd_kill, signal::big-signed-32>>)
     {:noreply, state}
   end
 
-  def handle_cast({:kill_group, signal}, state) do
+  def handle_cast({:kill, _signal}, state) do
+    Logger.warning(msg: "Rexec: kill ignored, no managed ospid yet")
+    {:noreply, state}
+  end
+
+  def handle_cast({:kill_group, signal}, %{ospid: ospid} = state) when is_integer(ospid) do
     Port.command(state.port, <<@cmd_kill_group, signal::big-signed-32>>)
+    {:noreply, state}
+  end
+
+  def handle_cast({:kill_group, _signal}, state) do
+    Logger.warning(msg: "Rexec: kill_group ignored, no managed ospid yet")
     {:noreply, state}
   end
 
