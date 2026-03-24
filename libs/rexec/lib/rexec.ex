@@ -29,6 +29,9 @@ defmodule Rexec do
 
   @registry :rexec_ospid_registry
 
+  @env_allowlist_exact MapSet.new(~w(PATH HOME USER LANG LC_ALL))
+  @env_allowlist_prefixes ~w(NIX_ XDG_ LC_)
+
   @doc """
   Starts a process linked to the caller.
 
@@ -244,19 +247,36 @@ defmodule Rexec do
   end
 
   defp add_env_opt(port_opts, opts) do
-    case Keyword.get(opts, :env) do
-      nil ->
-        port_opts
+    caller_overrides = Keyword.get(opts, :env, [])
+    override_map = Map.new(caller_overrides)
 
-      env when is_list(env) ->
-        erlang_env =
-          Enum.map(env, fn
-            {name, false} -> {String.to_charlist(name), false}
-            {name, value} -> {String.to_charlist(name), String.to_charlist(value)}
-          end)
+    current_env = System.get_env()
 
-        [{:env, erlang_env} | port_opts]
-    end
+    # Remove all vars, then add back only allowed ones
+    removals =
+      for {name, _val} <- current_env,
+          not env_allowed?(name),
+          not Map.has_key?(override_map, name),
+          do: {String.to_charlist(name), false}
+
+    allowed =
+      for {name, val} <- current_env,
+          env_allowed?(name),
+          not Map.has_key?(override_map, name),
+          do: {String.to_charlist(name), String.to_charlist(val)}
+
+    overrides =
+      Enum.map(caller_overrides, fn
+        {name, false} -> {String.to_charlist(name), false}
+        {name, value} -> {String.to_charlist(name), String.to_charlist(value)}
+      end)
+
+    [{:env, removals ++ allowed ++ overrides} | port_opts]
+  end
+
+  defp env_allowed?(name) do
+    name in @env_allowlist_exact or
+      Enum.any?(@env_allowlist_prefixes, &String.starts_with?(name, &1))
   end
 
   defp add_cd_opt(port_opts, opts) do

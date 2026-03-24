@@ -69,7 +69,45 @@ defmodule RexecTest do
       assert_receive {:EXIT, ^pid, :normal}, 5000
     end
 
-    test "removes environment variable when value is false" do
+    test "excludes non-allowlisted env vars from child" do
+      Process.flag(:trap_exit, true)
+      # Set a var in the BEAM that should NOT pass through
+      System.put_env("REXEC_SHOULD_BE_HIDDEN", "secret")
+
+      {:ok, pid, ospid} =
+        Rexec.run_link(["sh", "-c", "echo ${REXEC_SHOULD_BE_HIDDEN:-hidden}"])
+
+      assert_receive {:stdout, ^ospid, "hidden\n"}, 5000
+      assert_receive {:EXIT, ^pid, :normal}, 5000
+    after
+      System.delete_env("REXEC_SHOULD_BE_HIDDEN")
+    end
+
+    test "passes allowlisted env vars to child" do
+      Process.flag(:trap_exit, true)
+
+      {:ok, pid, ospid} =
+        Rexec.run_link(["sh", "-c", "echo $PATH"])
+
+      assert_receive {:stdout, ^ospid, path}, 5000
+      assert path != "\n", "PATH should not be empty"
+      assert_receive {:EXIT, ^pid, :normal}, 5000
+    end
+
+    test "passes NIX_ prefixed vars to child" do
+      Process.flag(:trap_exit, true)
+      System.put_env("NIX_TEST_PASSTHROUGH", "nix_value")
+
+      {:ok, pid, ospid} =
+        Rexec.run_link(["sh", "-c", "echo $NIX_TEST_PASSTHROUGH"])
+
+      assert_receive {:stdout, ^ospid, "nix_value\n"}, 5000
+      assert_receive {:EXIT, ^pid, :normal}, 5000
+    after
+      System.delete_env("NIX_TEST_PASSTHROUGH")
+    end
+
+    test "per-call env overrides allowlist defaults" do
       Process.flag(:trap_exit, true)
 
       {:ok, pid, ospid} =
