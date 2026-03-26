@@ -149,6 +149,64 @@ defmodule SowerWeb.SowerComponents do
     """
   end
 
+  attr :meta, Flop.Meta, required: true
+  attr :path, :string, default: nil
+
+  def pagination(assigns) do
+    ~H"""
+    <Flop.Phoenix.pagination
+      meta={@meta}
+      path={@path}
+      class="flex items-center justify-center gap-1 mt-6"
+      page_list_attrs={[class: "order-2 flex items-center gap-1"]}
+      page_list_item_attrs={[class: "contents"]}
+      page_link_attrs={[
+        class:
+          "inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+      ]}
+      current_page_link_attrs={[
+        class:
+          "inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+      ]}
+      disabled_link_attrs={[
+        class: "opacity-40 pointer-events-none"
+      ]}
+    >
+      <:previous attrs={[
+        class:
+          "order-1 inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+      ]}>
+        <svg class="w-4 h-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+          <path
+            fill-rule="evenodd"
+            d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z"
+            clip-rule="evenodd"
+          />
+        </svg>
+        Prev
+      </:previous>
+      <:next attrs={[
+        class:
+          "order-3 inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+      ]}>
+        Next
+        <svg class="w-4 h-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
+          <path
+            fill-rule="evenodd"
+            d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+            clip-rule="evenodd"
+          />
+        </svg>
+      </:next>
+      <:ellipsis>
+        <span class="inline-flex items-center justify-center px-2 py-1.5 text-sm text-zinc-400 dark:text-zinc-500">
+          &hellip;
+        </span>
+      </:ellipsis>
+    </Flop.Phoenix.pagination>
+    """
+  end
+
   attr :label, :string, required: true
   slot :inner_block, required: true
 
