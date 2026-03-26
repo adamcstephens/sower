@@ -138,6 +138,98 @@ defmodule Sower.SeedTest do
     end
   end
 
+  describe "list_flop/1" do
+    test "returns seeds with default ordering" do
+      seed_a = seed_fixture(%{name: "alpha"})
+      seed_b = seed_fixture(%{name: "bravo"})
+
+      assert {:ok, {seeds, meta}} = Seed.list_flop()
+      sids = Enum.map(seeds, & &1.sid)
+
+      # Default order is updated_at desc, so most recent first
+      assert seed_b.sid in sids
+      assert seed_a.sid in sids
+      assert meta.total_count == 2
+    end
+
+    test "filters by name with ilike_and" do
+      seed_fixture(%{name: "kale-host"})
+      seed_fixture(%{name: "bravo-host"})
+
+      params = %{
+        "filters" => [%{"field" => "name", "op" => "ilike_and", "value" => "kale"}]
+      }
+
+      assert {:ok, {seeds, meta}} = Seed.list_flop(params)
+      assert length(seeds) == 1
+      assert hd(seeds).name == "kale-host"
+      assert meta.total_count == 1
+    end
+
+    test "filters by seed_type" do
+      seed_fixture(%{name: "host-a", seed_type: "nixos"})
+      seed_fixture(%{name: "user-a", seed_type: "home-manager"})
+
+      params = %{
+        "filters" => [%{"field" => "seed_type", "op" => "==", "value" => "nixos"}]
+      }
+
+      assert {:ok, {seeds, _meta}} = Seed.list_flop(params)
+      assert Enum.all?(seeds, &(&1.seed_type == "nixos"))
+    end
+
+    test "combines multiple filters" do
+      seed_fixture(%{name: "kale", seed_type: "nixos"})
+      seed_fixture(%{name: "kale-hm", seed_type: "home-manager"})
+      seed_fixture(%{name: "bravo", seed_type: "nixos"})
+
+      params = %{
+        "filters" => [
+          %{"field" => "name", "op" => "ilike_and", "value" => "kale"},
+          %{"field" => "seed_type", "op" => "==", "value" => "nixos"}
+        ]
+      }
+
+      assert {:ok, {seeds, meta}} = Seed.list_flop(params)
+      assert length(seeds) == 1
+      assert hd(seeds).name == "kale"
+      assert meta.total_count == 1
+    end
+
+    test "sorts by name ascending" do
+      seed_fixture(%{name: "charlie"})
+      seed_fixture(%{name: "alpha"})
+      seed_fixture(%{name: "bravo"})
+
+      params = %{"order_by" => ["name"], "order_directions" => ["asc"]}
+
+      assert {:ok, {seeds, _meta}} = Seed.list_flop(params)
+      names = Enum.map(seeds, & &1.name)
+      assert names == ["alpha", "bravo", "charlie"]
+    end
+
+    test "paginates results" do
+      for i <- 1..5, do: seed_fixture(%{name: "seed-#{i}"})
+
+      params = %{"page" => 1, "page_size" => 2}
+      assert {:ok, {seeds, meta}} = Seed.list_flop(params)
+      assert length(seeds) == 2
+      assert meta.total_count == 5
+      assert meta.total_pages == 3
+
+      params = %{"page" => 3, "page_size" => 2}
+      assert {:ok, {seeds, _meta}} = Seed.list_flop(params)
+      assert length(seeds) == 1
+    end
+
+    test "preloads tags" do
+      seed_fixture(%{tags: [%{key: "env", value: "prod"}]})
+
+      assert {:ok, {[seed], _meta}} = Seed.list_flop()
+      assert [%{key: "env", value: "prod"}] = seed.tags
+    end
+  end
+
   describe "extract_info_from_store_path/1" do
     test "extracts the derivation name from a NixOS store path" do
       assert Seed.extract_info_from_store_path("/nix/store/abc123def-nixos-system-myhost-25.11") ==
