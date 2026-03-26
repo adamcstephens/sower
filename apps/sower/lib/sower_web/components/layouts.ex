@@ -22,6 +22,7 @@ defmodule SowerWeb.Layouts do
   attr :flash, :map, required: true, doc: "the map of flash messages"
 
   attr :current_user, :map, default: nil
+  attr :nav_section, :atom, default: nil
 
   slot :inner_block, required: true
 
@@ -52,7 +53,7 @@ defmodule SowerWeb.Layouts do
                 <li>
                   <.link
                     navigate={~p"/gardens"}
-                    class="block rounded-md px-3 py-2 hover:text-orange-700 hover:bg-zinc-200 dark:hover:text-orange-300 dark:hover:bg-zinc-600"
+                    class={mobile_nav_link_class(@nav_section, :gardens)}
                   >
                     Gardens
                   </.link>
@@ -60,7 +61,7 @@ defmodule SowerWeb.Layouts do
                 <li>
                   <.link
                     navigate={~p"/seeds"}
-                    class="block rounded-md px-3 py-2 hover:text-orange-700 hover:bg-zinc-200 dark:hover:text-orange-300 dark:hover:bg-zinc-600"
+                    class={mobile_nav_link_class(@nav_section, :seeds)}
                   >
                     Seeds
                   </.link>
@@ -68,7 +69,7 @@ defmodule SowerWeb.Layouts do
                 <li>
                   <.link
                     navigate={~p"/deployments"}
-                    class="block rounded-md px-3 py-2 hover:text-orange-700 hover:bg-zinc-200 dark:hover:text-orange-300 dark:hover:bg-zinc-600"
+                    class={mobile_nav_link_class(@nav_section, :deployments)}
                   >
                     Deployments
                   </.link>
@@ -80,33 +81,20 @@ defmodule SowerWeb.Layouts do
               <li>
                 <.link
                   navigate={~p"/gardens"}
-                  class="hover:text-orange-700 dark:hover:text-orange-300"
+                  class={nav_link_class(@nav_section, :gardens)}
                 >
                   Gardens
                 </.link>
               </li>
               <li>
-                <.link navigate={~p"/seeds"} class="hover:text-orange-700 dark:hover:text-orange-300">
+                <.link navigate={~p"/seeds"} class={nav_link_class(@nav_section, :seeds)}>
                   Seeds
                 </.link>
               </li>
-              <%!-- <li> --%>
-              <%!--   <.link --%>
-              <%!--     navigate={~p"/nix/caches"} --%>
-              <%!--     class="hover:text-orange-700 dark:hover:text-orange-300" --%>
-              <%!--   > --%>
-              <%!--     Caches --%>
-              <%!--   </.link> --%>
-              <%!-- </li> --%>
-              <%!-- <li> --%>
-              <%!--   <.link navigate={~p"/forges"} class="hover:text-orange-700 dark:hover:text-orange-300"> --%>
-              <%!--     Forges --%>
-              <%!--   </.link> --%>
-              <%!-- </li> --%>
               <li>
                 <.link
                   navigate={~p"/deployments"}
-                  class="hover:text-orange-700 dark:hover:text-orange-300"
+                  class={nav_link_class(@nav_section, :deployments)}
                 >
                   Deployments
                 </.link>
@@ -329,6 +317,22 @@ defmodule SowerWeb.Layouts do
       </.button>
     </div>
     """
+  end
+
+  defp nav_link_class(current, section) when current == section do
+    "text-orange-700 dark:text-orange-300 border-b-[3px] border-orange-700 dark:border-orange-300 pb-3.5 -mb-4"
+  end
+
+  defp nav_link_class(_current, _section) do
+    "hover:text-orange-700 dark:hover:text-orange-300"
+  end
+
+  defp mobile_nav_link_class(current, section) when current == section do
+    "block rounded-md px-3 py-2 text-orange-700 dark:text-orange-300 bg-zinc-200 dark:bg-zinc-600"
+  end
+
+  defp mobile_nav_link_class(_current, _section) do
+    "block rounded-md px-3 py-2 hover:text-orange-700 hover:bg-zinc-200 dark:hover:text-orange-300 dark:hover:bg-zinc-600"
   end
 
   # Embed all files in layouts/* within this module.

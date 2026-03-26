@@ -160,6 +160,7 @@ defmodule SowerWeb.UserAuth do
     socket = mount_current_user(socket, session)
 
     if socket.assigns.current_user do
+      socket = attach_nav_section_hook(socket)
       {:cont, socket}
     else
       socket =
@@ -179,6 +180,25 @@ defmodule SowerWeb.UserAuth do
       {:cont, socket}
     end
   end
+
+  defp attach_nav_section_hook(%{private: %{lifecycle: _}} = socket) do
+    Phoenix.LiveView.attach_hook(socket, :nav_section, :handle_params, fn _params, uri, socket ->
+      section =
+        uri
+        |> URI.parse()
+        |> Map.get(:path)
+        |> nav_section_from_path()
+
+      {:cont, Phoenix.Component.assign(socket, :nav_section, section)}
+    end)
+  end
+
+  defp attach_nav_section_hook(socket), do: socket
+
+  defp nav_section_from_path("/gardens" <> _), do: :gardens
+  defp nav_section_from_path("/seeds" <> _), do: :seeds
+  defp nav_section_from_path("/deployments" <> _), do: :deployments
+  defp nav_section_from_path(_), do: nil
 
   defp mount_current_user(socket, session) do
     Phoenix.Component.assign_new(socket, :current_user, fn ->
