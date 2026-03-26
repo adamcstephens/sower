@@ -1,0 +1,91 @@
+<Layouts.app flash={@flash} current_user={@current_user}>
+  <.header>
+    Listing Deployments
+  </.header>
+
+  <form phx-change="filter" class="mt-6 flex gap-4 items-end">
+    <div class="flex-1">
+      <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Garden</label>
+      <input
+        type="text"
+        name="garden_name"
+        value={filter_value(@meta, :garden_name)}
+        placeholder="Search by garden..."
+        phx-debounce="300"
+        class="mt-1 block w-full rounded-md border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
+      />
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300">State</label>
+      <select
+        name="state"
+        class="mt-1 block w-full rounded-md border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
+      >
+        <option value="">All states</option>
+        <option :for={s <- state_options()} value={s} selected={filter_value(@meta, :state) == s}>
+          {s}
+        </option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Result</label>
+      <select
+        name="result"
+        class="mt-1 block w-full rounded-md border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
+      >
+        <option value="">All results</option>
+        <option
+          :for={r <- result_options()}
+          value={r}
+          selected={filter_value(@meta, :result) == r}
+        >
+          {r}
+        </option>
+      </select>
+    </div>
+  </form>
+
+  <.table
+    id="deployments"
+    rows={@deployments}
+    meta={@meta}
+    path={~p"/deployments"}
+    row_click={fn deployment -> JS.navigate(~p"/deployments/#{deployment}") end}
+  >
+    <:col :let={deployment} label="">
+      <.deployment_status state={deployment.state} result={deployment.result} />
+    </:col>
+    <:col :let={deployment} label="sid">
+      <span
+        class="sm:hidden truncate max-w-[8rem] inline-block align-bottom"
+        title={deployment.sid}
+      >
+        {deployment.sid}
+      </span>
+      <span class="hidden sm:inline">{deployment.sid}</span>
+    </:col>
+    <:col :let={deployment} label="garden" field={:garden_name}>
+      {get_in(deployment.garden.name) || "-"}
+    </:col>
+    <:col :let={deployment} label="completed" field={:deployed_at} hide_on={:sm}>
+      <.local_datetime datetime={deployment.deployed_at} user_timezone={@user_timezone} />
+    </:col>
+    <:action :let={deployment}>
+      <.button
+        :if={retryable?(deployment)}
+        variant={:secondary}
+        type="button"
+        phx-click="retry"
+        phx-value-sid={deployment.sid}
+        phx-stop-propagation
+        phx-disable-with="Retrying..."
+        class="hidden sm:inline"
+        disabled={@retrying_deployment_sid == deployment.sid}
+      >
+        Retry
+      </.button>
+    </:action>
+  </.table>
+
+  <.pagination meta={@meta} path={~p"/deployments"} />
+</Layouts.app>

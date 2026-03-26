@@ -2,60 +2,9 @@ defmodule SowerWeb.DeploymentLive.Index do
   use SowerWeb, :live_view
 
   alias Sower.Orchestration
-  alias SowerWeb.Layouts
+  alias Sower.Orchestration.Deployment
 
-  @impl true
-  def render(assigns) do
-    ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user}>
-      <.header>
-        Listing Deployments
-      </.header>
-
-      <.table
-        id="deployments"
-        rows={@streams.deployments}
-        row_click={fn {_id, deployment} -> JS.navigate(~p"/deployments/#{deployment}") end}
-      >
-        <:col :let={{_id, deployment}} label="">
-          <.deployment_status state={deployment.state} result={deployment.result} />
-        </:col>
-        <:col :let={{_id, deployment}} label="sid">
-          <span
-            class="sm:hidden truncate max-w-[8rem] inline-block align-bottom"
-            title={deployment.sid}
-          >
-            {deployment.sid}
-          </span>
-          <span class="hidden sm:inline">{deployment.sid}</span>
-        </:col>
-        <:col :let={{_id, deployment}} label="garden">
-          {get_in(deployment.garden.name) || "-"}
-        </:col>
-        <:col :let={{_id, deployment}} label="completed" hide_on={:sm}>
-          <.local_datetime datetime={deployment.deployed_at} user_timezone={@user_timezone} />
-        </:col>
-        <:action :let={{_id, deployment}}>
-          <.button
-            :if={retryable?(deployment)}
-            variant={:secondary}
-            type="button"
-            phx-click="retry"
-            phx-value-sid={deployment.sid}
-            phx-stop-propagation
-            phx-disable-with="Retrying..."
-            class="hidden sm:inline"
-            disabled={@retrying_deployment_sid == deployment.sid}
-          >
-            Retry
-          </.button>
-        </:action>
-      </.table>
-    </Layouts.app>
-    """
-  end
-
-  @impl true
+  @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Sower.PubSub, "deployments")
@@ -64,26 +13,52 @@ defmodule SowerWeb.DeploymentLive.Index do
     {:ok,
      socket
      |> assign(:page_title, "Listing Deployments")
-     |> assign(:retrying_deployment_sid, nil)
-     |> stream(:deployments, Orchestration.list_deployments() |> Sower.Repo.preload([:garden]))}
+     |> assign(:retrying_deployment_sid, nil)}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_params(params, _uri, socket) do
+    case Deployment.list_flop(params) do
+      {:ok, {deployments, meta}} ->
+        {:noreply, assign(socket, deployments: deployments, meta: meta)}
+
+      {:error, meta} ->
+        {:noreply, assign(socket, deployments: [], meta: meta)}
+    end
   end
 
   @impl Phoenix.LiveView
   def handle_info({:deployment, :created, deployment}, socket) do
     deployment = Sower.Repo.preload(deployment, [:garden])
-
-    # Insert new deployment at the top of the stream
-    {:noreply, stream_insert(socket, :deployments, deployment, at: 0)}
+    deployments = [deployment | socket.assigns.deployments]
+    {:noreply, assign(socket, :deployments, deployments)}
   end
 
   def handle_info({:deployment, :updated, deployment}, socket) do
     deployment = Sower.Repo.preload(deployment, [:garden])
 
-    # Update existing deployment in the stream
-    {:noreply, stream_insert(socket, :deployments, deployment)}
+    deployments =
+      Enum.map(socket.assigns.deployments, fn d ->
+        if d.id == deployment.id, do: deployment, else: d
+      end)
+
+    {:noreply, assign(socket, :deployments, deployments)}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
+  def handle_event("filter", params, socket) do
+    filters =
+      []
+      |> maybe_add_filter(:garden_name, :ilike_and, params["garden_name"])
+      |> maybe_add_filter(:state, :==, params["state"])
+      |> maybe_add_filter(:result, :==, params["result"])
+
+    flop = %Flop{filters: filters}
+    path = Flop.Phoenix.build_path(~p"/deployments", flop)
+
+    {:noreply, push_patch(socket, to: path)}
+  end
+
   def handle_event("retry", %{"sid" => sid}, socket) do
     deployment = Orchestration.get_deployment_sid(sid)
 
@@ -124,5 +99,35 @@ defmodule SowerWeb.DeploymentLive.Index do
 
   defp retryable?(deployment) do
     deployment.state in [:completed, :stale]
+  end
+
+  defp maybe_add_filter(filters, _field, _op, nil), do: filters
+  defp maybe_add_filter(filters, _field, _op, ""), do: filters
+
+  defp maybe_add_filter(filters, field, op, value) do
+    filters ++ [%Flop.Filter{field: field, op: op, value: value}]
+  end
+
+  defp filter_value(%Flop.Meta{flop: %Flop{filters: filters}}, field) do
+    case Enum.find(filters, &(&1.field == field)) do
+      %Flop.Filter{value: value} when is_atom(value) and not is_nil(value) ->
+        Atom.to_string(value)
+
+      %Flop.Filter{value: value} ->
+        value
+
+      nil ->
+        nil
+    end
+  end
+
+  defp filter_value(_meta, _field), do: nil
+
+  defp state_options do
+    ["created", "dispatched", "acknowledged", "completed", "stale"]
+  end
+
+  defp result_options do
+    ["success", "failure", "partial"]
   end
 end
