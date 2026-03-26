@@ -16,6 +16,22 @@ defmodule Sower.Orchestration.Deployment do
   @derive {Jason.Encoder, only: [:sid]}
   @derive {Phoenix.Param, key: :sid}
 
+  @derive {
+    Flop.Schema,
+    filterable: [:state, :result, :garden_name],
+    sortable: [:state, :result, :deployed_at, :inserted_at],
+    default_limit: 20,
+    default_order: %{
+      order_by: [:inserted_at],
+      order_directions: [:desc]
+    },
+    adapter_opts: [
+      join_fields: [
+        garden_name: [binding: :garden, field: :name, ecto_type: :string]
+      ]
+    ]
+  }
+
   schema "deployments" do
     field :sid, SowerClient.Sid, autogenerate: true
     field :org_id, Ecto.UUID
@@ -79,6 +95,18 @@ defmodule Sower.Orchestration.Deployment do
       )
 
     Repo.all(query)
+  end
+
+  def list_flop(params \\ %{}) do
+    query = from(d in __MODULE__, join: g in assoc(d, :garden), as: :garden)
+
+    case Flop.validate_and_run(query, params, for: __MODULE__) do
+      {:ok, {deployments, meta}} ->
+        {:ok, {Repo.preload(deployments, [:garden]), meta}}
+
+      {:error, meta} ->
+        {:error, meta}
+    end
   end
 
   def list_deployments(%Garden{} = garden, opts \\ []) do
