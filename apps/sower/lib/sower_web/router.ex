@@ -114,6 +114,13 @@ defmodule SowerWeb.Router do
     post "/seeds", SeedController, :create
   end
 
+  if Mix.env() in [:dev, :test] do
+    scope "/dev", SowerWeb do
+      pipe_through :browser
+      get "/login", DevLoginController, :login
+    end
+  end
+
   scope "/auth" do
     pipe_through :browser
     get "/:provider", SowerWeb.AuthController, :request
