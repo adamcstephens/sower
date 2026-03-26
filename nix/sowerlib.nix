@@ -29,6 +29,7 @@ rec {
       type = "nixos";
       extraSeedMeta = lib.recursiveUpdate {
         tags = {
+          inherit (nixosConfig.pkgs.stdenv.hostPlatform) system;
           nixos_version = nixosConfig.config.system.nixos.version;
         };
       } (nixosConfig.config.sower.seed.meta or { });
@@ -42,6 +43,7 @@ rec {
       package = homeConfig.activationPackage;
       extraSeedMeta = {
         tags = {
+          inherit (homeConfig.pkgs.stdenv.hostPlatform) system;
           inherit (homeConfig.config.home) username homeDirectory;
           inherit (homeConfig.config.home.version) release;
         };
