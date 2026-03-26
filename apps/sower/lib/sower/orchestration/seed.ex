@@ -12,6 +12,17 @@ defmodule Sower.Orchestration.Seed do
 
   @derive {Phoenix.Param, key: :sid}
 
+  @derive {
+    Flop.Schema,
+    filterable: [:name, :seed_type],
+    sortable: [:name, :seed_type, :updated_at],
+    default_limit: 20,
+    default_order: %{
+      order_by: [:updated_at],
+      order_directions: [:desc]
+    }
+  }
+
   @seed_types SowerClient.Seed.seed_types()
 
   schema "seeds" do
@@ -137,6 +148,16 @@ defmodule Sower.Orchestration.Seed do
 
     Repo.all(query)
     |> Repo.preload([:tags])
+  end
+
+  def list_flop(params \\ %{}) do
+    case Flop.validate_and_run(Seed, params, for: Seed) do
+      {:ok, {seeds, meta}} ->
+        {:ok, {Repo.preload(seeds, [:tags]), meta}}
+
+      {:error, meta} ->
+        {:error, meta}
+    end
   end
 
   @doc """

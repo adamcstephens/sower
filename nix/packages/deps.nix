@@ -591,6 +591,52 @@ let
         in
         drv;
 
+      flop =
+        let
+          version = "0.26.3";
+          drv = buildMix {
+            inherit version;
+            name = "flop";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "flop";
+              sha256 = "cd77588229778ac55560c90dfbe15ab6486773f067d6e52db9fa703b8c9a9d2d";
+            };
+
+            beamDeps = [
+              ecto
+              nimble_options
+            ];
+          };
+        in
+        drv;
+
+      flop_phoenix =
+        let
+          version = "0.25.3";
+          drv = buildMix {
+            inherit version;
+            name = "flop_phoenix";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "flop_phoenix";
+              sha256 = "912fae3c343dde43c5ea4f642275793d9dbef32989bf200013e12b85adb93b9c";
+            };
+
+            beamDeps = [
+              flop
+              phoenix
+              phoenix_html
+              phoenix_live_view
+            ];
+          };
+        in
+        drv;
+
       gen_stage =
         let
           version = "1.3.2";

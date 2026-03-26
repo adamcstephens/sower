@@ -4,20 +4,26 @@ defmodule SowerWeb.SowerComponents do
   import SowerWeb.CoreComponents, only: [button: 1]
 
   @doc """
-  Renders a table with responsive column hiding.
+  Renders a table with responsive column hiding and optional sortable headers.
 
   Columns can be hidden below a breakpoint by setting `hide_on={:sm}` (or `:md`, `:lg`, `:xl`)
   on the `:col` slot, which applies `hidden <bp>:table-cell` classes to both `<th>` and `<td>`.
+
+  For sortable columns, set `field={:field_name}` on the `:col` slot and provide `meta` and `path`
+  on the table. Columns without `field` render plain labels as before.
   """
   attr :id, :string, required: true
   attr :rows, :list, required: true
   attr :row_id, :any, default: nil
   attr :row_click, :any, default: nil
   attr :row_item, :any, default: &Function.identity/1
+  attr :meta, :any, default: nil
+  attr :path, :string, default: nil
 
   slot :col, required: true do
     attr :label, :string
     attr :hide_on, :atom
+    attr :field, :atom
   end
 
   attr :action_hide_on, :atom, default: nil
@@ -44,7 +50,11 @@ defmodule SowerWeb.SowerComponents do
                 col[:hide_on] && "hidden #{col[:hide_on]}:table-cell"
               ]}
             >
-              {col[:label]}
+              <%= if col[:field] && @meta && @path do %>
+                <.sort_link field={col[:field]} label={col[:label]} meta={@meta} path={@path} />
+              <% else %>
+                {col[:label]}
+              <% end %>
             </th>
             <th
               :if={@action != []}
@@ -101,6 +111,41 @@ defmodule SowerWeb.SowerComponents do
         </tbody>
       </table>
     </div>
+    """
+  end
+
+  attr :field, :atom, required: true
+  attr :label, :string, required: true
+  attr :meta, Flop.Meta, required: true
+  attr :path, :string, required: true
+
+  defp sort_link(assigns) do
+    flop = assigns.meta.flop
+    current_field = List.first(flop.order_by || [])
+    current_dir = List.first(flop.order_directions || [])
+
+    indicator =
+      if current_field == assigns.field do
+        case current_dir do
+          :asc -> " \u25B4"
+          :asc_nulls_first -> " \u25B4"
+          :asc_nulls_last -> " \u25B4"
+          _ -> " \u25BE"
+        end
+      end
+
+    new_flop = Flop.push_order(flop, assigns.field)
+    href = Flop.Phoenix.build_path(assigns.path, new_flop)
+
+    assigns = assign(assigns, indicator: indicator, href: href)
+
+    ~H"""
+    <.link
+      patch={@href}
+      class="group inline-flex items-center hover:text-zinc-700 dark:hover:text-zinc-300"
+    >
+      {@label}<span :if={@indicator} class="ml-1">{@indicator}</span>
+    </.link>
     """
   end
 
