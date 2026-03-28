@@ -6,6 +6,10 @@ defmodule Sower.Forge.Oauth do
 
   # client
 
+  def redirect_url do
+    "#{Application.fetch_env!(:sower, :public_url)}/forges/oauth/callback"
+  end
+
   def start_link(_) do
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
   end
@@ -39,8 +43,7 @@ defmodule Sower.Forge.Oauth do
                  forge.client_id,
                  forge.client_secret,
                  %{
-                   redirect_uri:
-                     "#{Application.fetch_env!(:sower, :public_url)}/forges/oauth/callback",
+                   redirect_uri: redirect_url(),
                    require_pkce: true,
                    pkce_verifier: verifier
                  }

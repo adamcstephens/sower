@@ -30,6 +30,17 @@ defmodule SowerWeb.Forge.ConnectionLive.FormComponent do
         />
         <.input field={@form[:client_id]} type="text" label="Client" />
         <.input field={@form[:client_secret]} type="text" label="Client secret" />
+        <div>
+          <.label>Redirect URL</.label>
+          <div class="mt-1 flex items-center gap-2">
+            <code class="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900">
+              {@redirect_url}
+            </code>
+          </div>
+          <p class="mt-1 text-sm text-zinc-500">
+            Use this as the redirect URI when creating the OAuth application on your forge.
+          </p>
+        </div>
         <:actions>
           <.button phx-disable-with="Saving...">Save Connection</.button>
         </:actions>
@@ -43,6 +54,7 @@ defmodule SowerWeb.Forge.ConnectionLive.FormComponent do
     {:ok,
      socket
      |> assign(assigns)
+     |> assign(:redirect_url, Sower.Forge.Oauth.redirect_url())
      |> assign_new(:form, fn ->
        to_form(Forge.change_connection(connection))
      end)}
