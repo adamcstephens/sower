@@ -70,14 +70,16 @@ defmodule SowerWeb.DeploymentLive.Show do
             <article
               :for={sd <- @deployment.seed_deployments}
               id={"seed-log-#{sd.seed.sid}"}
-              class={[
-                "rounded-lg border border-zinc-200/50 dark:border-zinc-700/50 p-4",
-                sd.log && "cursor-pointer"
-              ]}
-              phx-click={sd.log && "toggle_seed_log"}
-              phx-value-seed_sid={sd.log && sd.seed.sid}
+              class="rounded-lg border border-zinc-200/50 dark:border-zinc-700/50 p-4"
             >
-              <div class="flex flex-wrap items-center justify-between gap-2 sm:gap-4">
+              <div
+                class={[
+                  "flex flex-wrap items-center justify-between gap-2 sm:gap-4",
+                  sd.log && "cursor-pointer"
+                ]}
+                phx-click={sd.log && "toggle_seed_log"}
+                phx-value-seed_sid={sd.log && sd.seed.sid}
+              >
                 <div class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 flex flex-wrap items-center gap-2 min-w-0">
                   <.link
                     navigate={~p"/seeds/#{sd.seed.sid}"}
