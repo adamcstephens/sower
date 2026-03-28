@@ -267,7 +267,13 @@ defmodule SowerWeb.SowerComponents do
 
   def online(assigns) do
     ~H"""
-    <svg class="w-4 h-4" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <svg
+      class="w-4 h-4"
+      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label={if @state, do: "Online", else: "Offline"}
+    >
       <circle
         cx="12"
         cy="12"
@@ -292,42 +298,49 @@ defmodule SowerWeb.SowerComponents do
 
   attr :state, :atom, required: true
   attr :result, :atom, default: nil
+  attr :compact, :boolean, default: false
 
   def deployment_status(assigns) do
     ~H"""
     <%= case @state do %>
       <% :created -> %>
         <span class="inline-flex items-center gap-1.5 text-sm text-zinc-500 dark:text-zinc-400">
-          <span class="relative flex h-2.5 w-2.5">
+          <span class="relative flex h-2.5 w-2.5" role="img" aria-label="Created">
             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-zinc-400 opacity-75" />
             <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-zinc-400" />
           </span>
-          Created
+          <span class={@compact && "sr-only"}>Created</span>
         </span>
       <% :dispatched -> %>
         <span class="inline-flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400">
-          <span class="relative flex h-2.5 w-2.5">
+          <span class="relative flex h-2.5 w-2.5" role="img" aria-label="Dispatched">
             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75" />
             <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
           </span>
-          Dispatched
+          <span class={@compact && "sr-only"}>Dispatched</span>
         </span>
       <% :acknowledged -> %>
         <span class="inline-flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400">
-          <span class="relative flex h-2.5 w-2.5">
+          <span class="relative flex h-2.5 w-2.5" role="img" aria-label="Acknowledged">
             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75" />
             <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
           </span>
-          Acknowledged
+          <span class={@compact && "sr-only"}>Acknowledged</span>
         </span>
       <% :completed -> %>
-        <.result result={@result} />
+        <span class={[
+          "inline-flex items-center gap-1.5 text-sm",
+          result_text_class(@result)
+        ]}>
+          <.result result={@result} />
+          <span :if={not @compact}>{result_label(@result)}</span>
+        </span>
       <% :stale -> %>
         <span class="inline-flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-400">
-          <span class="relative flex h-2.5 w-2.5">
+          <span class="relative flex h-2.5 w-2.5" role="img" aria-label="Stale">
             <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500" />
           </span>
-          Stale
+          <span class={@compact && "sr-only"}>Stale</span>
         </span>
     <% end %>
     """
@@ -337,7 +350,13 @@ defmodule SowerWeb.SowerComponents do
 
   def result(assigns) do
     ~H"""
-    <svg class="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <svg
+      class="w-5 h-5"
+      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label={result_label(@result)}
+    >
       <%= cond do %>
         <% @result == :success -> %>
           <path
@@ -376,6 +395,14 @@ defmodule SowerWeb.SowerComponents do
     </svg>
     """
   end
+
+  defp result_label(:success), do: "Success"
+  defp result_label(nil), do: "No result"
+  defp result_label(_), do: "Failed"
+
+  defp result_text_class(:success), do: "text-green-600 dark:text-green-400"
+  defp result_text_class(nil), do: "text-zinc-500 dark:text-zinc-400"
+  defp result_text_class(_), do: "text-red-600 dark:text-red-400"
 
   attr :datetime, DateTime, default: nil
   attr :user_timezone, :string, required: true

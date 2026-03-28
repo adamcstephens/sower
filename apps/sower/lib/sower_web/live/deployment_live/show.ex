@@ -94,6 +94,7 @@ defmodule SowerWeb.DeploymentLive.Show do
                     :if={sd.result}
                     state={:completed}
                     result={sd.result}
+                    compact
                   />
                   <.button
                     :if={sd.log}
