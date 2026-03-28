@@ -16,7 +16,8 @@ if config_env() == :test do
   if Code.loaded?(Garden.Config) do
     Garden.Config.load(
       %{
-        state_directory: Path.expand("../_build", __DIR__),
+        state_directory:
+          Path.join(System.tmp_dir!(), "sower_test_#{System.system_time(:millisecond)}"),
         subscriptions: [
           %{seed_name: "test1", seed_type: "nixos"},
           %{seed_name: "test1", seed_type: "home-manager"}
