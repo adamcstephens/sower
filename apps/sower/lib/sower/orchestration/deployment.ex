@@ -50,7 +50,7 @@ defmodule Sower.Orchestration.Deployment do
     field :result, Ecto.Enum, values: [:success, :failure, :partial]
 
     field :state, Ecto.Enum,
-      values: [:created, :dispatched, :acknowledged, :completed, :stale],
+      values: [:created, :dispatched, :acknowledged, :completed, :stale, :canceled],
       default: :created
 
     field :last_dispatched_at, :utc_datetime_usec
@@ -299,7 +299,7 @@ defmodule Sower.Orchestration.Deployment do
       end)
 
     Enum.each(to_cancel, fn deployment ->
-      update_deployment(deployment, %{state: :stale, result: :failure})
+      update_deployment(deployment, %{state: :canceled, result: :failure})
     end)
 
     # 3. Replay valid unresolved deployments
@@ -513,6 +513,27 @@ defmodule Sower.Orchestration.Deployment do
     end
   end
 
+  # Cancel stale deployments for subscriptions
+
+  def cancel_stale_for_subscriptions(subscription_ids) when is_list(subscription_ids) do
+    stale_deployments =
+      from(d in __MODULE__,
+        join: sd in "subscriptions_deployments",
+        on: sd.deployment_id == d.id,
+        where: sd.subscription_id in ^subscription_ids,
+        where: d.state == :stale,
+        distinct: true
+      )
+      |> Repo.all()
+
+    Enum.reduce(stale_deployments, 0, fn deployment, acc ->
+      case update_deployment(deployment, %{state: :canceled}) do
+        {:ok, _} -> acc + 1
+        _ -> acc
+      end
+    end)
+  end
+
   # Private helpers
 
   defp validate_request_subscriptions(sids) when is_list(sids) and length(sids) > 0 do
@@ -623,6 +644,9 @@ defmodule Sower.Orchestration.Deployment do
                  subscriptions: subscriptions
                }) do
             {:ok, deploy} ->
+              subscription_ids = Enum.map(subscriptions, & &1.id)
+              cancel_stale_for_subscriptions(subscription_ids)
+
               Logger.info(
                 msg: "Deployment record created successfully",
                 request_id: request_id,

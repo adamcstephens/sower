@@ -98,7 +98,7 @@ defmodule SowerWeb.DeploymentLive.Index do
   end
 
   defp retryable?(deployment) do
-    deployment.state in [:completed, :stale]
+    deployment.state in [:completed, :stale, :canceled]
   end
 
   defp maybe_add_filter(filters, _field, _op, nil), do: filters
@@ -124,7 +124,7 @@ defmodule SowerWeb.DeploymentLive.Index do
   defp filter_value(_meta, _field), do: nil
 
   defp state_options do
-    ["created", "dispatched", "acknowledged", "completed", "stale"]
+    ["created", "dispatched", "acknowledged", "completed", "stale", "canceled"]
   end
 
   defp result_options do
