@@ -23,7 +23,7 @@ defmodule SowerWeb.GardenChannelTest do
       garden =
         garden_fixture(%{
           sid: SowerClient.Sid.generate("grdn"),
-          local_sid: SowerClient.Sid.generate("local")
+          local_sid: SowerClient.Sid.generate("lc_grdn")
         })
 
       encoded_token = Base.encode64(access_token.token)
@@ -81,7 +81,7 @@ defmodule SowerWeb.GardenChannelTest do
       garden =
         garden_fixture(%{
           sid: SowerClient.Sid.generate("grdn"),
-          local_sid: SowerClient.Sid.generate("local")
+          local_sid: SowerClient.Sid.generate("lc_grdn")
         })
 
       encoded_token = Base.encode64(access_token.token)
@@ -114,7 +114,7 @@ defmodule SowerWeb.GardenChannelTest do
       garden =
         garden_fixture(%{
           sid: SowerClient.Sid.generate("grdn"),
-          local_sid: SowerClient.Sid.generate("local")
+          local_sid: SowerClient.Sid.generate("lc_grdn")
         })
 
       seed = seed_fixture(%{name: "replay-seed", seed_type: "nixos"})

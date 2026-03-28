@@ -154,7 +154,7 @@ defmodule Sower.Orchestration.Deployment do
     result =
       %__MODULE__{
         org_id: Repo.get_org_id(),
-        sid: SowerClient.Sid.generate("deploy")
+        sid: SowerClient.Sid.generate("dply")
       }
       |> changeset(attrs)
       |> Repo.insert()
@@ -256,7 +256,7 @@ defmodule Sower.Orchestration.Deployment do
                 retry_deployment =
                   Repo.preload(retry_deployment, [:garden, :subscriptions, seeds: [:tags]])
 
-                request_id = SowerClient.Sid.generate("request")
+                request_id = SowerClient.Sid.generate("req")
 
                 SowerWeb.Endpoint.broadcast(
                   "garden:#{retry_deployment.garden.sid}",
@@ -306,7 +306,7 @@ defmodule Sower.Orchestration.Deployment do
     mark_deployments_dispatched(to_replay, now)
 
     Enum.each(to_replay, fn deployment ->
-      request_id = SowerClient.Sid.generate("request")
+      request_id = SowerClient.Sid.generate("req")
       payload = deployment_event_payload(deployment, request_id)
       SowerWeb.Endpoint.broadcast("garden:#{garden.sid}", "deployment", payload)
       SowerWeb.Endpoint.broadcast("agent:#{garden.sid}", "deployment", payload)
@@ -360,7 +360,7 @@ defmodule Sower.Orchestration.Deployment do
         {:error, :garden_not_found}
 
       %Garden{} = garden ->
-        request_id = SowerClient.Sid.generate("request")
+        request_id = SowerClient.Sid.generate("req")
         {:ok, request_id} = process_deployment(request_id, [subscription], garden, opts)
         {:ok, request_id}
     end

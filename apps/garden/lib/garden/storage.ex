@@ -122,7 +122,7 @@ defmodule Garden.Storage do
 
   defp default() do
     %__MODULE__{
-      local_sid: SowerClient.Sid.generate("loc_garden")
+      local_sid: SowerClient.Sid.generate("lc_grdn")
     }
   end
 end
