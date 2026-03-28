@@ -131,7 +131,7 @@
         </:col>
         <:action :let={deployment}>
           <.button
-            :if={deployment.state in [:completed, :stale]}
+            :if={deployment.state in [:completed, :stale, :canceled]}
             variant={:secondary}
             type="button"
             phx-click="retry_deployment"

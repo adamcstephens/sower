@@ -1077,7 +1077,7 @@ defmodule Sower.OrchestrationTest do
       assert hd(overdue).sid == subscription.sid
 
       refreshed = Orchestration.get_deployment_sid!(unresolved.sid)
-      assert refreshed.state == :stale
+      assert refreshed.state == :canceled
       assert refreshed.result == :failure
     end
   end
