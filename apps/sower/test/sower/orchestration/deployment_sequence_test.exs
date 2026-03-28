@@ -236,6 +236,66 @@ defmodule Sower.Orchestration.DeploymentSequenceTest do
     end
   end
 
+  describe "cancel stale on new deployment" do
+    test "stale deployment gets canceled when same sub deploys", %{
+      org: org,
+      garden: garden,
+      seed: seed,
+      subscription: subscription,
+      deployment: deployment
+    } do
+      # Mark the existing deployment as stale
+      {:ok, stale} = Deployment.update_deployment(deployment, %{state: :stale, result: :failure})
+      assert stale.state == :stale
+
+      # Cancel stale deployments for the same subscription
+      canceled_count = Deployment.cancel_stale_for_subscriptions([subscription.id])
+
+      # The stale deployment should now be canceled
+      updated = Deployment.get_deployment!(deployment.id)
+      assert updated.state == :canceled
+      assert canceled_count == 1
+    end
+
+    test "non-stale deployments are not canceled", %{
+      subscription: subscription,
+      deployment: deployment
+    } do
+      # deployment is in :dispatched state from setup
+      assert deployment.state == :dispatched
+
+      canceled_count = Deployment.cancel_stale_for_subscriptions([subscription.id])
+
+      updated = Deployment.get_deployment!(deployment.id)
+      assert updated.state == :dispatched
+      assert canceled_count == 0
+    end
+
+    test "stale deployments for different subs are not canceled", %{
+      garden: garden,
+      deployment: deployment
+    } do
+      # Mark the existing deployment as stale
+      {:ok, _stale} = Deployment.update_deployment(deployment, %{state: :stale, result: :failure})
+
+      # Create a different subscription
+      other_sub =
+        subscription_fixture(%{
+          garden_id: garden.id,
+          seed_name: "other-seed",
+          seed_type: "nixos"
+        })
+
+      # Cancel stale for the other sub only
+      canceled_count = Deployment.cancel_stale_for_subscriptions([other_sub.id])
+
+      # Original stale deployment should remain stale
+      updated = Deployment.get_deployment!(deployment.id)
+      assert updated.state == :stale
+      assert canceled_count == 0
+    end
+  end
+
   defp assert_seed_state(deployment, seed, expected_state) do
     sd = fetch_seed_deployment(deployment, seed)
     assert sd.state == expected_state

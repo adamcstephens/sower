@@ -342,6 +342,13 @@ defmodule SowerWeb.SowerComponents do
           </span>
           <span class={@compact && "sr-only"}>Stale</span>
         </span>
+      <% :canceled -> %>
+        <span class="inline-flex items-center gap-1.5 text-sm text-zinc-400 dark:text-zinc-500">
+          <span class="relative flex h-2.5 w-2.5" role="img" aria-label="Canceled">
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-zinc-400" />
+          </span>
+          <span class={@compact && "sr-only"}>Canceled</span>
+        </span>
     <% end %>
     """
   end

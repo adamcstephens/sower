@@ -226,7 +226,7 @@ defmodule SowerWeb.DeploymentLive.Show do
   end
 
   defp retryable?(deployment) do
-    deployment.state in [:completed, :stale]
+    deployment.state in [:completed, :stale, :canceled]
   end
 
   defp initialize_socket(socket) do
