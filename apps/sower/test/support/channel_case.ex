@@ -36,7 +36,7 @@ defmodule SowerWeb.ChannelCase do
           Map.merge(
             %{
               sid: SowerClient.Sid.generate("grdn"),
-              local_sid: SowerClient.Sid.generate("local")
+              local_sid: SowerClient.Sid.generate("lc_grdn")
             },
             unquote(attrs)
           )

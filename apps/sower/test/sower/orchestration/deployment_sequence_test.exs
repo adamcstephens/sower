@@ -96,7 +96,7 @@ defmodule Sower.Orchestration.DeploymentSequenceTest do
 
       {:ok, completed} =
         Deployment.record_deployment(%SowerClient.Orchestration.DeploymentResult{
-          request_id: SowerClient.Sid.generate("request"),
+          request_id: SowerClient.Sid.generate("req"),
           deployment_sid: deployment.sid,
           result: :success,
           deployed_at: deployed_at
@@ -166,7 +166,7 @@ defmodule Sower.Orchestration.DeploymentSequenceTest do
       # Deployment reports partial
       {:ok, completed} =
         Deployment.record_deployment(%SowerClient.Orchestration.DeploymentResult{
-          request_id: SowerClient.Sid.generate("request"),
+          request_id: SowerClient.Sid.generate("req"),
           deployment_sid: deployment.sid,
           result: :partial,
           deployed_at: DateTime.utc_now() |> DateTime.truncate(:second)

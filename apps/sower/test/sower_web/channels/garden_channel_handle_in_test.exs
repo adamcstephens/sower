@@ -28,7 +28,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
     test "registers a new garden when garden_sid is nil" do
       %{socket: socket} = connect_and_join_garden()
 
-      local_sid = SowerClient.Sid.generate("local")
+      local_sid = SowerClient.Sid.generate("lc_grdn")
 
       ref =
         push(socket, "garden:hello", %{
