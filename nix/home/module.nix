@@ -13,17 +13,6 @@ let
 
   stateDir = "${config.xdg.stateHome}/sower-garden";
 
-  oldStateDir = "${config.xdg.stateHome}/sower-agent";
-
-  migrationScript = pkgs.writeShellApplication {
-    name = "sower-garden-migrate";
-    text = ''
-      if [ -d ${oldStateDir} ] && [ ! -d ${stateDir} ]; then
-        mv ${oldStateDir} ${stateDir}
-      fi
-    '';
-  };
-
   secretsScript = pkgs.writeShellApplication {
     name = "sower-garden-init-secrets";
     runtimeInputs = [ pkgs.openssl ];
@@ -118,7 +107,6 @@ in
             ];
 
             ExecStartPre = [
-              (lib.getExe migrationScript)
               (lib.getExe secretsScript)
             ];
             ExecStart = lib.getExe startScript;

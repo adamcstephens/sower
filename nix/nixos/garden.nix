@@ -37,16 +37,6 @@ let
       '';
   };
 
-  migrationScript = pkgs.writeShellApplication {
-    name = "sower-garden-migrate";
-    text = ''
-      if [ -d /var/lib/sower-agent ] && [ ! -d /var/lib/sower-garden ]; then
-        mv /var/lib/sower-agent /var/lib/sower-garden
-        chown -R sower-garden:sower-garden /var/lib/sower-garden
-      fi
-    '';
-  };
-
   secretsScript = pkgs.writeShellApplication {
     name = "sower-garden-init-secrets";
     runtimeInputs = [ pkgs.openssl ];
@@ -248,7 +238,6 @@ in
         WorkingDirectory = "%S/sower-garden";
 
         ExecStartPre = [
-          "+${lib.getExe migrationScript}"
           (lib.getExe secretsScript)
         ];
         ExecStart = lib.getExe startScript;
