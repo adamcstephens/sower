@@ -52,7 +52,7 @@
     path={~p"/deployments"}
     row_click={fn deployment -> JS.navigate(~p"/deployments/#{deployment}") end}
   >
-    <:col :let={deployment} label="">
+    <:col :let={deployment} label="Status">
       <.deployment_status state={deployment.state} result={deployment.result} />
     </:col>
     <:col :let={deployment} label="sid">

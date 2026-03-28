@@ -110,17 +110,21 @@
         rows={@deployments}
         row_click={fn deployment -> JS.navigate(~p"/deployments/#{deployment.sid}") end}
       >
-        <:col :let={deployment} label="">
-          <.deployment_status state={deployment.state} result={deployment.result} />
+        <:col :let={deployment} label="Status">
+          <span class="sm:hidden">
+            <.deployment_status state={deployment.state} result={deployment.result} compact />
+          </span>
+          <span class="hidden sm:inline-flex">
+            <.deployment_status state={deployment.state} result={deployment.result} />
+          </span>
         </:col>
         <:col :let={deployment} label="SID">
           <span
-            class="sm:hidden truncate max-sm:max-w-[12rem] inline-block align-bottom"
+            class="truncate max-w-[8rem] sm:max-w-none inline-block align-bottom"
             title={deployment.sid}
           >
             {deployment.sid}
           </span>
-          <span class="hidden sm:inline">{deployment.sid}</span>
         </:col>
         <:col :let={deployment} label="Created" hide_on={:sm}>
           <.local_datetime datetime={deployment.inserted_at} user_timezone={@user_timezone} />
