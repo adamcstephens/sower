@@ -498,6 +498,42 @@ defmodule Garden.DeployerTest do
       assert Enum.any?(reboot_lines, &(&1 =~ "[garden]" and &1 =~ "reboot skipped"))
     end
 
+    test "includes downloading decision line before download output" do
+      deployment = %Deployment{
+        sid: "dep_dl_start",
+        seed_deployments: [seed_deploy_with_identity("seed_ds1")]
+      }
+
+      download_lines = ["copying path '/nix/store/abc123'"]
+
+      logged_lines =
+        capture_seed_result_lines(deployment,
+          realize_seed_fun: fn sd -> {:ok, sd, download_lines} end
+        )
+
+      assert Enum.at(logged_lines, 0) =~ "[garden]"
+      assert Enum.at(logged_lines, 0) =~ "downloading seed-seed_ds1 (nixos)"
+      assert Enum.at(logged_lines, 1) == "copying path '/nix/store/abc123'"
+    end
+
+    test "includes downloading decision line in failure log" do
+      deployment = %Deployment{
+        sid: "dep_dl_start_fail",
+        seed_deployments: [seed_deploy_with_identity("seed_dsf1")]
+      }
+
+      download_lines = ["error: path '/nix/store/missing' is not valid"]
+
+      logged_lines =
+        capture_seed_result_lines(deployment,
+          realize_seed_fun: fn sd -> {:error, :failed_to_realize, sd, download_lines} end
+        )
+
+      assert Enum.at(logged_lines, 0) =~ "[garden]"
+      assert Enum.at(logged_lines, 0) =~ "downloading seed-seed_dsf1 (nixos)"
+      assert Enum.at(logged_lines, 1) == "error: path '/nix/store/missing' is not valid"
+    end
+
     test "includes download output in log before decision lines" do
       deployment = %Deployment{
         sid: "dep_dl_log",
@@ -511,8 +547,8 @@ defmodule Garden.DeployerTest do
           realize_seed_fun: fn sd -> {:ok, sd, download_lines} end
         )
 
-      assert Enum.at(logged_lines, 0) == "copying path '/nix/store/abc123'"
-      assert Enum.at(logged_lines, 1) == "copying path '/nix/store/def456'"
+      assert Enum.at(logged_lines, 1) == "copying path '/nix/store/abc123'"
+      assert Enum.at(logged_lines, 2) == "copying path '/nix/store/def456'"
       assert Enum.any?(logged_lines, &(&1 =~ "[garden]" and &1 =~ "realized"))
     end
 
@@ -529,7 +565,7 @@ defmodule Garden.DeployerTest do
           realize_seed_fun: fn sd -> {:error, :failed_to_realize, sd, download_lines} end
         )
 
-      assert Enum.at(logged_lines, 0) == "error: path '/nix/store/missing' is not valid"
+      assert Enum.at(logged_lines, 1) == "error: path '/nix/store/missing' is not valid"
       assert Enum.any?(logged_lines, &(&1 =~ "[garden]" and &1 =~ "realization failed"))
     end
 

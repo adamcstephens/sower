@@ -87,16 +87,17 @@ defmodule Garden.Deployer do
         artifact: seed.artifact
       )
 
+      downloading_line = decision_line("downloading #{seed.name} (#{seed.seed_type})")
       report_seed_status_fun.(deployment, seed, :downloading)
-      realize_seed_fun.(seed_deploy)
+      {downloading_line, realize_seed_fun.(seed_deploy)}
     end)
     |> async_stream_fun.(fn
-      {:ok, {:ok, %SeedDeployment{seed: seed} = seed_deploy, download_output}} ->
+      {:ok, {downloading_line, {:ok, %SeedDeployment{seed: seed} = seed_deploy, download_output}}} ->
         profile = get_deployment_profile_fun.(seed_deploy.subscription_sid)
         mode = Garden.Seed.activation_mode(profile)
 
         preamble =
-          download_output ++
+          [downloading_line | download_output] ++
             [
               decision_line("realized #{seed.name} (#{seed.seed_type})"),
               decision_line("activating #{seed.name} (#{seed.seed_type}) with mode: #{mode}")
@@ -160,12 +161,13 @@ defmodule Garden.Deployer do
         result
 
       {:ok,
-       {:error, :failed_to_realize, %SeedDeployment{seed: seed} = _seed_deploy, download_output}} ->
+       {downloading_line,
+        {:error, :failed_to_realize, %SeedDeployment{seed: seed} = _seed_deploy, download_output}}} ->
         report_seed_result_fun.(
           deployment,
           seed,
           :failure,
-          download_output ++
+          [downloading_line | download_output] ++
             [
               decision_line("realization failed for #{seed.name} (#{seed.seed_type})")
             ]
@@ -173,7 +175,7 @@ defmodule Garden.Deployer do
 
         {:error, :failed_to_realize, seed}
 
-      {:ok, {:error, _, _} = error} ->
+      {:ok, {_downloading_line, {:error, _, _} = error}} ->
         error
 
       {:exit, error} ->
