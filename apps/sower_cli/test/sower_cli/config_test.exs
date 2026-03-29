@@ -5,6 +5,7 @@ defmodule SowerCli.ConfigTest do
     test "loads config and stores in application env" do
       config =
         SowerCli.Config.load(
+          skip_config_file: true,
           overrides: %{"endpoint" => "https://test.com", "access_token_file" => nil}
         )
 
@@ -20,6 +21,7 @@ defmodule SowerCli.ConfigTest do
     test "returns cached config from application env" do
       config =
         SowerCli.Config.load(
+          skip_config_file: true,
           overrides: %{"caches" => ["attic://server:cache"], "access_token_file" => nil}
         )
 

@@ -2,18 +2,18 @@
   "access_token_file": "./.dev-api-token",
   "endpoint": "http://localhost:7150",
   "state_directory": "./_build/garden1",
-  "subscriptions": [
-    {
+  "subscriptions": {
+    "deck-nixos": {
       "seed_name": "deck",
       "seed_type": "nixos",
       "rules": ["source=dev"],
       "schedule": "* * * * *",
       "poll_on_connect": true
     },
-    {
+    "deck-hm": {
       "seed_name": "deck",
       "seed_type": "home-manager",
       "poll_on_connect": false
     }
-  ]
+  }
 }
