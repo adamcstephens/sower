@@ -3,12 +3,13 @@ defmodule Garden.Deployer do
 
   alias Garden.Socket
 
+  alias Garden.Storage
   alias SowerClient.Activator
   alias SowerClient.Orchestration.Deployment
-  alias SowerClient.Orchestration.DeploymentProfile
   alias SowerClient.Orchestration.SeedDeployment
   alias SowerClient.Orchestration.SeedDeploymentResult
   alias SowerClient.Orchestration.SeedDeploymentStatus
+  alias SowerClient.Orchestration.Subscription
 
   def run(%Deployment{} = deployment) do
     run_with_opts(deployment, upgrade_opts: [], reboot_opts: [])
@@ -66,8 +67,8 @@ defmodule Garden.Deployer do
     async_stream_fun = Keyword.get(opts, :async_stream_fun, &async_stream/2)
     realize_seed_fun = Keyword.get(opts, :realize_seed_fun, &realize_seed/1)
 
-    get_deployment_profile_fun =
-      Keyword.get(opts, :get_deployment_profile_fun, fn _sid -> %DeploymentProfile{} end)
+    find_subscription_fun =
+      Keyword.get(opts, :find_subscription_fun, &find_subscription/1)
 
     activate_seed_fun = Keyword.get(opts, :activate_seed_fun, &Garden.Seed.activate/2)
 
@@ -92,8 +93,8 @@ defmodule Garden.Deployer do
     end)
     |> async_stream_fun.(fn
       {:ok, {downloading_line, {:ok, %SeedDeployment{seed: seed} = seed_deploy, download_output}}} ->
-        profile = get_deployment_profile_fun.(seed_deploy.subscription_sid)
-        mode = Garden.Seed.activation_mode(profile)
+        subscription = find_subscription_fun.(seed_deploy.subscription_sid) || %Subscription{}
+        mode = Garden.Seed.activation_mode(subscription)
 
         preamble =
           [downloading_line | download_output] ++
@@ -109,11 +110,11 @@ defmodule Garden.Deployer do
           seed_type: seed.seed_type,
           artifact: seed.artifact,
           deployment_sid: deployment.sid,
-          activation_args: get_in(profile.activation_args)
+          activation_args: get_in(subscription.activation_args)
         )
 
         report_seed_status_fun.(deployment, seed, :activating)
-        result = activate_seed_fun.(seed, profile)
+        result = activate_seed_fun.(seed, subscription)
 
         case result do
           {:ok, output} ->
@@ -225,6 +226,10 @@ defmodule Garden.Deployer do
     )
   end
 
+  defp find_subscription(sid) do
+    (Storage.read().subscriptions || []) |> Enum.find(&(&1.sid == sid))
+  end
+
   def maybe_reboot(%Deployment{} = deployment, result) do
     maybe_reboot(deployment, result, [])
   end
@@ -320,35 +325,35 @@ defmodule Garden.Deployer do
 
   def reboot_reason(
         seed_deployments,
-        get_profile \\ fn _sid -> %DeploymentProfile{} end,
+        find_sub \\ &find_subscription/1,
         read_link \\ &:file.read_link_all/1
       ) do
-    profiles =
+    subscriptions =
       seed_deployments
       |> Enum.filter(&(get_in(&1.seed.seed_type) == "nixos"))
       |> Enum.map(fn %SeedDeployment{subscription_sid: subscription_sid} ->
-        get_profile.(subscription_sid) || %DeploymentProfile{}
+        find_sub.(subscription_sid) || %Subscription{}
       end)
 
     cond do
-      profiles == [] ->
+      subscriptions == [] ->
         nil
 
-      Enum.any?(profiles, fn profile ->
-        profile.reboot_policy == "always"
+      Enum.any?(subscriptions, fn sub ->
+        sub.reboot_policy == "always"
       end) ->
         "policy_always"
 
-      Enum.any?(profiles, fn profile ->
-        profile.reboot_policy == "when-required" and
-          Garden.Seed.activation_mode(profile) == "boot" and
+      Enum.any?(subscriptions, fn sub ->
+        sub.reboot_policy == "when-required" and
+          Garden.Seed.activation_mode(sub) == "boot" and
             not is_nil(detect_boot_critical_change_reason(read_link))
       end) ->
         "boot_mode"
 
-      Enum.any?(profiles, fn profile ->
-        profile.reboot_policy == "when-required" and
-            Garden.Seed.activation_mode(profile) == "switch"
+      Enum.any?(subscriptions, fn sub ->
+        sub.reboot_policy == "when-required" and
+            Garden.Seed.activation_mode(sub) == "switch"
       end) ->
         detect_boot_critical_change_reason(read_link)
 
