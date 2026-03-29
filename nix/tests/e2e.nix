@@ -86,12 +86,12 @@ testers.runNixOSTest {
               settings = {
                 access_token_file = "/run/sower/test_token";
                 endpoint = "http://localhost:4000";
-                subscriptions = [
-                  {
+                subscriptions = {
+                  server = {
                     seed_name = "server";
                     seed_type = "nixos";
-                  }
-                ];
+                  };
+                };
               };
             };
           };
@@ -150,8 +150,8 @@ testers.runNixOSTest {
 
               settings = {
                 endpoint = "http://localhost:4000";
-                subscriptions = [
-                  {
+                subscriptions = {
+                  testuser = {
                     seed_name = "testuser";
                     seed_type = "home-manager";
                     rules = [
@@ -161,8 +161,8 @@ testers.runNixOSTest {
                         op = "eq";
                       }
                     ];
-                  }
-                ];
+                  };
+                };
               };
             };
           };
