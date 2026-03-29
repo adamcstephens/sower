@@ -19,6 +19,7 @@ defmodule Sower.Orchestration.Subscription do
 
     many_to_many :deployments, Deployment, join_through: SubscriptionDeployment
 
+    field :name, :string
     field :seed_name, :string
     field :seed_type, :string
     field :schedule, :string
@@ -31,9 +32,9 @@ defmodule Sower.Orchestration.Subscription do
   @doc false
   def changeset(subscription, attrs) do
     subscription
-    |> cast(attrs, [:garden_id, :seed_name, :seed_type, :schedule, :timezone])
+    |> cast(attrs, [:garden_id, :name, :seed_name, :seed_type, :schedule, :timezone])
     |> cast_embed(:rules, with: &__MODULE__.Rule.changeset/2)
-    |> unique_constraint([:garden_id, :org_id, :seed_name, :seed_type])
+    |> unique_constraint([:garden_id, :org_id, :name])
   end
 
   def list_subscriptions do
@@ -128,14 +129,17 @@ defmodule Sower.Orchestration.Subscription do
   end
 
   def create_subscription(attrs \\ %{}) do
+    attrs = Map.put_new_lazy(attrs, :name, fn -> attrs[:seed_name] end)
+
     case %__MODULE__{
            org_id: Repo.get_org_id(),
            sid: SowerClient.Sid.generate("sub")
          }
          |> changeset(attrs)
          |> Repo.insert(
-           on_conflict: {:replace, [:updated_at, :rules, :schedule, :timezone]},
-           conflict_target: [:garden_id, :org_id, :seed_name, :seed_type],
+           on_conflict:
+             {:replace, [:updated_at, :seed_name, :seed_type, :rules, :schedule, :timezone]},
+           conflict_target: [:garden_id, :org_id, :name],
            returning: true
          ) do
       {:ok, sub} -> {:ok, Repo.reload(sub)}
@@ -143,23 +147,17 @@ defmodule Sower.Orchestration.Subscription do
     end
   end
 
-  def register_subscription(
-        %SowerClient.Orchestration.Subscription{
-          seed_name: seed_name,
-          seed_type: seed_type,
-          rules: rules,
-          schedule: schedule,
-          timezone: timezone
-        },
-        garden_id
-      ) do
+  def register_subscription(%SowerClient.Orchestration.Subscription{} = sub, garden_id) do
+    name = sub.name || SowerClient.Sid.generate("sub")
+
     case create_subscription(%{
            garden_id: garden_id,
-           seed_name: seed_name,
-           seed_type: seed_type,
-           rules: rules,
-           schedule: schedule,
-           timezone: timezone
+           name: name,
+           seed_name: sub.seed_name,
+           seed_type: sub.seed_type,
+           rules: sub.rules,
+           schedule: sub.schedule,
+           timezone: sub.timezone
          }) do
       {:ok, subscription} ->
         {:ok, SowerClient.Orchestration.Subscription.cast!(subscription)}

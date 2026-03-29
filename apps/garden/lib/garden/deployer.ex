@@ -243,24 +243,15 @@ defmodule Garden.Deployer do
         %DeploymentProfile{}
 
       sub ->
-        profile_name =
-          case get_in(sub.deployment_profile) do
-            nil ->
-              default_profile_name = default_deployment_profile()
+        profile_name = default_deployment_profile()
 
-              Logger.info(
-                msg: "Subscription deployment profile not found, using default",
-                default_deployment_profile: default_profile_name,
-                deploy_subscription_sid: subscription_sid,
-                subscription_seed_name: get_in(sub.seed_name),
-                subscription_seed_type: get_in(sub.seed_type)
-              )
-
-              default_profile_name
-
-            configured_profile_name ->
-              configured_profile_name
-          end
+        Logger.info(
+          msg: "Using default deployment profile",
+          default_deployment_profile: profile_name,
+          deploy_subscription_sid: subscription_sid,
+          subscription_seed_name: get_in(sub.seed_name),
+          subscription_seed_type: get_in(sub.seed_type)
+        )
 
         subscription_overrides = find_profile.(profile_name) || %DeploymentProfile{}
 

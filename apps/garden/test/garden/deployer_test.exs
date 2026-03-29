@@ -45,14 +45,10 @@ defmodule Garden.DeployerTest do
              }
     end
 
-    test "uses subscription deployment_profile string to resolve named profile overrides" do
+    test "uses default deployment profile to resolve profile overrides" do
       sid = "sub_boot"
-      profile_name = "boot_profile"
 
-      sub = %Subscription{
-        sid: sid,
-        deployment_profile: profile_name
-      }
+      sub = %Subscription{sid: sid}
 
       find_sub = fn
         ^sid -> sub
@@ -60,7 +56,7 @@ defmodule Garden.DeployerTest do
       end
 
       find_profile = fn
-        ^profile_name -> %{activation_args: ["boot"], reboot_policy: "always"}
+        "default" -> %{activation_args: ["boot"], reboot_policy: "always"}
         _ -> %{}
       end
 
@@ -70,13 +66,10 @@ defmodule Garden.DeployerTest do
              }
     end
 
-    test "keeps defaults for gardens not present in resolved profile overrides" do
+    test "keeps defaults for fields not present in resolved profile overrides" do
       sid = "sub_partial"
 
-      sub = %Subscription{
-        sid: sid,
-        deployment_profile: "partial_profile"
-      }
+      sub = %Subscription{sid: sid}
 
       assert Deployer.get_deployment_profile(
                sid,
@@ -88,13 +81,10 @@ defmodule Garden.DeployerTest do
              }
     end
 
-    test "falls back to defaults when named profile is not found" do
+    test "falls back to defaults when profile is not found" do
       sid = "sub_unknown_profile"
 
-      sub = %Subscription{
-        sid: sid,
-        deployment_profile: "missing_profile"
-      }
+      sub = %Subscription{sid: sid}
 
       assert Deployer.get_deployment_profile(
                sid,
