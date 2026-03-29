@@ -7,7 +7,7 @@ defmodule Garden.DeployerTest do
   alias Garden.Deployer
   alias SowerClient.Orchestration.Deployment
   alias SowerClient.Orchestration.SeedDeployment
-  alias SowerClient.Orchestration.DeploymentProfile
+  alias SowerClient.Orchestration.Subscription
   alias SowerClient.Seed
 
   describe "deployment_result/1" do
@@ -94,14 +94,14 @@ defmodule Garden.DeployerTest do
     test "returns nil when there are no nixos seed deployments" do
       seed_deployments = [seed_deploy("sub1", "home-manager")]
 
-      assert Deployer.reboot_reason(seed_deployments, fn _ -> %DeploymentProfile{} end) == nil
+      assert Deployer.reboot_reason(seed_deployments, fn _ -> %Subscription{} end) == nil
     end
 
     test "returns policy_always when profile reboot policy is always" do
       seed_deployments = [seed_deploy("sub_always")]
 
       get_profile = fn "sub_always" ->
-        %DeploymentProfile{activation_args: ["switch"], reboot_policy: "always"}
+        %Subscription{activation_args: ["switch"], reboot_policy: "always"}
       end
 
       assert Deployer.reboot_reason(seed_deployments, get_profile) == "policy_always"
@@ -111,7 +111,7 @@ defmodule Garden.DeployerTest do
       seed_deployments = [seed_deploy("sub_boot")]
 
       get_profile = fn "sub_boot" ->
-        %DeploymentProfile{activation_args: ["boot"], reboot_policy: "when-required"}
+        %Subscription{activation_args: ["boot"], reboot_policy: "when-required"}
       end
 
       read_link = fn
@@ -127,7 +127,7 @@ defmodule Garden.DeployerTest do
       seed_deployments = [seed_deploy("sub_boot")]
 
       get_profile = fn "sub_boot" ->
-        %DeploymentProfile{activation_args: ["boot"], reboot_policy: "when-required"}
+        %Subscription{activation_args: ["boot"], reboot_policy: "when-required"}
       end
 
       read_link = fn
@@ -144,7 +144,7 @@ defmodule Garden.DeployerTest do
       seed_deployments = [seed_deploy("sub_switch")]
 
       get_profile = fn "sub_switch" ->
-        %DeploymentProfile{activation_args: ["switch"], reboot_policy: "when-required"}
+        %Subscription{activation_args: ["switch"], reboot_policy: "when-required"}
       end
 
       read_link = fn
@@ -160,7 +160,7 @@ defmodule Garden.DeployerTest do
       seed_deployments = [seed_deploy("sub_switch")]
 
       get_profile = fn "sub_switch" ->
-        %DeploymentProfile{activation_args: ["switch"], reboot_policy: "when-required"}
+        %Subscription{activation_args: ["switch"], reboot_policy: "when-required"}
       end
 
       logs =
@@ -194,7 +194,7 @@ defmodule Garden.DeployerTest do
                        Enum.map(enumerable, fn item -> {:ok, func.(item)} end)
                      end,
                      realize_seed_fun: fn seed_deploy -> {:ok, seed_deploy, []} end,
-                     get_deployment_profile_fun: fn _ -> %DeploymentProfile{} end,
+                     find_subscription_fun: fn _ -> %Subscription{} end,
                      activate_seed_fun: fn _seed, _profile -> {:error, :activator_unavailable} end,
                      report_seed_status_fun: fn _, _, _ -> :ok end,
                      report_seed_result_fun: fn _deployment, _seed, result, output_lines ->
@@ -226,7 +226,7 @@ defmodule Garden.DeployerTest do
                      Enum.map(enumerable, fn item -> {:ok, func.(item)} end)
                    end,
                    realize_seed_fun: fn seed_deploy -> {:ok, seed_deploy, []} end,
-                   get_deployment_profile_fun: fn _ -> %DeploymentProfile{} end,
+                   find_subscription_fun: fn _ -> %Subscription{} end,
                    activate_seed_fun: fn _seed, _profile -> {:ok, ["activation complete"]} end,
                    report_seed_status_fun: fn _, _, _ -> :ok end,
                    report_seed_result_fun: fn _deployment, _seed, result, _output_lines ->
@@ -256,7 +256,7 @@ defmodule Garden.DeployerTest do
                        Enum.map(enumerable, fn item -> {:ok, func.(item)} end)
                      end,
                      realize_seed_fun: fn seed_deploy -> {:ok, seed_deploy, []} end,
-                     get_deployment_profile_fun: fn _ -> %DeploymentProfile{} end,
+                     find_subscription_fun: fn _ -> %Subscription{} end,
                      activate_seed_fun: fn _seed, _profile -> {:error, :cmd_not_found} end,
                      report_seed_status_fun: fn _, _, _ -> :ok end,
                      report_seed_result_fun: fn _deployment, _seed, result, output_lines ->
@@ -319,8 +319,8 @@ defmodule Garden.DeployerTest do
 
       logged_lines =
         capture_seed_result_lines(deployment,
-          get_deployment_profile_fun: fn _ ->
-            %DeploymentProfile{activation_args: ["boot"]}
+          find_subscription_fun: fn _ ->
+            %Subscription{activation_args: ["boot"]}
           end
         )
 
@@ -345,8 +345,8 @@ defmodule Garden.DeployerTest do
               Enum.map(enumerable, fn item -> {:ok, func.(item)} end)
             end,
             realize_seed_fun: fn sd -> {:ok, sd, []} end,
-            get_deployment_profile_fun: fn _ ->
-              %DeploymentProfile{reboot_policy: "always"}
+            find_subscription_fun: fn _ ->
+              %Subscription{reboot_policy: "always"}
             end,
             activate_seed_fun: fn _seed, _profile -> {:ok, ["ok"]} end,
             report_seed_result_fun: fn _deployment, _seed, result, output_lines ->
@@ -387,7 +387,7 @@ defmodule Garden.DeployerTest do
               Enum.map(enumerable, fn item -> {:ok, func.(item)} end)
             end,
             realize_seed_fun: fn sd -> {:ok, sd, []} end,
-            get_deployment_profile_fun: fn _ -> %DeploymentProfile{} end,
+            find_subscription_fun: fn _ -> %Subscription{} end,
             activate_seed_fun: fn _seed, _profile -> {:error, 1, ["failed"]} end,
             report_seed_result_fun: fn _deployment, _seed, result, output_lines ->
               send(test_pid, {:seed_result, result, output_lines})
@@ -499,8 +499,8 @@ defmodule Garden.DeployerTest do
           Enum.map(enumerable, fn item -> {:ok, func.(item)} end)
         end,
         realize_seed_fun: Keyword.get(opts, :realize_seed_fun, fn sd -> {:ok, sd, []} end),
-        get_deployment_profile_fun:
-          Keyword.get(opts, :get_deployment_profile_fun, fn _ -> %DeploymentProfile{} end),
+        find_subscription_fun:
+          Keyword.get(opts, :find_subscription_fun, fn _ -> %Subscription{} end),
         activate_seed_fun:
           Keyword.get(opts, :activate_seed_fun, fn _seed, _profile ->
             {:ok, ["activation output"]}
