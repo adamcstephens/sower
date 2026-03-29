@@ -12,6 +12,12 @@ defmodule SowerClient.Orchestration.Subscription do
         readOnly: true,
         nullable: true
       },
+      # TODO: make required in 0.9.0 once all gardens send name
+      name: %Schema{
+        type: :string,
+        description: "Human-readable subscription name",
+        nullable: true
+      },
       seed_name: %Schema{
         type: :string,
         description: "Name of the seed",
@@ -30,11 +36,6 @@ defmodule SowerClient.Orchestration.Subscription do
         items: __MODULE__.Rule,
         default: [],
         description: "Tag-based rules to filter seeds"
-      },
-      deployment_profile: %Schema{
-        type: :string,
-        description: "Name of deployment profile to apply",
-        nullable: true
       },
       schedule: %Schema{
         type: :string,
