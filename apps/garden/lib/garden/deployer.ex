@@ -2,8 +2,7 @@ defmodule Garden.Deployer do
   require Logger
 
   alias Garden.Socket
-  alias Garden.Config
-  alias Garden.Storage
+
   alias SowerClient.Activator
   alias SowerClient.Orchestration.Deployment
   alias SowerClient.Orchestration.DeploymentProfile
@@ -68,7 +67,7 @@ defmodule Garden.Deployer do
     realize_seed_fun = Keyword.get(opts, :realize_seed_fun, &realize_seed/1)
 
     get_deployment_profile_fun =
-      Keyword.get(opts, :get_deployment_profile_fun, &get_deployment_profile/1)
+      Keyword.get(opts, :get_deployment_profile_fun, fn _sid -> %DeploymentProfile{} end)
 
     activate_seed_fun = Keyword.get(opts, :activate_seed_fun, &Garden.Seed.activate/2)
 
@@ -226,56 +225,6 @@ defmodule Garden.Deployer do
     )
   end
 
-  def get_deployment_profile(nil), do: nil
-
-  def get_deployment_profile(
-        subscription_sid,
-        find_sub \\ &find_subscription/1,
-        find_profile \\ &find_deployment_profile/1
-      ) do
-    case find_sub.(subscription_sid) do
-      nil ->
-        Logger.info(
-          msg: "Subscription not found, using defaults",
-          deploy_subscription_sid: subscription_sid
-        )
-
-        %DeploymentProfile{}
-
-      sub ->
-        profile_name = default_deployment_profile()
-
-        Logger.info(
-          msg: "Using default deployment profile",
-          default_deployment_profile: profile_name,
-          deploy_subscription_sid: subscription_sid,
-          subscription_seed_name: get_in(sub.seed_name),
-          subscription_seed_type: get_in(sub.seed_type)
-        )
-
-        subscription_overrides = find_profile.(profile_name) || %DeploymentProfile{}
-
-        %DeploymentProfile{}
-        |> Map.merge(subscription_overrides)
-    end
-  end
-
-  defp default_deployment_profile() do
-    Config.get()
-    |> Kernel.||(%{})
-    |> Map.get(:default_deployment_profile)
-    |> Kernel.||("default")
-  end
-
-  def find_deployment_profile(name) do
-    config = Config.get()
-    get_in(config.deployment_profiles[name]) || %DeploymentProfile{}
-  end
-
-  defp find_subscription(sid) do
-    Storage.read().subscriptions |> Enum.find(&(&1.sid == sid))
-  end
-
   def maybe_reboot(%Deployment{} = deployment, result) do
     maybe_reboot(deployment, result, [])
   end
@@ -371,7 +320,7 @@ defmodule Garden.Deployer do
 
   def reboot_reason(
         seed_deployments,
-        get_profile \\ &get_deployment_profile/1,
+        get_profile \\ fn _sid -> %DeploymentProfile{} end,
         read_link \\ &:file.read_link_all/1
       ) do
     profiles =

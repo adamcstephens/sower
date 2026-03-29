@@ -50,22 +50,12 @@ defmodule SowerClient.Config do
         type: :string,
         description: "Directory where state files are written (garden-only)"
       },
-      default_deployment_profile: %Schema{
-        type: :string,
-        description: "Name of default deployment profile",
-        nullable: true
-      },
-      deployment_profiles: %Schema{
-        type: :object,
-        additionalProperties: SowerClient.Orchestration.DeploymentProfile,
-        nullable: true,
-        description: "Deployment policies (garden-only)"
-      },
       subscriptions: %Schema{
         type: :array,
         items: SowerClient.Orchestration.Subscription,
         default: [],
-        description: "Subscriptions (garden-only)"
+        description:
+          "Subscriptions (garden-only). Configured as a map (name -> config), converted to list during loading."
       }
     },
     required: []
@@ -102,7 +92,7 @@ defmodule SowerClient.Config do
         end)
       end
     end)
-    |> preprocess_subscription_rules()
+    |> preprocess_subscriptions()
     |> Map.merge(config_overrides)
     |> override_with_env()
     |> parse_file_values()
@@ -366,17 +356,21 @@ defmodule SowerClient.Config do
   end
 
   # parse subscriptions and rules
-  defp preprocess_subscription_rules(%{"subscriptions" => subscriptions} = config)
-       when is_list(subscriptions) do
+  defp preprocess_subscriptions(%{"subscriptions" => subscriptions} = config)
+       when is_map(subscriptions) do
     normalized_subscriptions =
       subscriptions
-      |> Enum.map(&parse_subscription_rules/1)
-      |> Enum.map(&fill_default_subscription_name/1)
+      |> Enum.map(fn {name, sub} ->
+        sub
+        |> Map.put("name", name)
+        |> parse_subscription_rules()
+        |> fill_default_subscription_name()
+      end)
 
     Map.put(config, "subscriptions", normalized_subscriptions)
   end
 
-  defp preprocess_subscription_rules(config), do: config
+  defp preprocess_subscriptions(config), do: config
 
   defp parse_subscription_rules(%{"rules" => rules} = sub) when is_list(rules) do
     normalized_rules =
