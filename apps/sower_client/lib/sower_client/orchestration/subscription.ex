@@ -51,6 +51,19 @@ defmodule SowerClient.Orchestration.Subscription do
         type: :boolean,
         description: "Whether to request deployment immediately on connect (garden-only)",
         default: false
+      },
+      activation_args: %Schema{
+        type: :array,
+        items: %Schema{type: :string},
+        default: [],
+        description:
+          "Arguments to pass to activation script (e.g. [\"boot\"] for NixOS boot mode)"
+      },
+      reboot_policy: %Schema{
+        type: :string,
+        description: "Whether deployment can trigger automated reboots",
+        enum: ["never", "when-required", "always"],
+        default: "never"
       }
     },
     required: [:seed_name, :seed_type],

@@ -22,19 +22,6 @@
     },
     "required": []
   },
-  "DeploymentProfile": {
-    "properties": {
-      "activation_args": {
-        "has_default": true,
-        "type": "array"
-      },
-      "reboot_policy": {
-        "has_default": true,
-        "type": "string"
-      }
-    },
-    "required": []
-  },
   "PresignedUploadReply": {
     "properties": {
       "headers": {

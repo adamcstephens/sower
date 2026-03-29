@@ -5,7 +5,6 @@ defmodule SowerClient do
   @server_pushed_schema_titles [
     "Deployment",
     "SeedDeployment",
-    "DeploymentProfile",
     "Seed",
     "SeedTag",
     "PresignedUploadReply"
@@ -33,7 +32,6 @@ defmodule SowerClient do
       SowerClient.Orchestration.AgentSeedProfile,
       SowerClient.Orchestration.AgentSeedsReport,
       SowerClient.Orchestration.Deployment,
-      SowerClient.Orchestration.DeploymentProfile,
       SowerClient.Orchestration.DeploymentResult,
       SowerClient.Orchestration.DeploymentRequest,
       SowerClient.Orchestration.DeploymentStatus,

@@ -24,6 +24,8 @@ defmodule Sower.Orchestration.Subscription do
     field :seed_type, :string
     field :schedule, :string
     field :timezone, :string
+    field :activation_args, {:array, :string}, default: []
+    field :reboot_policy, :string, default: "never"
     embeds_many :rules, __MODULE__.Rule
 
     timestamps(type: :utc_datetime)
@@ -32,7 +34,16 @@ defmodule Sower.Orchestration.Subscription do
   @doc false
   def changeset(subscription, attrs) do
     subscription
-    |> cast(attrs, [:garden_id, :name, :seed_name, :seed_type, :schedule, :timezone])
+    |> cast(attrs, [
+      :garden_id,
+      :name,
+      :seed_name,
+      :seed_type,
+      :schedule,
+      :timezone,
+      :activation_args,
+      :reboot_policy
+    ])
     |> cast_embed(:rules, with: &__MODULE__.Rule.changeset/2)
     |> unique_constraint([:garden_id, :org_id, :name])
   end
@@ -138,7 +149,17 @@ defmodule Sower.Orchestration.Subscription do
          |> changeset(attrs)
          |> Repo.insert(
            on_conflict:
-             {:replace, [:updated_at, :seed_name, :seed_type, :rules, :schedule, :timezone]},
+             {:replace,
+              [
+                :updated_at,
+                :seed_name,
+                :seed_type,
+                :rules,
+                :schedule,
+                :timezone,
+                :activation_args,
+                :reboot_policy
+              ]},
            conflict_target: [:garden_id, :org_id, :name],
            returning: true
          ) do
@@ -157,7 +178,9 @@ defmodule Sower.Orchestration.Subscription do
            seed_type: sub.seed_type,
            rules: sub.rules,
            schedule: sub.schedule,
-           timezone: sub.timezone
+           timezone: sub.timezone,
+           activation_args: sub.activation_args,
+           reboot_policy: sub.reboot_policy
          }) do
       {:ok, subscription} ->
         {:ok, SowerClient.Orchestration.Subscription.cast!(subscription)}
