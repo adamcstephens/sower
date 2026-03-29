@@ -81,7 +81,7 @@
           end
         }
       >
-        <:col :let={subscription} label="Name">{subscription.seed_name}</:col>
+        <:col :let={subscription} label="Name">{subscription.name}</:col>
         <:col :let={subscription} label="Type">{subscription.seed_type}</:col>
         <:col :let={subscription} label="Updated" hide_on={:sm}>
           <.local_datetime datetime={subscription.updated_at} user_timezone={@user_timezone} />

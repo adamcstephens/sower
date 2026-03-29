@@ -17,7 +17,7 @@
       end
     }
   >
-    <:col :let={{_id, subscription}} label="Sid">{subscription.sid}</:col>
+    <:col :let={{_id, subscription}} label="Name">{subscription.name}</:col>
     <:action :let={{_id, subscription}}>
       <div class="sr-only">
         <.link navigate={~p"/gardens/#{@garden}/subscriptions/#{subscription}"}>Show</.link>
