@@ -76,51 +76,60 @@
       </p>
     </section>
 
-    <section>
-      <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4">Matching Seeds</h2>
+    <section class="-mx-4 sm:mx-0">
+      <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4 px-4 sm:px-0">
+        Seeds
+      </h2>
       <.table
-        id="matching-seeds"
-        rows={@matching_seeds}
+        id="subscription-seeds"
+        rows={@seeds}
+        meta={@meta}
+        path={~p"/gardens/#{@garden}/subscriptions/#{@subscription}"}
         row_click={fn seed -> JS.navigate(~p"/seeds/#{seed}") end}
       >
-        <:col :let={seed} label="Name">{seed.name}</:col>
-        <:col :let={seed} label="Type">{seed.seed_type}</:col>
-        <:col :let={seed} label="Tags">
-          {Enum.sort(seed.tags) |> Enum.map_join(", ", fn tag -> "#{tag.key}=#{tag.value}" end)}
+        <:col :let={seed} label="Artifact">
+          <span
+            class="font-mono text-xs truncate inline-block max-w-[250px] sm:max-w-lg align-middle"
+            title={seed.artifact}
+          >
+            {seed.artifact}
+          </span>
         </:col>
-        <:col :let={seed} label="Created">
-          <.local_datetime datetime={seed.inserted_at} user_timezone={@user_timezone} />
+        <:col :let={seed} label="Status">
+          <.seed_subscription_status
+            is_current={seed.is_current}
+            is_pending={seed.is_pending}
+            latest_deployment_result={seed.latest_deployment_result}
+          />
+        </:col>
+        <:col :let={seed} label="Gen" hide_on={:sm}>
+          {seed.generation_number && "##{seed.generation_number}"}
+        </:col>
+        <:col :let={seed} label="Deployment" hide_on={:sm}>
+          <.link
+            :if={seed.latest_deployment_sid}
+            navigate={~p"/deployments/#{seed.latest_deployment_sid}"}
+            class="inline-flex items-center gap-1.5 align-middle hover:text-orange-500 dark:hover:text-orange-400"
+          >
+            <.result result={seed.latest_deployment_result} />
+            <span class="font-mono text-xs">{seed.latest_deployment_sid}</span>
+          </.link>
+        </:col>
+        <:col :let={seed} label="Updated" field={:updated_at} hide_on={:md}>
+          <.local_datetime datetime={seed.updated_at} user_timezone={@user_timezone} />
         </:col>
       </.table>
       <p
-        :if={@matching_seeds == []}
-        class="text-sm text-zinc-500 dark:text-zinc-400 italic"
+        :if={@seeds == []}
+        class="text-sm text-zinc-500 dark:text-zinc-400 italic px-4 sm:px-0"
       >
         No matching seeds found.
       </p>
-    </section>
-
-    <section>
-      <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4">Deployments</h2>
-      <.table
-        id="deployments"
-        rows={@subscription.deployments}
-        row_click={fn deployment -> JS.navigate(~p"/deployments/#{deployment.sid}") end}
-      >
-        <:col :let={deployment} label="Result">
-          <.result result={deployment.result} />
-        </:col>
-        <:col :let={deployment} label="SID">{deployment.sid}</:col>
-        <:col :let={deployment} label="Created">
-          <.local_datetime datetime={deployment.inserted_at} user_timezone={@user_timezone} />
-        </:col>
-      </.table>
-      <p
-        :if={@subscription.deployments == []}
-        class="text-sm text-zinc-500 dark:text-zinc-400 italic"
-      >
-        No deployments.
-      </p>
+      <.pagination
+        :if={@seeds != []}
+        meta={@meta}
+        path={~p"/gardens/#{@garden}/subscriptions/#{@subscription}"}
+      />
     </section>
   </div>
 
