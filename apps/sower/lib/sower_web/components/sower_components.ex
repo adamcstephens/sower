@@ -38,6 +38,8 @@ defmodule SowerWeb.SowerComponents do
         assign(assigns, row_id: assigns.row_id || fn {id, _item} -> id end)
       end
 
+    assigns = assign(assigns, :action_hide_classes, hide_on_classes(assigns.action_hide_on))
+
     ~H"""
     <div class="px-4 sm:overflow-visible sm:px-0">
       <table class={["w-full", @show_header && "mt-11"]}>
@@ -47,7 +49,7 @@ defmodule SowerWeb.SowerComponents do
               :for={col <- @col}
               class={[
                 "p-0 pr-6 pb-4 font-normal",
-                col[:hide_on] && "hidden #{col[:hide_on]}:table-cell"
+                hide_on_classes(col[:hide_on])
               ]}
             >
               <%= if col[:field] && @meta && @path do %>
@@ -58,7 +60,7 @@ defmodule SowerWeb.SowerComponents do
             </th>
             <th
               :if={@action != []}
-              class={["relative p-0 pb-4", @action_hide_on && "hidden #{@action_hide_on}:table-cell"]}
+              class={["relative p-0 pb-4", @action_hide_classes]}
             >
               <span class="sr-only">{gettext("Actions")}</span>
             </th>
@@ -83,7 +85,7 @@ defmodule SowerWeb.SowerComponents do
               class={[
                 "relative p-0",
                 @row_click && "hover:cursor-pointer",
-                col[:hide_on] && "hidden #{col[:hide_on]}:table-cell"
+                hide_on_classes(col[:hide_on])
               ]}
             >
               <div class="block py-4 pr-6">
@@ -95,7 +97,7 @@ defmodule SowerWeb.SowerComponents do
             </td>
             <td
               :if={@action != []}
-              class={["relative w-14 p-0", @action_hide_on && "hidden #{@action_hide_on}:table-cell"]}
+              class={["relative w-14 p-0", @action_hide_classes]}
             >
               <div class="relative whitespace-nowrap py-4 text-right text-sm font-medium">
                 <span class="absolute -inset-y-px -right-4 left-0 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800" />
@@ -402,6 +404,12 @@ defmodule SowerWeb.SowerComponents do
     </svg>
     """
   end
+
+  defp hide_on_classes(nil), do: nil
+  defp hide_on_classes(:sm), do: "hidden sm:table-cell"
+  defp hide_on_classes(:md), do: "hidden md:table-cell"
+  defp hide_on_classes(:lg), do: "hidden lg:table-cell"
+  defp hide_on_classes(:xl), do: "hidden xl:table-cell"
 
   defp result_label(:success), do: "Success"
   defp result_label(nil), do: "No result"
