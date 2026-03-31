@@ -29,7 +29,7 @@ defmodule Sower.Repo do
   def prepare_query(_operation, query, opts) do
     cond do
       opts[:skip_org_id] || opts[:ecto_query] in [:schema_migration, :preload] ||
-          opts[:schema_migration] ->
+        opts[:schema_migration] || get_in(query.from, [Access.key(:prefix)]) == "durable" ->
         {query, opts}
 
       org_id = opts[:org_id] ->

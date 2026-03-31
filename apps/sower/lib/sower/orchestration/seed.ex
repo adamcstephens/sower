@@ -76,9 +76,18 @@ defmodule Sower.Orchestration.Seed do
     end)
     |> Repo.transact()
     |> case do
-      {:ok, %{seed: seed}} -> {:ok, Repo.preload(seed, [:tags])}
-      {:error, _} = error -> error
+      {:ok, %{seed: seed}} ->
+        seed = Repo.preload(seed, [:tags])
+        trigger_realtime_deploys(seed)
+        {:ok, seed}
+
+      {:error, _} = error ->
+        error
     end
+  end
+
+  defp trigger_realtime_deploys(%Seed{} = seed) do
+    Durable.start(Sower.Orchestration.Workflows.RealtimeDeploy, %{"seed_id" => seed.id})
   end
 
   def create!(attrs, opts \\ []) do

@@ -363,6 +363,33 @@ let
         in
         drv;
 
+      durable =
+        let
+          version = "0.0.0-alpha";
+          drv = buildMix {
+            inherit version;
+            name = "durable";
+            appConfigPath = ../../config;
+
+            src = fetchFromGitHub {
+              owner = "wavezync";
+              repo = "durable";
+              rev = "739bec3196142fde4abc02a00ffddfa2b271dd80";
+              hash = "sha256-EcxpBWyq0VUg5iSEwGYo4ZUYbAASSwwTYtuIzYl95Xc=";
+            };
+
+            beamDeps = [
+              ecto_sql
+              postgrex
+              jason
+              telemetry
+              nimble_options
+              crontab
+            ];
+          };
+        in
+        drv;
+
       ecto =
         let
           version = "3.13.5";

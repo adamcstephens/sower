@@ -143,6 +143,32 @@ defmodule Sower.Orchestration.Subscription do
     |> Repo.all()
   end
 
+  def find_realtime_subscriptions(%Sower.Orchestration.Seed{} = seed) do
+    seed
+    |> find_subscription()
+    |> Enum.filter(fn sub -> sub.allow_realtime end)
+  end
+
+  def within_window?(%__MODULE__{window: nil}, _now), do: true
+
+  def within_window?(%__MODULE__{window: window}, now) do
+    local = DateTime.shift_zone!(now, window.tz)
+    day = local |> DateTime.to_date() |> Date.day_of_week() |> day_name()
+    time = DateTime.to_time(local)
+
+    day in window.days and
+      Time.compare(time, Time.from_iso8601!("#{window.time_start}:00")) != :lt and
+      Time.compare(time, Time.from_iso8601!("#{window.time_end}:00")) != :gt
+  end
+
+  defp day_name(1), do: "mon"
+  defp day_name(2), do: "tue"
+  defp day_name(3), do: "wed"
+  defp day_name(4), do: "thu"
+  defp day_name(5), do: "fri"
+  defp day_name(6), do: "sat"
+  defp day_name(7), do: "sun"
+
   def create_subscription(attrs \\ %{}) do
     attrs = Map.put_new_lazy(attrs, :name, fn -> attrs[:seed_name] end)
 
