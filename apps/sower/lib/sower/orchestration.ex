@@ -6,6 +6,7 @@ defmodule Sower.Orchestration do
   alias Sower.Orchestration.Garden
   alias Sower.Orchestration.GardenSeedGeneration
   alias Sower.Orchestration.Deployment
+  alias Sower.Orchestration.Seed
   alias Sower.Orchestration.Subscription
 
   # Garden delegates
@@ -54,6 +55,11 @@ defmodule Sower.Orchestration do
   defdelegate list_deployments(), to: Deployment
   defdelegate list_deployments(garden, opts \\ []), to: Deployment
   defdelegate list_matching_seeds(subscription, limit \\ 10), to: Deployment
+
+  defdelegate list_matching_seeds_enriched(subscription, garden_id, params),
+    to: Seed,
+    as: :list_matching_enriched
+
   defdelegate list_unresolved_deployments_for_garden(garden, opts \\ []), to: Deployment
   defdelegate match_seed(subscription), to: Deployment
   defdelegate process_deployment(request_id, subscriptions, garden, opts \\ []), to: Deployment

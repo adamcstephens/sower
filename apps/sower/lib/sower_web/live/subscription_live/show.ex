@@ -3,16 +3,16 @@ defmodule SowerWeb.SubscriptionLive.Show do
 
   alias Sower.Orchestration
 
-  @impl true
+  @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     {:ok, socket}
   end
 
-  @impl true
-  def handle_params(%{"garden_sid" => garden_sid, "sid" => sid}, _, socket) do
+  @impl Phoenix.LiveView
+  def handle_params(%{"garden_sid" => garden_sid, "sid" => sid} = params, _, socket) do
     garden = Orchestration.get_garden_sid!(garden_sid)
 
-    case Orchestration.get_subscription_sid_with_deployments(sid) do
+    case Orchestration.get_subscription_sid(sid) do
       nil ->
         {:noreply,
          socket
@@ -20,10 +20,10 @@ defmodule SowerWeb.SubscriptionLive.Show do
          |> redirect(to: ~p"/gardens/#{garden}/subscriptions")}
 
       subscription ->
-        matching_seeds = Orchestration.list_matching_seeds(subscription, 5)
+        subscription = Sower.Repo.preload(subscription, :garden)
+        flop_params = Map.take(params, ["page", "page_size", "order_by", "order_directions"])
 
-        # TODO find the generations in the current visible seed list
-        # matching_generations = matching_seeds |> Enum.map(
+        {seeds, meta} = load_seeds(subscription, garden, flop_params)
 
         if connected?(socket) do
           Phoenix.PubSub.subscribe(Sower.PubSub, "deployments:subscription:#{sid}")
@@ -34,14 +34,16 @@ defmodule SowerWeb.SubscriptionLive.Show do
          |> assign(:garden, garden)
          |> assign(:page_title, page_title(socket.assigns.live_action))
          |> assign(:subscription, subscription)
-         |> assign(:matching_seeds, matching_seeds)
-         |> assign(:deployable, matching_seeds != [])
+         |> assign(:seeds, seeds)
+         |> assign(:meta, meta)
+         |> assign(:flop_params, flop_params)
+         |> assign(:deployable, seeds != [])
          |> assign(:deploying, false)
          |> assign(:deploy_error, nil)}
     end
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("deploy_subscription", %{"subscription_sid" => _sub_sid}, socket) do
     socket = assign(socket, deploying: true, deploy_error: nil)
 
@@ -62,29 +64,34 @@ defmodule SowerWeb.SubscriptionLive.Show do
        |> assign(:deploying, false)
        |> redirect(to: ~p"/deployments/#{deployment.sid}")}
     else
-      subscription =
-        Orchestration.get_subscription_sid_with_deployments!(socket.assigns.subscription.sid)
-
-      matching_seeds = Orchestration.list_matching_seeds(subscription, 5)
-
-      {:noreply,
-       socket
-       |> assign(:subscription, subscription)
-       |> assign(:matching_seeds, matching_seeds)}
+      {:noreply, refresh_seeds(socket)}
     end
   end
 
   @impl Phoenix.LiveView
   def handle_info({:deployment, _event, _deployment}, socket) do
-    subscription =
-      Orchestration.get_subscription_sid_with_deployments!(socket.assigns.subscription.sid)
+    {:noreply, refresh_seeds(socket)}
+  end
 
-    matching_seeds = Orchestration.list_matching_seeds(subscription, 5)
+  defp load_seeds(%Orchestration.Subscription{} = subscription, garden, flop_params) do
+    case Orchestration.list_matching_seeds_enriched(subscription, garden.id, flop_params) do
+      {:ok, {seeds, meta}} -> {seeds, meta}
+      {:error, meta} -> {[], meta}
+    end
+  end
 
-    {:noreply,
-     socket
-     |> assign(:subscription, subscription)
-     |> assign(:matching_seeds, matching_seeds)}
+  defp refresh_seeds(socket) do
+    {seeds, meta} =
+      load_seeds(
+        socket.assigns.subscription,
+        socket.assigns.garden,
+        socket.assigns.flop_params
+      )
+
+    socket
+    |> assign(:seeds, seeds)
+    |> assign(:meta, meta)
+    |> assign(:deployable, seeds != [])
   end
 
   defp page_title(:show), do: "Show Subscription"
