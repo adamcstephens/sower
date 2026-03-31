@@ -16,6 +16,7 @@ defmodule Sower.Application do
       {Finch, name: Sower.Finch},
       {Phoenix.PubSub, name: Sower.PubSub},
       SowerWeb.Presence,
+      {Durable, repo: Sower.Repo, queues: %{default: [concurrency: 10]}},
       {Task.Supervisor, name: Sower.TaskSupervisor},
       Sower.Orchestration.StaleDeploymentFinalizer,
       SowerWeb.Endpoint,
