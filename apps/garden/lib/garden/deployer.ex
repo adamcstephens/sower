@@ -11,6 +11,8 @@ defmodule Garden.Deployer do
   alias SowerClient.Orchestration.SeedDeploymentStatus
   alias SowerClient.Orchestration.Subscription
 
+  @rebootable_seed_types ["nixos"]
+
   def run(%Deployment{} = deployment) do
     run_with_opts(deployment, upgrade_opts: [], reboot_opts: [])
   end
@@ -249,7 +251,10 @@ defmodule Garden.Deployer do
         Application.get_env(:garden, :enable_activation, true)
       end)
 
-    if Enum.any?(deployment.seed_deployments, &(get_in(&1.seed.seed_type) == "nixos")) do
+    if Enum.any?(
+         deployment.seed_deployments,
+         &(get_in(&1.seed.seed_type) in @rebootable_seed_types)
+       ) do
       case reboot_reason_fun.(deployment.seed_deployments) do
         nil ->
           write_reboot_decision(deployment, opts, "no reboot required")
@@ -330,7 +335,7 @@ defmodule Garden.Deployer do
       ) do
     subscriptions =
       seed_deployments
-      |> Enum.filter(&(get_in(&1.seed.seed_type) == "nixos"))
+      |> Enum.filter(&(get_in(&1.seed.seed_type) in @rebootable_seed_types))
       |> Enum.map(fn %SeedDeployment{subscription_sid: subscription_sid} ->
         find_sub.(subscription_sid) || %Subscription{}
       end)
