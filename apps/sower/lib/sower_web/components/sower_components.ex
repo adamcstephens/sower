@@ -337,6 +337,42 @@ defmodule SowerWeb.SowerComponents do
     """
   end
 
+  attr :is_current, :boolean, required: true
+  attr :is_pending, :boolean, required: true
+  attr :latest_deployment_result, :atom, default: nil
+
+  def seed_subscription_status(assigns) do
+    ~H"""
+    <%= cond do %>
+      <% @is_current -> %>
+        <span class="inline-flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
+          <span class="relative flex h-2.5 w-2.5" role="img" aria-label="Active">
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+          </span>
+          Active
+        </span>
+      <% @is_pending -> %>
+        <span class="inline-flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-400">
+          <span class="relative flex h-2.5 w-2.5" role="img" aria-label="Pending">
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500" />
+          </span>
+          Pending
+        </span>
+      <% @latest_deployment_result == :success -> %>
+        <span class="inline-flex items-center gap-1.5 text-sm text-zinc-500 dark:text-zinc-400">
+          <span class="relative flex h-2.5 w-2.5" role="img" aria-label="Deployed">
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-zinc-400" />
+          </span>
+          Deployed
+        </span>
+      <% true -> %>
+        <span class="inline-flex items-center gap-1.5 text-sm text-zinc-400 dark:text-zinc-500">
+          —
+        </span>
+    <% end %>
+    """
+  end
+
   attr :state, :atom, required: true
   attr :result, :atom, default: nil
   attr :compact, :boolean, default: false

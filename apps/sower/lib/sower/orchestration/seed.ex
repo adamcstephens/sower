@@ -5,7 +5,17 @@ defmodule Sower.Orchestration.Seed do
   import Ecto.Query, only: [from: 2]
 
   alias Sower.Repo
-  alias Sower.Orchestration.{Seed, SeedTag}
+
+  alias Sower.Orchestration.{
+    Deployment,
+    GardenSeedGeneration,
+    Seed,
+    SeedDeployment,
+    SeedTag,
+    Subscription,
+    SubscriptionDeployment
+  }
+
   alias Ecto.Multi
 
   @derive {Jason.Encoder, only: [:sid, :name, :seed_type, :artifact, :tags]}
@@ -34,6 +44,21 @@ defmodule Sower.Orchestration.Seed do
     field :artifact, :string
 
     has_many :tags, SeedTag
+
+    field :generation_number, :integer, virtual: true
+    field :is_current, :boolean, virtual: true, default: false
+
+    field :latest_deployment_state, Ecto.Enum,
+      values: [:created, :dispatched, :acknowledged, :completed, :stale, :canceled],
+      virtual: true
+
+    field :latest_deployment_result, Ecto.Enum,
+      values: [:success, :failure, :partial],
+      virtual: true
+
+    field :latest_deployment_sid, :string, virtual: true
+    field :latest_deployment_at, :utc_datetime, virtual: true
+    field :is_pending, :boolean, virtual: true, default: false
 
     timestamps()
   end
@@ -166,6 +191,124 @@ defmodule Sower.Orchestration.Seed do
 
       {:error, meta} ->
         {:error, meta}
+    end
+  end
+
+  @doc """
+  List matching seeds enriched with generation and deployment info for a subscription.
+
+  Returns seeds matching the subscription's name/type/rules, enriched with:
+  - generation_number and is_current from garden_seed_generations
+  - latest deployment state/result from this subscription's deployments
+  - is_pending flag (no successful deployment, or seed updated after last deployment)
+
+  Paginated via Flop with a default limit of 10.
+  """
+  def list_matching_enriched(%Subscription{} = subscription, garden_id, params) do
+    tags =
+      Enum.map(subscription.rules || [], fn rule ->
+        %{key: rule.key, value: rule.value}
+      end)
+
+    base_query =
+      from(s in Seed,
+        as: :seed,
+        where: s.name == ^subscription.seed_name and s.seed_type == ^subscription.seed_type
+      )
+
+    base_query =
+      Enum.reduce(tags, base_query, fn %{key: key, value: value}, query ->
+        from(s in query,
+          where:
+            exists(
+              from(st in SeedTag,
+                where: st.seed_id == parent_as(:seed).id,
+                where: st.key == ^key and st.value == ^value
+              )
+            )
+        )
+      end)
+
+    gen_query =
+      from(g in GardenSeedGeneration,
+        where: g.garden_id == ^garden_id and g.seed_id == parent_as(:seed).id,
+        select: %{generation_number: g.generation_number, is_current: g.is_current},
+        limit: 1
+      )
+
+    deploy_query =
+      from(d in Deployment,
+        join: sd in SeedDeployment,
+        on: sd.deployment_id == d.id,
+        join: sub_d in SubscriptionDeployment,
+        on: sub_d.deployment_id == d.id,
+        where: sd.seed_id == parent_as(:seed).id,
+        where: sub_d.subscription_id == ^subscription.id,
+        order_by: [desc: d.inserted_at],
+        limit: 1,
+        select: %{sid: d.sid, state: d.state, result: d.result, deployed_at: d.deployed_at}
+      )
+
+    last_successful_deploy_query =
+      from(d in Deployment,
+        join: sub_d in SubscriptionDeployment,
+        on: sub_d.deployment_id == d.id,
+        where: sub_d.subscription_id == ^subscription.id,
+        where: d.result == :success and not is_nil(d.deployed_at),
+        order_by: [desc: d.deployed_at],
+        limit: 1,
+        select: d.deployed_at
+      )
+
+    last_successful_at = Repo.one(last_successful_deploy_query, skip_org_id: true)
+
+    query =
+      from(s in base_query,
+        left_lateral_join: g in subquery(gen_query),
+        on: true,
+        left_lateral_join: ld in subquery(deploy_query),
+        on: true,
+        select_merge: %{
+          generation_number: g.generation_number,
+          is_current: coalesce(g.is_current, false),
+          latest_deployment_sid: ld.sid,
+          latest_deployment_state: ld.state,
+          latest_deployment_result: ld.result,
+          latest_deployment_at: ld.deployed_at,
+          is_pending: false
+        }
+      )
+
+    case Flop.validate_and_run(query, params, for: Seed, default_limit: 10) do
+      {:ok, {seeds, meta}} ->
+        seeds =
+          seeds
+          |> Repo.preload([:tags])
+          |> mark_newest_pending(last_successful_at)
+
+        {:ok, {seeds, meta}}
+
+      {:error, meta} ->
+        {:error, meta}
+    end
+  end
+
+  defp mark_newest_pending(seeds, nil), do: seeds
+
+  defp mark_newest_pending(seeds, last_successful_at) do
+    newest =
+      seeds
+      |> Enum.filter(fn seed -> DateTime.compare(seed.updated_at, last_successful_at) == :gt end)
+      |> Enum.max_by(& &1.updated_at, DateTime, fn -> nil end)
+
+    case newest do
+      nil ->
+        seeds
+
+      %Seed{id: pending_id} ->
+        Enum.map(seeds, fn seed ->
+          if seed.id == pending_id, do: %{seed | is_pending: true}, else: seed
+        end)
     end
   end
 
