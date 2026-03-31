@@ -64,7 +64,13 @@ defmodule SowerClient.Orchestration.Subscription do
         description: "Whether deployment can trigger automated reboots",
         enum: ["never", "when-required", "always"],
         default: "never"
-      }
+      },
+      allow_realtime: %Schema{
+        type: :boolean,
+        description: "Whether to deploy immediately when a matching seed is registered",
+        default: false
+      },
+      window: __MODULE__.Window
     },
     required: [:seed_name, :seed_type],
     example: %{

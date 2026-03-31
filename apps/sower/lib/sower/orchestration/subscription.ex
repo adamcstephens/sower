@@ -26,7 +26,9 @@ defmodule Sower.Orchestration.Subscription do
     field :timezone, :string
     field :activation_args, {:array, :string}, default: []
     field :reboot_policy, :string, default: "never"
+    field :allow_realtime, :boolean, default: false
     embeds_many :rules, __MODULE__.Rule
+    embeds_one :window, __MODULE__.Window
 
     timestamps(type: :utc_datetime)
   end
@@ -42,9 +44,11 @@ defmodule Sower.Orchestration.Subscription do
       :schedule,
       :timezone,
       :activation_args,
-      :reboot_policy
+      :reboot_policy,
+      :allow_realtime
     ])
     |> cast_embed(:rules, with: &__MODULE__.Rule.changeset/2)
+    |> cast_embed(:window, with: &__MODULE__.Window.changeset/2)
     |> unique_constraint([:garden_id, :org_id, :name])
   end
 
@@ -158,7 +162,9 @@ defmodule Sower.Orchestration.Subscription do
                 :schedule,
                 :timezone,
                 :activation_args,
-                :reboot_policy
+                :reboot_policy,
+                :allow_realtime,
+                :window
               ]},
            conflict_target: [:garden_id, :org_id, :name],
            returning: true
@@ -180,7 +186,9 @@ defmodule Sower.Orchestration.Subscription do
            schedule: sub.schedule,
            timezone: sub.timezone,
            activation_args: sub.activation_args,
-           reboot_policy: sub.reboot_policy
+           reboot_policy: sub.reboot_policy,
+           allow_realtime: sub.allow_realtime,
+           window: sub.window
          }) do
       {:ok, subscription} ->
         {:ok, SowerClient.Orchestration.Subscription.cast!(subscription)}
@@ -351,6 +359,30 @@ defmodule Sower.Orchestration.Subscription do
       rule
       |> cast(attrs, [:key, :op, :value])
       |> validate_required([:key, :op, :value])
+    end
+  end
+
+  defmodule Window do
+    use Ecto.Schema
+    import Ecto.Changeset
+
+    @derive {Jason.Encoder, only: [:days, :time_start, :time_end, :tz]}
+
+    embedded_schema do
+      field :days, {:array, :string}
+      field :time_start, :string
+      field :time_end, :string
+      field :tz, :string
+    end
+
+    def changeset(window, attrs) when is_struct(attrs) do
+      changeset(window, Map.from_struct(attrs))
+    end
+
+    def changeset(window, attrs) do
+      window
+      |> cast(attrs, [:days, :time_start, :time_end, :tz])
+      |> validate_required([:days, :time_start, :time_end, :tz])
     end
   end
 end
