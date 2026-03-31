@@ -98,6 +98,7 @@ defmodule SowerWeb.DeploymentLive.Show do
                     result={sd.result}
                     compact
                   />
+                  <.seed_deployment_status :if={!sd.result} state={sd.state} />
                   <.button
                     :if={sd.log}
                     variant={:secondary}
@@ -163,18 +164,13 @@ defmodule SowerWeb.DeploymentLive.Show do
     end
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_info({:deployment, _event, %Sower.Orchestration.Deployment{} = deployment}, socket) do
-    case Orchestration.get_deployment_sid(deployment.sid) do
-      nil ->
-        {:noreply, socket}
+    {:noreply, refresh_deployment(socket, deployment.sid)}
+  end
 
-      deployment ->
-        deployment =
-          Sower.Repo.preload(deployment, seed_deployments: :seed, subscriptions: [], garden: [])
-
-        {:noreply, assign(socket, :deployment, deployment)}
-    end
+  def handle_info({:seed_deployment, :updated}, socket) do
+    {:noreply, refresh_deployment(socket, socket.assigns.deployment.sid)}
   end
 
   @impl true
@@ -234,5 +230,18 @@ defmodule SowerWeb.DeploymentLive.Show do
     |> assign(:page_title, "Show Deployment")
     |> assign(:expanded_seed_logs, MapSet.new())
     |> assign(:retrying, false)
+  end
+
+  defp refresh_deployment(socket, sid) do
+    case Orchestration.get_deployment_sid(sid) do
+      nil ->
+        socket
+
+      deployment ->
+        deployment =
+          Sower.Repo.preload(deployment, seed_deployments: :seed, subscriptions: [], garden: [])
+
+        assign(socket, :deployment, deployment)
+    end
   end
 end

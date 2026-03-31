@@ -226,6 +226,78 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
     assert_redirect(show_live, ~p"/deployments/#{retried.sid}")
   end
 
+  test "displays seed deployment state", %{conn: conn, user: user} do
+    Sower.Repo.put_org_id(user.org_id)
+    garden = garden_fixture()
+    seed = seed_fixture()
+
+    deployment =
+      deployment_fixture(%{
+        garden_id: garden.id,
+        seeds: [seed],
+        subscriptions: [],
+        state: :acknowledged,
+        result: nil,
+        deployed_at: nil
+      })
+
+    seed_deployment =
+      Sower.Repo.get_by!(
+        Sower.Orchestration.SeedDeployment,
+        [deployment_id: deployment.id, seed_id: seed.id],
+        skip_org_id: true
+      )
+
+    seed_deployment
+    |> change(%{state: :downloading})
+    |> Sower.Repo.update!(skip_org_id: true)
+
+    {:ok, _show_live, html} = live(conn, ~p"/deployments/#{deployment.sid}")
+
+    assert html =~ "Downloading"
+  end
+
+  test "updates seed deployment state via PubSub broadcast", %{conn: conn, user: user} do
+    Sower.Repo.put_org_id(user.org_id)
+    garden = garden_fixture()
+    seed = seed_fixture()
+
+    deployment =
+      deployment_fixture(%{
+        garden_id: garden.id,
+        seeds: [seed],
+        subscriptions: [],
+        state: :acknowledged,
+        result: nil,
+        deployed_at: nil
+      })
+
+    {:ok, show_live, html} = live(conn, ~p"/deployments/#{deployment.sid}")
+
+    assert html =~ "Pending"
+
+    # Update seed deployment state in DB
+    seed_deployment =
+      Sower.Repo.get_by!(
+        Sower.Orchestration.SeedDeployment,
+        [deployment_id: deployment.id, seed_id: seed.id],
+        skip_org_id: true
+      )
+
+    seed_deployment
+    |> change(%{state: :activating})
+    |> Sower.Repo.update!(skip_org_id: true)
+
+    # Broadcast seed status change
+    Phoenix.PubSub.broadcast!(
+      Sower.PubSub,
+      "deployment:#{deployment.sid}",
+      {:seed_deployment, :updated}
+    )
+
+    assert render(show_live) =~ "Activating"
+  end
+
   test "shows error when retry is already in progress", %{conn: conn, user: user} do
     Sower.Repo.put_org_id(user.org_id)
     garden = garden_fixture()

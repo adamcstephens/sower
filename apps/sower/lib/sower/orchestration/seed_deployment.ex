@@ -36,8 +36,12 @@ defmodule Sower.Orchestration.SeedDeployment do
       |> changeset(%{state: status.status})
       |> Repo.update(skip_org_id: true)
       |> case do
-        {:ok, _} -> {:ok, %{}}
-        error -> error
+        {:ok, _} ->
+          broadcast_seed_status(deployment.sid)
+          {:ok, %{}}
+
+        error ->
+          error
       end
     end
   end
@@ -101,5 +105,13 @@ defmodule Sower.Orchestration.SeedDeployment do
       nil -> {:error, :seed_not_in_deployment}
       seed_deployment -> {:ok, seed_deployment}
     end
+  end
+
+  defp broadcast_seed_status(deployment_sid) do
+    Phoenix.PubSub.broadcast(
+      Sower.PubSub,
+      "deployment:#{deployment_sid}",
+      {:seed_deployment, :updated}
+    )
   end
 end
