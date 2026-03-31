@@ -26,6 +26,30 @@
 
     <.detail_field label="Seed Type">{@subscription.seed_type}</.detail_field>
 
+    <.detail_field :if={@subscription.schedule} label="Schedule">
+      {@subscription.schedule}
+      <span :if={@subscription.timezone} class="text-zinc-500 dark:text-zinc-400">
+        ({@subscription.timezone})
+      </span>
+    </.detail_field>
+
+    <.detail_field :if={@subscription.activation_args != []} label="Activation Args">
+      {Enum.join(@subscription.activation_args, ", ")}
+    </.detail_field>
+
+    <.detail_field :if={@subscription.reboot_policy != "never"} label="Reboot Policy">
+      {@subscription.reboot_policy}
+    </.detail_field>
+
+    <.detail_field label="Realtime">
+      {if @subscription.allow_realtime, do: "Enabled", else: "Disabled"}
+    </.detail_field>
+
+    <.detail_field :if={@subscription.window} label="Window">
+      {Enum.join(@subscription.window.days, ", ")}
+      {@subscription.window.time_start}–{@subscription.window.time_end} ({@subscription.window.tz})
+    </.detail_field>
+
     <section class="-mx-4 sm:mx-0">
       <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4 px-4 sm:px-0">
         Rules
