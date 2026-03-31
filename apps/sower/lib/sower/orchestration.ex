@@ -20,6 +20,7 @@ defmodule Sower.Orchestration do
   defdelegate get_garden_sid(sid), to: Garden
   defdelegate list_gardens(), to: Garden
   defdelegate list_gardens_with_latest_deployment(), to: Garden
+  defdelegate list_gardens_flop(params \\ %{}), to: Garden
   defdelegate update_garden(garden, attrs), to: Garden
 
   # Subscription delegates
