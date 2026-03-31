@@ -236,13 +236,37 @@ defmodule Garden.Deployer do
     maybe_reboot(deployment, result, [])
   end
 
-  def maybe_reboot(%Deployment{} = deployment, result, opts) when result != :success do
+  def maybe_reboot(%Deployment{} = deployment, _result, _opts)
+      when deployment.seed_deployments == [] do
+    :ok
+  end
+
+  def maybe_reboot(%Deployment{} = deployment, result, opts) do
+    has_rebootable_seeds =
+      Enum.any?(
+        deployment.seed_deployments,
+        &(get_in(&1.seed.seed_type) in @rebootable_seed_types)
+      )
+
+    if has_rebootable_seeds do
+      maybe_reboot_seeds(deployment, result, opts)
+    else
+      Logger.debug(
+        msg: "Skipping reboot for non-rebootable deployment",
+        deployment_sid: deployment.sid
+      )
+
+      :ok
+    end
+  end
+
+  defp maybe_reboot_seeds(%Deployment{} = deployment, result, opts) when result != :success do
     Logger.debug(msg: "Skipping reboot due to unsuccesful deployment", result: result)
     write_reboot_decision(deployment, opts, "reboot skipped: deployment result was #{result}")
     :ok
   end
 
-  def maybe_reboot(%Deployment{} = deployment, :success, opts) do
+  defp maybe_reboot_seeds(%Deployment{} = deployment, :success, opts) do
     reboot_reason_fun = Keyword.get(opts, :reboot_reason_fun, &reboot_reason/1)
     reboot_fun = Keyword.get(opts, :reboot_fun, &Activator.reboot/1)
 
@@ -251,66 +275,54 @@ defmodule Garden.Deployer do
         Application.get_env(:garden, :enable_activation, true)
       end)
 
-    if Enum.any?(
-         deployment.seed_deployments,
-         &(get_in(&1.seed.seed_type) in @rebootable_seed_types)
-       ) do
-      case reboot_reason_fun.(deployment.seed_deployments) do
-        nil ->
-          write_reboot_decision(deployment, opts, "no reboot required")
-          :ok
+    case reboot_reason_fun.(deployment.seed_deployments) do
+      nil ->
+        write_reboot_decision(deployment, opts, "no reboot required")
+        :ok
 
-        reason ->
-          if activation_enabled_fun.() do
-            Logger.info(
-              msg: "Reboot required by deployment policy",
-              deployment_sid: deployment.sid,
-              reason: reason
-            )
+      reason ->
+        if activation_enabled_fun.() do
+          Logger.info(
+            msg: "Reboot required by deployment policy",
+            deployment_sid: deployment.sid,
+            reason: reason
+          )
 
-            write_reboot_decision(deployment, opts, "reboot initiated: #{reason}")
+          write_reboot_decision(deployment, opts, "reboot initiated: #{reason}")
 
-            case reboot_fun.(reason: reason) do
-              {:ok, output} ->
-                Logger.info(
-                  msg: "Reboot request completed",
-                  deployment_sid: deployment.sid,
-                  reason: reason,
-                  output: output
-                )
+          case reboot_fun.(reason: reason) do
+            {:ok, output} ->
+              Logger.info(
+                msg: "Reboot request completed",
+                deployment_sid: deployment.sid,
+                reason: reason,
+                output: output
+              )
 
-              {:error, code, output} ->
-                Logger.error(
-                  msg: "Reboot request failed",
-                  deployment_sid: deployment.sid,
-                  reason: reason,
-                  code: code,
-                  output: output
-                )
+            {:error, code, output} ->
+              Logger.error(
+                msg: "Reboot request failed",
+                deployment_sid: deployment.sid,
+                reason: reason,
+                code: code,
+                output: output
+              )
 
-              {:error, reboot_error} ->
-                Logger.error(
-                  msg: "Reboot request failed",
-                  deployment_sid: deployment.sid,
-                  reason: reason,
-                  error: inspect(reboot_error)
-                )
-            end
-          else
-            Logger.debug(
-              msg: "Reboot run in noop",
-              deployment_sid: deployment.sid,
-              reason: reason
-            )
+            {:error, reboot_error} ->
+              Logger.error(
+                msg: "Reboot request failed",
+                deployment_sid: deployment.sid,
+                reason: reason,
+                error: inspect(reboot_error)
+              )
           end
-      end
-    else
-      Logger.debug(
-        msg: "Skipping reboot for non-nixos deployment",
-        deployment_sid: deployment.sid
-      )
-
-      :ok
+        else
+          Logger.debug(
+            msg: "Reboot run in noop",
+            deployment_sid: deployment.sid,
+            reason: reason
+          )
+        end
     end
   end
 
