@@ -12,6 +12,17 @@ defmodule Sower.Orchestration.Garden do
   @derive {Jason.Encoder, only: [:sid, :local_sid]}
   @derive {Phoenix.Param, key: :sid}
 
+  @derive {
+    Flop.Schema,
+    filterable: [],
+    sortable: [:name, :inserted_at],
+    default_limit: 20,
+    default_order: %{
+      order_by: [:name],
+      order_directions: [:asc]
+    }
+  }
+
   schema "gardens" do
     field :sid, SowerClient.Sid, autogenerate: true
     field :name, :string
@@ -53,6 +64,25 @@ defmodule Sower.Orchestration.Garden do
       select: %{a | latest_deployment: d}
     )
     |> Repo.all()
+  end
+
+  def list_gardens_flop(params \\ %{}) do
+    latest_deployment_query =
+      from(d in Deployment,
+        where: d.garden_id == parent_as(:garden).id,
+        order_by: [desc: d.inserted_at],
+        limit: 1
+      )
+
+    query =
+      from(a in __MODULE__,
+        as: :garden,
+        left_lateral_join: d in subquery(latest_deployment_query),
+        on: true,
+        select: %{a | latest_deployment: d}
+      )
+
+    Flop.validate_and_run(query, params, for: __MODULE__)
   end
 
   def get_garden(

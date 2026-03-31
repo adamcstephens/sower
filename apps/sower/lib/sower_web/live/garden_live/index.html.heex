@@ -5,31 +5,27 @@
 
   <.table
     id="gardens"
-    rows={@streams.gardens}
-    row_click={fn {_id, garden} -> JS.navigate(~p"/gardens/#{garden}") end}
+    rows={@gardens}
+    row_click={fn garden -> JS.navigate(~p"/gardens/#{garden}") end}
+    meta={@meta}
+    path={~p"/gardens"}
     action_hide_on={:sm}
   >
-    <:col :let={{_id, garden}} label="Name">{garden.name}</:col>
-    <:col :let={{_id, garden}} label="Online">
+    <:col :let={garden} label="Name" field={:name}>{garden.name}</:col>
+    <:col :let={garden} label="Online">
       <.online state={garden.sid in Map.keys(@garden_presence)} />
     </:col>
-    <:col :let={{_id, garden}} label="Deploy">
+    <:col :let={garden} label="Deploy">
       <.result result={garden.latest_deployment && garden.latest_deployment.result} />
     </:col>
-    <:action :let={{_id, garden}}>
+    <:action :let={garden}>
       <div class="sr-only">
         <.link navigate={~p"/gardens/#{garden}"}>Show</.link>
       </div>
     </:action>
-    <:action :let={{id, garden}}>
-      <.link
-        phx-click={JS.push("delete", value: %{id: garden.id}) |> hide("##{id}")}
-        data-confirm="Are you sure?"
-      >
-        Delete
-      </.link>
-    </:action>
   </.table>
+
+  <.pagination meta={@meta} path={~p"/gardens"} />
 
   <.modal
     :if={@live_action in [:new, :edit]}

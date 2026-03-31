@@ -6,19 +6,26 @@ defmodule SowerWeb.GardenLive.Index do
   alias Sower.Orchestration.Garden
   alias SowerWeb.Presence
 
-  @impl true
+  @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Sower.PubSub, "garden:presence")
     end
 
-    {:ok,
-     stream(socket, :gardens, Orchestration.list_gardens_with_latest_deployment())
-     |> assign(:garden_presence, Presence.list("garden:presence"))}
+    {:ok, assign(socket, :garden_presence, Presence.list("garden:presence"))}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_params(params, _url, socket) do
+    socket =
+      case Orchestration.list_gardens_flop(params) do
+        {:ok, {gardens, meta}} ->
+          assign(socket, gardens: gardens, meta: meta)
+
+        {:error, meta} ->
+          assign(socket, gardens: [], meta: meta)
+      end
+
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
   end
 
@@ -34,27 +41,50 @@ defmodule SowerWeb.GardenLive.Index do
     |> assign(:garden, nil)
   end
 
-  @impl true
-  def handle_info({SowerWeb.GardenLive.FormComponent, {:saved, garden}}, socket) do
-    {:noreply, stream_insert(socket, :gardens, garden)}
+  @impl Phoenix.LiveView
+  def handle_info({SowerWeb.GardenLive.FormComponent, {:saved, _garden}}, socket) do
+    case Orchestration.list_gardens_flop(socket.assigns.meta.flop) do
+      {:ok, {gardens, meta}} ->
+        {:noreply, assign(socket, gardens: gardens, meta: meta)}
+
+      {:error, meta} ->
+        {:noreply, assign(socket, gardens: [], meta: meta)}
+    end
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_info(%Broadcast{topic: "garden:presence", event: "presence_diff"}, socket) do
-    # update the presence list, then touch the stream to force a table refresh
     socket =
-      socket
-      |> assign(:garden_presence, Presence.list("garden:presence"))
-      |> stream(:gardens, Orchestration.list_gardens_with_latest_deployment())
+      case Orchestration.list_gardens_flop(socket.assigns.meta.flop) do
+        {:ok, {gardens, meta}} ->
+          assign(socket,
+            gardens: gardens,
+            meta: meta,
+            garden_presence: Presence.list("garden:presence")
+          )
+
+        {:error, meta} ->
+          assign(socket,
+            gardens: [],
+            meta: meta,
+            garden_presence: Presence.list("garden:presence")
+          )
+      end
 
     {:noreply, socket}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("delete", %{"id" => id}, socket) do
     garden = Orchestration.get_garden!(id)
     {:ok, _} = Orchestration.delete_garden(garden)
 
-    {:noreply, stream_delete(socket, :gardens, garden)}
+    case Orchestration.list_gardens_flop(socket.assigns.meta.flop) do
+      {:ok, {gardens, meta}} ->
+        {:noreply, assign(socket, gardens: gardens, meta: meta)}
+
+      {:error, meta} ->
+        {:noreply, assign(socket, gardens: [], meta: meta)}
+    end
   end
 end
