@@ -24,6 +24,23 @@ config :sower, SowerWeb.Endpoint,
   pubsub_server: Sower.PubSub,
   live_view: [signing_salt: "nrwHFIM7"]
 
+config :boruta, Boruta.Oauth,
+  repo: Sower.Repo,
+  issuer: "sower",
+  contexts: [
+    access_tokens: Boruta.Ecto.AccessTokens,
+    clients: Boruta.Ecto.Clients,
+    codes: Boruta.Ecto.Codes,
+    scopes: Boruta.Ecto.Scopes
+  ],
+  max_ttl: [
+    access_token: 2_592_000,
+    authorization_code: 60,
+    id_token: 86_400,
+    refresh_token: 2_592_000
+  ],
+  token_generator: Boruta.TokenGenerator
+
 config :flop, repo: Sower.Repo
 
 config :sower, Sower.Orchestration,

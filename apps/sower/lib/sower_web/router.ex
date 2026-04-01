@@ -102,6 +102,11 @@ defmodule SowerWeb.Router do
     get "/openapi", OpenApiSpex.Plug.RenderSpec, []
   end
 
+  scope "/api/oauth", SowerWeb.OAuth do
+    pipe_through :api
+    post "/token", TokenController, :create
+  end
+
   scope "/api/v1", SowerWeb.Api do
     pipe_through [:api, :ensure_token_authenticated]
 

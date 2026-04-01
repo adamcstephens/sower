@@ -4,6 +4,7 @@ defmodule SowerClient do
   # Used by contract evolution tests and baseline generation.
   @server_pushed_schema_titles [
     "Deployment",
+    "OAuthCredentials",
     "SeedDeployment",
     "Seed",
     "SeedTag",
@@ -24,6 +25,7 @@ defmodule SowerClient do
     |> OpenApiSpex.add_schemas([
       SowerClient.GardenHello,
       SowerClient.AgentHello,
+      SowerClient.Auth.OAuthCredentials,
       SowerClient.Auth.TokenInfo,
       SowerClient.Orchestration.GardenSeedGeneration,
       SowerClient.Orchestration.GardenSeedProfile,

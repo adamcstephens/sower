@@ -36,8 +36,15 @@ defmodule SowerWeb.GardenChannelHandleInTest do
           "name" => "new-garden"
         })
 
-      assert_reply ref, :ok, reply
+      # Registration now includes Boruta client creation (RSA keygen) + token issuance
+      assert_reply ref, :ok, reply, 5_000
       assert is_binary(reply.sid)
+      assert is_map(reply.oauth_credentials)
+      assert is_binary(reply.oauth_credentials.access_token)
+      assert is_binary(reply.oauth_credentials.refresh_token)
+      assert is_binary(reply.oauth_credentials.client_id)
+      assert is_binary(reply.oauth_credentials.client_secret)
+      assert is_integer(reply.oauth_credentials.expires_in)
     end
 
     test "accepts legacy agent:hello event" do

@@ -25,11 +25,14 @@ defmodule Sower.Repo do
   @doc """
   Enable foreign key multitenancy and require :org_id unless :skip_org_id is passed
   """
+  @boruta_tables ["oauth_clients", "oauth_tokens", "oauth_scopes", "oauth_clients_scopes"]
+
   @impl Ecto.Repo
   def prepare_query(_operation, query, opts) do
     cond do
       opts[:skip_org_id] || opts[:ecto_query] in [:schema_migration, :preload] ||
-        opts[:schema_migration] || get_in(query.from, [Access.key(:prefix)]) == "durable" ->
+        opts[:schema_migration] || get_in(query.from, [Access.key(:prefix)]) == "durable" ||
+          boruta_table?(query) ->
         {query, opts}
 
       org_id = opts[:org_id] ->
@@ -39,6 +42,9 @@ defmodule Sower.Repo do
         raise "expected org_id or skip_org_id to be set"
     end
   end
+
+  defp boruta_table?(%{from: %{source: {table, _}}}) when table in @boruta_tables, do: true
+  defp boruta_table?(_), do: false
 
   def put_org_id(org_id) do
     Process.put(@tenant_key, org_id)
