@@ -22,6 +22,35 @@
     },
     "required": []
   },
+  "OAuthCredentials": {
+    "properties": {
+      "access_token": {
+        "type": "string"
+      },
+      "client_id": {
+        "type": "string"
+      },
+      "client_secret": {
+        "type": "string"
+      },
+      "expires_in": {
+        "type": "integer"
+      },
+      "refresh_token": {
+        "type": "string"
+      },
+      "token_type": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "access_token",
+      "client_id",
+      "client_secret",
+      "expires_in",
+      "refresh_token"
+    ]
+  },
   "PresignedUploadReply": {
     "properties": {
       "headers": {
