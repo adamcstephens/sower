@@ -28,6 +28,7 @@ defmodule Sower.Orchestration.Garden do
     field :name, :string
     field :local_sid, :string
     field :org_id, Ecto.UUID
+    field :boruta_client_id, :string
 
     has_many :subscriptions, Sower.Orchestration.Subscription
     has_many :deployments, Sower.Orchestration.Deployment
@@ -41,7 +42,7 @@ defmodule Sower.Orchestration.Garden do
   @doc false
   def changeset(garden, attrs) do
     garden
-    |> cast(attrs, [:name, :org_id, :local_sid])
+    |> cast(attrs, [:name, :org_id, :local_sid, :boruta_client_id])
     |> validate_required([:name])
   end
 
@@ -98,7 +99,7 @@ defmodule Sower.Orchestration.Garden do
         )
 
         if socket.assigns.access_token |> can() |> create?(__MODULE__) do
-          create_garden(%{name: name, local_sid: local_sid})
+          register_new_garden(%{name: name, local_sid: local_sid})
         else
           {:error, :unauthorized}
         end
@@ -129,7 +130,7 @@ defmodule Sower.Orchestration.Garden do
         )
 
         if socket.assigns.access_token |> can() |> create?(__MODULE__) do
-          create_garden(%{name: name, local_sid: local_sid})
+          register_new_garden(%{name: name, local_sid: local_sid})
         else
           {:error, :unauthorized}
         end
@@ -196,9 +197,28 @@ defmodule Sower.Orchestration.Garden do
 
   def get_garden_sid(sid), do: Repo.get_by(__MODULE__, sid: sid)
 
+  def get_by_boruta_client_id(client_id),
+    do: Repo.get_by(__MODULE__, [boruta_client_id: client_id], skip_org_id: true)
+
   def get_garden_local_sid(local_sid), do: Repo.get_by(__MODULE__, local_sid: local_sid)
 
   def get_garden_local_sid!(local_sid), do: Repo.get_by!(__MODULE__, local_sid: local_sid)
+
+  def register_new_garden(attrs) do
+    with {:ok, garden} <- create_garden(attrs),
+         {:ok, client} <- Sower.GardenAuth.create_client(garden.sid),
+         {:ok, garden} <- update_garden(garden, %{boruta_client_id: client.id}),
+         {:ok, token_response} <- Sower.GardenAuth.issue(client.id, client.secret) do
+      oauth_credentials =
+        Map.merge(token_response, %{client_id: client.id, client_secret: client.secret})
+
+      {:ok, garden, oauth_credentials}
+    else
+      {:error, reason} ->
+        Logger.error(msg: "Failed to register new garden with OAuth", error: inspect(reason))
+        {:error, reason}
+    end
+  end
 
   def create_garden(attrs \\ %{}) do
     %__MODULE__{
@@ -216,6 +236,18 @@ defmodule Sower.Orchestration.Garden do
   end
 
   def delete_garden(%__MODULE__{} = garden) do
+    if garden.boruta_client_id do
+      try do
+        Sower.GardenAuth.delete_client(garden.boruta_client_id)
+      rescue
+        Ecto.NoResultsError ->
+          Logger.warning(
+            msg: "Boruta client not found during garden deletion",
+            boruta_client_id: garden.boruta_client_id
+          )
+      end
+    end
+
     Repo.delete(garden)
   end
 

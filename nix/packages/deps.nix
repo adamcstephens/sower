@@ -222,6 +222,37 @@ let
         in
         drv;
 
+      boruta =
+        let
+          version = "2.3.1";
+          drv = buildMix {
+            inherit version;
+            name = "boruta";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "boruta";
+              sha256 = "ae06432f70ab8447afc0d64bd404594c0b1452633458ae2377de250ead7bf0d9";
+            };
+
+            beamDeps = [
+              ecto_sql
+              ex_json_schema
+              joken
+              jose
+              nebulex
+              phoenix
+              plug
+              postgrex
+              puid
+              secure_random
+              shards
+            ];
+          };
+        in
+        drv;
+
       cloak =
         let
           version = "1.1.4";
@@ -282,6 +313,23 @@ let
             beamDeps = [
               ecto
             ];
+          };
+        in
+        drv;
+
+      crypto_rand =
+        let
+          version = "1.0.4";
+          drv = buildMix {
+            inherit version;
+            name = "crypto_rand";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "crypto_rand";
+              sha256 = "ad1862fd3e1c938f60982902632474868ea96901d75dd53f0ec32dd55e123549";
+            };
           };
         in
         drv;
@@ -516,6 +564,27 @@ let
             beamDeps = [
               ex_aws
               sweet_xml
+            ];
+          };
+        in
+        drv;
+
+      ex_json_schema =
+        let
+          version = "0.11.2";
+          drv = buildMix {
+            inherit version;
+            name = "ex_json_schema";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "ex_json_schema";
+              sha256 = "395f4aaf32ea0a14d861b16695e7bc8a1b5d841e0fd374d25aef9701bf8da825";
+            };
+
+            beamDeps = [
+              decimal
             ];
           };
         in
@@ -874,6 +943,28 @@ let
 
             beamDeps = [
               mint
+            ];
+          };
+        in
+        drv;
+
+      nebulex =
+        let
+          version = "2.6.6";
+          drv = buildMix {
+            inherit version;
+            name = "nebulex";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "nebulex";
+              sha256 = "8cbf531af6fe407383b6ba410a43a19319af47804929d8a8d1975a780b9952df";
+            };
+
+            beamDeps = [
+              shards
+              telemetry
             ];
           };
         in
@@ -1253,6 +1344,27 @@ let
         in
         drv;
 
+      puid =
+        let
+          version = "1.1.2";
+          drv = buildMix {
+            inherit version;
+            name = "puid";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "puid";
+              sha256 = "fbd1691e29e576c4fbf23852f4d256774702ad1f2a91b37e4344f7c278f1ffaa";
+            };
+
+            beamDeps = [
+              crypto_rand
+            ];
+          };
+        in
+        drv;
+
       quantum =
         let
           version = "3.5.3";
@@ -1336,6 +1448,39 @@ let
               jason
               toml
             ];
+          };
+        in
+        drv;
+
+      secure_random =
+        let
+          version = "0.5.1";
+          drv = buildMix {
+            inherit version;
+            name = "secure_random";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "secure_random";
+              sha256 = "1b9754f15e3940a143baafd19da12293f100044df69ea12db5d72878312ae6ab";
+            };
+          };
+        in
+        drv;
+
+      shards =
+        let
+          version = "1.1.1";
+          drv = buildRebar3 {
+            inherit version;
+            name = "shards";
+
+            src = fetchHex {
+              inherit version;
+              pkg = "shards";
+              sha256 = "169a045dae6668cda15fbf86d31bf433d0dbbaec42c8c23ca4f8f2d405ea8eda";
+            };
           };
         in
         drv;

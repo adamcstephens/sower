@@ -9,8 +9,8 @@ defmodule Garden.Storage do
   typedstruct do
     field :local_sid, String.t()
     field :garden_sid, String.t()
-
     field :subscriptions, list(SowerClient.Orchestration.Subscription)
+    field :oauth_credentials, map()
   end
 
   @cooldown_seconds 60
@@ -64,7 +64,11 @@ defmodule Garden.Storage do
     {:ok, bin} = File.read(file)
 
     raw = :erlang.binary_to_term(bin)
-    data = migrate_agent_sid(raw)
+
+    data =
+      raw
+      |> migrate_agent_sid()
+      |> ensure_fields()
 
     if data != raw do
       File.write!(file, :erlang.term_to_binary(data))
@@ -115,10 +119,20 @@ defmodule Garden.Storage do
     data
     |> Map.delete(:agent_sid)
     |> Map.put(:garden_sid, sid)
-    |> then(&struct!(__MODULE__, Map.take(&1, [:local_sid, :garden_sid, :subscriptions])))
+    |> then(
+      &struct!(
+        __MODULE__,
+        Map.take(&1, [:local_sid, :garden_sid, :subscriptions, :oauth_credentials])
+      )
+    )
   end
 
   defp migrate_agent_sid(%__MODULE__{} = data), do: data
+
+  # Ensure deserialized structs have all current fields (handles schema evolution)
+  defp ensure_fields(%{__struct__: __MODULE__} = data) do
+    struct(__MODULE__, Map.from_struct(data))
+  end
 
   defp default() do
     %__MODULE__{

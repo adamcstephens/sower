@@ -29,6 +29,7 @@ defmodule Sower.MixProject do
     [
       {:argon2id_elixir, "~> 1.1"},
       {:bandit, "~> 1.0"},
+      {:boruta, "~> 2.3"},
       {:cloak_ecto, "~> 1.3.0"},
       {:cuid2_ex, "~> 0.2.0"},
       {:durable, github: "wavezync/durable"},

@@ -96,6 +96,16 @@ defmodule SowerWeb.GardenChannel do
     {:reply, :ok, socket}
   end
 
+  def handle_in("token:refresh", %{"refresh_token" => refresh_token}, socket) do
+    case Sower.GardenAuth.refresh(refresh_token) do
+      {:ok, token_response} ->
+        {:reply, {:ok, token_response}, socket}
+
+      {:error, _error} ->
+        {:reply, {:error, %{reason: "token_refresh_failed"}}, socket}
+    end
+  end
+
   # Accept both "garden:hello" and "agent:hello"
   def handle_in("garden:hello", payload, socket), do: do_handle_hello(payload, socket)
   def handle_in("agent:hello", payload, socket), do: do_handle_hello(payload, socket)
@@ -105,6 +115,16 @@ defmodule SowerWeb.GardenChannel do
          |> normalize_hello_payload()
          |> SowerClient.GardenHello.cast!()
          |> Sower.Orchestration.get_garden(socket) do
+      {:ok, garden, oauth_credentials} ->
+        reply = %{
+          sid: garden.sid,
+          local_sid: garden.local_sid,
+          oauth_credentials: oauth_credentials
+        }
+
+        Logger.debug(msg: "Replying to hello with oauth credentials", garden_sid: garden.sid)
+        {:reply, {:ok, reply}, assign(socket, :garden_sid, garden.sid)}
+
       {:ok, garden} ->
         Logger.debug(msg: "Replying to hello", garden: garden)
         {:reply, {:ok, garden}, assign(socket, :garden_sid, garden.sid)}
