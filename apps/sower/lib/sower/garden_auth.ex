@@ -31,8 +31,8 @@ defmodule Sower.GardenAuth do
     })
   end
 
-  def delete_client(boruta_client_id) do
-    client = Boruta.Ecto.Admin.get_client!(boruta_client_id)
+  def delete_client(oauth_client_id) do
+    client = Boruta.Ecto.Admin.get_client!(oauth_client_id)
     Boruta.Ecto.Admin.delete_client(client)
   end
 

@@ -34,11 +34,11 @@ defmodule SowerWeb.GardenSocket do
   defp authenticate_token("boruta:" <> boruta_token) do
     case Boruta.Oauth.Authorization.AccessToken.authorize(value: boruta_token) do
       {:ok, oauth_token} ->
-        case Sower.Orchestration.Garden.get_by_boruta_client_id(oauth_token.client.id) do
+        case Sower.Orchestration.Garden.get_by_oauth_client_id(oauth_token.client.id) do
           nil ->
             Logger.error(
               msg: "No garden found for Boruta client",
-              boruta_client_id: oauth_token.client.id
+              oauth_client_id: oauth_token.client.id
             )
 
             {:error, :unknown_client}
