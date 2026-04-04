@@ -154,9 +154,8 @@ defmodule Sower.Orchestration.Garden do
         )
 
         if socket.assigns.access_token |> can() |> create?(__MODULE__) do
-          garden = update_garden(garden, %{local_sid: local_sid})
-
-          {:ok, garden}
+          {:ok, garden} = update_garden(garden, %{local_sid: local_sid})
+          maybe_provision_oauth_client(garden, public_key)
         else
           {:error, :unauthorized_garden_hello}
         end
@@ -172,7 +171,7 @@ defmodule Sower.Orchestration.Garden do
           garden_sid: garden.sid
         )
 
-        {:ok, garden}
+        maybe_provision_oauth_client(garden, public_key)
 
       %__MODULE__{} = garden
       when garden.sid == garden_sid and
@@ -188,7 +187,7 @@ defmodule Sower.Orchestration.Garden do
 
         {:ok, garden} = update_garden(garden, %{name: name})
 
-        {:ok, garden}
+        maybe_provision_oauth_client(garden, public_key)
 
       %__MODULE__{} = garden ->
         Logger.error(
@@ -224,6 +223,27 @@ defmodule Sower.Orchestration.Garden do
         Logger.error(msg: "Failed to register new garden with OAuth", error: inspect(reason))
         {:error, reason}
     end
+  end
+
+  defp maybe_provision_oauth_client(%__MODULE__{oauth_client_id: nil} = garden, public_key)
+       when is_binary(public_key) do
+    with {:ok, client} <- Sower.GardenAuth.create_client(garden.sid, public_key),
+         {:ok, garden} <- update_garden(garden, %{oauth_client_id: client.id}) do
+      {:ok, garden, %{client_id: client.id}}
+    else
+      {:error, reason} ->
+        Logger.error(
+          msg: "Failed to provision OAuth client for existing garden",
+          garden_sid: garden.sid,
+          error: inspect(reason)
+        )
+
+        {:ok, garden}
+    end
+  end
+
+  defp maybe_provision_oauth_client(%__MODULE__{} = garden, _public_key) do
+    {:ok, garden}
   end
 
   def create_garden(attrs \\ %{}) do
