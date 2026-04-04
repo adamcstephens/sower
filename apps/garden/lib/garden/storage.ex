@@ -11,6 +11,7 @@ defmodule Garden.Storage do
     field :garden_sid, String.t()
     field :subscriptions, list(SowerClient.Orchestration.Subscription)
     field :oauth_credentials, map()
+    field :private_key_pem, String.t()
   end
 
   @cooldown_seconds 60
