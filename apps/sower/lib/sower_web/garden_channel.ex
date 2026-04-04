@@ -96,16 +96,6 @@ defmodule SowerWeb.GardenChannel do
     {:reply, :ok, socket}
   end
 
-  def handle_in("token:refresh", %{"refresh_token" => refresh_token}, socket) do
-    case Sower.GardenAuth.refresh(refresh_token) do
-      {:ok, token_response} ->
-        {:reply, {:ok, token_response}, socket}
-
-      {:error, _error} ->
-        {:reply, {:error, %{reason: "token_refresh_failed"}}, socket}
-    end
-  end
-
   # Accept both "garden:hello" and "agent:hello"
   def handle_in("garden:hello", payload, socket), do: do_handle_hello(payload, socket)
   def handle_in("agent:hello", payload, socket), do: do_handle_hello(payload, socket)

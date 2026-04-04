@@ -129,15 +129,29 @@ defmodule Garden.Socket do
   defp resolve_connect_token do
     storage = Storage.read()
 
-    case storage.oauth_credentials do
-      %{access_token: token, token_issued_at: issued_at, expires_in: expires_in}
-      when is_binary(token) ->
+    case storage do
+      %{
+        oauth_credentials: %{
+          access_token: token,
+          token_issued_at: issued_at,
+          expires_in: expires_in
+        },
+        private_key_pem: private_key_pem
+      }
+      when is_binary(token) and is_binary(private_key_pem) ->
         if token_expired?(issued_at, expires_in) do
-          try_http_refresh(storage) || registration_token()
+          try_reauthenticate(storage) || registration_token()
         else
           Logger.debug(msg: "Using stored Boruta access token")
           "boruta:#{token}"
         end
+
+      %{
+        oauth_credentials: %{client_id: client_id},
+        private_key_pem: private_key_pem
+      }
+      when is_binary(client_id) and is_binary(private_key_pem) ->
+        try_reauthenticate(storage) || registration_token()
 
       _ ->
         registration_token()
@@ -151,72 +165,72 @@ defmodule Garden.Socket do
 
   defp token_expired?(_, _), do: true
 
-  defp try_http_refresh(%{oauth_credentials: %{refresh_token: refresh_token}} = storage)
-       when is_binary(refresh_token) do
-    endpoint = Application.fetch_env!(:garden, :config).endpoint
+  defp try_reauthenticate(%{
+         oauth_credentials: %{client_id: client_id},
+         private_key_pem: private_key_pem
+       })
+       when is_binary(client_id) and is_binary(private_key_pem) do
+    case Garden.Auth.request_token(client_id, private_key_pem) do
+      {:ok, token_response} ->
+        storage = Storage.read()
 
-    case Req.post("#{endpoint}/api/oauth/token",
-           json: %{grant_type: "refresh_token", refresh_token: refresh_token}
-         ) do
-      {:ok, %{status: 200, body: body}} ->
         updated_creds =
-          storage.oauth_credentials
+          (storage.oauth_credentials || %{})
           |> Map.merge(%{
-            access_token: body["access_token"],
-            refresh_token: body["refresh_token"],
-            expires_in: body["expires_in"],
+            access_token: token_response.access_token,
+            expires_in: token_response.expires_in,
             token_issued_at: System.system_time(:second)
           })
 
         storage |> Map.put(:oauth_credentials, updated_creds) |> Storage.write()
-        Logger.info(msg: "Refreshed OAuth token via HTTP")
-        "boruta:#{body["access_token"]}"
+        Logger.info(msg: "Reauthenticated via JWT assertion")
+        "boruta:#{token_response.access_token}"
 
-      {:ok, %{status: status}} ->
-        Logger.warning(msg: "HTTP token refresh failed", status: status)
-        nil
-
-      {:error, error} ->
-        Logger.warning(msg: "HTTP token refresh error", error: inspect(error))
+      {:error, _} ->
         nil
     end
   end
 
-  defp try_http_refresh(_), do: nil
+  defp try_reauthenticate(_), do: nil
 
   defp registration_token do
     Logger.debug(msg: "Using registration token")
     Base.encode64(Application.fetch_env!(:garden, :config).access_token)
   end
 
-  defp schedule_token_refresh(socket, %{expires_in: expires_in}) when is_integer(expires_in) do
-    # Refresh at 80% of TTL
-    refresh_ms = trunc(expires_in * 0.8 * 1000)
-    timer_ref = Process.send_after(self(), :refresh_token, refresh_ms)
+  defp schedule_reauthentication(socket, %{expires_in: expires_in})
+       when is_integer(expires_in) do
+    # Reauthenticate at 80% of TTL
+    reauth_ms = trunc(expires_in * 0.8 * 1000)
+    timer_ref = Process.send_after(self(), :reauthenticate, reauth_ms)
 
-    Logger.debug(msg: "Scheduled token refresh", refresh_in_seconds: div(refresh_ms, 1000))
-    assign(socket, :refresh_timer, timer_ref)
+    Logger.debug(msg: "Scheduled reauthentication", reauth_in_seconds: div(reauth_ms, 1000))
+    assign(socket, :reauth_timer, timer_ref)
   end
 
-  defp schedule_token_refresh(socket, _), do: socket
+  defp schedule_reauthentication(socket, _), do: socket
 
-  defp maybe_schedule_existing_refresh(socket, %{expires_in: _} = creds) do
-    schedule_token_refresh(socket, creds)
+  defp maybe_schedule_existing_reauth(socket, %{expires_in: _} = creds) do
+    schedule_reauthentication(socket, creds)
   end
 
-  defp maybe_schedule_existing_refresh(socket, _), do: socket
+  defp maybe_schedule_existing_reauth(socket, _), do: socket
 
   @impl Slipstream
   def handle_join(@lobby_topic, %{"conn_sid" => conn_sid}, socket) do
     Logger.info(msg: "Joined channel topic", topic: @lobby_topic, conn_sid: conn_sid)
+
+    storage = Garden.Storage.read()
+    {public_key_pem, storage} = Garden.Auth.ensure_keypair(storage)
 
     {:ok, hello_ref} =
       push_message(
         socket,
         SowerClient.GardenHello.cast!(%{
           name: Garden.Config.get().name,
-          local_sid: Garden.Storage.read().local_sid,
-          garden_sid: Garden.Storage.read().garden_sid
+          local_sid: storage.local_sid,
+          garden_sid: storage.garden_sid,
+          public_key: public_key_pem
         })
       )
 
@@ -327,24 +341,32 @@ defmodule Garden.Socket do
 
     {storage, socket} =
       case reply do
-        %{"oauth_credentials" => creds} when is_map(creds) ->
-          oauth_creds = %{
-            client_id: creds["client_id"],
-            client_secret: creds["client_secret"],
-            access_token: creds["access_token"],
-            refresh_token: creds["refresh_token"],
-            expires_in: creds["expires_in"],
-            token_type: creds["token_type"] || "bearer",
-            token_issued_at: System.system_time(:second)
-          }
+        %{"oauth_credentials" => %{"client_id" => client_id}} ->
+          Logger.info(msg: "Received client registration", client_id: client_id)
 
-          Logger.info(msg: "Received OAuth credentials from registration")
+          oauth_creds = %{client_id: client_id}
 
-          {Map.put(storage, :oauth_credentials, oauth_creds),
-           schedule_token_refresh(socket, oauth_creds)}
+          storage = Map.put(storage, :oauth_credentials, oauth_creds)
+
+          case Garden.Auth.request_token(client_id, storage.private_key_pem) do
+            {:ok, token_response} ->
+              updated_creds =
+                Map.merge(oauth_creds, %{
+                  access_token: token_response.access_token,
+                  expires_in: token_response.expires_in,
+                  token_issued_at: System.system_time(:second)
+                })
+
+              {Map.put(storage, :oauth_credentials, updated_creds),
+               schedule_reauthentication(socket, updated_creds)}
+
+            {:error, _} ->
+              Logger.warning(msg: "Initial token request failed after registration")
+              {storage, socket}
+          end
 
         _ ->
-          {storage, maybe_schedule_existing_refresh(socket, storage.oauth_credentials)}
+          {storage, maybe_schedule_existing_reauth(socket, storage.oauth_credentials)}
       end
 
     if persist? or Map.has_key?(reply, "oauth_credentials") do
@@ -436,32 +458,29 @@ defmodule Garden.Socket do
     end
   end
 
-  def handle_info(:refresh_token, socket) do
+  def handle_info(:reauthenticate, socket) do
     storage = Storage.read()
 
-    case storage.oauth_credentials do
-      %{refresh_token: rt} when is_binary(rt) ->
-        topic = private_channel(socket)
-        {:ok, ref} = push(socket, topic, "token:refresh", %{refresh_token: rt})
-
-        case await_reply(ref) do
-          {:ok, new_tokens} ->
+    case storage do
+      %{oauth_credentials: %{client_id: client_id}, private_key_pem: private_key_pem}
+      when is_binary(client_id) and is_binary(private_key_pem) ->
+        case Garden.Auth.request_token(client_id, private_key_pem) do
+          {:ok, token_response} ->
             updated_creds =
               storage.oauth_credentials
               |> Map.merge(%{
-                access_token: new_tokens["access_token"],
-                refresh_token: new_tokens["refresh_token"],
-                expires_in: new_tokens["expires_in"],
+                access_token: token_response.access_token,
+                expires_in: token_response.expires_in,
                 token_issued_at: System.system_time(:second)
               })
 
             storage |> Map.put(:oauth_credentials, updated_creds) |> Storage.write()
-            Logger.info(msg: "Token refreshed via channel")
-            {:noreply, schedule_token_refresh(socket, updated_creds)}
+            Logger.info(msg: "Reauthenticated via JWT assertion")
+            {:noreply, schedule_reauthentication(socket, updated_creds)}
 
-          {:error, error} ->
-            Logger.warning(msg: "Channel token refresh failed, retrying in 60s", error: error)
-            Process.send_after(self(), :refresh_token, 60_000)
+          {:error, _} ->
+            Logger.warning(msg: "Reauthentication failed, retrying in 60s")
+            Process.send_after(self(), :reauthenticate, 60_000)
             {:noreply, socket}
         end
 

@@ -9,7 +9,6 @@ defmodule Sower.GardenAuth do
   alias Boruta.Oauth.TokenResponse
 
   @access_token_ttl 900
-  @refresh_token_ttl 2_592_000
 
   typedstruct module: Context do
     field :org_id, String.t(), enforce: true
@@ -17,16 +16,18 @@ defmodule Sower.GardenAuth do
     field :scope, String.t(), enforce: true
   end
 
-  def create_client(garden_name) do
+  def create_client(garden_name, public_key_pem) do
     Boruta.Ecto.Admin.create_client(%{
       name: "garden:#{garden_name}",
       redirect_uris: ["https://localhost"],
-      supported_grant_types: ["client_credentials", "refresh_token"],
+      supported_grant_types: ["client_credentials"],
       access_token_ttl: @access_token_ttl,
-      refresh_token_ttl: @refresh_token_ttl,
       authorize_scope: true,
       authorized_scopes: [%{name: "garden:agent"}],
-      confidential: true
+      confidential: true,
+      jwt_public_key: public_key_pem,
+      token_endpoint_auth_methods: ["private_key_jwt"],
+      token_endpoint_jwt_auth_alg: "RS512"
     })
   end
 
@@ -35,19 +36,12 @@ defmodule Sower.GardenAuth do
     Boruta.Ecto.Admin.delete_client(client)
   end
 
-  def issue(client_id, client_secret) do
+  def issue(client_assertion) do
     token_request(%{
       "grant_type" => "client_credentials",
-      "client_id" => client_id,
-      "client_secret" => client_secret,
+      "client_assertion_type" => "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+      "client_assertion" => client_assertion,
       "scope" => "garden:agent"
-    })
-  end
-
-  def refresh(refresh_token_value) do
-    token_request(%{
-      "grant_type" => "refresh_token",
-      "refresh_token" => refresh_token_value
     })
   end
 
@@ -60,7 +54,6 @@ defmodule Sower.GardenAuth do
       {:ok,
        %{
          access_token: response.access_token,
-         refresh_token: response.refresh_token,
          expires_in: response.expires_in,
          token_type: response.token_type
        }}

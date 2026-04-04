@@ -3,8 +3,12 @@ defmodule SowerWeb.OAuth.TokenController do
 
   require Logger
 
-  def create(conn, %{"grant_type" => "refresh_token", "refresh_token" => refresh_token}) do
-    case Sower.GardenAuth.refresh(refresh_token) do
+  def create(conn, %{
+        "grant_type" => "client_credentials",
+        "client_assertion_type" => "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+        "client_assertion" => client_assertion
+      }) do
+    case Sower.GardenAuth.issue(client_assertion) do
       {:ok, token_response} ->
         json(conn, token_response)
 
@@ -12,8 +16,8 @@ defmodule SowerWeb.OAuth.TokenController do
         conn
         |> put_status(:bad_request)
         |> json(%{
-          error: "invalid_grant",
-          error_description: "Refresh token is invalid or expired"
+          error: "invalid_client",
+          error_description: "Client assertion is invalid"
         })
     end
   end
@@ -23,7 +27,7 @@ defmodule SowerWeb.OAuth.TokenController do
     |> put_status(:bad_request)
     |> json(%{
       error: "unsupported_grant_type",
-      error_description: "Only refresh_token grant is supported"
+      error_description: "Only client_credentials grant with JWT client assertion is supported"
     })
   end
 end

@@ -30,6 +30,7 @@ defmodule Garden.MixProject do
       {:quantum, "~> 3.0"},
       {:cuid2_ex, "~> 0.2"},
       {:jason, "~> 1.0"},
+      {:jose, "~> 1.11"},
       {:nix, in_umbrella: true},
       {:slipstream, "~> 1.0"},
       # load typedstruct before typed_struct_ecto_changeset
