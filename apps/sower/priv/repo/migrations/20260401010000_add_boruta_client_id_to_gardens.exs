@@ -3,9 +3,9 @@ defmodule Sower.Repo.Migrations.AddBorutaClientIdToGardens do
 
   def change do
     alter table(:gardens) do
-      add :boruta_client_id, :string
+      add :oauth_client_id, :string
     end
 
-    create index(:gardens, [:boruta_client_id], unique: true)
+    create index(:gardens, [:oauth_client_id], unique: true)
   end
 end

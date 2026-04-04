@@ -28,7 +28,7 @@ defmodule Sower.Orchestration.Garden do
     field :name, :string
     field :local_sid, :string
     field :org_id, Ecto.UUID
-    field :boruta_client_id, :string
+    field :oauth_client_id, :string
 
     has_many :subscriptions, Sower.Orchestration.Subscription
     has_many :deployments, Sower.Orchestration.Deployment
@@ -42,7 +42,7 @@ defmodule Sower.Orchestration.Garden do
   @doc false
   def changeset(garden, attrs) do
     garden
-    |> cast(attrs, [:name, :org_id, :local_sid, :boruta_client_id])
+    |> cast(attrs, [:name, :org_id, :local_sid, :oauth_client_id])
     |> validate_required([:name])
   end
 
@@ -207,8 +207,8 @@ defmodule Sower.Orchestration.Garden do
 
   def get_garden_sid(sid), do: Repo.get_by(__MODULE__, sid: sid)
 
-  def get_by_boruta_client_id(client_id),
-    do: Repo.get_by(__MODULE__, [boruta_client_id: client_id], skip_org_id: true)
+  def get_by_oauth_client_id(client_id),
+    do: Repo.get_by(__MODULE__, [oauth_client_id: client_id], skip_org_id: true)
 
   def get_garden_local_sid(local_sid), do: Repo.get_by(__MODULE__, local_sid: local_sid)
 
@@ -217,7 +217,7 @@ defmodule Sower.Orchestration.Garden do
   def register_new_garden(%{public_key: public_key} = attrs) do
     with {:ok, garden} <- create_garden(attrs),
          {:ok, client} <- Sower.GardenAuth.create_client(garden.sid, public_key),
-         {:ok, garden} <- update_garden(garden, %{boruta_client_id: client.id}) do
+         {:ok, garden} <- update_garden(garden, %{oauth_client_id: client.id}) do
       {:ok, garden, %{client_id: client.id}}
     else
       {:error, reason} ->
@@ -242,14 +242,14 @@ defmodule Sower.Orchestration.Garden do
   end
 
   def delete_garden(%__MODULE__{} = garden) do
-    if garden.boruta_client_id do
+    if garden.oauth_client_id do
       try do
-        Sower.GardenAuth.delete_client(garden.boruta_client_id)
+        Sower.GardenAuth.delete_client(garden.oauth_client_id)
       rescue
         Ecto.NoResultsError ->
           Logger.warning(
             msg: "Boruta client not found during garden deletion",
-            boruta_client_id: garden.boruta_client_id
+            oauth_client_id: garden.oauth_client_id
           )
       end
     end
