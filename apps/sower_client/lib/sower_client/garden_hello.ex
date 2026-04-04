@@ -19,6 +19,11 @@ defmodule SowerClient.GardenHello do
       name: %Schema{
         type: :string,
         description: "Name of garden"
+      },
+      public_key: %Schema{
+        type: :string,
+        description: "PEM-encoded RSA public key for private_key_jwt authentication",
+        nullable: true
       }
     },
     required: [:local_sid, :name]

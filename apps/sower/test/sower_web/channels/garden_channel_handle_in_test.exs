@@ -30,21 +30,29 @@ defmodule SowerWeb.GardenChannelHandleInTest do
 
       local_sid = SowerClient.Sid.generate("lc_grdn")
 
+      {_private_pem, public_pem} =
+        JOSE.JWK.generate_key({:rsa, 2048})
+        |> then(fn jwk ->
+          {_, priv} = JOSE.JWK.to_pem(jwk)
+          {_, pub} = jwk |> JOSE.JWK.to_public() |> JOSE.JWK.to_pem()
+          {priv, pub}
+        end)
+
       ref =
         push(socket, "garden:hello", %{
           "local_sid" => local_sid,
-          "name" => "new-garden"
+          "name" => "new-garden",
+          "public_key" => public_pem
         })
 
-      # Registration now includes Boruta client creation (RSA keygen) + token issuance
+      # Registration includes Boruta client creation with public key
       assert_reply ref, :ok, reply, 5_000
       assert is_binary(reply.sid)
       assert is_map(reply.oauth_credentials)
-      assert is_binary(reply.oauth_credentials.access_token)
-      assert is_binary(reply.oauth_credentials.refresh_token)
       assert is_binary(reply.oauth_credentials.client_id)
-      assert is_binary(reply.oauth_credentials.client_secret)
-      assert is_integer(reply.oauth_credentials.expires_in)
+      refute Map.has_key?(reply.oauth_credentials, :client_secret)
+      refute Map.has_key?(reply.oauth_credentials, :refresh_token)
+      refute Map.has_key?(reply.oauth_credentials, :access_token)
     end
 
     test "accepts legacy agent:hello event" do

@@ -87,7 +87,12 @@ defmodule Sower.Orchestration.Garden do
   end
 
   def get_garden(
-        %SowerClient.GardenHello{garden_sid: nil, name: name, local_sid: local_sid},
+        %SowerClient.GardenHello{
+          garden_sid: nil,
+          name: name,
+          local_sid: local_sid,
+          public_key: public_key
+        },
         socket
       ) do
     case get_garden_local_sid(local_sid) do
@@ -99,7 +104,7 @@ defmodule Sower.Orchestration.Garden do
         )
 
         if socket.assigns.access_token |> can() |> create?(__MODULE__) do
-          register_new_garden(%{name: name, local_sid: local_sid})
+          register_new_garden(%{name: name, local_sid: local_sid, public_key: public_key})
         else
           {:error, :unauthorized}
         end
@@ -117,7 +122,12 @@ defmodule Sower.Orchestration.Garden do
   end
 
   def get_garden(
-        %SowerClient.GardenHello{garden_sid: garden_sid, name: name, local_sid: local_sid},
+        %SowerClient.GardenHello{
+          garden_sid: garden_sid,
+          name: name,
+          local_sid: local_sid,
+          public_key: public_key
+        },
         socket
       ) do
     case get_garden_sid(garden_sid) do
@@ -130,7 +140,7 @@ defmodule Sower.Orchestration.Garden do
         )
 
         if socket.assigns.access_token |> can() |> create?(__MODULE__) do
-          register_new_garden(%{name: name, local_sid: local_sid})
+          register_new_garden(%{name: name, local_sid: local_sid, public_key: public_key})
         else
           {:error, :unauthorized}
         end
@@ -204,15 +214,11 @@ defmodule Sower.Orchestration.Garden do
 
   def get_garden_local_sid!(local_sid), do: Repo.get_by!(__MODULE__, local_sid: local_sid)
 
-  def register_new_garden(attrs) do
+  def register_new_garden(%{public_key: public_key} = attrs) do
     with {:ok, garden} <- create_garden(attrs),
-         {:ok, client} <- Sower.GardenAuth.create_client(garden.sid),
-         {:ok, garden} <- update_garden(garden, %{boruta_client_id: client.id}),
-         {:ok, token_response} <- Sower.GardenAuth.issue(client.id, client.secret) do
-      oauth_credentials =
-        Map.merge(token_response, %{client_id: client.id, client_secret: client.secret})
-
-      {:ok, garden, oauth_credentials}
+         {:ok, client} <- Sower.GardenAuth.create_client(garden.sid, public_key),
+         {:ok, garden} <- update_garden(garden, %{boruta_client_id: client.id}) do
+      {:ok, garden, %{client_id: client.id}}
     else
       {:error, reason} ->
         Logger.error(msg: "Failed to register new garden with OAuth", error: inspect(reason))
