@@ -247,6 +247,7 @@ in
         UMask = "0077";
 
         StateDirectory = "sower-garden";
+        StateDirectoryMode = "0700";
         WorkingDirectory = "%S/sower-garden";
 
         ExecStartPre = [
