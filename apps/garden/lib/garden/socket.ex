@@ -96,24 +96,8 @@ defmodule Garden.Socket do
 
   @impl Slipstream
   def init(_args) do
-    do_connect()
-  end
-
-  defp do_connect() do
-    config = Application.get_all_env(__MODULE__)
-    token_param = resolve_connect_token()
-
-    uri =
-      config
-      |> Keyword.get(:uri)
-      |> Map.put(:query, "token=#{token_param}")
-      |> URI.to_string()
-
-    config = Keyword.put(config, :uri, uri)
-
-    case connect(config) do
+    case do_connect() do
       {:ok, socket} ->
-        Logger.debug(msg: "Connecting")
         {:ok, Map.put(socket, :active_deployments, %{})}
 
       {:error, reason} ->
@@ -124,6 +108,43 @@ defmodule Garden.Socket do
 
         :ignore
     end
+  end
+
+  @impl Slipstream
+  def handle_disconnect(_reason, socket) do
+    Logger.warning(msg: "Disconnected from server socket")
+
+    case do_connect(socket) do
+      {:ok, socket} -> {:ok, socket}
+      {:error, reason} -> {:stop, reason, socket}
+    end
+  end
+
+  defp do_connect(socket \\ nil) do
+    config = build_connect_config()
+
+    case if(socket, do: connect(socket, config), else: connect(config)) do
+      {:ok, socket} ->
+        {:ok, socket}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp build_connect_config do
+    config = Application.get_all_env(__MODULE__)
+    token_param = resolve_connect_token()
+    uri = Keyword.get(config, :uri)
+
+    Logger.info(msg: "Connecting to server socket", endpoint: uri)
+
+    uri =
+      uri
+      |> Map.put(:query, "token=#{token_param}")
+      |> URI.to_string()
+
+    Keyword.put(config, :uri, uri)
   end
 
   defp resolve_connect_token do
@@ -183,7 +204,7 @@ defmodule Garden.Socket do
           })
 
         storage |> Map.put(:oauth_credentials, updated_creds) |> Storage.write()
-        Logger.info(msg: "Reauthenticated via JWT assertion")
+        Logger.debug(msg: "Reauthenticated via JWT assertion")
         "boruta:#{token_response.access_token}"
 
       {:error, _} ->
@@ -194,7 +215,7 @@ defmodule Garden.Socket do
   defp try_reauthenticate(_), do: nil
 
   defp registration_token do
-    Logger.debug(msg: "Using registration token")
+    Logger.info(msg: "Using registration token")
     Base.encode64(Application.fetch_env!(:garden, :config).access_token)
   end
 
