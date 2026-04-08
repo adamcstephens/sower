@@ -85,7 +85,7 @@ config :sower, :generators,
   timestamp_type: :utc_datetime_usec
 
 config :elixir, time_zone_database: Zoneinfo.TimeZoneDatabase
-config :zoneinfo, tzpath: "/etc/zoneinfo"
+config :zoneinfo, tzpath: System.get_env("TZDIR", "/etc/zoneinfo")
 
 config :ex_aws, http_client: ExAws.Request.Req
 config :ex_aws_s3, :content_hash_algorithm, :sha256

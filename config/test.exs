@@ -6,10 +6,9 @@ import Config
 # to provide built-in test partitioning in CI environment.
 # Run `mix help test` for more information.
 config :sower, Sower.Repo,
-  username: "postgres",
-  password: "postgres",
-  hostname: "localhost",
+  username: System.get_env("PGUSER", "postgres"),
   database: "sower_test#{System.get_env("MIX_TEST_PARTITION")}",
+  socket_dir: System.get_env("PGHOST", Path.expand("../.services/postgres/data", __DIR__)),
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: 10
 
