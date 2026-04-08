@@ -197,7 +197,7 @@
   },
   "info": {
     "title": "sower",
-    "version": "0.7.0"
+    "version": "0.8.0-dev"
   },
   "openapi": "3.0.0",
   "paths": {
