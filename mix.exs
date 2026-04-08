@@ -43,8 +43,8 @@ defmodule SowerUmbrella.MixProject do
   defp deps do
     [
       {:dialyxir, "~> 1.0", only: [:dev]},
-      {:deps_nix, "~> 2.6"},
-      {:igniter, "~> 0.7", only: [:dev, :test], override: true}
+      {:deps_nix, "~> 3.0", only: [:dev]},
+      {:igniter, "~> 0.7", only: [:dev, :test], override: true},
     ]
   end
 end

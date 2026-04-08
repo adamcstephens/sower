@@ -48,10 +48,11 @@ defmodule Sower.MixProject do
       {:jason, "~> 1.2"},
       {:joken, "~> 2.6.1"},
       {:libcluster_consul, "~> 1.3"},
-      {:live_debugger, "~> 0.6.0", only: :dev},
+      {:live_debugger, "~> 0.7.0", only: :dev},
       {:mime, "~> 2.0.6"},
       {:mix_test_watch, "~> 1.0", only: [:dev, :test], runtime: false},
       {:nix, in_umbrella: true},
+      {:owl, "~> 0.13", override: true},
       {:permit, "~> 0.3.0"},
       {:permit_ecto, "~> 0.2.3"},
       {:phoenix, "~> 1.8.0"},
@@ -82,7 +83,7 @@ defmodule Sower.MixProject do
   defp aliases do
     [
       setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build"],
-      "ecto.setup": ["ecto.create", "ecto.migrate", "run apps/sower/priv/repo/seeds.exs"],
+      "ecto.setup": ["ecto.create", "ecto.migrate", "run #{Path.expand("priv/repo/seeds.exs", __DIR__)}"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],

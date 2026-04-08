@@ -52,7 +52,7 @@ format-go:
 
 mix-nix-lock:
     mix deps.get
-    mix deps.nix --output nix/packages/deps.nix
+    mix deps.nix --output nix/packages/deps.nix --env prod --env test
 
 mix-clean:
     mix deps.clean --unused --unlock
@@ -118,6 +118,7 @@ update-elixir:
     mix deps.update --all
     mix deps.get
     mix hex.outdated
+    pushd apps/sower; MIX_ENV=test mix boruta.gen.migration; popd
     just mix-clean
     just mix-nix-lock
     jj commit -m 'server(chore): update elixir deps' mix.exs mix.lock nix/packages/deps.nix
