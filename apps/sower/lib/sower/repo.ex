@@ -31,8 +31,7 @@ defmodule Sower.Repo do
   def prepare_query(_operation, query, opts) do
     cond do
       opts[:skip_org_id] || opts[:ecto_query] in [:schema_migration, :preload] ||
-        opts[:schema_migration] || get_in(query.from, [Access.key(:prefix)]) == "durable" ||
-          boruta_table?(query) ->
+        opts[:schema_migration] || oban_table?(query) || boruta_table?(query) ->
         {query, opts}
 
       org_id = opts[:org_id] ->
@@ -42,6 +41,11 @@ defmodule Sower.Repo do
         raise "expected org_id or skip_org_id to be set"
     end
   end
+
+  defp oban_table?(%{from: %{source: {table, _}}}) when is_binary(table),
+    do: String.starts_with?(table, "oban_")
+
+  defp oban_table?(_), do: false
 
   defp boruta_table?(%{from: %{source: {table, _}}}) when table in @boruta_tables, do: true
   defp boruta_table?(_), do: false

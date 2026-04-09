@@ -112,7 +112,9 @@ defmodule Sower.Orchestration.Seed do
   end
 
   defp trigger_realtime_deploys(%Seed{} = seed) do
-    Durable.start(Sower.Orchestration.Workflows.RealtimeDeploy, %{"seed_id" => seed.id})
+    %{"seed_id" => seed.id, "org_id" => seed.org_id}
+    |> Sower.Workers.RealtimeDeploy.new()
+    |> Oban.insert()
   end
 
   def create!(attrs, opts \\ []) do
