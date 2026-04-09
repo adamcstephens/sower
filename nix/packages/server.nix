@@ -1,14 +1,18 @@
 {
   lib,
-  sowerLib,
   pkgs,
-  callPackages,
+
   beamPackages,
+  callPackages,
   esbuild,
-  tailwindcss,
-  stdenv,
-  version,
+  postgresql,
+  postgresqlTestHook,
+  sowerLib,
   sowerServicesHook,
+  stdenv,
+  tailwindcss,
+  tzdata,
+  version,
 }:
 let
   arch = if stdenv.isAarch64 then "arm64" else "x64";
@@ -33,7 +37,10 @@ beamPackages.mixRelease rec {
 
   mixReleaseName = "server";
 
-  nativeBuildInputs = [ sowerServicesHook ];
+  nativeBuildInputs = [
+    sowerServicesHook
+    tzdata
+  ];
 
   sowerServices = sowerLib.generateUnitFiles {
     inherit pkgs;
@@ -66,23 +73,28 @@ beamPackages.mixRelease rec {
     mv $out/bin/server $out/bin/sower-server
   '';
 
-  # disabled because requires test deps to work
-  # doCheck = true;
-  # nativeCheckInputs = [
-  #   postgresql
-  #   postgresqlTestHook
-  # ];
-  # checkPhase = ''
-  #   runHook preCheck
-  #
-  #   export MIX_ENV=test
-  #
-  #   ${nixpkgs}/pkgs/development/beam-modules/mix-configure-hook.sh
-  #
-  #   mix do deps.loadpaths --no-deps-check + test
-  #
-  #   runHook postCheck
-  # '';
+  doCheck = true;
+  env = {
+    PGDATABASE = "sower_test";
+  };
+  nativeCheckInputs = [
+    postgresql
+    postgresqlTestHook
+  ];
+  checkPhase = ''
+    runHook preCheck
+
+    export MIX_ENV=test
+    ln -sv $PWD/_build/prod _build/test
+
+    pushd apps/sower
+    mix do deps.loadpaths --no-deps-check + ecto.setup + test
+    popd
+
+    export MIX_ENV=prod
+
+    runHook postCheck
+  '';
 
   passthru = {
     inherit mixNixDeps;
