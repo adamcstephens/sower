@@ -40,6 +40,20 @@ beamPackages.mixRelease {
   '';
 
   doCheck = true;
+  checkPhase = ''
+    runHook preCheck
+
+    export MIX_ENV=test
+    ln -sv $PWD/_build/prod _build/test
+
+    pushd apps/sower_cli
+    mix do deps.loadpaths --no-deps-check + test
+    popd
+
+    export MIX_ENV=prod
+
+    runHook postCheck
+  '';
 
   meta.mainProgram = "sower";
 }
