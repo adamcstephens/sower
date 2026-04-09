@@ -16,7 +16,7 @@ defmodule Sower.Application do
       {Finch, name: Sower.Finch},
       {Phoenix.PubSub, name: Sower.PubSub},
       SowerWeb.Presence,
-      {Durable, repo: Sower.Repo, queues: %{default: [concurrency: 10]}},
+      {Oban, oban_config()},
       {Task.Supervisor, name: Sower.TaskSupervisor},
       Sower.Orchestration.StaleDeploymentFinalizer,
       SowerWeb.Endpoint,
@@ -27,6 +27,12 @@ defmodule Sower.Application do
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Sower.Supervisor]
     Supervisor.start_link(children, opts)
+  end
+
+  @oban_testing if Mix.env() == :test, do: :manual, else: :disabled
+
+  defp oban_config do
+    [repo: Sower.Repo, queues: [default: 10], testing: @oban_testing]
   end
 
   # Tell Phoenix to update the endpoint configuration
