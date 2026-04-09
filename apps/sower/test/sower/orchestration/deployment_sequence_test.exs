@@ -238,9 +238,6 @@ defmodule Sower.Orchestration.DeploymentSequenceTest do
 
   describe "cancel stale on new deployment" do
     test "stale deployment gets canceled when same sub deploys", %{
-      org: org,
-      garden: garden,
-      seed: seed,
       subscription: subscription,
       deployment: deployment
     } do

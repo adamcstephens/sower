@@ -22,7 +22,7 @@ defmodule Sower.Orchestration.Workflows.RealtimeDeploy do
         |> Enum.filter(&Subscription.within_window?(&1, now))
         |> Enum.map(fn sub ->
           case Deployment.deploy_subscription(sub) do
-            {:ok, request_id} ->
+            {:ok, request_id, _pid} ->
               Logger.info(
                 msg: "Realtime deploy triggered",
                 subscription_sid: sub.sid,

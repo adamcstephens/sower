@@ -101,7 +101,7 @@ defmodule SowerWeb.GardenLive.Show do
         socket = assign(socket, deploying_sub: sub_sid, deploy_error: nil)
 
         case Orchestration.deploy_subscription(sub, force: true) do
-          {:ok, _request_id} ->
+          {:ok, _request_id, _pid} ->
             {:noreply, socket}
 
           {:error, reason} ->

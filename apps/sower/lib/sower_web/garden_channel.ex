@@ -155,7 +155,7 @@ defmodule SowerWeb.GardenChannel do
            req,
            socket.assigns.garden
          ) do
-      {:ok, request_id} ->
+      {:ok, request_id, _pid} ->
         {:ok, %{request_id: request_id}}
 
       {:error, error} ->
