@@ -24,6 +24,7 @@ defmodule Sower.AccountsTest do
   end
 
   describe "new/1" do
+    @tag :capture_log
     test "validates email uniqueness" do
       %{email: email, org_id: org_id} = user_fixture()
 
@@ -55,6 +56,7 @@ defmodule Sower.AccountsTest do
       %{user: user_fixture()}
     end
 
+    @tag :capture_log
     test "generates a token", %{user: user, organization: org} do
       token = User.generate_session_token(user)
       assert user_token = Repo.get_by(UserToken, [token: token], skip_org_id: true)

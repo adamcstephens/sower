@@ -36,6 +36,7 @@ defmodule Sower.SeedTest do
       assert %Seed{id: ^id} = Seed.latest(seed.name, "nixos")
     end
 
+    @tag :capture_log
     test "upserts" do
       seed = seed_fixture()
 
