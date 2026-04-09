@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: go cli
+      - name: sower build
         run: |
           printf '%s' '${{ secrets.NIKS3_AUTH_TOKEN }}' > ../niks3-token
           export NIKS3_AUTH_TOKEN_FILE="$PWD/../niks3-token"
@@ -27,16 +27,6 @@ jobs:
       - run: |
           export HOME=$PWD
           nix develop .# --command just check-elixir-format
-
-  # elixir-test:
-  #   runs-on: local/x86_64-linux
-  #
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #
-  #     - run: |
-  #         export HOME=$PWD
-  #         nix develop .# --command just check-elixir-test
 
   go:
     runs-on: local/x86_64-linux
