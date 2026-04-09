@@ -121,7 +121,7 @@ defmodule Garden.Profile do
     case System.get_env("XDG_STATE_HOME") do
       nil ->
         # Get current user and look up their home directory
-        case get_user_home(System.fetch_env!("USER")) do
+        case get_user_home(System.get_env("USER", get_username!())) do
           {:ok, home} ->
             {:ok, "#{home}/.local/state/nix/profiles/home-manager"}
 
@@ -157,6 +157,13 @@ defmodule Garden.Profile do
 
       {_output, _exit_code} ->
         fallback_get_user_home(username)
+    end
+  end
+
+  def get_username!() do
+    with {output, 0} <- System.cmd("id", ["--user", "--name"], stderr_to_stdout: true),
+         username when username != "" <- String.trim(output) do
+      username
     end
   end
 
