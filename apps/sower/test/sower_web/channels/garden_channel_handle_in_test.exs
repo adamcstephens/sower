@@ -105,6 +105,9 @@ defmodule SowerWeb.GardenChannelHandleInTest do
 
       assert_reply ref, :ok, %{request_id: request_id}
       assert is_binary(request_id)
+
+      # Wait for the async deployment task to complete before test exits
+      assert_push "deployment", _payload, 5000
     end
 
     @tag :capture_log
