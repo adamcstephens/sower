@@ -32,7 +32,7 @@ defmodule Sower.MixProject do
       {:boruta, "~> 2.3"},
       {:cloak_ecto, "~> 1.3.0"},
       {:cuid2_ex, "~> 0.2.0"},
-      {:durable, github: "wavezync/durable"},
+      {:oban, "~> 2.21"},
       {:ecto_sql, "~> 3.11"},
       {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
       {:open_api_spex, "~> 3.22"},
