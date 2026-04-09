@@ -313,8 +313,18 @@ defmodule Sower.Orchestration.Deployment do
     end)
 
     # 4. Deploy fresh for all overdue subscriptions
-    Enum.each(overdue, fn sub ->
-      deploy_subscription(sub)
+    overdue_tasks =
+      Enum.map(overdue, fn sub ->
+        {:ok, _request_id, pid} = deploy_subscription(sub)
+        pid
+      end)
+
+    Enum.each(overdue_tasks, fn pid ->
+      ref = Process.monitor(pid)
+
+      receive do
+        {:DOWN, ^ref, :process, ^pid, _reason} -> :ok
+      end
     end)
 
     if to_replay != [] or overdue != [] or to_cancel != [] do
@@ -361,8 +371,8 @@ defmodule Sower.Orchestration.Deployment do
 
       %Garden{} = garden ->
         request_id = SowerClient.Sid.generate("req")
-        {:ok, request_id} = process_deployment(request_id, [subscription], garden, opts)
-        {:ok, request_id}
+        {:ok, request_id, pid} = process_deployment(request_id, [subscription], garden, opts)
+        {:ok, request_id, pid}
     end
   end
 
@@ -381,67 +391,68 @@ defmodule Sower.Orchestration.Deployment do
         garden
       ) do
     with {:ok, subscriptions} <- validate_deployment_request(request, garden.id),
-         {:ok, request_id} <-
+         {:ok, request_id, pid} <-
            process_deployment(request.request_id, subscriptions, garden, force: request.force) do
-      {:ok, request_id}
+      {:ok, request_id, pid}
     end
   end
 
   def process_deployment(request_id, subscriptions, %Garden{} = garden, opts \\ []) do
-    Task.Supervisor.start_child(Sower.TaskSupervisor, fn ->
-      Repo.put_org_id(garden.org_id)
+    {:ok, pid} =
+      Task.Supervisor.start_child(Sower.TaskSupervisor, fn ->
+        Repo.put_org_id(garden.org_id)
 
-      Logger.info(
-        msg: "Deployment processing started",
-        request_id: request_id,
-        garden_id: garden.id
-      )
+        Logger.info(
+          msg: "Deployment processing started",
+          request_id: request_id,
+          garden_id: garden.id
+        )
 
-      case do_deployment(request_id, subscriptions, opts) do
-        {:ok, deployment} ->
-          Logger.info(
-            msg: "Deployment broadcast successful",
-            request_id: request_id,
-            deployment_sid: deployment.sid,
-            skipped: deployment.skipped
-          )
+        case do_deployment(request_id, subscriptions, opts) do
+          {:ok, deployment} ->
+            Logger.info(
+              msg: "Deployment broadcast successful",
+              request_id: request_id,
+              deployment_sid: deployment.sid,
+              skipped: deployment.skipped
+            )
 
-          SowerWeb.Endpoint.broadcast(
-            "garden:#{garden.sid}",
-            "deployment",
-            Map.from_struct(deployment)
-          )
+            SowerWeb.Endpoint.broadcast(
+              "garden:#{garden.sid}",
+              "deployment",
+              Map.from_struct(deployment)
+            )
 
-          # Backward compatibility: 0.7.0 gardens join "agent:*"
-          SowerWeb.Endpoint.broadcast(
-            "agent:#{garden.sid}",
-            "deployment",
-            Map.from_struct(deployment)
-          )
+            # Backward compatibility: 0.7.0 gardens join "agent:*"
+            SowerWeb.Endpoint.broadcast(
+              "agent:#{garden.sid}",
+              "deployment",
+              Map.from_struct(deployment)
+            )
 
-        {:error, reason} ->
-          Logger.error(
-            msg: "Deployment processing failed",
-            request_id: request_id,
-            reason: to_string(reason)
-          )
+          {:error, reason} ->
+            Logger.error(
+              msg: "Deployment processing failed",
+              request_id: request_id,
+              reason: to_string(reason)
+            )
 
-          SowerWeb.Endpoint.broadcast(
-            "garden:#{garden.sid}",
-            "deployment:error",
-            %{request_id: request_id, reason: to_string(reason)}
-          )
+            SowerWeb.Endpoint.broadcast(
+              "garden:#{garden.sid}",
+              "deployment:error",
+              %{request_id: request_id, reason: to_string(reason)}
+            )
 
-          # Backward compatibility: 0.7.0 gardens join "agent:*"
-          SowerWeb.Endpoint.broadcast(
-            "agent:#{garden.sid}",
-            "deployment:error",
-            %{request_id: request_id, reason: to_string(reason)}
-          )
-      end
-    end)
+            # Backward compatibility: 0.7.0 gardens join "agent:*"
+            SowerWeb.Endpoint.broadcast(
+              "agent:#{garden.sid}",
+              "deployment:error",
+              %{request_id: request_id, reason: to_string(reason)}
+            )
+        end
+      end)
 
-    {:ok, request_id}
+    {:ok, request_id, pid}
   end
 
   def record_deployment_status(%SowerClient.Orchestration.DeploymentStatus{} = status) do

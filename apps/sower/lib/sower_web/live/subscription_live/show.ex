@@ -48,7 +48,7 @@ defmodule SowerWeb.SubscriptionLive.Show do
     socket = assign(socket, deploying: true, deploy_error: nil)
 
     case Orchestration.deploy_subscription(socket.assigns.subscription, force: true) do
-      {:ok, _request_id} ->
+      {:ok, _request_id, _pid} ->
         {:noreply, socket}
 
       {:error, reason} ->

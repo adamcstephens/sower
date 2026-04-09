@@ -107,6 +107,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
       assert is_binary(request_id)
     end
 
+    @tag :capture_log
     test "returns error for unknown subscription" do
       %{socket: socket} = connect_and_join_garden()
 
@@ -150,6 +151,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
       assert reply.state == :acknowledged
     end
 
+    @tag :capture_log
     test "returns error for unknown deployment" do
       %{socket: socket} = connect_and_join_garden()
 
@@ -196,6 +198,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
       assert reply.result == :success
     end
 
+    @tag :capture_log
     test "returns error for unknown deployment" do
       %{socket: socket} = connect_and_join_garden()
 
@@ -240,6 +243,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
       assert_reply ref, :ok, %{}
     end
 
+    @tag :capture_log
     test "returns error for unknown deployment" do
       %{socket: socket} = connect_and_join_garden()
 
@@ -253,6 +257,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
       assert_reply ref, :error, :deployment_not_found
     end
 
+    @tag :capture_log
     test "returns error for seed not in deployment" do
       %{socket: socket, garden: garden} = connect_and_join_garden()
 
@@ -356,6 +361,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
       assert seed_deployment.log == "partial output"
     end
 
+    @tag :capture_log
     test "returns error for unknown deployment" do
       %{socket: socket} = connect_and_join_garden()
 

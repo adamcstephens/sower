@@ -505,6 +505,7 @@ defmodule Sower.OrchestrationTest do
       assert asp.is_current == true
     end
 
+    @tag :capture_log
     test "upsert_from_report/4 updates existing profile on conflict" do
       garden = garden_fixture()
       seed = seed_fixture()
@@ -532,6 +533,7 @@ defmodule Sower.OrchestrationTest do
       assert asp2.is_current == true
     end
 
+    @tag :capture_log
     test "unique constraint on garden_id and seed_id" do
       garden = garden_fixture()
       seed = seed_fixture()
@@ -922,8 +924,11 @@ defmodule Sower.OrchestrationTest do
           force: false
         })
 
-      assert {:ok, request_id} = Orchestration.handle_deployment_request(request, garden)
+      assert {:ok, request_id, pid} = Orchestration.handle_deployment_request(request, garden)
       assert is_binary(request_id)
+
+      ref = Process.monitor(pid)
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5000
     end
 
     test "returns error for deployment request with unauthorized subscription", %{
@@ -966,8 +971,11 @@ defmodule Sower.OrchestrationTest do
 
       request_id = "dr_test_#{System.unique_integer([:positive])}"
 
-      assert {:ok, ^request_id} =
+      assert {:ok, ^request_id, pid} =
                Orchestration.process_deployment(request_id, [subscription], garden)
+
+      ref = Process.monitor(pid)
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5000
     end
 
     @tag :capture_log
@@ -984,8 +992,11 @@ defmodule Sower.OrchestrationTest do
 
       request_id = "dr_test_error_#{System.unique_integer([:positive])}"
 
-      assert {:ok, ^request_id} =
+      assert {:ok, ^request_id, pid} =
                Orchestration.process_deployment(request_id, [subscription], garden)
+
+      ref = Process.monitor(pid)
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5000
     end
   end
 

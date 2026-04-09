@@ -83,7 +83,11 @@ defmodule Sower.MixProject do
   defp aliases do
     [
       setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build"],
-      "ecto.setup": ["ecto.create", "ecto.migrate", "run #{Path.expand("priv/repo/seeds.exs", __DIR__)}"],
+      "ecto.setup": [
+        "ecto.create",
+        "ecto.migrate",
+        "run #{Path.expand("priv/repo/seeds.exs", __DIR__)}"
+      ],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
