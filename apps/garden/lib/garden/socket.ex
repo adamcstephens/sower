@@ -134,17 +134,19 @@ defmodule Garden.Socket do
 
   defp build_connect_config do
     config = Application.get_all_env(__MODULE__)
-    token_param = resolve_connect_token()
+    token = resolve_connect_token()
     uri = Keyword.get(config, :uri)
 
     Logger.info(msg: "Connecting to server socket", endpoint: uri)
 
-    uri =
-      uri
-      |> Map.put(:query, "token=#{token_param}")
-      |> URI.to_string()
+    auth_header = {"x-auth-token", token}
+    uri = URI.to_string(uri)
 
-    Keyword.put(config, :uri, uri)
+    config
+    |> Keyword.put(:uri, uri)
+    |> Keyword.update(:headers, [auth_header], fn headers ->
+      [auth_header | headers]
+    end)
   end
 
   defp resolve_connect_token do

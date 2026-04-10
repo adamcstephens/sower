@@ -1,6 +1,62 @@
 defmodule SowerWeb.GardenChannelTest do
   use SowerWeb.ChannelCase, async: true
 
+  import ExUnit.CaptureLog
+
+  describe "connect/3" do
+    test "authenticates via x-auth-token header" do
+      user = user_fixture()
+      Sower.Repo.put_org_id(user.org_id)
+
+      {:ok, access_token} =
+        Sower.Accounts.AccessToken.create(%{
+          "description" => "test",
+          "user_id" => user.id,
+          "org_id" => user.org_id,
+          "permissions" => [%{"role" => "garden:register"}]
+        })
+
+      encoded_token = Base.encode64(access_token.token)
+
+      {:ok, _socket} =
+        connect(SowerWeb.GardenSocket, %{},
+          connect_info: %{x_headers: [{"x-auth-token", encoded_token}]}
+        )
+    end
+
+    test "falls back to query param token for backward compat" do
+      user = user_fixture()
+      Sower.Repo.put_org_id(user.org_id)
+
+      {:ok, access_token} =
+        Sower.Accounts.AccessToken.create(%{
+          "description" => "test",
+          "user_id" => user.id,
+          "org_id" => user.org_id,
+          "permissions" => [%{"role" => "garden:register"}]
+        })
+
+      encoded_token = Base.encode64(access_token.token)
+
+      {:ok, _socket} =
+        connect(SowerWeb.GardenSocket, %{"token" => encoded_token})
+    end
+
+    test "rejects invalid base64 token" do
+      capture_log(fn ->
+        assert {:error, :unauthorized} =
+                 connect(SowerWeb.GardenSocket, %{"token" => "not-valid-base64!!!"})
+      end)
+    end
+
+    test "rejects connection with no token" do
+      capture_log(fn ->
+        assert {:error, :unauthorized} =
+                 connect(SowerWeb.GardenSocket, %{})
+      end)
+    end
+  end
+
   describe "join/3" do
     test "joins with matching local_sid and assigns garden" do
       %{socket: socket, garden: garden} = connect_and_join_garden()

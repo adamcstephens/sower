@@ -18,7 +18,7 @@ defmodule Sower.Authorization.Permissions do
          org_id: org_id,
          scope: scope
        }) do
-    if String.contains?(scope, "garden:agent") do
+    if "garden:agent" in String.split(scope) do
       permit
       |> read(Sower.Orchestration.Garden, org_id: org_id)
     else
