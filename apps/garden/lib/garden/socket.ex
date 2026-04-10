@@ -163,7 +163,7 @@ defmodule Garden.Socket do
       }
       when is_binary(token) and is_binary(private_key_pem) ->
         if token_expired?(issued_at, expires_in) do
-          try_reauthenticate(storage) || registration_token()
+          try_reauthenticate(storage)
         else
           Logger.debug(msg: "Using stored Boruta access token")
           "boruta:#{token}"
@@ -174,10 +174,10 @@ defmodule Garden.Socket do
         private_key_pem: private_key_pem
       }
       when is_binary(client_id) and is_binary(private_key_pem) ->
-        try_reauthenticate(storage) || registration_token()
+        try_reauthenticate(storage)
 
       _ ->
-        try_http_registration(storage) || registration_token()
+        try_http_registration(storage)
     end
   end
 
@@ -252,15 +252,11 @@ defmodule Garden.Socket do
         end
 
       {:error, reason} ->
-        Logger.debug(msg: "HTTP registration failed, falling back", reason: inspect(reason))
+        Logger.warning(msg: "HTTP registration failed", reason: inspect(reason))
         nil
     end
   end
 
-  defp registration_token do
-    Logger.info(msg: "Using registration token")
-    Base.encode64(Application.fetch_env!(:garden, :config).access_token)
-  end
 
   defp schedule_reauthentication(socket, %{expires_in: expires_in})
        when is_integer(expires_in) do
