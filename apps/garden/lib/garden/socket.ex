@@ -299,26 +299,17 @@ defmodule Garden.Socket do
 
   @impl Slipstream
   def handle_join(@lobby_topic, %{"conn_sid" => conn_sid}, socket) do
-    Logger.info(msg: "Joined channel topic", topic: @lobby_topic, conn_sid: conn_sid)
-
     storage = Garden.Storage.read()
-    {public_key_pem, storage} = Garden.Auth.ensure_keypair(storage)
+    garden_sid = storage.garden_sid
 
-    {:ok, hello_ref} =
-      push_message(
-        socket,
-        SowerClient.GardenHello.cast!(%{
-          name: Garden.Config.get().name,
-          local_sid: storage.local_sid,
-          garden_sid: storage.garden_sid,
-          public_key: public_key_pem
-        })
-      )
+    Logger.info(msg: "Joined lobby, joining private channel", garden_sid: garden_sid)
 
     socket =
       socket
-      |> assign(:hello_ref, hello_ref)
       |> assign(:conn_sid, conn_sid)
+      |> assign(:garden_sid, garden_sid)
+      |> maybe_schedule_existing_reauth(storage.oauth_credentials)
+      |> join("garden:#{garden_sid}", %{local_sid: storage.local_sid})
 
     {:ok, socket}
   end
@@ -406,65 +397,6 @@ defmodule Garden.Socket do
   end
 
   @impl Slipstream
-  def handle_reply(
-        ref,
-        {:ok, %{"sid" => garden_sid} = reply},
-        socket
-      )
-      when ref == socket.assigns.hello_ref do
-    Logger.debug(msg: "Received hello reply", garden: reply)
-    storage = Garden.Storage.read()
-
-    {:join, garden_sid, persist?: persist?} =
-      Lifecycle.process_hello_reply(garden_sid, storage.garden_sid)
-
-    storage = if persist?, do: Map.put(storage, :garden_sid, garden_sid), else: storage
-
-    {storage, socket} =
-      case reply do
-        %{"oauth_credentials" => %{"client_id" => client_id}} ->
-          Logger.info(msg: "Received client registration", client_id: client_id)
-
-          oauth_creds = %{client_id: client_id}
-
-          storage = Map.put(storage, :oauth_credentials, oauth_creds)
-
-          case Garden.Auth.request_token(client_id, storage.private_key_pem) do
-            {:ok, token_response} ->
-              updated_creds =
-                Map.merge(oauth_creds, %{
-                  access_token: token_response.access_token,
-                  expires_in: token_response.expires_in,
-                  token_issued_at: System.system_time(:second)
-                })
-
-              {Map.put(storage, :oauth_credentials, updated_creds),
-               schedule_reauthentication(socket, updated_creds)}
-
-            {:error, _} ->
-              Logger.warning(msg: "Initial token request failed after registration")
-              {storage, socket}
-          end
-
-        _ ->
-          {storage, maybe_schedule_existing_reauth(socket, storage.oauth_credentials)}
-      end
-
-    if persist? or Map.has_key?(reply, "oauth_credentials") do
-      Storage.write(storage)
-    end
-
-    socket =
-      socket
-      |> join("garden:#{garden_sid}", %{local_sid: storage.local_sid})
-      |> Map.put(
-        :assigns,
-        socket.assigns |> Map.delete(:hello_ref) |> Map.put(:garden_sid, garden_sid)
-      )
-
-    {:ok, socket}
-  end
-
   def handle_reply(_ref, :ok, socket) do
     {:noreply, socket}
   end

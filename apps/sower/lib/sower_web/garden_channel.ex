@@ -57,34 +57,43 @@ defmodule SowerWeb.GardenChannel do
   defp do_join_private(
          topic_sid,
          topic,
-         %{"local_sid" => local_sid},
-         %{assigns: %{conn_sid: conn_sid}} = socket
+         params,
+         %{assigns: %{conn_sid: conn_sid, access_token: access_token}} = socket
        ) do
-    Sower.Repo.put_org_id(socket.assigns.access_token.org_id)
+    Sower.Repo.put_org_id(access_token.org_id)
 
     Logger.debug(
       msg: "Channel topic joined",
       topic: topic,
-      local_sid: local_sid,
       conn_sid: conn_sid
     )
 
-    case Orchestration.get_garden_sid(topic_sid) do
-      nil ->
-        {:error, %{reason: "unauthorized"}}
-
-      garden when is_nil(garden.local_sid) ->
-        {:error, %{reason: "unauthorized"}}
-
-      garden when garden.local_sid == local_sid ->
+    case authorize_private_join(topic_sid, params, access_token) do
+      {:ok, garden} ->
         send(self(), :track_presence)
         send(self(), :reconcile_deployments)
         {:ok, %{conn_sid: conn_sid}, assign(socket, :garden, garden)}
 
-      _ ->
+      :error ->
         {:error, %{reason: "unauthorized"}}
     end
   end
+
+  defp authorize_private_join(topic_sid, _params, %Sower.GardenAuth.Context{} = context) do
+    case Orchestration.get_garden_sid(topic_sid) do
+      %{id: id} = garden when id == context.garden_id -> {:ok, garden}
+      _ -> :error
+    end
+  end
+
+  defp authorize_private_join(topic_sid, %{"local_sid" => local_sid}, _access_token) do
+    case Orchestration.get_garden_sid(topic_sid) do
+      %{local_sid: ^local_sid} = garden when not is_nil(local_sid) -> {:ok, garden}
+      _ -> :error
+    end
+  end
+
+  defp authorize_private_join(_topic_sid, _params, _access_token), do: :error
 
   @impl Phoenix.Channel
   def handle_in("ping", _, socket) do
