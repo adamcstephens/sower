@@ -95,6 +95,18 @@ defmodule Garden.Socket do
   #
 
   @impl Slipstream
+  def handle_connect(socket) do
+    Logger.info(
+      msg: "Connected to websocket",
+      authority: socket.channel_config.uri.authority,
+      path: socket.channel_config.uri.path
+    )
+
+    socket = assign(socket, :reconnect_counter, 0)
+    {:ok, join(socket, @lobby_topic)}
+  end
+
+  @impl Slipstream
   def init(_args) do
     case do_connect() do
       {:ok, socket} ->
@@ -113,11 +125,21 @@ defmodule Garden.Socket do
   @impl Slipstream
   def handle_disconnect(_reason, socket) do
     Logger.warning(msg: "Disconnected from server socket")
+    {:ok, schedule_reconnect(socket)}
+  end
 
-    case do_connect(socket) do
-      {:ok, socket} -> {:ok, socket}
-      {:error, reason} -> {:stop, reason, socket}
-    end
+  defp schedule_reconnect(socket) do
+    counter = Map.get(socket.assigns, :reconnect_counter, 0)
+
+    backoff_times =
+      Application.get_env(__MODULE__, :reconnect_after_msec, [200, 500, 1_000, 2_000])
+
+    delay = Enum.at(backoff_times, counter, List.last(backoff_times))
+
+    Logger.info(msg: "Scheduling reconnect", delay_ms: delay, attempt: counter + 1)
+    Process.send_after(self(), :attempt_reconnect, delay)
+
+    assign(socket, :reconnect_counter, counter + 1)
   end
 
   defp do_connect(socket \\ nil) do
@@ -256,7 +278,6 @@ defmodule Garden.Socket do
         nil
     end
   end
-
 
   defp schedule_reauthentication(socket, %{expires_in: expires_in})
        when is_integer(expires_in) do
@@ -515,6 +536,17 @@ defmodule Garden.Socket do
         send(self(), :check_pending_reload)
 
         {:noreply, %{socket | active_deployments: active_deployments}}
+    end
+  end
+
+  def handle_info(:attempt_reconnect, socket) do
+    case do_connect(socket) do
+      {:ok, socket} ->
+        {:noreply, socket}
+
+      {:error, reason} ->
+        Logger.warning(msg: "Reconnect attempt failed", error: inspect(reason))
+        {:noreply, schedule_reconnect(socket)}
     end
   end
 
