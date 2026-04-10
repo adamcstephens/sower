@@ -15,6 +15,19 @@ defmodule SowerWeb.ChannelCase do
 
   setup tags do
     Sower.DataCase.setup_sandbox(tags)
+
+    on_exit(fn ->
+      for pid <- Task.Supervisor.children(Sower.TaskSupervisor) do
+        ref = Process.monitor(pid)
+
+        receive do
+          {:DOWN, ^ref, :process, ^pid, _} -> :ok
+        after
+          5_000 -> :ok
+        end
+      end
+    end)
+
     :ok
   end
 

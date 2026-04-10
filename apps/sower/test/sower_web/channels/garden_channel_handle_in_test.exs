@@ -6,7 +6,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
       %{socket: socket} = connect_and_join_garden()
 
       ref = push(socket, "ping", %{})
-      assert_reply ref, :ok, :pong
+      assert_reply ref, :ok, :pong, 1_000
     end
   end
 
@@ -21,7 +21,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
           "name" => garden.name
         })
 
-      assert_reply ref, :ok, reply
+      assert_reply ref, :ok, reply, 1_000
       assert reply.sid == garden.sid
     end
 
@@ -65,7 +65,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
           "name" => garden.name
         })
 
-      assert_reply ref, :ok, reply
+      assert_reply ref, :ok, reply, 1_000
       assert reply.sid == garden.sid
     end
 
@@ -79,7 +79,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
           "name" => garden.name
         })
 
-      assert_reply ref, :ok, reply
+      assert_reply ref, :ok, reply, 1_000
       assert reply.sid == garden.sid
     end
   end
@@ -103,7 +103,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
           "subscription_sids" => [subscription.sid]
         })
 
-      assert_reply ref, :ok, %{request_id: request_id}
+      assert_reply ref, :ok, %{request_id: request_id}, 1_000
       assert is_binary(request_id)
 
       # Wait for the async deployment task to complete before test exits
@@ -120,7 +120,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
           "subscription_sids" => ["nonexistent_sid"]
         })
 
-      assert_reply ref, :error, :subscription_not_found
+      assert_reply ref, :error, :subscription_not_found, 1_000
     end
   end
 
@@ -150,7 +150,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
           "status" => "acknowledged"
         })
 
-      assert_reply ref, :ok, reply
+      assert_reply ref, :ok, reply, 1_000
       assert reply.state == :acknowledged
     end
 
@@ -164,7 +164,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
           "status" => "acknowledged"
         })
 
-      assert_reply ref, :error, :deployment_not_found
+      assert_reply ref, :error, :deployment_not_found, 1_000
     end
   end
 
@@ -196,7 +196,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
           "deployed_at" => DateTime.utc_now() |> DateTime.to_iso8601()
         })
 
-      assert_reply ref, :ok, reply
+      assert_reply ref, :ok, reply, 1_000
       assert reply.state == :completed
       assert reply.result == :success
     end
@@ -212,7 +212,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
           "result" => "success"
         })
 
-      assert_reply ref, :error, :deployment_not_found
+      assert_reply ref, :error, :deployment_not_found, 1_000
     end
   end
 
@@ -243,7 +243,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
           "status" => "downloading"
         })
 
-      assert_reply ref, :ok, %{}
+      assert_reply ref, :ok, %{}, 1_000
     end
 
     @tag :capture_log
@@ -257,7 +257,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
           "status" => "downloading"
         })
 
-      assert_reply ref, :error, :deployment_not_found
+      assert_reply ref, :error, :deployment_not_found, 1_000
     end
 
     @tag :capture_log
@@ -288,7 +288,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
           "status" => "downloading"
         })
 
-      assert_reply ref, :error, :seed_not_in_deployment
+      assert_reply ref, :error, :seed_not_in_deployment, 1_000
     end
   end
 
@@ -320,7 +320,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
           "log" => "deployment completed successfully"
         })
 
-      assert_reply ref, :ok, %{}
+      assert_reply ref, :ok, %{}, 1_000
 
       [seed_deployment] =
         Sower.Repo.preload(deployment, :seed_deployments, force: true).seed_deployments
@@ -355,7 +355,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
           "log" => "partial output"
         })
 
-      assert_reply ref, :ok, %{}
+      assert_reply ref, :ok, %{}, 1_000
 
       [seed_deployment] =
         Sower.Repo.preload(deployment, :seed_deployments, force: true).seed_deployments
@@ -375,7 +375,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
           "result" => "success"
         })
 
-      assert_reply ref, :error, :deployment_not_found
+      assert_reply ref, :error, :deployment_not_found, 1_000
     end
   end
 
@@ -391,7 +391,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
           ]
         })
 
-      assert_reply ref, :ok, %{subscriptions: subscriptions}
+      assert_reply ref, :ok, %{subscriptions: subscriptions}, 1_000
       assert length(subscriptions) == 2
 
       names = Enum.map(subscriptions, & &1.seed_name) |> Enum.sort()
@@ -414,7 +414,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
           ]
         })
 
-      assert_reply ref, :ok, %{subscriptions: subscriptions}
+      assert_reply ref, :ok, %{subscriptions: subscriptions}, 1_000
       assert length(subscriptions) == 1
       assert hd(subscriptions).seed_name == "to-keep"
 
@@ -448,7 +448,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
           ]
         })
 
-      assert_reply ref, :ok, :ok
+      assert_reply ref, :ok, :ok, 1_000
     end
 
     test "handles empty profiles list" do
@@ -459,7 +459,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
           "profiles" => []
         })
 
-      assert_reply ref, :ok, :ok
+      assert_reply ref, :ok, :ok, 1_000
     end
   end
 end

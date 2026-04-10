@@ -212,7 +212,7 @@ testers.runNixOSTest {
           server.succeed("sower seed upgrade --name server --type nixos --debug")
 
       with subtest("nixos garden deployment"):
-          server.succeed('sower-garden rpc "Garden.Admin.deploy(\\\"nixos\\\")"')
+          server.wait_until_succeeds('sower-garden rpc "Garden.Admin.deploy(\\\"nixos\\\")"', timeout=15)
           server.wait_until_succeeds(
               "journalctl --no-pager -u sower-garden"
               " --grep='Completed.activation'",

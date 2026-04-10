@@ -222,7 +222,11 @@ defmodule SowerWeb.GardenChannel do
         :reconcile_deployments,
         %Phoenix.Socket{assigns: %{garden: garden}} = socket
       ) do
-    Orchestration.Deployment.reconcile_deployments_on_connect(garden)
+    Task.Supervisor.start_child(Sower.TaskSupervisor, fn ->
+      Sower.Repo.put_org_id(garden.org_id)
+      Orchestration.Deployment.reconcile_deployments_on_connect(garden)
+    end)
+
     {:noreply, socket}
   end
 
