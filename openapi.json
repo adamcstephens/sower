@@ -2,6 +2,31 @@
   "components": {
     "responses": {},
     "schemas": {
+      "GardenRegistration": {
+        "description": "HTTP registration request for a new garden",
+        "properties": {
+          "name": {
+            "description": "Name of garden",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "public_key": {
+            "description": "PEM-encoded RSA public key for private_key_jwt authentication",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          }
+        },
+        "required": [
+          "name",
+          "public_key"
+        ],
+        "title": "GardenRegistration",
+        "type": "object",
+        "x-struct": "Elixir.SowerClient.GardenRegistration",
+        "x-validate": null
+      },
       "Nix Cache": {
         "description": "A Nix binary cache",
         "example": {
@@ -37,6 +62,24 @@
         "title": "Nix Cache",
         "type": "object",
         "x-struct": "Elixir.SowerClient.Nix.Cache",
+        "x-validate": null
+      },
+      "OAuthCredentials": {
+        "description": "OAuth client registration returned to a garden after registration",
+        "properties": {
+          "client_id": {
+            "description": "Boruta OAuth client ID",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          }
+        },
+        "required": [
+          "client_id"
+        ],
+        "title": "OAuthCredentials",
+        "type": "object",
+        "x-struct": "Elixir.SowerClient.Auth.OAuthCredentials",
         "x-validate": null
       },
       "Seed": {
@@ -239,6 +282,93 @@
           }
         },
         "summary": "Verify access token",
+        "tags": []
+      }
+    },
+    "/api/v1/gardens/register": {
+      "post": {
+        "callbacks": {},
+        "operationId": "RegisterGarden",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GardenRegistration"
+              }
+            }
+          },
+          "description": "Garden registration params",
+          "required": false
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "oauth_credentials": {
+                      "$ref": "#/components/schemas/OAuthCredentials"
+                    },
+                    "sid": {
+                      "description": "Garden SID",
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "required": [
+                    "sid",
+                    "oauth_credentials"
+                  ],
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Garden registration response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Validation error"
+          }
+        },
+        "summary": "Register a new garden",
         "tags": []
       }
     },
