@@ -29,6 +29,15 @@ const (
 	Service     SeedSeedType = "service"
 )
 
+// GardenRegistration HTTP registration request for a new garden
+type GardenRegistration struct {
+	// Name Name of garden
+	Name string `json:"name"`
+
+	// PublicKey PEM-encoded RSA public key for private_key_jwt authentication
+	PublicKey string `json:"public_key"`
+}
+
 // NixCache A Nix binary cache
 type NixCache struct {
 	// PublicKey Trusted public key for signed NARs
@@ -39,6 +48,12 @@ type NixCache struct {
 
 	// Url URL to binary cache
 	Url *string `json:"url,omitempty"`
+}
+
+// OAuthCredentials OAuth client registration returned to a garden after registration
+type OAuthCredentials struct {
+	// ClientId Boruta OAuth client ID
+	ClientId string `json:"client_id"`
 }
 
 // Seed A seed is an installable unit
@@ -112,6 +127,9 @@ type LatestSeedParams struct {
 	// SeedType Seed type
 	SeedType *string `form:"seed_type,omitempty" json:"seed_type,omitempty"`
 }
+
+// RegisterGardenJSONRequestBody defines body for RegisterGarden for application/json ContentType.
+type RegisterGardenJSONRequestBody = GardenRegistration
 
 // NewSeedJSONRequestBody defines body for NewSeed for application/json ContentType.
 type NewSeedJSONRequestBody = Seed
@@ -192,6 +210,11 @@ type ClientInterface interface {
 	// VerifyToken request
 	VerifyToken(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// RegisterGardenWithBody request with any body
+	RegisterGardenWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	RegisterGarden(ctx context.Context, body RegisterGardenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListNixCaches request
 	ListNixCaches(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -212,6 +235,30 @@ type ClientInterface interface {
 
 func (c *Client) VerifyToken(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewVerifyTokenRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RegisterGardenWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRegisterGardenRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RegisterGarden(ctx context.Context, body RegisterGardenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRegisterGardenRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -317,6 +364,46 @@ func NewVerifyTokenRequest(server string) (*http.Request, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewRegisterGardenRequest calls the generic RegisterGarden builder with application/json body
+func NewRegisterGardenRequest(server string, body RegisterGardenJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRegisterGardenRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewRegisterGardenRequestWithBody generates requests for RegisterGarden with any type of body
+func NewRegisterGardenRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/gardens/register")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -636,6 +723,11 @@ type ClientWithResponsesInterface interface {
 	// VerifyTokenWithResponse request
 	VerifyTokenWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*VerifyTokenResponse, error)
 
+	// RegisterGardenWithBodyWithResponse request with any body
+	RegisterGardenWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RegisterGardenResponse, error)
+
+	RegisterGardenWithResponse(ctx context.Context, body RegisterGardenJSONRequestBody, reqEditors ...RequestEditorFn) (*RegisterGardenResponse, error)
+
 	// ListNixCachesWithResponse request
 	ListNixCachesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListNixCachesResponse, error)
 
@@ -673,6 +765,40 @@ func (r VerifyTokenResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r VerifyTokenResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type RegisterGardenResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *struct {
+		// OauthCredentials OAuth client registration returned to a garden after registration
+		OauthCredentials OAuthCredentials `json:"oauth_credentials"`
+
+		// Sid Garden SID
+		Sid string `json:"sid"`
+	}
+	JSON401 *struct {
+		Error *string `json:"error,omitempty"`
+	}
+	JSON422 *struct {
+		Error *string `json:"error,omitempty"`
+	}
+}
+
+// Status returns HTTPResponse.Status
+func (r RegisterGardenResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RegisterGardenResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -825,6 +951,23 @@ func (c *ClientWithResponses) VerifyTokenWithResponse(ctx context.Context, reqEd
 	return ParseVerifyTokenResponse(rsp)
 }
 
+// RegisterGardenWithBodyWithResponse request with arbitrary body returning *RegisterGardenResponse
+func (c *ClientWithResponses) RegisterGardenWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RegisterGardenResponse, error) {
+	rsp, err := c.RegisterGardenWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRegisterGardenResponse(rsp)
+}
+
+func (c *ClientWithResponses) RegisterGardenWithResponse(ctx context.Context, body RegisterGardenJSONRequestBody, reqEditors ...RequestEditorFn) (*RegisterGardenResponse, error) {
+	rsp, err := c.RegisterGarden(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRegisterGardenResponse(rsp)
+}
+
 // ListNixCachesWithResponse request returning *ListNixCachesResponse
 func (c *ClientWithResponses) ListNixCachesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListNixCachesResponse, error) {
 	rsp, err := c.ListNixCaches(ctx, reqEditors...)
@@ -907,6 +1050,56 @@ func ParseVerifyTokenResponse(rsp *http.Response) (*VerifyTokenResponse, error) 
 			return nil, err
 		}
 		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRegisterGardenResponse parses an HTTP response from a RegisterGardenWithResponse call
+func ParseRegisterGardenResponse(rsp *http.Response) (*RegisterGardenResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RegisterGardenResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest struct {
+			// OauthCredentials OAuth client registration returned to a garden after registration
+			OauthCredentials OAuthCredentials `json:"oauth_credentials"`
+
+			// Sid Garden SID
+			Sid string `json:"sid"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest struct {
+			Error *string `json:"error,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest struct {
+			Error *string `json:"error,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
 
 	}
 

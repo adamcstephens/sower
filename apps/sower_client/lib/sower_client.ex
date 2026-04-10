@@ -24,6 +24,7 @@ defmodule SowerClient do
     }
     |> OpenApiSpex.add_schemas([
       SowerClient.GardenHello,
+      SowerClient.GardenRegistration,
       SowerClient.AgentHello,
       SowerClient.Auth.OAuthCredentials,
       SowerClient.Auth.TokenInfo,
