@@ -177,7 +177,7 @@ defmodule Garden.Socket do
         try_reauthenticate(storage) || registration_token()
 
       _ ->
-        registration_token()
+        try_http_registration(storage) || registration_token()
     end
   end
 
@@ -215,6 +215,47 @@ defmodule Garden.Socket do
   end
 
   defp try_reauthenticate(_), do: nil
+
+  defp try_http_registration(storage) do
+    config = Garden.Config.get()
+    {public_key_pem, storage} = Garden.Auth.ensure_keypair(storage)
+
+    req =
+      Req.new(
+        base_url: "#{config.endpoint}/api/v1",
+        auth: {:bearer, config.access_token},
+        retry: false
+      )
+
+    case SowerClient.Registration.register(req, config.name, public_key_pem) do
+      {:ok, %{garden_sid: garden_sid, client_id: client_id}} ->
+        Logger.info(msg: "Registered via HTTP", garden_sid: garden_sid, client_id: client_id)
+
+        oauth_creds = %{client_id: client_id}
+        storage = Map.merge(storage, %{garden_sid: garden_sid, oauth_credentials: oauth_creds})
+
+        case Garden.Auth.request_token(client_id, storage.private_key_pem) do
+          {:ok, token_response} ->
+            updated_creds =
+              Map.merge(oauth_creds, %{
+                access_token: token_response.access_token,
+                expires_in: token_response.expires_in,
+                token_issued_at: System.system_time(:second)
+              })
+
+            storage |> Map.put(:oauth_credentials, updated_creds) |> Storage.write()
+            "boruta:#{token_response.access_token}"
+
+          {:error, _} ->
+            Storage.write(storage)
+            nil
+        end
+
+      {:error, reason} ->
+        Logger.debug(msg: "HTTP registration failed, falling back", reason: inspect(reason))
+        nil
+    end
+  end
 
   defp registration_token do
     Logger.info(msg: "Using registration token")
