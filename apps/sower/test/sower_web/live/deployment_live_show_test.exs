@@ -221,7 +221,11 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
     retried =
       Sower.Repo.get_by!(Sower.Orchestration.Deployment, parent_deployment_id: deployment.id)
 
-    assert retried.retried_by_user_id == user.id
+    retried = Sower.Repo.preload(retried, :events)
+    assert [event] = retried.events
+    assert event.event == :created
+    assert event.reason == :retry
+    assert event.actor_sid == user.sid
 
     assert_redirect(show_live, ~p"/deployments/#{retried.sid}")
   end
@@ -313,9 +317,7 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
     deployment_fixture(%{
       garden_id: garden.id,
       parent_deployment_id: parent.id,
-      retry_ordinal: 1,
-      retried_by_user_id: user.id,
-      retried_at: DateTime.utc_now()
+      retry_ordinal: 1
     })
 
     {:ok, show_live, _html} = live(conn, ~p"/deployments/#{parent.sid}")

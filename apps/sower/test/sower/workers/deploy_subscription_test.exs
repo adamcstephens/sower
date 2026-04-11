@@ -54,7 +54,7 @@ defmodule Sower.Workers.DeploySubscriptionTest do
 
       test_pid = self()
 
-      deploy_fun = fn subscription ->
+      deploy_fun = fn subscription, _opts ->
         send(test_pid, {:deployed, subscription.sid})
         {:ok, "req_test123", self()}
       end
@@ -77,7 +77,7 @@ defmodule Sower.Workers.DeploySubscriptionTest do
           allow_realtime: true
         })
 
-      deploy_fun = fn _sub -> {:error, :connection_refused} end
+      deploy_fun = fn _sub, _opts -> {:error, :connection_refused} end
 
       assert {:error, :connection_refused} = DeploySubscription.run(sub.sid, deploy_fun)
     end
