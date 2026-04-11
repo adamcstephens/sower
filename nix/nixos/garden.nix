@@ -118,18 +118,6 @@ in
         assertion = activatorCfg.enable || !config.security.sudo-rs.enable;
         message = "sudo-rs is not supported";
       }
-      {
-        assertion = !(cfg.settings ? subscriptions && builtins.isList cfg.settings.subscriptions);
-        message = "services.sower.garden.settings.subscriptions changed from a list to a map (name -> config) in 0.8.0";
-      }
-      {
-        assertion = !(cfg.settings ? deployment_profiles);
-        message = "services.sower.garden.settings.deployment_profiles was removed in 0.8.0; set activation_args and reboot_policy directly on each subscription";
-      }
-      {
-        assertion = !(cfg.settings ? default_deployment_profile);
-        message = "services.sower.garden.settings.default_deployment_profile was removed in 0.8.0";
-      }
     ];
 
     boot.extraSystemdUnitPaths = lib.optionals manageServices [
