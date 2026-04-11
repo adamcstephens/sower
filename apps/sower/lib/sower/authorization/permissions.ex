@@ -73,13 +73,4 @@ defmodule Sower.Authorization.Permissions do
     permit
     |> all(Sower.Orchestration.Garden, org_id: org_id)
   end
-
-  defp check_role_perm(
-         %Permit.Permissions{} = permit,
-         %Sower.Accounts.AccessToken.Permission{role: :"agent:register"},
-         org_id
-       ) do
-    permit
-    |> all(Sower.Orchestration.Garden, org_id: org_id)
-  end
 end

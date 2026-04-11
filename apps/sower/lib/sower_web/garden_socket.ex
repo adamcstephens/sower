@@ -4,7 +4,6 @@ defmodule SowerWeb.GardenSocket do
   use Phoenix.Socket
 
   channel("garden:*", SowerWeb.GardenChannel)
-  channel("agent:*", SowerWeb.GardenChannel)
 
   @impl Phoenix.Socket
   def connect(params, socket, connect_info) do

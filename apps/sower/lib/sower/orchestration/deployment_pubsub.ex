@@ -26,12 +26,6 @@ defmodule Sower.Orchestration.DeploymentPubSub do
         "deployments:garden:#{deployment.garden.sid}",
         {:deployment, event, deployment}
       )
-
-      # Deprecated: kept for 0.7.0 LiveView backward compatibility
-      broadcast(
-        "deployments:agent:#{deployment.garden.sid}",
-        {:deployment, event, deployment}
-      )
     end
 
     Enum.each(deployment.subscriptions, fn subscription ->

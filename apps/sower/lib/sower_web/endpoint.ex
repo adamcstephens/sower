@@ -22,11 +22,6 @@ defmodule SowerWeb.Endpoint do
     websocket: [connect_info: [:x_headers]],
     longpoll: false
 
-  # Deprecated: kept for 0.7.0 garden backward compatibility
-  socket "/agent", SowerWeb.GardenSocket,
-    websocket: [connect_info: [:x_headers]],
-    longpoll: false
-
   # Serve at "/" the static files from "priv/static" directory.
   #
   # You should set gzip to true if you are running phx.digest

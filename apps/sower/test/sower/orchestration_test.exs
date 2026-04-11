@@ -1034,7 +1034,7 @@ defmodule Sower.OrchestrationTest do
         })
 
       replayed_at = DateTime.utc_now() |> DateTime.truncate(:second)
-      Phoenix.PubSub.subscribe(Sower.PubSub, "agent:#{garden.sid}")
+      Phoenix.PubSub.subscribe(Sower.PubSub, "garden:#{garden.sid}")
 
       assert {:ok, %{replayed: replayed, cancelled: [], overdue: []}} =
                Orchestration.Deployment.reconcile_deployments_on_connect(garden, now: replayed_at)
@@ -1047,7 +1047,7 @@ defmodule Sower.OrchestrationTest do
         payload: payload
       }
 
-      assert topic == "agent:#{garden.sid}"
+      assert topic == "garden:#{garden.sid}"
       assert payload.sid == unresolved.sid
       assert payload.skipped == false
       assert is_binary(payload.request_id)
@@ -1408,7 +1408,7 @@ defmodule Sower.OrchestrationTest do
           deployed_at: DateTime.utc_now()
         })
 
-      Phoenix.PubSub.subscribe(Sower.PubSub, "agent:#{garden.sid}")
+      Phoenix.PubSub.subscribe(Sower.PubSub, "garden:#{garden.sid}")
 
       assert {:ok, retried} = Orchestration.retry_deployment(deployment, user.id)
 
@@ -1418,7 +1418,7 @@ defmodule Sower.OrchestrationTest do
         payload: payload
       }
 
-      assert topic == "agent:#{garden.sid}"
+      assert topic == "garden:#{garden.sid}"
       assert payload.sid == retried.sid
       assert payload.skipped == false
       assert is_binary(payload.request_id)

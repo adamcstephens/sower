@@ -264,13 +264,6 @@ defmodule Sower.Orchestration.Deployment do
                   deployment_event_payload(retry_deployment, request_id)
                 )
 
-                # Backward compatibility: 0.7.0 gardens join "agent:*"
-                SowerWeb.Endpoint.broadcast(
-                  "agent:#{retry_deployment.garden.sid}",
-                  "deployment",
-                  deployment_event_payload(retry_deployment, request_id)
-                )
-
                 retry_deployment
 
               {:error, changeset} ->
@@ -309,7 +302,6 @@ defmodule Sower.Orchestration.Deployment do
       request_id = SowerClient.Sid.generate("req")
       payload = deployment_event_payload(deployment, request_id)
       SowerWeb.Endpoint.broadcast("garden:#{garden.sid}", "deployment", payload)
-      SowerWeb.Endpoint.broadcast("agent:#{garden.sid}", "deployment", payload)
     end)
 
     # 4. Deploy fresh for all overdue subscriptions
@@ -423,13 +415,6 @@ defmodule Sower.Orchestration.Deployment do
               Map.from_struct(deployment)
             )
 
-            # Backward compatibility: 0.7.0 gardens join "agent:*"
-            SowerWeb.Endpoint.broadcast(
-              "agent:#{garden.sid}",
-              "deployment",
-              Map.from_struct(deployment)
-            )
-
           {:error, reason} ->
             Logger.error(
               msg: "Deployment processing failed",
@@ -439,13 +424,6 @@ defmodule Sower.Orchestration.Deployment do
 
             SowerWeb.Endpoint.broadcast(
               "garden:#{garden.sid}",
-              "deployment:error",
-              %{request_id: request_id, reason: to_string(reason)}
-            )
-
-            # Backward compatibility: 0.7.0 gardens join "agent:*"
-            SowerWeb.Endpoint.broadcast(
-              "agent:#{garden.sid}",
               "deployment:error",
               %{request_id: request_id, reason: to_string(reason)}
             )
