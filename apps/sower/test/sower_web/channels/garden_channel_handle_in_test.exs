@@ -54,34 +54,6 @@ defmodule SowerWeb.GardenChannelHandleInTest do
       refute Map.has_key?(reply.oauth_credentials, :refresh_token)
       refute Map.has_key?(reply.oauth_credentials, :access_token)
     end
-
-    test "accepts legacy agent:hello event" do
-      %{socket: socket, garden: garden} = connect_and_join_garden()
-
-      ref =
-        push(socket, "agent:hello", %{
-          "garden_sid" => garden.sid,
-          "local_sid" => garden.local_sid,
-          "name" => garden.name
-        })
-
-      assert_reply ref, :ok, reply, 1_000
-      assert reply.sid == garden.sid
-    end
-
-    test "normalizes legacy agent_sid field to garden_sid" do
-      %{socket: socket, garden: garden} = connect_and_join_garden()
-
-      ref =
-        push(socket, "garden:hello", %{
-          "agent_sid" => garden.sid,
-          "local_sid" => garden.local_sid,
-          "name" => garden.name
-        })
-
-      assert_reply ref, :ok, reply, 1_000
-      assert reply.sid == garden.sid
-    end
   end
 
   describe "deployment:request" do

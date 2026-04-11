@@ -117,7 +117,7 @@ defmodule PeerNode do
     put_env(
       node,
       Garden.Socket,
-      uri: "ws://#{:inet.ntoa(central_node_ip())}:7150/agent/websocket",
+      uri: "ws://#{:inet.ntoa(central_node_ip())}:7150/garden/websocket",
       reconnect_after_msec: [200, 500, 1000, 2000]
     )
   end
