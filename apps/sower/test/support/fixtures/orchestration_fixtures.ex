@@ -12,7 +12,6 @@ defmodule Sower.OrchestrationFixtures do
       attrs
       |> Enum.into(%{
         name: SowerClient.Sid.generate("grdn"),
-        local_sid: "some local_sid",
         sid: "some sid"
       })
       |> Sower.Orchestration.create_garden()
