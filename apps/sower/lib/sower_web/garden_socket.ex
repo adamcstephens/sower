@@ -74,7 +74,7 @@ defmodule SowerWeb.GardenSocket do
   defp authenticate_token(base64_token) do
     with {:ok, decoded} <- Base.decode64(base64_token),
          {:ok, access_token} <- Sower.Accounts.AccessToken.authenticate(decoded) do
-      if access_token |> can() |> read?(Sower.Orchestration.Garden) do
+      if access_token |> can() |> create?(Sower.Orchestration.Garden) do
         {:ok, access_token}
       else
         Logger.error(
