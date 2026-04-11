@@ -112,7 +112,7 @@
             class="inline-flex items-center gap-1.5 align-middle hover:text-orange-500 dark:hover:text-orange-400"
           >
             <.result result={seed.latest_deployment_result} />
-            <span class="font-mono text-xs">{seed.latest_deployment_sid}</span>
+            <span class="text-xs">{seed.latest_deployment_sid}</span>
           </.link>
         </:col>
         <:col :let={seed} label="Updated" field={:updated_at} hide_on={:md}>
