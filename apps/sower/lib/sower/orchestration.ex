@@ -14,10 +14,7 @@ defmodule Sower.Orchestration do
   defdelegate create_garden(attrs \\ %{}), to: Garden
   defdelegate delete_garden(garden), to: Garden
   defdelegate get_garden!(id), to: Garden
-  defdelegate get_garden(hello, socket), to: Garden
   defdelegate register_new_garden(attrs), to: Garden
-  defdelegate get_garden_local_sid!(local_sid), to: Garden
-  defdelegate get_garden_local_sid(local_sid), to: Garden
   defdelegate get_garden_sid!(sid), to: Garden
   defdelegate get_garden_sid(sid), to: Garden
   defdelegate list_gardens(), to: Garden

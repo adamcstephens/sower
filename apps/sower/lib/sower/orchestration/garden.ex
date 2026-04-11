@@ -2,14 +2,13 @@ defmodule Sower.Orchestration.Garden do
   use Ecto.Schema
   import Ecto.Changeset
   import Ecto.Query, warn: false
-  import Sower.Authorization
 
   alias Sower.Repo
   alias Sower.Orchestration.Deployment
 
   require Logger
 
-  @derive {Jason.Encoder, only: [:sid, :local_sid]}
+  @derive {Jason.Encoder, only: [:sid]}
   @derive {Phoenix.Param, key: :sid}
 
   @derive {
@@ -26,7 +25,6 @@ defmodule Sower.Orchestration.Garden do
   schema "gardens" do
     field :sid, SowerClient.Sid, autogenerate: true
     field :name, :string
-    field :local_sid, :string
     field :org_id, Ecto.UUID
     field :oauth_client_id, :string
 
@@ -42,7 +40,7 @@ defmodule Sower.Orchestration.Garden do
   @doc false
   def changeset(garden, attrs) do
     garden
-    |> cast(attrs, [:name, :org_id, :local_sid, :oauth_client_id])
+    |> cast(attrs, [:name, :org_id, :oauth_client_id])
     |> validate_required([:name])
   end
 
@@ -86,120 +84,6 @@ defmodule Sower.Orchestration.Garden do
     Flop.validate_and_run(query, params, for: __MODULE__)
   end
 
-  def get_garden(
-        %SowerClient.GardenHello{
-          garden_sid: nil,
-          name: name,
-          local_sid: local_sid,
-          public_key: public_key
-        },
-        socket
-      ) do
-    case get_garden_local_sid(local_sid) do
-      nil ->
-        Logger.debug(
-          msg: "Registering new garden",
-          name: name,
-          local_sid: local_sid
-        )
-
-        if socket.assigns.access_token |> can() |> create?(__MODULE__) do
-          register_new_garden(%{name: name, local_sid: local_sid, public_key: public_key})
-        else
-          {:error, :unauthorized}
-        end
-
-      %__MODULE__{} = garden ->
-        Logger.error(
-          msg: "Local garden attempted to re-register existing garden",
-          name: garden.name,
-          local_sid: local_sid,
-          existing_garden_sid: garden.sid
-        )
-
-        {:error, :unauthorized_garden_hello}
-    end
-  end
-
-  def get_garden(
-        %SowerClient.GardenHello{
-          garden_sid: garden_sid,
-          name: name,
-          local_sid: local_sid,
-          public_key: public_key
-        },
-        socket
-      ) do
-    case get_garden_sid(garden_sid) do
-      nil ->
-        Logger.debug(
-          msg: "Local garden requested a missing garden",
-          name: name,
-          local_sid: local_sid,
-          requested_garden_sid: garden_sid
-        )
-
-        if socket.assigns.access_token |> can() |> create?(__MODULE__) do
-          register_new_garden(%{name: name, local_sid: local_sid, public_key: public_key})
-        else
-          {:error, :unauthorized}
-        end
-
-      %__MODULE__{local_sid: nil} = garden when garden.name == name ->
-        Logger.debug(
-          msg: "Registering local sid to existing garden",
-          name: garden.name,
-          local_sid: local_sid,
-          garden_sid: garden.sid
-        )
-
-        if socket.assigns.access_token |> can() |> create?(__MODULE__) do
-          {:ok, garden} = update_garden(garden, %{local_sid: local_sid})
-          maybe_provision_oauth_client(garden, public_key)
-        else
-          {:error, :unauthorized_garden_hello}
-        end
-
-      %__MODULE__{} = garden
-      when garden.sid == garden_sid and
-             garden.name == name and
-             garden.local_sid == local_sid ->
-        Logger.debug(
-          msg: "Found matching garden",
-          name: garden.name,
-          local_sid: local_sid,
-          garden_sid: garden.sid
-        )
-
-        maybe_provision_oauth_client(garden, public_key)
-
-      %__MODULE__{} = garden
-      when garden.sid == garden_sid and
-             garden.name != name and
-             garden.local_sid == local_sid ->
-        Logger.info(
-          msg: "Found matching garden with different name, renaming",
-          name: name,
-          previous_name: garden.name,
-          local_sid: local_sid,
-          garden_sid: garden.sid
-        )
-
-        {:ok, garden} = update_garden(garden, %{name: name})
-
-        maybe_provision_oauth_client(garden, public_key)
-
-      %__MODULE__{} = garden ->
-        Logger.error(
-          msg: "Invalid garden request",
-          local_sid: local_sid,
-          garden_sid: garden.sid
-        )
-
-        {:error, :unauthorized_garden_hello}
-    end
-  end
-
   def get_garden!(id), do: Repo.get!(__MODULE__, id)
 
   def get_garden_sid!(sid), do: Repo.get_by!(__MODULE__, sid: sid)
@@ -208,10 +92,6 @@ defmodule Sower.Orchestration.Garden do
 
   def get_by_oauth_client_id(client_id),
     do: Repo.get_by(__MODULE__, [oauth_client_id: client_id], skip_org_id: true)
-
-  def get_garden_local_sid(local_sid), do: Repo.get_by(__MODULE__, local_sid: local_sid)
-
-  def get_garden_local_sid!(local_sid), do: Repo.get_by!(__MODULE__, local_sid: local_sid)
 
   def register_new_garden(%{public_key: public_key} = attrs) do
     with {:ok, garden} <- create_garden(attrs),
@@ -223,27 +103,6 @@ defmodule Sower.Orchestration.Garden do
         Logger.error(msg: "Failed to register new garden with OAuth", error: inspect(reason))
         {:error, reason}
     end
-  end
-
-  defp maybe_provision_oauth_client(%__MODULE__{oauth_client_id: nil} = garden, public_key)
-       when is_binary(public_key) do
-    with {:ok, client} <- Sower.GardenAuth.create_client(garden.sid, public_key),
-         {:ok, garden} <- update_garden(garden, %{oauth_client_id: client.id}) do
-      {:ok, garden, %{client_id: client.id}}
-    else
-      {:error, reason} ->
-        Logger.error(
-          msg: "Failed to provision OAuth client for existing garden",
-          garden_sid: garden.sid,
-          error: inspect(reason)
-        )
-
-        {:ok, garden}
-    end
-  end
-
-  defp maybe_provision_oauth_client(%__MODULE__{} = garden, _public_key) do
-    {:ok, garden}
   end
 
   def create_garden(attrs \\ %{}) do

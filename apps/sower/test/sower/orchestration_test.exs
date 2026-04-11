@@ -30,11 +30,10 @@ defmodule Sower.OrchestrationTest do
     end
 
     test "create_garden/1 with valid data creates a garden" do
-      valid_attrs = %{name: "some garden", local_sid: "some local_sid"}
+      valid_attrs = %{name: "some garden"}
 
       assert {:ok, %Garden{} = garden} = Orchestration.create_garden(valid_attrs)
       assert garden.name == "some garden"
-      assert garden.local_sid == "some local_sid"
     end
 
     test "create_garden/1 with invalid data returns error changeset" do
@@ -43,10 +42,10 @@ defmodule Sower.OrchestrationTest do
 
     test "update_garden/2 with valid data updates the garden" do
       garden = garden_fixture()
-      update_attrs = %{local_sid: "some updated local_sid"}
+      update_attrs = %{name: "updated garden"}
 
       assert {:ok, %Garden{} = garden} = Orchestration.update_garden(garden, update_attrs)
-      assert garden.local_sid == "some updated local_sid"
+      assert garden.name == "updated garden"
     end
 
     test "update_garden/2 with invalid data returns error changeset" do

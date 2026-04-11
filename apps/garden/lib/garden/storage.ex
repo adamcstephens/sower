@@ -4,10 +4,9 @@ defmodule Garden.Storage do
 
   require Logger
 
-  @derive {Jason.Encoder, only: [:local_sid, :garden_sid]}
+  @derive {Jason.Encoder, only: [:garden_sid]}
 
   typedstruct do
-    field :local_sid, String.t()
     field :garden_sid, String.t()
     field :subscriptions, list(SowerClient.Orchestration.Subscription)
     field :oauth_credentials, map()
@@ -119,8 +118,6 @@ defmodule Garden.Storage do
   end
 
   defp default() do
-    %__MODULE__{
-      local_sid: SowerClient.Sid.generate("lc_grdn")
-    }
+    %__MODULE__{}
   end
 end

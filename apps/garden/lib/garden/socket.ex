@@ -367,7 +367,7 @@ defmodule Garden.Socket do
       |> assign(:conn_sid, conn_sid)
       |> assign(:garden_sid, garden_sid)
       |> maybe_schedule_existing_reauth(storage.oauth_credentials)
-      |> join("garden:#{garden_sid}", %{local_sid: storage.local_sid})
+      |> join("garden:#{garden_sid}", %{})
 
     {:ok, socket}
   end

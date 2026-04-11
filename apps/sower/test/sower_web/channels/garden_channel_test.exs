@@ -47,7 +47,7 @@ defmodule SowerWeb.GardenChannelTest do
   end
 
   describe "join/3" do
-    test "joins with matching local_sid and assigns garden" do
+    test "joins and assigns garden" do
       %{socket: socket, garden: garden} = connect_and_join_garden()
 
       assert socket.assigns.garden.id == garden.id
@@ -69,7 +69,7 @@ defmodule SowerWeb.GardenChannelTest do
                  socket,
                  SowerWeb.GardenChannel,
                  "garden:nonexistent_sid",
-                 %{"local_sid" => "some_local_sid"}
+                 %{}
                )
     end
 
@@ -140,7 +140,7 @@ defmodule SowerWeb.GardenChannelTest do
           socket,
           SowerWeb.GardenChannel,
           "garden:#{garden.sid}",
-          %{"local_sid" => garden.local_sid}
+          %{}
         )
 
       assert_push "deployment", payload

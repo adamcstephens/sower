@@ -82,13 +82,6 @@ defmodule SowerWeb.GardenChannel do
     end
   end
 
-  defp authorize_private_join(topic_sid, %{"local_sid" => local_sid}, _access_token) do
-    case Orchestration.get_garden_sid(topic_sid) do
-      %{local_sid: ^local_sid} = garden when not is_nil(local_sid) -> {:ok, garden}
-      _ -> :error
-    end
-  end
-
   defp authorize_private_join(_topic_sid, _params, _access_token), do: :error
 
   @impl Phoenix.Channel
@@ -99,32 +92,6 @@ defmodule SowerWeb.GardenChannel do
 
   def handle_in("pong", %{"ref" => _ref}, socket) do
     {:reply, :ok, socket}
-  end
-
-  def handle_in("garden:hello", payload, socket), do: do_handle_hello(payload, socket)
-
-  defp do_handle_hello(payload, socket) do
-    case payload
-         |> SowerClient.GardenHello.cast!()
-         |> Sower.Orchestration.get_garden(socket) do
-      {:ok, garden, oauth_credentials} ->
-        reply = %{
-          sid: garden.sid,
-          local_sid: garden.local_sid,
-          oauth_credentials: oauth_credentials
-        }
-
-        Logger.debug(msg: "Replying to hello with oauth credentials", garden_sid: garden.sid)
-        {:reply, {:ok, reply}, assign(socket, :garden_sid, garden.sid)}
-
-      {:ok, garden} ->
-        Logger.debug(msg: "Replying to hello", garden: garden)
-        {:reply, {:ok, garden}, assign(socket, :garden_sid, garden.sid)}
-
-      {:error, error} ->
-        Logger.error(msg: "Error returning hello", error: error)
-        {:reply, {:error, error}, socket}
-    end
   end
 
   handle_schema(SowerClient.Seed, &Sower.Orchestration.Seed.get_by_request/1)

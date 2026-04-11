@@ -10,22 +10,6 @@ defmodule SowerWeb.GardenChannelHandleInTest do
     end
   end
 
-  describe "garden:hello" do
-    test "returns garden info for an existing garden" do
-      %{socket: socket, garden: garden} = connect_and_join_garden()
-
-      ref =
-        push(socket, "garden:hello", %{
-          "garden_sid" => garden.sid,
-          "local_sid" => garden.local_sid,
-          "name" => garden.name
-        })
-
-      assert_reply ref, :ok, reply, 1_000
-      assert reply.sid == garden.sid
-    end
-  end
-
   describe "deployment:request" do
     test "returns request_id for valid deployment request" do
       %{socket: socket, garden: garden} = connect_and_join_garden()
