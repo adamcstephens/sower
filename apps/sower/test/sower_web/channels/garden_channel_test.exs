@@ -4,27 +4,19 @@ defmodule SowerWeb.GardenChannelTest do
   import ExUnit.CaptureLog
 
   describe "connect/3" do
-    test "authenticates via x-auth-token header" do
+    test "authenticates via boruta token in x-auth-token header" do
       user = user_fixture()
       Sower.Repo.put_org_id(user.org_id)
 
-      {:ok, access_token} =
-        Sower.Accounts.AccessToken.create(%{
-          "description" => "test",
-          "user_id" => user.id,
-          "org_id" => user.org_id,
-          "permissions" => [%{"role" => "garden:register"}]
-        })
-
-      encoded_token = Base.encode64(access_token.token)
+      %{boruta_token: boruta_token} = create_garden_with_oauth()
 
       {:ok, _socket} =
         connect(SowerWeb.GardenSocket, %{},
-          connect_info: %{x_headers: [{"x-auth-token", encoded_token}]}
+          connect_info: %{x_headers: [{"x-auth-token", "boruta:#{boruta_token}"}]}
         )
     end
 
-    test "falls back to query param token for backward compat" do
+    test "rejects non-boruta token" do
       user = user_fixture()
       Sower.Repo.put_org_id(user.org_id)
 
@@ -38,21 +30,18 @@ defmodule SowerWeb.GardenChannelTest do
 
       encoded_token = Base.encode64(access_token.token)
 
-      {:ok, _socket} =
-        connect(SowerWeb.GardenSocket, %{"token" => encoded_token})
-    end
-
-    test "rejects invalid base64 token" do
       capture_log(fn ->
         assert {:error, :unauthorized} =
-                 connect(SowerWeb.GardenSocket, %{"token" => "not-valid-base64!!!"})
+                 connect(SowerWeb.GardenSocket, %{},
+                   connect_info: %{x_headers: [{"x-auth-token", encoded_token}]}
+                 )
       end)
     end
 
     test "rejects connection with no token" do
       capture_log(fn ->
         assert {:error, :unauthorized} =
-                 connect(SowerWeb.GardenSocket, %{})
+                 connect(SowerWeb.GardenSocket, %{}, connect_info: %{x_headers: []})
       end)
     end
   end
@@ -68,17 +57,12 @@ defmodule SowerWeb.GardenChannelTest do
       user = user_fixture()
       Sower.Repo.put_org_id(user.org_id)
 
-      {:ok, access_token} =
-        Sower.Accounts.AccessToken.create(%{
-          "description" => "test",
-          "user_id" => user.id,
-          "org_id" => user.org_id,
-          "permissions" => [%{"role" => "garden:register"}]
-        })
+      %{boruta_token: boruta_token} = create_garden_with_oauth()
 
-      encoded_token = Base.encode64(access_token.token)
-
-      {:ok, socket} = connect(SowerWeb.GardenSocket, %{"token" => encoded_token})
+      {:ok, socket} =
+        connect(SowerWeb.GardenSocket, %{},
+          connect_info: %{x_headers: [{"x-auth-token", "boruta:#{boruta_token}"}]}
+        )
 
       assert {:error, %{reason: "unauthorized"}} =
                subscribe_and_join(
@@ -89,34 +73,24 @@ defmodule SowerWeb.GardenChannelTest do
                )
     end
 
-    test "rejects join when local_sid does not match" do
+    test "rejects join for a different garden than the authenticated one" do
       user = user_fixture()
       Sower.Repo.put_org_id(user.org_id)
 
-      {:ok, access_token} =
-        Sower.Accounts.AccessToken.create(%{
-          "description" => "test",
-          "user_id" => user.id,
-          "org_id" => user.org_id,
-          "permissions" => [%{"role" => "garden:register"}]
-        })
+      %{boruta_token: boruta_token} = create_garden_with_oauth()
+      other_garden = garden_fixture(%{sid: SowerClient.Sid.generate("grdn")})
 
-      garden =
-        garden_fixture(%{
-          sid: SowerClient.Sid.generate("grdn"),
-          local_sid: SowerClient.Sid.generate("lc_grdn")
-        })
-
-      encoded_token = Base.encode64(access_token.token)
-
-      {:ok, socket} = connect(SowerWeb.GardenSocket, %{"token" => encoded_token})
+      {:ok, socket} =
+        connect(SowerWeb.GardenSocket, %{},
+          connect_info: %{x_headers: [{"x-auth-token", "boruta:#{boruta_token}"}]}
+        )
 
       assert {:error, %{reason: "unauthorized"}} =
                subscribe_and_join(
                  socket,
                  SowerWeb.GardenChannel,
-                 "garden:#{garden.sid}",
-                 %{"local_sid" => "wrong_local_sid"}
+                 "garden:#{other_garden.sid}",
+                 %{}
                )
     end
   end
@@ -126,19 +100,7 @@ defmodule SowerWeb.GardenChannelTest do
       user = user_fixture()
       Sower.Repo.put_org_id(user.org_id)
 
-      {:ok, access_token} =
-        Sower.Accounts.AccessToken.create(%{
-          "description" => "test",
-          "user_id" => user.id,
-          "org_id" => user.org_id,
-          "permissions" => [%{"role" => "garden:register"}]
-        })
-
-      garden =
-        garden_fixture(%{
-          sid: SowerClient.Sid.generate("grdn"),
-          local_sid: SowerClient.Sid.generate("lc_grdn")
-        })
+      %{garden: garden, boruta_token: boruta_token} = create_garden_with_oauth()
 
       seed = seed_fixture(%{name: "replay-seed", seed_type: "nixos"})
 
@@ -168,8 +130,10 @@ defmodule SowerWeb.GardenChannelTest do
           deployed_at: DateTime.utc_now() |> DateTime.truncate(:second)
         })
 
-      encoded_token = Base.encode64(access_token.token)
-      {:ok, socket} = connect(SowerWeb.GardenSocket, %{"token" => encoded_token})
+      {:ok, socket} =
+        connect(SowerWeb.GardenSocket, %{},
+          connect_info: %{x_headers: [{"x-auth-token", "boruta:#{boruta_token}"}]}
+        )
 
       {:ok, _reply, _socket} =
         subscribe_and_join(
