@@ -1160,8 +1160,6 @@ defmodule Sower.OrchestrationTest do
           garden_id: garden.id,
           parent_deployment_id: parent.id,
           retry_ordinal: 1,
-          retried_by_user_id: user.id,
-          retried_at: DateTime.utc_now(),
           result: nil,
           state: :dispatched,
           deployed_at: nil,
@@ -1313,8 +1311,13 @@ defmodule Sower.OrchestrationTest do
 
       assert {:ok, retried} = Orchestration.retry_deployment(deployment, user.id)
       assert retried.parent_deployment_id == deployment.id
-      assert retried.retried_by_user_id == user.id
       assert retried.retry_ordinal == 1
+
+      retried = Sower.Repo.preload(retried, :events)
+      assert [event] = retried.events
+      assert event.event == :created
+      assert event.reason == :retry
+      assert event.actor_sid == user.sid
 
       retried = Sower.Repo.preload(retried, [:seeds, :subscriptions])
       assert Enum.map(retried.seeds, & &1.id) == [seed.id]

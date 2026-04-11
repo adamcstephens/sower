@@ -100,7 +100,13 @@ defmodule SowerWeb.GardenLive.Show do
       sub ->
         socket = assign(socket, deploying_sub: sub_sid, deploy_error: nil)
 
-        case Orchestration.deploy_subscription(sub, force: true) do
+        user = socket.assigns.current_user
+
+        case Orchestration.deploy_subscription(sub,
+               force: true,
+               actor_sid: user.sid,
+               event_reason: :user_triggered
+             ) do
           {:ok, _request_id, _pid} ->
             {:noreply, socket}
 
