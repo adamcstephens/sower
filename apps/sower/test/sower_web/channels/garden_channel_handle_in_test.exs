@@ -328,8 +328,8 @@ defmodule SowerWeb.GardenChannelHandleInTest do
       ref =
         push(socket, "subscriptions:sync", %{
           "subscriptions" => [
-            %{"seed_name" => "sync-host-1", "seed_type" => "nixos"},
-            %{"seed_name" => "sync-host-2", "seed_type" => "nixos"}
+            %{"name" => "sync-host-1", "seed_name" => "sync-host-1", "seed_type" => "nixos"},
+            %{"name" => "sync-host-2", "seed_name" => "sync-host-2", "seed_type" => "nixos"}
           ]
         })
 
@@ -352,7 +352,7 @@ defmodule SowerWeb.GardenChannelHandleInTest do
       ref =
         push(socket, "subscriptions:sync", %{
           "subscriptions" => [
-            %{"seed_name" => "to-keep", "seed_type" => "nixos"}
+            %{"name" => "to-keep", "seed_name" => "to-keep", "seed_type" => "nixos"}
           ]
         })
 
