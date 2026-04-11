@@ -71,6 +71,6 @@ defmodule Sower.Authorization.Permissions do
          org_id
        ) do
     permit
-    |> all(Sower.Orchestration.Garden, org_id: org_id)
+    |> create(Sower.Orchestration.Garden, org_id: org_id)
   end
 end

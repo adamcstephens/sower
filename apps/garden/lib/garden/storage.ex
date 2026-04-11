@@ -68,7 +68,6 @@ defmodule Garden.Storage do
 
     data =
       raw
-      |> migrate_agent_sid()
       |> ensure_fields()
 
     if data != raw do
@@ -113,22 +112,6 @@ defmodule Garden.Storage do
     Logger.debug(msg: "Wrote storage", file: file)
     %{state | data: data}
   end
-
-  defp migrate_agent_sid(%{agent_sid: sid} = data) when is_binary(sid) do
-    Logger.info(msg: "Migrating agent_sid to garden_sid", garden_sid: sid)
-
-    data
-    |> Map.delete(:agent_sid)
-    |> Map.put(:garden_sid, sid)
-    |> then(
-      &struct!(
-        __MODULE__,
-        Map.take(&1, [:local_sid, :garden_sid, :subscriptions, :oauth_credentials])
-      )
-    )
-  end
-
-  defp migrate_agent_sid(%__MODULE__{} = data), do: data
 
   # Ensure deserialized structs have all current fields (handles schema evolution)
   defp ensure_fields(%{__struct__: __MODULE__} = data) do
