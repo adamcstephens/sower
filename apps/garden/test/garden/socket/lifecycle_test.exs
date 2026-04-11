@@ -59,13 +59,23 @@ defmodule Garden.Socket.LifecycleTest do
   describe "merge_subscriptions/2" do
     test "merges server-assigned sids into config subscriptions" do
       config_subs = [
-        Subscription.cast!(%{seed_name: "host", seed_type: "nixos", poll_on_connect: true}),
-        Subscription.cast!(%{seed_name: "user", seed_type: "home-manager"})
+        Subscription.cast!(%{
+          name: "host",
+          seed_name: "host",
+          seed_type: "nixos",
+          poll_on_connect: true
+        }),
+        Subscription.cast!(%{name: "user", seed_name: "user", seed_type: "home-manager"})
       ]
 
       registered = [
-        %{"seed_name" => "host", "seed_type" => "nixos", "sid" => "sub_abc"},
-        %{"seed_name" => "user", "seed_type" => "home-manager", "sid" => "sub_def"}
+        %{"name" => "host", "seed_name" => "host", "seed_type" => "nixos", "sid" => "sub_abc"},
+        %{
+          "name" => "user",
+          "seed_name" => "user",
+          "seed_type" => "home-manager",
+          "sid" => "sub_def"
+        }
       ]
 
       result = Lifecycle.merge_subscriptions(config_subs, registered)
@@ -78,12 +88,12 @@ defmodule Garden.Socket.LifecycleTest do
 
     test "drops config subscriptions not registered on server" do
       config_subs = [
-        Subscription.cast!(%{seed_name: "host", seed_type: "nixos"}),
-        Subscription.cast!(%{seed_name: "orphan", seed_type: "nixos"})
+        Subscription.cast!(%{name: "host", seed_name: "host", seed_type: "nixos"}),
+        Subscription.cast!(%{name: "orphan", seed_name: "orphan", seed_type: "nixos"})
       ]
 
       registered = [
-        %{"seed_name" => "host", "seed_type" => "nixos", "sid" => "sub_abc"}
+        %{"name" => "host", "seed_name" => "host", "seed_type" => "nixos", "sid" => "sub_abc"}
       ]
 
       result = Lifecycle.merge_subscriptions(config_subs, registered)
@@ -94,7 +104,7 @@ defmodule Garden.Socket.LifecycleTest do
 
     test "returns empty list for empty registered" do
       config_subs = [
-        Subscription.cast!(%{seed_name: "host", seed_type: "nixos"})
+        Subscription.cast!(%{name: "host", seed_name: "host", seed_type: "nixos"})
       ]
 
       assert Lifecycle.merge_subscriptions(config_subs, []) == []
@@ -105,12 +115,18 @@ defmodule Garden.Socket.LifecycleTest do
     test "filters to subscriptions with poll_on_connect true" do
       subs = [
         Subscription.cast!(%{
+          name: "host",
           seed_name: "host",
           seed_type: "nixos",
           poll_on_connect: true,
           sid: "sub_1"
         }),
-        Subscription.cast!(%{seed_name: "user", seed_type: "home-manager", sid: "sub_2"})
+        Subscription.cast!(%{
+          name: "user",
+          seed_name: "user",
+          seed_type: "home-manager",
+          sid: "sub_2"
+        })
       ]
 
       result = Lifecycle.poll_on_connect_subscriptions(subs)
@@ -121,7 +137,7 @@ defmodule Garden.Socket.LifecycleTest do
 
     test "returns empty list when none have poll_on_connect" do
       subs = [
-        Subscription.cast!(%{seed_name: "host", seed_type: "nixos", sid: "sub_1"})
+        Subscription.cast!(%{name: "host", seed_name: "host", seed_type: "nixos", sid: "sub_1"})
       ]
 
       assert Lifecycle.poll_on_connect_subscriptions(subs) == []

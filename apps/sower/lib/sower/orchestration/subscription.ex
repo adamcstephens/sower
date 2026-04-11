@@ -201,21 +201,19 @@ defmodule Sower.Orchestration.Subscription do
   end
 
   def register_subscription(%SowerClient.Orchestration.Subscription{} = sub, garden_id) do
-    attrs =
-      %{
-        garden_id: garden_id,
-        seed_name: sub.seed_name,
-        seed_type: sub.seed_type,
-        rules: sub.rules,
-        schedule: sub.schedule,
-        timezone: sub.timezone,
-        activation_args: sub.activation_args,
-        reboot_policy: sub.reboot_policy,
-        allow_realtime: sub.allow_realtime,
-        window: sub.window
-      }
-
-    attrs = if sub.name, do: Map.put(attrs, :name, sub.name), else: attrs
+    attrs = %{
+      garden_id: garden_id,
+      name: sub.name,
+      seed_name: sub.seed_name,
+      seed_type: sub.seed_type,
+      rules: sub.rules,
+      schedule: sub.schedule,
+      timezone: sub.timezone,
+      activation_args: sub.activation_args,
+      reboot_policy: sub.reboot_policy,
+      allow_realtime: sub.allow_realtime,
+      window: sub.window
+    }
 
     case create_subscription(attrs) do
       {:ok, subscription} ->
