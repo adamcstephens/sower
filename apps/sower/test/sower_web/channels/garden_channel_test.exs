@@ -64,39 +64,6 @@ defmodule SowerWeb.GardenChannelTest do
       assert socket.assigns.garden.id == garden.id
     end
 
-    test "accepts legacy agent: topic prefix" do
-      user = user_fixture()
-      Sower.Repo.put_org_id(user.org_id)
-
-      {:ok, access_token} =
-        Sower.Accounts.AccessToken.create(%{
-          "description" => "test",
-          "user_id" => user.id,
-          "org_id" => user.org_id,
-          "permissions" => [%{"role" => "garden:register"}]
-        })
-
-      garden =
-        garden_fixture(%{
-          sid: SowerClient.Sid.generate("grdn"),
-          local_sid: SowerClient.Sid.generate("lc_grdn")
-        })
-
-      encoded_token = Base.encode64(access_token.token)
-
-      {:ok, socket} = connect(SowerWeb.GardenSocket, %{"token" => encoded_token})
-
-      {:ok, _reply, socket} =
-        subscribe_and_join(
-          socket,
-          SowerWeb.GardenChannel,
-          "agent:#{garden.sid}",
-          %{"local_sid" => garden.local_sid}
-        )
-
-      assert socket.assigns.garden.id == garden.id
-    end
-
     test "rejects join when garden does not exist" do
       user = user_fixture()
       Sower.Repo.put_org_id(user.org_id)

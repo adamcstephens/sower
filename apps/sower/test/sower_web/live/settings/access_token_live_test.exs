@@ -122,12 +122,12 @@ defmodule SowerWeb.Settings.AccessTokenLiveTest do
 
       {:ok, updated} =
         Sower.Accounts.AccessToken.update(token, %{
-          "permissions" => ["nix-cache:read", "agent:register"]
+          "permissions" => ["nix-cache:read", "garden:register"]
         })
 
       roles = Enum.map(updated.permissions, & &1.role)
       assert :"nix-cache:read" in roles
-      assert :"agent:register" in roles
+      assert :"garden:register" in roles
       refute :"seed:read" in roles
     end
   end

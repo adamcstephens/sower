@@ -25,15 +25,11 @@ defmodule SowerClient do
     |> OpenApiSpex.add_schemas([
       SowerClient.GardenHello,
       SowerClient.GardenRegistration,
-      SowerClient.AgentHello,
       SowerClient.Auth.OAuthCredentials,
       SowerClient.Auth.TokenInfo,
       SowerClient.Orchestration.GardenSeedGeneration,
       SowerClient.Orchestration.GardenSeedProfile,
       SowerClient.Orchestration.GardenSeedsReport,
-      SowerClient.Orchestration.AgentSeedGeneration,
-      SowerClient.Orchestration.AgentSeedProfile,
-      SowerClient.Orchestration.AgentSeedsReport,
       SowerClient.Orchestration.Deployment,
       SowerClient.Orchestration.DeploymentResult,
       SowerClient.Orchestration.DeploymentRequest,
@@ -45,7 +41,6 @@ defmodule SowerClient do
       SowerClient.Orchestration.Subscription.Window,
       SowerClient.Orchestration.SubscriptionSync,
       SowerClient.Storage.PresignedUploadReply,
-      SowerClient.Storage.DeploymentLogUploadRequest,
       SowerClient.Seed,
       SowerClient.SeedMeta,
       SowerClient.SeedTag

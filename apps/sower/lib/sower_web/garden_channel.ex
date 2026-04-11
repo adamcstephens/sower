@@ -27,12 +27,8 @@ defmodule SowerWeb.GardenChannel do
 
   @impl Phoenix.Channel
   def join("garden:lobby", message, socket), do: do_join_lobby(message, socket)
-  def join("agent:lobby", message, socket), do: do_join_lobby(message, socket)
 
   def join("garden:" <> topic_sid = topic, params, socket),
-    do: do_join_private(topic_sid, topic, params, socket)
-
-  def join("agent:" <> topic_sid = topic, params, socket),
     do: do_join_private(topic_sid, topic, params, socket)
 
   def join(topic, params, socket) do
@@ -105,13 +101,10 @@ defmodule SowerWeb.GardenChannel do
     {:reply, :ok, socket}
   end
 
-  # Accept both "garden:hello" and "agent:hello"
   def handle_in("garden:hello", payload, socket), do: do_handle_hello(payload, socket)
-  def handle_in("agent:hello", payload, socket), do: do_handle_hello(payload, socket)
 
   defp do_handle_hello(payload, socket) do
     case payload
-         |> normalize_hello_payload()
          |> SowerClient.GardenHello.cast!()
          |> Sower.Orchestration.get_garden(socket) do
       {:ok, garden, oauth_credentials} ->
@@ -133,15 +126,6 @@ defmodule SowerWeb.GardenChannel do
         {:reply, {:error, error}, socket}
     end
   end
-
-  # Accept both "agent_sid" (legacy) and "garden_sid" from hello payloads
-  defp normalize_hello_payload(%{"agent_sid" => sid} = payload) when is_binary(sid) do
-    payload
-    |> Map.delete("agent_sid")
-    |> Map.put_new("garden_sid", sid)
-  end
-
-  defp normalize_hello_payload(payload), do: payload
 
   handle_schema(SowerClient.Seed, &Sower.Orchestration.Seed.get_by_request/1)
 
@@ -191,22 +175,8 @@ defmodule SowerWeb.GardenChannel do
     Sower.Orchestration.SeedDeployment.record_seed_result(req, socket.assigns.garden)
   end)
 
-  # Accept both new and old seeds report events
   handle_schema(SowerClient.Orchestration.GardenSeedsReport, fn report, socket ->
     Orchestration.update_garden_seed_generations(report, socket.assigns.garden)
-  end)
-
-  handle_schema(SowerClient.Orchestration.AgentSeedsReport, fn report, socket ->
-    # Convert legacy AgentSeedsReport to GardenSeedsReport for internal handling
-    report = struct(SowerClient.Orchestration.GardenSeedsReport, Map.from_struct(report))
-    Orchestration.update_garden_seed_generations(report, socket.assigns.garden)
-  end)
-
-  # Kept for backward compatibility with old gardens that still upload logs to S3.
-  # New gardens send SeedDeploymentResult instead.
-  # remove 0.7.0
-  handle_schema(SowerClient.Storage.DeploymentLogUploadRequest, fn _req, _socket ->
-    {:error, :deprecated}
   end)
 
   @impl Phoenix.Channel
@@ -215,12 +185,6 @@ defmodule SowerWeb.GardenChannel do
 
     {:ok, _} =
       Presence.track(self(), "garden:presence", socket.assigns.garden.sid, %{
-        online_at: DateTime.utc_now()
-      })
-
-    # Also track on legacy topic for 0.7.0 LiveView compatibility
-    {:ok, _} =
-      Presence.track(self(), "agent:presence", socket.assigns.garden.sid, %{
         online_at: DateTime.utc_now()
       })
 
