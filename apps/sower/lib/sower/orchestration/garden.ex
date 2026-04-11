@@ -261,19 +261,48 @@ defmodule Sower.Orchestration.Garden do
     |> Repo.update()
   end
 
-  def delete_garden(%__MODULE__{} = garden) do
-    if garden.oauth_client_id do
-      try do
-        Sower.GardenAuth.delete_client(garden.oauth_client_id)
-      rescue
-        Ecto.NoResultsError ->
-          Logger.warning(
-            msg: "Boruta client not found during garden deletion",
-            oauth_client_id: garden.oauth_client_id
-          )
-      end
-    end
+  def rekey_garden(%__MODULE__{} = garden, public_key_pem) do
+    with :ok <- delete_existing_client(garden),
+         {:ok, client} <- Sower.GardenAuth.create_client(garden.sid, public_key_pem),
+         {:ok, garden} <- update_garden(garden, %{oauth_client_id: client.id}) do
+      Logger.info(
+        msg: "Garden re-keyed",
+        garden_sid: garden.sid,
+        new_client_id: client.id
+      )
 
+      {:ok, garden, %{client_id: client.id}}
+    else
+      {:error, reason} ->
+        Logger.error(
+          msg: "Failed to re-key garden",
+          garden_sid: garden.sid,
+          error: inspect(reason)
+        )
+
+        {:error, reason}
+    end
+  end
+
+  defp delete_existing_client(%__MODULE__{oauth_client_id: nil}), do: :ok
+
+  defp delete_existing_client(%__MODULE__{oauth_client_id: client_id}) do
+    try do
+      Sower.GardenAuth.delete_client(client_id)
+      :ok
+    rescue
+      Ecto.NoResultsError ->
+        Logger.warning(
+          msg: "Old Boruta client not found during re-key",
+          oauth_client_id: client_id
+        )
+
+        :ok
+    end
+  end
+
+  def delete_garden(%__MODULE__{} = garden) do
+    delete_existing_client(garden)
     Repo.delete(garden)
   end
 

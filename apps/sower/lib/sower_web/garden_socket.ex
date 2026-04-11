@@ -47,7 +47,7 @@ defmodule SowerWeb.GardenSocket do
   defp extract_token_from_params(_params), do: :error
 
   defp authenticate_token("boruta:" <> boruta_token) do
-    case Boruta.Oauth.Authorization.AccessToken.authorize(value: boruta_token) do
+    case authorize_boruta_token(boruta_token) do
       {:ok, oauth_token} ->
         case Sower.Orchestration.Garden.get_by_oauth_client_id(oauth_token.client.id) do
           nil ->
@@ -67,8 +67,8 @@ defmodule SowerWeb.GardenSocket do
              }}
         end
 
-      {:error, _} ->
-        {:error, :invalid_boruta_token}
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -92,5 +92,17 @@ defmodule SowerWeb.GardenSocket do
       {:error, error} ->
         {:error, error}
     end
+  end
+
+  defp authorize_boruta_token(token) do
+    Boruta.Oauth.Authorization.AccessToken.authorize(value: token)
+  rescue
+    ArgumentError ->
+      Logger.error(
+        msg: "Boruta token references a deleted OAuth client",
+        token_prefix: String.slice(token, 0, 8)
+      )
+
+      {:error, :invalid_boruta_token}
   end
 end
