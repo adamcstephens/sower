@@ -67,6 +67,9 @@
     <:col :let={deployment} label="garden" field={:garden_name}>
       {get_in(deployment.garden.name) || "-"}
     </:col>
+    <:col :let={deployment} label="trigger" hide_on={:sm}>
+      {trigger_label(deployment)}
+    </:col>
     <:col :let={deployment} label="completed" field={:deployed_at} hide_on={:sm}>
       <.local_datetime datetime={deployment.deployed_at} user_timezone={@user_timezone} />
     </:col>

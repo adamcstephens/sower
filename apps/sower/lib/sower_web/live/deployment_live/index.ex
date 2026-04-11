@@ -29,13 +29,13 @@ defmodule SowerWeb.DeploymentLive.Index do
 
   @impl Phoenix.LiveView
   def handle_info({:deployment, :created, deployment}, socket) do
-    deployment = Sower.Repo.preload(deployment, [:garden])
+    deployment = Sower.Repo.preload(deployment, [:garden, :events])
     deployments = [deployment | socket.assigns.deployments]
     {:noreply, assign(socket, :deployments, deployments)}
   end
 
   def handle_info({:deployment, :updated, deployment}, socket) do
-    deployment = Sower.Repo.preload(deployment, [:garden])
+    deployment = Sower.Repo.preload(deployment, [:garden, :events])
 
     deployments =
       Enum.map(socket.assigns.deployments, fn d ->
@@ -122,6 +122,18 @@ defmodule SowerWeb.DeploymentLive.Index do
   end
 
   defp filter_value(_meta, _field), do: nil
+
+  defp trigger_label(deployment) do
+    created_event = Enum.find(deployment.events, &(&1.event == :created))
+
+    case get_in(created_event.reason) do
+      :user_triggered -> "user"
+      :schedule_triggered -> "schedule"
+      :realtime_triggered -> "realtime"
+      :retry -> "retry"
+      _ -> "-"
+    end
+  end
 
   defp state_options do
     ["created", "dispatched", "acknowledged", "completed", "stale", "canceled"]

@@ -126,6 +126,26 @@ defmodule SowerWeb.DeploymentLive.Show do
             No seeds.
           </p>
         </section>
+
+        <section :if={@deployment.events != []}>
+          <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4">Activity</h2>
+          <div class="space-y-3 text-sm">
+            <div
+              :for={event <- Enum.sort_by(@deployment.events, & &1.inserted_at, DateTime)}
+              class="grid grid-cols-[auto_auto_auto] gap-x-4 items-center justify-start"
+            >
+              <span class="text-zinc-400 dark:text-zinc-500">
+                <.local_datetime datetime={event.inserted_at} user_timezone={@user_timezone} />
+              </span>
+              <span class="text-zinc-700 dark:text-zinc-300">
+                {event_description(event)}
+              </span>
+              <span class="text-zinc-400 dark:text-zinc-500">
+                {event.actor_sid}
+              </span>
+            </div>
+          </div>
+        </section>
       </div>
     </Layouts.app>
     """
@@ -155,7 +175,12 @@ defmodule SowerWeb.DeploymentLive.Show do
 
       deployment ->
         deployment =
-          Sower.Repo.preload(deployment, seed_deployments: :seed, subscriptions: [], garden: [])
+          Sower.Repo.preload(deployment, [
+            :events,
+            seed_deployments: :seed,
+            subscriptions: [],
+            garden: []
+          ])
 
         {:noreply,
          socket
@@ -232,6 +257,18 @@ defmodule SowerWeb.DeploymentLive.Show do
     |> assign(:retrying, false)
   end
 
+  defp event_description(%{event: :created, reason: :user_triggered}), do: "Deployed by user"
+
+  defp event_description(%{event: :created, reason: :schedule_triggered}),
+    do: "Deployed by schedule"
+
+  defp event_description(%{event: :created, reason: :realtime_triggered}),
+    do: "Deployed by realtime trigger"
+
+  defp event_description(%{event: :created, reason: :retry}), do: "Retried"
+  defp event_description(%{event: :canceled, reason: :superseded}), do: "Canceled — superseded"
+  defp event_description(%{event: :canceled, reason: :stale}), do: "Canceled — stale"
+
   defp refresh_deployment(socket, sid) do
     case Orchestration.get_deployment_sid(sid) do
       nil ->
@@ -239,7 +276,12 @@ defmodule SowerWeb.DeploymentLive.Show do
 
       deployment ->
         deployment =
-          Sower.Repo.preload(deployment, seed_deployments: :seed, subscriptions: [], garden: [])
+          Sower.Repo.preload(deployment, [
+            :events,
+            seed_deployments: :seed,
+            subscriptions: [],
+            garden: []
+          ])
 
         assign(socket, :deployment, deployment)
     end

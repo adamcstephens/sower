@@ -99,7 +99,7 @@ defmodule Sower.Orchestration.Deployment do
 
     case Flop.validate_and_run(query, params, for: __MODULE__) do
       {:ok, {deployments, meta}} ->
-        {:ok, {Repo.preload(deployments, [:garden]), meta}}
+        {:ok, {Repo.preload(deployments, [:garden, :events]), meta}}
 
       {:error, meta} ->
         {:error, meta}
