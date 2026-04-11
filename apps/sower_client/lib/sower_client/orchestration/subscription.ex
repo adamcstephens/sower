@@ -12,11 +12,9 @@ defmodule SowerClient.Orchestration.Subscription do
         readOnly: true,
         nullable: true
       },
-      # TODO: make required in 0.9.0 once all gardens send name
       name: %Schema{
         type: :string,
-        description: "Human-readable subscription name",
-        nullable: true
+        description: "Human-readable subscription name"
       },
       seed_name: %Schema{
         type: :string,
@@ -72,7 +70,7 @@ defmodule SowerClient.Orchestration.Subscription do
       },
       window: __MODULE__.Window
     },
-    required: [:seed_name, :seed_type],
+    required: [:name, :seed_name, :seed_type],
     example: %{
       seed_name: "myhost",
       seed_type: "nixos",

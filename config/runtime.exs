@@ -19,8 +19,8 @@ if config_env() == :test do
         state_directory:
           Path.join(System.tmp_dir!(), "sower_test_#{System.system_time(:millisecond)}"),
         subscriptions: [
-          %{seed_name: "test1", seed_type: "nixos"},
-          %{seed_name: "test1", seed_type: "home-manager"}
+          %{name: "test1", seed_name: "test1", seed_type: "nixos"},
+          %{name: "test1", seed_name: "test1", seed_type: "home-manager"}
         ]
       },
       skip_config_file: true,
