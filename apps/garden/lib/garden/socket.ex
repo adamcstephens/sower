@@ -210,6 +210,14 @@ defmodule Garden.Socket do
       when is_binary(client_id) and is_binary(private_key_pem) ->
         try_reauthenticate(storage)
 
+      %{garden_sid: garden_sid} when is_binary(garden_sid) ->
+        Logger.warning(
+          msg: "Garden is registered but has no usable credentials, attempting rekey",
+          garden_sid: garden_sid
+        )
+
+        try_http_rekey(storage)
+
       _ ->
         try_http_registration(storage)
     end
@@ -249,6 +257,56 @@ defmodule Garden.Socket do
   end
 
   defp try_reauthenticate(_), do: {:error, :no_credentials}
+
+  defp try_http_rekey(storage) do
+    config = Garden.Config.get()
+    {public_key_pem, storage} = Garden.Auth.ensure_keypair(storage)
+
+    req =
+      Req.new(
+        base_url: "#{config.endpoint}/api/v1",
+        auth: {:bearer, config.access_token},
+        retry: false
+      )
+
+    case SowerClient.Registration.rekey(req, storage.garden_sid, public_key_pem) do
+      {:ok, %{client_id: client_id}} ->
+        Logger.info(
+          msg: "Re-keyed via HTTP",
+          garden_sid: storage.garden_sid,
+          client_id: client_id
+        )
+
+        oauth_creds = %{client_id: client_id}
+        storage = Map.put(storage, :oauth_credentials, oauth_creds)
+
+        case Garden.Auth.request_token(client_id, storage.private_key_pem) do
+          {:ok, token_response} ->
+            updated_creds =
+              Map.merge(oauth_creds, %{
+                access_token: token_response.access_token,
+                expires_in: token_response.expires_in,
+                token_issued_at: System.system_time(:second)
+              })
+
+            storage |> Map.put(:oauth_credentials, updated_creds) |> Storage.write()
+            {:ok, "boruta:#{token_response.access_token}"}
+
+          {:error, reason} ->
+            Storage.write(storage)
+            {:error, {:token_request_failed, reason}}
+        end
+
+      {:error, reason} ->
+        Logger.error(
+          msg: "Rekey failed, garden may need operator intervention",
+          garden_sid: storage.garden_sid,
+          reason: inspect(reason)
+        )
+
+        {:error, {:rekey_failed, reason}}
+    end
+  end
 
   defp try_http_registration(storage) do
     config = Garden.Config.get()
