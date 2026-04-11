@@ -52,7 +52,11 @@ defmodule SowerWeb.DeploymentLive.IndexTest do
     retried =
       Sower.Repo.get_by!(Sower.Orchestration.Deployment, parent_deployment_id: deployment.id)
 
-    assert retried.retried_by_user_id == user.id
+    retried = Sower.Repo.preload(retried, :events)
+    assert [event] = retried.events
+    assert event.event == :created
+    assert event.reason == :retry
+    assert event.actor_sid == user.sid
   end
 
   test "shows error when retry submission fails", %{conn: conn, user: user} do
@@ -70,9 +74,7 @@ defmodule SowerWeb.DeploymentLive.IndexTest do
     deployment_fixture(%{
       garden_id: garden.id,
       parent_deployment_id: deployment.id,
-      retry_ordinal: 1,
-      retried_by_user_id: user.id,
-      retried_at: DateTime.utc_now()
+      retry_ordinal: 1
     })
 
     {:ok, index_live, _html} = live(conn, ~p"/deployments")

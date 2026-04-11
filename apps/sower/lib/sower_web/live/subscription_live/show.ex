@@ -47,7 +47,13 @@ defmodule SowerWeb.SubscriptionLive.Show do
   def handle_event("deploy_subscription", %{"subscription_sid" => _sub_sid}, socket) do
     socket = assign(socket, deploying: true, deploy_error: nil)
 
-    case Orchestration.deploy_subscription(socket.assigns.subscription, force: true) do
+    user = socket.assigns.current_user
+
+    case Orchestration.deploy_subscription(socket.assigns.subscription,
+           force: true,
+           actor_sid: user.sid,
+           event_reason: :user_triggered
+         ) do
       {:ok, _request_id, _pid} ->
         {:noreply, socket}
 

@@ -6,7 +6,7 @@ defmodule Sower.Orchestration.Deployment do
   alias Sower.Repo
   alias Sower.Accounts.User
   alias Sower.Orchestration
-  alias Sower.Orchestration.{Garden, Seed, Subscription, DeploymentPubSub}
+  alias Sower.Orchestration.{DeploymentEvent, DeploymentPubSub, Garden, Seed, Subscription}
 
   require Logger
 
@@ -39,7 +39,7 @@ defmodule Sower.Orchestration.Deployment do
     belongs_to :garden, Garden
     belongs_to :parent_deployment, __MODULE__
     has_many :retries, __MODULE__, foreign_key: :parent_deployment_id
-    belongs_to :retried_by_user, User
+    has_many :events, Orchestration.DeploymentEvent
 
     many_to_many :subscriptions, Subscription, join_through: Orchestration.SubscriptionDeployment
 
@@ -56,7 +56,6 @@ defmodule Sower.Orchestration.Deployment do
     field :last_dispatched_at, :utc_datetime_usec
     field :content_hash, :string
     field :retry_ordinal, :integer
-    field :retried_at, :utc_datetime_usec
 
     timestamps()
   end
@@ -72,9 +71,7 @@ defmodule Sower.Orchestration.Deployment do
       :garden_id,
       :content_hash,
       :parent_deployment_id,
-      :retried_by_user_id,
-      :retry_ordinal,
-      :retried_at
+      :retry_ordinal
     ])
     |> put_assoc(:seeds, Map.get(attrs, :seeds, deployment.seeds))
     |> put_assoc(:subscriptions, Map.get(attrs, :subscriptions, deployment.subscriptions))
@@ -244,15 +241,15 @@ defmodule Sower.Orchestration.Deployment do
               seeds: deployment.seeds,
               subscriptions: deployment.subscriptions,
               parent_deployment_id: deployment.id,
-              retried_by_user_id: user_id,
               retry_ordinal: max_retry_ordinal + 1,
-              retried_at: DateTime.utc_now(),
               last_dispatched_at: DateTime.utc_now(),
               state: :dispatched
             }
 
             case create_deployment(attrs) do
               {:ok, retry_deployment} ->
+                DeploymentEvent.record_event(retry_deployment, :created, :retry, user.sid)
+
                 retry_deployment =
                   Repo.preload(retry_deployment, [:garden, :subscriptions, seeds: [:tags]])
 
@@ -293,6 +290,7 @@ defmodule Sower.Orchestration.Deployment do
 
     Enum.each(to_cancel, fn deployment ->
       update_deployment(deployment, %{state: :canceled, result: :failure})
+      DeploymentEvent.record_event(deployment, :canceled, :superseded, garden.sid)
     end)
 
     # 3. Replay valid unresolved deployments
@@ -307,7 +305,9 @@ defmodule Sower.Orchestration.Deployment do
     # 4. Deploy fresh for all overdue subscriptions
     overdue_tasks =
       Enum.map(overdue, fn sub ->
-        {:ok, _request_id, pid} = deploy_subscription(sub)
+        {:ok, _request_id, pid} =
+          deploy_subscription(sub, actor_sid: garden.sid, event_reason: :schedule_triggered)
+
         pid
       end)
 
@@ -384,7 +384,11 @@ defmodule Sower.Orchestration.Deployment do
       ) do
     with {:ok, subscriptions} <- validate_deployment_request(request, garden.id),
          {:ok, request_id, pid} <-
-           process_deployment(request.request_id, subscriptions, garden, force: request.force) do
+           process_deployment(request.request_id, subscriptions, garden,
+             force: request.force,
+             actor_sid: garden.sid,
+             event_reason: :realtime_triggered
+           ) do
       {:ok, request_id, pid}
     end
   end
@@ -517,8 +521,12 @@ defmodule Sower.Orchestration.Deployment do
 
     Enum.reduce(stale_deployments, 0, fn deployment, acc ->
       case update_deployment(deployment, %{state: :canceled}) do
-        {:ok, _} -> acc + 1
-        _ -> acc
+        {:ok, _} ->
+          DeploymentEvent.record_event(deployment, :canceled, :stale, "system")
+          acc + 1
+
+        _ ->
+          acc
       end
     end)
   end
@@ -558,6 +566,8 @@ defmodule Sower.Orchestration.Deployment do
 
   defp do_deployment(request_id, subscriptions, opts) do
     force? = Keyword.get(opts, :force, false)
+    actor_sid = Keyword.get(opts, :actor_sid)
+    event_reason = Keyword.get(opts, :event_reason)
     garden_id = hd(subscriptions).garden_id
 
     seed_deploys =
@@ -633,6 +643,10 @@ defmodule Sower.Orchestration.Deployment do
                  subscriptions: subscriptions
                }) do
             {:ok, deploy} ->
+              if actor_sid && event_reason do
+                DeploymentEvent.record_event(deploy, :created, event_reason, actor_sid)
+              end
+
               subscription_ids = Enum.map(subscriptions, & &1.id)
               cancel_stale_for_subscriptions(subscription_ids)
 
@@ -746,7 +760,15 @@ defmodule Sower.Orchestration.Deployment do
 
         %__MODULE__{state: state} = unresolved
         when state in [:created, :dispatched, :acknowledged] ->
-          update_deployment(unresolved, %{deployed_at: now, result: :failure, state: :stale})
+          result =
+            update_deployment(unresolved, %{deployed_at: now, result: :failure, state: :stale})
+
+          case result do
+            {:ok, _} -> DeploymentEvent.record_event(unresolved, :canceled, :stale, "system")
+            _ -> :ok
+          end
+
+          result
 
         %__MODULE__{} ->
           :ignore
