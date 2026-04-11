@@ -47,8 +47,7 @@ defmodule SowerWeb.ChannelCase do
       Sower.OrchestrationFixtures.garden_fixture(
         Map.merge(
           %{
-            sid: SowerClient.Sid.generate("grdn"),
-            local_sid: SowerClient.Sid.generate("lc_grdn")
+            sid: SowerClient.Sid.generate("grdn")
           },
           attrs
         )
@@ -102,7 +101,7 @@ defmodule SowerWeb.ChannelCase do
           socket,
           SowerWeb.GardenChannel,
           "garden:#{garden.sid}",
-          %{"local_sid" => garden.local_sid}
+          %{}
         )
 
       %{socket: socket, garden: garden, user: user}
