@@ -113,12 +113,17 @@ defmodule Garden.Socket do
         {:ok, Map.put(socket, :active_deployments, %{})}
 
       {:error, reason} ->
-        Logger.error(
-          "Could not start #{__MODULE__} because of " <>
-            "validation failure: #{inspect(reason)}"
+        Logger.warning(
+          msg: "Initial connection failed, will retry",
+          error: inspect(reason)
         )
 
-        :ignore
+        socket =
+          new_socket()
+          |> Map.put(:active_deployments, %{})
+          |> assign(:reconnect_counter, 0)
+
+        {:ok, schedule_reconnect(socket)}
     end
   end
 
@@ -143,32 +148,39 @@ defmodule Garden.Socket do
   end
 
   defp do_connect(socket \\ nil) do
-    config = build_connect_config()
-
-    case if(socket, do: connect(socket, config), else: connect(config)) do
-      {:ok, socket} ->
-        {:ok, socket}
-
-      {:error, reason} ->
-        {:error, reason}
+    with {:ok, config} <- build_connect_config(),
+         {:ok, socket} <-
+           if(socket, do: connect(socket, config), else: connect(config)) do
+      {:ok, socket}
+    else
+      {:error, reason} -> {:error, reason}
     end
   end
 
   defp build_connect_config do
     config = Application.get_all_env(__MODULE__)
-    token = resolve_connect_token()
     uri = Keyword.get(config, :uri)
 
-    Logger.info(msg: "Connecting to server socket", endpoint: uri)
+    case resolve_connect_token() do
+      {:ok, token} ->
+        Logger.info(msg: "Connecting to server socket", endpoint: uri)
 
-    auth_header = {"x-auth-token", token}
-    uri = URI.to_string(uri)
+        auth_header = {"x-auth-token", token}
+        uri = URI.to_string(uri)
 
-    config
-    |> Keyword.put(:uri, uri)
-    |> Keyword.update(:headers, [auth_header], fn headers ->
-      [auth_header | headers]
-    end)
+        connect_config =
+          config
+          |> Keyword.put(:uri, uri)
+          |> Keyword.update(:headers, [auth_header], fn headers ->
+            [auth_header | headers]
+          end)
+
+        {:ok, connect_config}
+
+      {:error, reason} ->
+        Logger.warning(msg: "Could not resolve connect token", reason: inspect(reason))
+        {:error, reason}
+    end
   end
 
   defp resolve_connect_token do
@@ -188,7 +200,7 @@ defmodule Garden.Socket do
           try_reauthenticate(storage)
         else
           Logger.debug(msg: "Using stored Boruta access token")
-          "boruta:#{token}"
+          {:ok, "boruta:#{token}"}
         end
 
       %{
@@ -229,14 +241,14 @@ defmodule Garden.Socket do
 
         storage |> Map.put(:oauth_credentials, updated_creds) |> Storage.write()
         Logger.debug(msg: "Reauthenticated via JWT assertion")
-        "boruta:#{token_response.access_token}"
+        {:ok, "boruta:#{token_response.access_token}"}
 
-      {:error, _} ->
-        nil
+      {:error, reason} ->
+        {:error, {:reauthentication_failed, reason}}
     end
   end
 
-  defp try_reauthenticate(_), do: nil
+  defp try_reauthenticate(_), do: {:error, :no_credentials}
 
   defp try_http_registration(storage) do
     config = Garden.Config.get()
@@ -266,16 +278,16 @@ defmodule Garden.Socket do
               })
 
             storage |> Map.put(:oauth_credentials, updated_creds) |> Storage.write()
-            "boruta:#{token_response.access_token}"
+            {:ok, "boruta:#{token_response.access_token}"}
 
-          {:error, _} ->
+          {:error, reason} ->
             Storage.write(storage)
-            nil
+            {:error, {:token_request_failed, reason}}
         end
 
       {:error, reason} ->
         Logger.warning(msg: "HTTP registration failed", reason: inspect(reason))
-        nil
+        {:error, {:registration_failed, reason}}
     end
   end
 
