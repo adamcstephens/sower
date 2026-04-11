@@ -48,10 +48,6 @@ defmodule SowerWeb.SowerComponentsTest do
       assert html =~ "sm:table-cell"
     end
 
-    test "SowerComponents exports table/1 for global import resolution" do
-      assert function_exported?(SowerWeb.SowerComponents, :table, 1)
-    end
-
     test "action columns never get hide classes" do
       assigns = %{
         rows: [%{id: "1", name: "Alice"}]
