@@ -37,6 +37,8 @@ defmodule Sower.Accounts.AccessToken do
   end
 
   def changeset(access_token, attrs \\ %{}) do
+    attrs = normalize_permissions(attrs)
+
     access_token
     |> cast(attrs, [:expires_at, :user_id, :org_id, :description, :regenerate])
     |> validate_required([:expires_at, :user_id, :org_id, :description])
@@ -44,11 +46,21 @@ defmodule Sower.Accounts.AccessToken do
     |> force_expires_at_regeneration()
     |> cast_embed(:permissions,
       required: false,
-      with: &changeset_permission/2,
-      sort_param: :permissions_sort,
-      drop_param: :permissions_drop
+      with: &changeset_permission/2
     )
   end
+
+  defp normalize_permissions(%{"permissions" => [first | _] = roles} = attrs)
+       when is_binary(first) do
+    permissions =
+      roles
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.map(&%{"role" => &1})
+
+    Map.put(attrs, "permissions", permissions)
+  end
+
+  defp normalize_permissions(attrs), do: attrs
 
   def changeset_permission(permission, attrs \\ %{}) do
     permission

@@ -70,7 +70,7 @@ defmodule SowerWeb.CoreComponents do
               phx-window-keydown={JS.exec("data-cancel", to: "##{@id}")}
               phx-key="escape"
               phx-click-away={JS.exec("data-cancel", to: "##{@id}")}
-              class="shadow-zinc-700/10 ring-zinc-700/10 relative hidden rounded-2xl bg-zinc-200 dark:bg-zinc-300 p-14 shadow-lg ring-1 transition"
+              class="shadow-zinc-700/10 ring-zinc-700/10 relative hidden rounded-2xl bg-zinc-200 dark:bg-zinc-800 p-14 shadow-lg ring-1 transition"
             >
               <div class="absolute top-6 right-5">
                 <.button
@@ -168,7 +168,7 @@ defmodule SowerWeb.CoreComponents do
   def simple_form(assigns) do
     ~H"""
     <.form :let={f} for={@for} as={@as} {@rest}>
-      <div class="mt-10 space-y-8 bg-zinc-200 dark:bg-zinc-300 text-zinc-900 dark:text-zinc-900">
+      <div class="mt-10 space-y-8 bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">
         {render_slot(@inner_block, f)}
         <div :for={action <- @actions} class="mt-2 flex items-center justify-between gap-6">
           {render_slot(action, f)}

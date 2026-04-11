@@ -5,11 +5,13 @@ defmodule SowerWeb.Settings.AccessTokenLiveTest do
   import Sower.AccountsFixtures
 
   @create_attrs %{
-    description: "test"
+    description: "test",
+    permissions: ["seed:read", "seed:write"]
   }
   @update_attrs %{
     description: "second",
-    regenerate: true
+    regenerate: true,
+    permissions: ["nix-cache:read"]
   }
   @invalid_attrs %{
     description: ""
@@ -76,6 +78,57 @@ defmodule SowerWeb.Settings.AccessTokenLiveTest do
              |> render_click()
 
       refute has_element?(index_live, "#access_tokens-#{access_token.id}")
+    end
+  end
+
+  describe "Permissions changeset" do
+    setup [:register_and_log_in_user]
+
+    test "creates token with permissions from flat list", %{user: user} do
+      {:ok, token} =
+        Sower.Accounts.AccessToken.create(%{
+          "description" => "test",
+          "user_id" => user.id,
+          "org_id" => user.org_id,
+          "permissions" => ["seed:read", "garden:register"]
+        })
+
+      roles = Enum.map(token.permissions, & &1.role)
+      assert :"seed:read" in roles
+      assert :"garden:register" in roles
+      assert length(roles) == 2
+    end
+
+    test "creates token with empty permissions", %{user: user} do
+      {:ok, token} =
+        Sower.Accounts.AccessToken.create(%{
+          "description" => "test",
+          "user_id" => user.id,
+          "org_id" => user.org_id,
+          "permissions" => [""]
+        })
+
+      assert token.permissions == []
+    end
+
+    test "updates token permissions", %{user: user} do
+      {:ok, token} =
+        Sower.Accounts.AccessToken.create(%{
+          "description" => "test",
+          "user_id" => user.id,
+          "org_id" => user.org_id,
+          "permissions" => ["seed:read"]
+        })
+
+      {:ok, updated} =
+        Sower.Accounts.AccessToken.update(token, %{
+          "permissions" => ["nix-cache:read", "agent:register"]
+        })
+
+      roles = Enum.map(updated.permissions, & &1.role)
+      assert :"nix-cache:read" in roles
+      assert :"agent:register" in roles
+      refute :"seed:read" in roles
     end
   end
 

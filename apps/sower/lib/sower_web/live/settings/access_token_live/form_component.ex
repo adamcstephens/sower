@@ -33,36 +33,24 @@ defmodule SowerWeb.Settings.AccessTokenLive.FormComponent do
         <.header>
           Permissions
         </.header>
-        <.inputs_for :let={perm} field={@form[:permissions]}>
-          <input type="hidden" name="access_token[permissions_sort][]" value={perm.index} />
-          <.input
-            field={perm[:role]}
-            type="select"
-            options={Sower.Accounts.AccessToken.permission_roles()}
-          />
-          <.button
-            variant={:icon}
-            type="button"
-            name="access_token[permissions_drop][]"
-            value={perm.index}
-            phx-click={JS.dispatch("change")}
+        <input type="hidden" name="access_token[permissions][]" value="" />
+        <div class="space-y-2">
+          <label
+            :for={role <- Sower.Accounts.AccessToken.permission_roles()}
+            class="flex items-center gap-2"
           >
-            <.icon name="hero-x-mark" class="w-6 h-6 relative top-2" />
-          </.button>
-        </.inputs_for>
-
-        <input type="hidden" name="access_token[permissions_drop][]" />
+            <input
+              type="checkbox"
+              name="access_token[permissions][]"
+              value={role}
+              checked={role in current_permissions(@form)}
+              class="rounded border-zinc-300 dark:border-zinc-700"
+            />
+            <span>{role}</span>
+          </label>
+        </div>
 
         <:actions>
-          <.button
-            variant={:secondary}
-            type="button"
-            name="access_token[permissions_sort][]"
-            value="new"
-            phx-click={JS.dispatch("change")}
-          >
-            add permission
-          </.button>
           <.button phx-disable-with="Saving...">Save</.button>
         </:actions>
       </.simple_form>
@@ -136,5 +124,11 @@ defmodule SowerWeb.Settings.AccessTokenLive.FormComponent do
   defp is_force_expires_at_regeneration(%AccessToken{} = access_token, new_expires_at)
        when is_binary(new_expires_at) do
     access_token.expires_at != new_expires_at |> Date.from_iso8601!()
+  end
+
+  defp current_permissions(%{source: changeset}) do
+    changeset
+    |> Ecto.Changeset.get_field(:permissions, [])
+    |> Enum.map(&Atom.to_string(&1.role))
   end
 end
