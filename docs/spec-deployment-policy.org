@@ -1,0 +1,411 @@
+* Deployment Policy Rules — Specification
+
+** Overview
+
+A deployment policy is a list of rules attached to a subscription that controls
+when and how deployment actions are permitted. The system uses *default deny* —
+if no rule matches a given action/trigger/time combination, the action is blocked.
+
+The subscription retains responsibility for *what* to deploy (seed identity,
+matching rules, schedule). The policy controls *whether* a deployment action is
+allowed to proceed.
+
+** Design Principles
+
+- Default deny: the absence of a matching rule means the action is not permitted.
+- Allow-only: rules grant permission. There is no "deny" effect.
+- Any-match: rules are unordered. If any rule matches, the action is allowed.
+- Omitted fields mean "any": a rule with no =triggers= field matches all trigger types.
+- Overlapping rules are harmless: redundancy is acceptable, not an error.
+- Seed types define which actions are valid: the policy is validated against the
+  seed type's supported actions.
+
+** Actions
+
+Actions represent what a deployment does, generalized across seed types.
+
+| Action   | Description                                              | Disruption |
+|----------+----------------------------------------------------------+------------|
+| stage    | Download and pin a closure (gcroot). No runtime changes. | None       |
+| activate | Apply the configuration via the seed type's activation.  | Service    |
+| restart  | Full machine reboot.                                     | Full       |
+
+*** Actions by Seed Type
+
+| Seed Type    | stage | activate | restart |
+|--------------+-------+----------+---------|
+| nixos        | yes   | yes      | yes     |
+| home-manager | yes   | yes      | no      |
+| gcroot       | yes   | no       | no      |
+| service      | yes   | yes      | no      |
+
+This table will grow as new seed types are added. The policy engine should
+reject rules that reference actions unsupported by the subscription's seed type.
+
+*** Activation Mode Derivation
+
+The activation mode is not configured directly. It is derived from the set of
+actions permitted at the time of deployment. This keeps policy rules purely
+about permission while the system selects the appropriate mechanism.
+
+**** NixOS
+
+| Permitted Actions        | Activation Mode | Behavior                           |
+|--------------------------+-----------------+------------------------------------|
+| activate only            | switch          | Activate immediately, set as boot  |
+| activate + restart       | boot            | Set as boot config, then reboot    |
+| stage only               | (none)          | Download and pin closure only      |
+
+When =activate= is permitted but =restart= is not, the system uses =switch= —
+the configuration takes effect immediately without a reboot. When both
+=activate= and =restart= are permitted, the system uses =boot= mode and
+triggers a reboot, ensuring the full configuration (including kernel changes)
+is applied.
+
+This means a subscription with separate time windows for =activate= and
+=restart= naturally produces the desired behavior:
+
+- During activate-only windows: =switch= (non-disruptive)
+- During activate+restart windows: =boot= + reboot (full apply)
+
+**** Home-manager
+
+| Permitted Actions | Activation Mode | Behavior                       |
+|-------------------+-----------------+--------------------------------|
+| activate          | switch          | Activate new generation         |
+| stage only        | (none)          | Download and pin closure only  |
+
+**** Service
+
+| Permitted Actions | Activation Mode | Behavior                       |
+|-------------------+-----------------+--------------------------------|
+| activate          | restart         | Restart the service             |
+| stage only        | (none)          | Download and pin closure only  |
+
+**** Gcroot
+
+| Permitted Actions | Activation Mode | Behavior                       |
+|-------------------+-----------------+--------------------------------|
+| stage             | (none)          | Download and pin closure only  |
+
+** Triggers
+
+Triggers represent how a deployment was initiated. These align with the
+existing =deployment_events= audit system's =reason= field.
+
+| Trigger          | Audit Reason          | Description                                    | Source    |
+|------------------+-----------------------+------------------------------------------------+-----------|
+| manual           | user_triggered        | User clicked deploy in the UI or invoked via API | Human     |
+| manual           | user_retry            | User retried a failed deployment                 | Human     |
+| scheduled        | schedule_triggered    | Cron schedule fired and a new seed was found     | Automated |
+| realtime         | realtime_triggered    | A matching seed was registered                   | Automated |
+| poll_on_connect  | poll_on_connect       | Garden connected and polled for pending seeds    | Automated |
+
+Multiple audit reasons can map to the same policy trigger. The policy engine
+evaluates against the trigger column; the audit reason is preserved for
+traceability. =user_retry= is treated identically to =manual= for policy
+purposes.
+
+** Windows
+
+A window constrains when a rule applies based on day of week and time of day.
+Windows naturally handle overnight spans — when =time_start= is after
+=time_end=, the window wraps across midnight.
+
+| Field      | Type     | Required | Description                            |
+|------------+----------+----------+----------------------------------------|
+| days       | string[] | yes      | Days of the week the window is active  |
+| time_start | string   | yes      | Start of window (HH:MM)               |
+| time_end   | string   | yes      | End of window (HH:MM)                 |
+
+Day values: =mon=, =tue=, =wed=, =thu=, =fri=, =sat=, =sun=.
+
+Timezone is specified once on the subscription (=timezone= field) and applies
+to all windows in the policy.
+
+When =time_start= > =time_end= (e.g. =22:00= to =06:00=), the window spans
+midnight. The =days= field refers to the day the window *opens*. A rule with
+=days: ["fri"], time_start: "22:00", time_end: "06:00"= covers Friday 22:00
+through Saturday 06:00.
+
+A rule with no =window= field is not time-constrained — it matches at any time.
+
+** Rule Schema
+
+A single policy rule:
+
+| Field    | Type       | Required | Default | Description                                     |
+|----------+------------+----------+---------+-------------------------------------------------|
+| actions  | string[]   | yes      |         | Actions this rule permits                       |
+| triggers | string[]   | no       | any     | Triggers this rule applies to. Omit for all.    |
+| window   | object     | no       | none    | Time window constraint (see Windows section)    |
+| confirm  | boolean    | no       | false   | Require explicit confirmation before proceeding |
+
+Multiple rules are ORed (any-match). Within a rule, all fields are ANDed —
+the action, trigger, and window must all match.
+
+** Policy Evaluation
+
+Actions form a disruption hierarchy. Each level subsumes the levels below it:
+
+| Level | Action   | Implies         |
+|-------+----------+-----------------|
+|     3 | restart  | activate, stage |
+|     2 | activate | stage           |
+|     1 | stage    | (none)          |
+
+On each deployment event with =(trigger, current_time)=:
+
+1. For each action the seed type supports (from highest to lowest disruption):
+   a. Filter rules where the action is in the rule's =actions= list.
+   b. Filter rules where =trigger= is in the rule's =triggers= list (or triggers is omitted).
+   c. For remaining rules, evaluate the =window= against =current_time= (or pass if no window).
+   d. If any rule matches: the action is *permitted*.
+2. Select the highest-disruption permitted action. All lower actions are
+   implied and do not need separate rules.
+3. Derive the activation mode from the selected action (see Activation Mode Derivation).
+4. If the matching rule has =confirm: true=: block pending out-of-band approval
+   before proceeding.
+5. If no action is permitted: *deny* — do nothing.
+
+** Relationship to Schedule
+
+The subscription's =schedule= field defines *when to poll for new seeds*. The
+policy defines *whether to act on what is found*. These are separate concerns.
+
+A schedule that fires outside any policy window results in a poll that finds a
+seed but does not deploy it. This is intentional — the seed will be deployed
+when the next poll fires within the window, or when a manual deploy is triggered.
+
+** Examples
+
+*** Allow manual apply anytime, reboot only 2-4am
+
+#+begin_src json
+[
+  {
+    "actions": ["activate"],
+    "triggers": ["manual"]
+  },
+  {
+    "actions": ["restart"],
+    "window": {
+      "days": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
+      "time_start": "02:00",
+      "time_end": "04:00"
+    }
+  }
+]
+#+end_src
+
+*** Automated deploys on weekdays, reboots on weekends
+
+#+begin_src json
+[
+  {
+    "actions": ["activate"],
+    "triggers": ["manual"]
+  },
+  {
+    "actions": ["stage", "activate"],
+    "triggers": ["scheduled", "realtime"],
+    "window": {
+      "days": ["mon", "tue", "wed", "thu", "fri"],
+      "time_start": "09:00",
+      "time_end": "17:00"
+    }
+  },
+  {
+    "actions": ["restart"],
+    "window": {
+      "days": ["fri"],
+      "time_start": "22:00",
+      "time_end": "06:00"
+    }
+  }
+]
+#+end_src
+
+*** Staging only (gcroot subscription)
+
+#+begin_src json
+[
+  {
+    "actions": ["stage"],
+    "triggers": ["scheduled", "realtime"]
+  }
+]
+#+end_src
+
+*** Everything allowed, manual confirmation for reboot
+
+#+begin_src json
+[
+  {
+    "actions": ["stage", "activate"]
+  },
+  {
+    "actions": ["restart"],
+    "confirm": true
+  }
+]
+#+end_src
+
+*** Overnight maintenance window
+
+#+begin_src json
+[
+  {
+    "actions": ["activate"],
+    "triggers": ["manual"]
+  },
+  {
+    "actions": ["activate", "restart"],
+    "triggers": ["scheduled"],
+    "window": {
+      "days": ["tue", "thu"],
+      "time_start": "23:00",
+      "time_end": "05:00"
+    }
+  }
+]
+#+end_src
+
+** Migration from Current Schema
+
+*** Field Mapping
+
+The following subscription fields are replaced by policy rules:
+
+| Old Field        | Replacement                                              |
+|------------------+----------------------------------------------------------|
+| reboot_policy    | =restart= action in policy rules with window constraints |
+| allow_realtime   | =realtime= trigger in policy rules                       |
+| poll_on_connect  | =poll_on_connect= trigger in policy rules                |
+| window           | =window= on policy rules                                |
+| activation_args  | Derived from permitted actions per seed type (see Activation Mode Derivation) |
+
+*** Audit Reason Alignment
+
+The existing =deployment_events.reason= enum needs updates to align with
+policy triggers:
+
+| Current Reason       | Change                                                  |
+|----------------------+---------------------------------------------------------|
+| user_triggered       | Keep — maps to =manual= trigger                        |
+| retry                | Rename to =user_retry= — maps to =manual= trigger     |
+| schedule_triggered   | Keep — maps to =scheduled= trigger                     |
+| realtime_triggered   | Keep — maps to =realtime= trigger                      |
+| (new)                | Add =poll_on_connect= — maps to =poll_on_connect= trigger |
+| superseded           | Keep — lifecycle event, not a trigger                   |
+| stale                | Keep — lifecycle event, not a trigger                   |
+
+The =poll_on_connect= audit reason is currently missing. Garden-side
+poll-on-connect deploys do not pass audit context to the server. This must be
+added so that:
+1. The audit trail captures why the deployment was created.
+2. The policy engine can evaluate the correct trigger type.
+
+*** Shared Policy Evaluation Module
+
+The policy engine lives in =sower_client= as
+=SowerClient.Orchestration.Subscription.Policy=. Both the server (=sower=)
+and the garden depend on =sower_client=, so one implementation serves both
+sides.
+
+#+begin_example
+alias SowerClient.Orchestration.Subscription.Policy
+
+Policy.evaluate(subscription.policy, trigger, now)
+  → {:allow, :restart}   # highest permitted action
+  → {:allow, :activate}
+  → {:allow, :stage}
+  → {:confirm, :restart}  # allowed but requires confirmation
+  → :deny
+#+end_example
+
+The trigger is derived from the audit reason:
+
+#+begin_example
+Policy.trigger_for_reason(:user_triggered)    → :manual
+Policy.trigger_for_reason(:user_retry)        → :manual
+Policy.trigger_for_reason(:schedule_triggered) → :scheduled
+Policy.trigger_for_reason(:realtime_triggered) → :realtime
+Policy.trigger_for_reason(:poll_on_connect)    → :poll_on_connect
+#+end_example
+
+*** Injection Points
+
+*Server-side:*
+
+- =Sower.Workers.DeploySubscription.run/2= — currently checks =within_window?=.
+  Replace with =Policy.evaluate/3=. Covers realtime deploys.
+- =Sower.Orchestration.Deployment.deploy_subscription/2= — entry point for
+  manual (UI) and schedule catch-up deploys. Evaluate policy before creating
+  the deployment. The =event_reason= is already passed via opts.
+
+*Garden-side:*
+
+- =Garden.Socket.handle_cast(:sync_subscriptions)= — poll-on-connect path.
+  Evaluate policy before triggering deploy. The subscription is already
+  available from local storage.
+- =Garden.Scheduler= — scheduled deploys. Evaluate policy before deploying.
+  The subscription is already available.
+- =Garden.Deployer= — derives activation mode from =subscription.activation_args=
+  today. Replace with the action returned by policy evaluation. The seed
+  deployment's =subscription_sid= is used to look up the subscription, which
+  already happens in =find_subscription/1=.
+
+*Both sides:*
+
+The =within_window?= function on =Sower.Orchestration.Subscription= is
+replaced entirely by the shared policy evaluator. The server-side window
+schema (=embeds_one :window=) on subscriptions is replaced by windows
+embedded within policy rules.
+
+*** Other Implementation Notes
+
+- =within_window?= must be updated to handle overnight spans (sow-160) as
+  the same window logic is reused within the policy evaluator.
+- The deploy button in the UI currently has no concept of trigger type. It
+  will need to pass =user_triggered= (or =user_retry=) through to the policy
+  engine so manual deploys can be distinguished from automated ones.
+
+** Resolved Decisions
+
+- *Staging must be explicit.* =stage= is not implicitly allowed. However,
+  =activate= will always ensure staging is complete before proceeding — if a
+  policy allows =activate= but not =stage= independently, staging happens as
+  part of the activation flow, not as a separately-gated action.
+- *Default policy is narrow but not empty.* When no policy is specified (or the
+  policy list is empty), the following default applies:
+  #+begin_src json
+  [{"actions": ["activate"], "triggers": ["manual", "scheduled", "poll_on_connect"]}]
+  #+end_src
+  This ensures gardens are never stranded — they can always apply an upgrade
+  through safe channels. Notably excluded: =realtime= (too aggressive for a
+  default) and =restart= (too disruptive). Users must explicitly opt in to both.
+  When a user provides any policy rules, the default is fully replaced — there
+  is no merging.
+- *Confirm blocks any trigger.* The =confirm= flag is not limited to manual
+  triggers. When a rule with =confirm: true= matches, the action is blocked
+  pending out-of-band approval, regardless of trigger type. If multiple rules
+  match the same action and any of them has =confirm: true=, confirmation is
+  required.
+- *Realtime is gated at both ends.* The server will not send realtime deployment
+  events to a garden unless =realtime= appears as a trigger in at least one
+  policy rule. The garden will also reject realtime events not present in its
+  policy. This avoids unnecessary traffic and provides defense in depth.
+- *Inhibition is a separate layer.* Runtime inhibition (garden-side lock) is
+  evaluated as a pre-check before policy evaluation. It is out of scope for
+  this spec and will be specified separately.
+
+** Future Considerations
+
+- Additional window constraints (e.g. specific dates, week-of-month).
+- Generic conditions (non-time-based variables) could be added alongside windows
+  if needed, using an operator-based format (eq, in, between).
+- Cross-subscription coordination (rolling deployments, staged rollouts) would
+  be a separate orchestration layer above this policy system.
+- An embedded scripting language (Lua via Luerl) could replace or supplement
+  structured rules if the policy needs outgrow what windows and triggers can express.

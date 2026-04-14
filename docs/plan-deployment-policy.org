@@ -1,0 +1,153 @@
+* Deployment Policy — Implementation Plan
+
+See [[file:spec-deployment-policy.org][spec-deployment-policy.org]] for the full specification.
+
+** Compatibility Constraints
+
+- Gardens and servers can be at different versions.
+- Server must be upgraded first — it needs to accept both old and new formats.
+- Old gardens send old fields (reboot_policy, allow_realtime, etc.) and must
+  continue to work with a new server.
+- New gardens sending policy rules must not break an old server — so the garden
+  upgrade must happen after the server can accept both formats.
+- Garden config files (client.json) are user-facing. Users need a migration
+  path and deprecation warnings, not a hard cutover.
+
+** Phase 1: Foundation
+
+No behavior change. Build the new types and evaluation logic, fully tested.
+
+*** Schema additions (sower_client)
+
+- Add =SowerClient.Orchestration.Subscription.Policy= module
+  - =Policy.Rule= schema: actions, triggers, window, confirm
+  - Reuses existing =Subscription.Window= schema for the window field
+- Add =policy= field to =SowerClient.Orchestration.Subscription= schema
+  - Type: array of =Policy.Rule=, default: =[]= (empty means use default policy)
+  - Add to =sower_client.ex= schema list
+
+*** Shared evaluator (sower_client)
+
+- =Policy.evaluate(policy_rules, trigger, now, seed_type)=
+  - Returns ={:allow, action}=, ={:confirm, action}=, or =:deny=
+  - Walks the disruption hierarchy (restart → activate → stage)
+  - Applies default policy when rules are empty
+  - Validates actions against seed type
+- =Policy.trigger_for_reason(audit_reason)=
+  - Maps audit reasons to policy triggers
+- Window evaluation logic with overnight span support (subsumes sow-160)
+
+*** Database migration (sower)
+
+- Add =policy= column (=:map= / jsonb array) to subscriptions table
+- Column is nullable — nil means "use old fields" during transition
+
+*** Tests
+
+- Policy evaluator unit tests covering:
+  - Each trigger type
+  - Window matching (including overnight spans)
+  - Disruption hierarchy (highest permitted action wins)
+  - Default policy behavior
+  - Confirm flag (confirm wins when multiple rules match)
+  - Seed type action validation
+  - Empty/nil policy → default
+
+** Phase 2: Server-side adoption
+
+Server uses policy for all deployment decisions. Old gardens still work.
+
+*** Old-to-new conversion
+
+- Add =Policy.from_legacy(subscription)= in sower_client
+  - Converts reboot_policy, allow_realtime, poll_on_connect, window,
+    activation_args into equivalent policy rules
+  - Used at registration time when a garden sends old-format subscriptions
+- Server's =register_subscription/2= and =sync_subscriptions/2=:
+  - If subscription has =policy= rules: store as-is
+  - If subscription has no policy (old garden): call =from_legacy=, store
+    the converted policy alongside the old fields
+
+*** Replace server-side evaluation
+
+- =Sower.Workers.DeploySubscription.run/2=:
+  - Replace =within_window?= check with =Policy.evaluate/3=
+  - Trigger is =:realtime= (already known from worker context)
+- =Sower.Orchestration.Deployment.deploy_subscription/2=:
+  - Evaluate policy before creating deployment
+  - =event_reason= already flows through opts — map to trigger
+- Manual deploy path (UI):
+  - Pass =:user_triggered= through to policy evaluation
+  - Handle =:confirm= result (UI confirmation flow)
+- =find_realtime_subscriptions/1=:
+  - Replace =sub.allow_realtime= filter with policy check for realtime trigger
+
+*** Audit reason updates
+
+- Rename =retry= → =user_retry= in deployment_events enum (migration)
+- Add =poll_on_connect= to deployment_events enum (migration)
+
+*** UI updates
+
+- Subscription show page: display policy rules instead of old fields
+- Keep displaying old fields as fallback if policy is empty (transition period)
+
+** Phase 3: Garden-side adoption
+
+Garden uses policy for all deployment decisions.
+
+*** Garden evaluation injection
+
+- =Garden.Socket.handle_cast(:sync_subscriptions)=:
+  - Evaluate policy for poll_on_connect subscriptions before deploying
+  - Pass =:poll_on_connect= as audit reason to server
+- =Garden.Scheduler=:
+  - Evaluate policy before deploying on cron fire
+- =Garden.Deployer=:
+  - Replace =Garden.Seed.activation_mode(subscription)= with action from
+    policy evaluation result
+  - Replace =reboot_reason/1= logic — reboot decision comes from policy
+    (=:restart= action permitted or not), not from =reboot_policy= field
+
+*** Garden config support
+
+- =SowerClient.Config.preprocess_subscriptions/1=:
+  - Support =policy= key in subscription config (new format)
+  - Continue supporting old keys (reboot_policy, etc.) — convert via
+    =Policy.from_legacy= with deprecation warning logged
+- Document new config format for users
+
+** Phase 4: Cleanup
+
+Remove old fields once all gardens have upgraded.
+
+*** Remove old fields
+
+- Remove from =SowerClient.Orchestration.Subscription= schema:
+  =reboot_policy=, =allow_realtime=, =poll_on_connect=, =window=,
+  =activation_args=
+- Remove from server Ecto schema and changeset
+- Remove from =register_subscription= and =create_subscription= field lists
+- Remove =Policy.from_legacy/1= conversion code
+- Remove =Garden.Seed.activation_mode/1=
+- Remove =Sower.Orchestration.Subscription.within_window?/2=
+- Remove =reboot_reason/1= from =Garden.Deployer=
+
+*** Database migration
+
+- Drop old columns: =reboot_policy=, =allow_realtime=, =window=,
+  =activation_args= from subscriptions table
+
+*** Config cleanup
+
+- Remove support for old config keys in =preprocess_subscriptions=
+- Deprecation warnings become errors
+
+** Release Sequence
+
+1. Release Phases 1+2+3 together → policy system fully functional on both
+   server and garden. Old fields kept alongside new policy field.
+   =Policy.from_legacy= converts old garden configs automatically with
+   deprecation warnings. No user action required to upgrade.
+2. After all gardens running release 1 → release Phase 4 cleanup (drop
+   old fields, remove conversion code, deprecation warnings become errors).
