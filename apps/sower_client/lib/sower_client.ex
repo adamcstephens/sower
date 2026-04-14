@@ -26,7 +26,6 @@ defmodule SowerClient do
       SowerClient.GardenHello,
       SowerClient.GardenRegistration,
       SowerClient.AgentHello,
-      SowerClient.GardenRekey,
       SowerClient.Auth.OAuthCredentials,
       SowerClient.Auth.TokenInfo,
       SowerClient.Orchestration.GardenSeedGeneration,
