@@ -222,7 +222,7 @@ defmodule Garden.Socket do
       }
       when is_binary(token) and is_binary(private_key_pem) ->
         if token_expired?(issued_at, expires_in) do
-          try_reauthenticate_or_rekey(storage)
+          try_reauthenticate_or_reregister(storage)
         else
           Logger.debug(msg: "Using stored Boruta access token")
           {:ok, "boruta:#{token}"}
@@ -233,39 +233,33 @@ defmodule Garden.Socket do
         private_key_pem: private_key_pem
       }
       when is_binary(client_id) and is_binary(private_key_pem) ->
-        try_reauthenticate_or_rekey(storage)
-
-      %{garden_sid: garden_sid} when is_binary(garden_sid) ->
-        Logger.warning(
-          msg: "Garden is registered but has no usable credentials, attempting rekey",
-          garden_sid: garden_sid
-        )
-
-        try_http_rekey(storage)
+        try_reauthenticate_or_reregister(storage)
 
       _ ->
         try_http_registration(storage)
     end
   end
 
-  defp try_reauthenticate_or_rekey(%{garden_sid: garden_sid} = storage)
-       when is_binary(garden_sid) do
+  defp try_reauthenticate_or_reregister(storage) do
     case try_reauthenticate(storage) do
       {:ok, _} = ok ->
         ok
 
       {:error, reason} ->
         Logger.warning(
-          msg: "Reauthentication failed, attempting rekey",
-          garden_sid: garden_sid,
+          msg: "Reauthentication failed, clearing credentials and re-registering",
+          garden_sid: get_in(storage, [:garden_sid]),
           reason: inspect(reason)
         )
 
-        try_http_rekey(storage)
+        storage =
+          storage
+          |> Map.delete(:garden_sid)
+          |> Map.delete(:oauth_credentials)
+
+        try_http_registration(storage)
     end
   end
-
-  defp try_reauthenticate_or_rekey(storage), do: try_reauthenticate(storage)
 
   defp token_expired?(issued_at, expires_in)
        when is_integer(issued_at) and is_integer(expires_in) do
@@ -301,69 +295,6 @@ defmodule Garden.Socket do
   end
 
   defp try_reauthenticate(_), do: {:error, :no_credentials}
-
-  defp try_http_rekey(storage) do
-    config = Garden.Config.get()
-    {public_key_pem, storage} = Garden.Auth.ensure_keypair(storage)
-
-    req =
-      Req.new(
-        base_url: "#{config.endpoint}/api/v1",
-        auth: {:bearer, config.access_token},
-        retry: false
-      )
-
-    case SowerClient.Registration.rekey(req, storage.garden_sid, public_key_pem) do
-      {:ok, %{client_id: client_id}} ->
-        Logger.info(
-          msg: "Re-keyed via HTTP",
-          garden_sid: storage.garden_sid,
-          client_id: client_id
-        )
-
-        oauth_creds = %{client_id: client_id}
-        storage = Map.put(storage, :oauth_credentials, oauth_creds)
-
-        case Garden.Auth.request_token(client_id, storage.private_key_pem) do
-          {:ok, token_response} ->
-            updated_creds =
-              Map.merge(oauth_creds, %{
-                access_token: token_response.access_token,
-                expires_in: token_response.expires_in,
-                token_issued_at: System.system_time(:second)
-              })
-
-            storage |> Map.put(:oauth_credentials, updated_creds) |> Storage.write()
-            {:ok, "boruta:#{token_response.access_token}"}
-
-          {:error, reason} ->
-            Storage.write(storage)
-            {:error, {:token_request_failed, reason}}
-        end
-
-      {:error, :garden_not_found} ->
-        Logger.warning(
-          msg: "Garden no longer exists on server, re-registering",
-          garden_sid: storage.garden_sid
-        )
-
-        storage =
-          storage
-          |> Map.delete(:garden_sid)
-          |> Map.delete(:oauth_credentials)
-
-        try_http_registration(storage)
-
-      {:error, reason} ->
-        Logger.error(
-          msg: "Rekey failed, garden may need operator intervention",
-          garden_sid: storage.garden_sid,
-          reason: inspect(reason)
-        )
-
-        {:error, {:rekey_failed, reason}}
-    end
-  end
 
   defp try_http_registration(storage) do
     config = Garden.Config.get()
