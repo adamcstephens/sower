@@ -197,7 +197,7 @@ defmodule Garden.Socket do
       }
       when is_binary(token) and is_binary(private_key_pem) ->
         if token_expired?(issued_at, expires_in) do
-          try_reauthenticate(storage)
+          try_reauthenticate_or_rekey(storage)
         else
           Logger.debug(msg: "Using stored Boruta access token")
           {:ok, "boruta:#{token}"}
@@ -208,7 +208,7 @@ defmodule Garden.Socket do
         private_key_pem: private_key_pem
       }
       when is_binary(client_id) and is_binary(private_key_pem) ->
-        try_reauthenticate(storage)
+        try_reauthenticate_or_rekey(storage)
 
       %{garden_sid: garden_sid} when is_binary(garden_sid) ->
         Logger.warning(
@@ -222,6 +222,25 @@ defmodule Garden.Socket do
         try_http_registration(storage)
     end
   end
+
+  defp try_reauthenticate_or_rekey(%{garden_sid: garden_sid} = storage)
+       when is_binary(garden_sid) do
+    case try_reauthenticate(storage) do
+      {:ok, _} = ok ->
+        ok
+
+      {:error, reason} ->
+        Logger.warning(
+          msg: "Reauthentication failed, attempting rekey",
+          garden_sid: garden_sid,
+          reason: inspect(reason)
+        )
+
+        try_http_rekey(storage)
+    end
+  end
+
+  defp try_reauthenticate_or_rekey(storage), do: try_reauthenticate(storage)
 
   defp token_expired?(issued_at, expires_in)
        when is_integer(issued_at) and is_integer(expires_in) do
@@ -296,6 +315,19 @@ defmodule Garden.Socket do
             Storage.write(storage)
             {:error, {:token_request_failed, reason}}
         end
+
+      {:error, :garden_not_found} ->
+        Logger.warning(
+          msg: "Garden no longer exists on server, re-registering",
+          garden_sid: storage.garden_sid
+        )
+
+        storage =
+          storage
+          |> Map.delete(:garden_sid)
+          |> Map.delete(:oauth_credentials)
+
+        try_http_registration(storage)
 
       {:error, reason} ->
         Logger.error(
