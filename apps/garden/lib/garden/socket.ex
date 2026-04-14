@@ -128,9 +128,23 @@ defmodule Garden.Socket do
   end
 
   @impl Slipstream
-  def handle_disconnect(_reason, socket) do
-    Logger.warning(msg: "Disconnected from server socket")
+  def handle_disconnect(reason, socket) do
+    Logger.warning(msg: "Disconnected from server socket", reason: inspect(reason))
+    invalidate_cached_token()
     {:ok, schedule_reconnect(socket)}
+  end
+
+  defp invalidate_cached_token do
+    storage = Storage.read()
+
+    case storage do
+      %{oauth_credentials: %{access_token: _} = creds} ->
+        updated_creds = Map.drop(creds, [:access_token, :token_issued_at, :expires_in])
+        storage |> Map.put(:oauth_credentials, updated_creds) |> Storage.write()
+
+      _ ->
+        :ok
+    end
   end
 
   defp schedule_reconnect(socket) do
