@@ -128,9 +128,20 @@ defmodule Garden.Socket do
   end
 
   @impl Slipstream
+  def handle_disconnect({:error, {:upgrade_failure, %{status_code: status}}} = reason, socket)
+      when status in [403, 401] do
+    Logger.warning(
+      msg: "Server rejected connection, invalidating cached token",
+      status: status,
+      reason: inspect(reason)
+    )
+
+    invalidate_cached_token()
+    {:ok, schedule_reconnect(socket)}
+  end
+
   def handle_disconnect(reason, socket) do
     Logger.warning(msg: "Disconnected from server socket", reason: inspect(reason))
-    invalidate_cached_token()
     {:ok, schedule_reconnect(socket)}
   end
 
