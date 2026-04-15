@@ -29,6 +29,7 @@ defmodule Sower.Orchestration.Subscription do
     field :allow_realtime, :boolean, default: false
     embeds_many :rules, __MODULE__.Rule
     embeds_one :window, __MODULE__.Window
+    embeds_many :policy, __MODULE__.PolicyRule
 
     timestamps(type: :utc_datetime)
   end
@@ -49,6 +50,7 @@ defmodule Sower.Orchestration.Subscription do
     ])
     |> cast_embed(:rules, with: &__MODULE__.Rule.changeset/2)
     |> cast_embed(:window, with: &__MODULE__.Window.changeset/2)
+    |> cast_embed(:policy, with: &__MODULE__.PolicyRule.changeset/2)
     |> unique_constraint([:garden_id, :org_id, :name])
   end
 
@@ -190,7 +192,8 @@ defmodule Sower.Orchestration.Subscription do
                 :activation_args,
                 :reboot_policy,
                 :allow_realtime,
-                :window
+                :window,
+                :policy
               ]},
            conflict_target: [:garden_id, :org_id, :name],
            returning: true
@@ -212,7 +215,8 @@ defmodule Sower.Orchestration.Subscription do
       activation_args: sub.activation_args,
       reboot_policy: sub.reboot_policy,
       allow_realtime: sub.allow_realtime,
-      window: sub.window
+      window: sub.window,
+      policy: sub.policy
     }
 
     case create_subscription(attrs) do
@@ -408,7 +412,34 @@ defmodule Sower.Orchestration.Subscription do
     def changeset(window, attrs) do
       window
       |> cast(attrs, [:days, :time_start, :time_end, :tz])
-      |> validate_required([:days, :time_start, :time_end, :tz])
+      |> validate_required([:days, :time_start, :time_end])
+    end
+  end
+
+  defmodule PolicyRule do
+    use Ecto.Schema
+    import Ecto.Changeset
+
+    alias Sower.Orchestration.Subscription.Window
+
+    @derive {Jason.Encoder, only: [:actions, :triggers, :window, :confirm]}
+
+    embedded_schema do
+      field :actions, {:array, :string}
+      field :triggers, {:array, :string}
+      field :confirm, :boolean, default: false
+      embeds_one :window, Window
+    end
+
+    def changeset(rule, attrs) when is_struct(attrs) do
+      changeset(rule, Map.from_struct(attrs))
+    end
+
+    def changeset(rule, attrs) do
+      rule
+      |> cast(attrs, [:actions, :triggers, :confirm])
+      |> cast_embed(:window, with: &Window.changeset/2)
+      |> validate_required([:actions])
     end
   end
 end

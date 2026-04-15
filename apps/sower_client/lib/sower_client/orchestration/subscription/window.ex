@@ -30,6 +30,6 @@ defmodule SowerClient.Orchestration.Subscription.Window do
         example: "America/New_York"
       }
     },
-    required: [:days, :time_start, :time_end, :tz]
+    required: [:days, :time_start, :time_end]
   })
 end
