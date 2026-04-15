@@ -248,7 +248,7 @@ defmodule Garden.Socket do
       {:error, reason} ->
         Logger.warning(
           msg: "Reauthentication failed, clearing credentials and re-registering",
-          garden_sid: get_in(storage, [:garden_sid]),
+          garden_sid: storage.garden_sid,
           reason: inspect(reason)
         )
 
