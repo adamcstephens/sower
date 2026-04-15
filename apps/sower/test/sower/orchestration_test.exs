@@ -1316,7 +1316,7 @@ defmodule Sower.OrchestrationTest do
       retried = Sower.Repo.preload(retried, :events)
       assert [event] = retried.events
       assert event.event == :created
-      assert event.reason == :retry
+      assert event.reason == :user_retry
       assert event.actor_sid == user.sid
 
       retried = Sower.Repo.preload(retried, [:seeds, :subscriptions])
