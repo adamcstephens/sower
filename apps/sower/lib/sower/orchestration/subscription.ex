@@ -146,9 +146,11 @@ defmodule Sower.Orchestration.Subscription do
   end
 
   def find_realtime_subscriptions(%Sower.Orchestration.Seed{} = seed) do
+    alias SowerClient.Orchestration.Subscription.Policy
+
     seed
     |> find_subscription()
-    |> Enum.filter(fn sub -> sub.allow_realtime end)
+    |> Enum.filter(fn sub -> Policy.has_realtime_trigger?(sub.policy) end)
   end
 
   def within_window?(%__MODULE__{window: nil}, _now), do: true
@@ -204,6 +206,15 @@ defmodule Sower.Orchestration.Subscription do
   end
 
   def register_subscription(%SowerClient.Orchestration.Subscription{} = sub, garden_id) do
+    alias SowerClient.Orchestration.Subscription.Policy
+
+    policy =
+      if sub.policy == nil or sub.policy == [] do
+        Policy.from_legacy(sub)
+      else
+        sub.policy
+      end
+
     attrs = %{
       garden_id: garden_id,
       name: sub.name,
@@ -216,7 +227,7 @@ defmodule Sower.Orchestration.Subscription do
       reboot_policy: sub.reboot_policy,
       allow_realtime: sub.allow_realtime,
       window: sub.window,
-      policy: sub.policy
+      policy: policy
     }
 
     case create_subscription(attrs) do

@@ -50,6 +50,42 @@
       {@subscription.window.time_start}–{@subscription.window.time_end} ({@subscription.window.tz})
     </.detail_field>
 
+    <section :if={@subscription.policy != []} class="-mx-4 sm:mx-0">
+      <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4 px-4 sm:px-0">
+        Policy
+      </h2>
+      <div class="space-y-3 px-4 sm:px-0">
+        <div
+          :for={rule <- @subscription.policy}
+          class="rounded-lg border border-zinc-200 dark:border-zinc-700 p-3 text-sm"
+        >
+          <div class="flex flex-wrap gap-1.5 mb-1.5">
+            <span
+              :for={action <- rule.actions}
+              class="inline-flex items-center rounded-md bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-300"
+            >
+              {action}
+            </span>
+          </div>
+          <div class="text-zinc-500 dark:text-zinc-400 text-xs space-y-0.5">
+            <p :if={rule.triggers}>
+              Triggers: {Enum.join(rule.triggers, ", ")}
+            </p>
+            <p :if={!rule.triggers}>
+              Triggers: any
+            </p>
+            <p :if={rule.window}>
+              Window: {Enum.join(rule.window.days, ", ")}
+              {rule.window.time_start}–{rule.window.time_end}
+            </p>
+            <p :if={rule.confirm} class="text-amber-600 dark:text-amber-400">
+              Requires confirmation
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section class="-mx-4 sm:mx-0">
       <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4 px-4 sm:px-0">
         Rules

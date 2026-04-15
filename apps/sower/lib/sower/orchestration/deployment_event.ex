@@ -16,6 +16,8 @@ defmodule Sower.Orchestration.DeploymentEvent do
         :schedule_triggered,
         :realtime_triggered,
         :retry,
+        :user_retry,
+        :poll_on_connect,
         :superseded,
         :stale
       ]

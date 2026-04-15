@@ -19,7 +19,7 @@ defmodule Sower.Workers.DeploySubscriptionTest do
       assert :ok = DeploySubscription.run("sub_nonexistent")
     end
 
-    test "returns :ok when subscription is outside window" do
+    test "returns :ok when policy denies realtime trigger" do
       garden = garden_fixture()
 
       sub =
@@ -27,20 +27,41 @@ defmodule Sower.Workers.DeploySubscriptionTest do
           garden_id: garden.id,
           seed_name: "myhost",
           seed_type: "nixos",
-          allow_realtime: true,
-          window: %{
-            days: ["mon"],
-            time_start: "00:00",
-            time_end: "00:01",
-            tz: "Pacific/Kiritimati"
-          }
+          policy: [
+            %{actions: ["activate"], triggers: ["manual"]}
+          ]
+        })
+
+      assert :ok = DeploySubscription.run(sub.sid)
+    end
+
+    test "returns :ok when policy window is outside current time" do
+      garden = garden_fixture()
+
+      sub =
+        subscription_fixture(%{
+          garden_id: garden.id,
+          seed_name: "myhost",
+          seed_type: "nixos",
+          policy: [
+            %{
+              actions: ["activate"],
+              triggers: ["realtime"],
+              window: %{
+                days: ["mon"],
+                time_start: "00:00",
+                time_end: "00:01",
+                tz: "Pacific/Kiritimati"
+              }
+            }
+          ]
         })
 
       assert :ok = DeploySubscription.run(sub.sid)
     end
 
     @tag :capture_log
-    test "calls deploy function for subscription within window" do
+    test "calls deploy function for subscription with realtime policy" do
       garden = garden_fixture()
       seed_fixture(%{name: "myhost", seed_type: "nixos"})
 
@@ -49,7 +70,9 @@ defmodule Sower.Workers.DeploySubscriptionTest do
           garden_id: garden.id,
           seed_name: "myhost",
           seed_type: "nixos",
-          allow_realtime: true
+          policy: [
+            %{actions: ["activate"], triggers: ["realtime"]}
+          ]
         })
 
       test_pid = self()
@@ -74,7 +97,9 @@ defmodule Sower.Workers.DeploySubscriptionTest do
           garden_id: garden.id,
           seed_name: "myhost",
           seed_type: "nixos",
-          allow_realtime: true
+          policy: [
+            %{actions: ["activate"], triggers: ["realtime"]}
+          ]
         })
 
       deploy_fun = fn _sub, _opts -> {:error, :connection_refused} end
