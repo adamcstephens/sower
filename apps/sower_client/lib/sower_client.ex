@@ -37,6 +37,7 @@ defmodule SowerClient do
       SowerClient.Orchestration.SeedDeploymentResult,
       SowerClient.Orchestration.SeedDeploymentStatus,
       SowerClient.Orchestration.Subscription,
+      SowerClient.Orchestration.Subscription.Policy,
       SowerClient.Orchestration.Subscription.Window,
       SowerClient.Orchestration.SubscriptionSync,
       SowerClient.Storage.PresignedUploadReply,
