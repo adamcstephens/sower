@@ -68,7 +68,13 @@ defmodule SowerClient.Orchestration.Subscription do
         description: "Whether to deploy immediately when a matching seed is registered",
         default: false
       },
-      window: __MODULE__.Window
+      window: __MODULE__.Window,
+      policy: %Schema{
+        type: :array,
+        items: __MODULE__.Policy,
+        default: [],
+        description: "Policy rules controlling when and how deployment actions are permitted"
+      }
     },
     required: [:name, :seed_name, :seed_type],
     example: %{
