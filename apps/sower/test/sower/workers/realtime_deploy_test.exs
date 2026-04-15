@@ -16,7 +16,7 @@ defmodule Sower.Workers.RealtimeDeployTest do
   end
 
   describe "perform/1" do
-    test "enqueues deploy jobs for realtime subscriptions", %{org: org} do
+    test "enqueues deploy jobs for subscriptions with realtime policy", %{org: org} do
       garden = garden_fixture()
 
       seed =
@@ -29,7 +29,9 @@ defmodule Sower.Workers.RealtimeDeployTest do
         garden_id: garden.id,
         seed_name: "myhost",
         seed_type: "nixos",
-        allow_realtime: true
+        policy: [
+          %{actions: ["activate"], triggers: ["realtime"]}
+        ]
       })
 
       assert :ok =
@@ -41,7 +43,7 @@ defmodule Sower.Workers.RealtimeDeployTest do
       assert_enqueued(worker: DeploySubscription)
     end
 
-    test "does not enqueue jobs when no realtime subscriptions exist", %{org: org} do
+    test "does not enqueue jobs when no subscriptions exist", %{org: org} do
       seed =
         seed_fixture(%{
           name: "myhost",
@@ -57,7 +59,7 @@ defmodule Sower.Workers.RealtimeDeployTest do
       refute_enqueued(worker: DeploySubscription)
     end
 
-    test "skips subscriptions with allow_realtime false", %{org: org} do
+    test "skips subscriptions without realtime in policy triggers", %{org: org} do
       garden = garden_fixture()
 
       seed =
@@ -70,7 +72,9 @@ defmodule Sower.Workers.RealtimeDeployTest do
         garden_id: garden.id,
         seed_name: "myhost",
         seed_type: "nixos",
-        allow_realtime: false
+        policy: [
+          %{actions: ["activate"], triggers: ["manual", "scheduled"]}
+        ]
       })
 
       assert :ok =

@@ -224,7 +224,7 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
     retried = Sower.Repo.preload(retried, :events)
     assert [event] = retried.events
     assert event.event == :created
-    assert event.reason == :retry
+    assert event.reason == :user_retry
     assert event.actor_sid == user.sid
 
     assert_redirect(show_live, ~p"/deployments/#{retried.sid}")

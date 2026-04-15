@@ -248,7 +248,7 @@ defmodule Sower.Orchestration.Deployment do
 
             case create_deployment(attrs) do
               {:ok, retry_deployment} ->
-                DeploymentEvent.record_event(retry_deployment, :created, :retry, user.sid)
+                DeploymentEvent.record_event(retry_deployment, :created, :user_retry, user.sid)
 
                 retry_deployment =
                   Repo.preload(retry_deployment, [:garden, :subscriptions, seeds: [:tags]])
@@ -355,6 +355,8 @@ defmodule Sower.Orchestration.Deployment do
   # Deployment request handling
 
   def deploy_subscription(%Subscription{} = sub, opts \\ []) do
+    alias SowerClient.Orchestration.Subscription.Policy
+
     subscription = Repo.preload(sub, :garden)
 
     case subscription.garden do
@@ -362,9 +364,28 @@ defmodule Sower.Orchestration.Deployment do
         {:error, :garden_not_found}
 
       %Garden{} = garden ->
-        request_id = SowerClient.Sid.generate("req")
-        {:ok, request_id, pid} = process_deployment(request_id, [subscription], garden, opts)
-        {:ok, request_id, pid}
+        event_reason = Keyword.get(opts, :event_reason)
+        trigger = if event_reason, do: Policy.trigger_for_reason(event_reason), else: :manual
+        now = DateTime.utc_now()
+
+        case Policy.evaluate(
+               subscription.policy,
+               trigger,
+               now,
+               subscription.seed_type,
+               subscription.timezone
+             ) do
+          {:allow, _action} ->
+            request_id = SowerClient.Sid.generate("req")
+            {:ok, request_id, pid} = process_deployment(request_id, [subscription], garden, opts)
+            {:ok, request_id, pid}
+
+          {:confirm, _action} ->
+            {:error, :confirmation_required}
+
+          :deny ->
+            {:error, :policy_denied}
+        end
     end
   end
 

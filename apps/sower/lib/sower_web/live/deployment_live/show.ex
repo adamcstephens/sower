@@ -266,6 +266,8 @@ defmodule SowerWeb.DeploymentLive.Show do
     do: "Deployed by realtime trigger"
 
   defp event_description(%{event: :created, reason: :retry}), do: "Retried"
+  defp event_description(%{event: :created, reason: :user_retry}), do: "Retried by user"
+  defp event_description(%{event: :created, reason: :poll_on_connect}), do: "Deployed on connect"
   defp event_description(%{event: :canceled, reason: :superseded}), do: "Canceled — superseded"
   defp event_description(%{event: :canceled, reason: :stale}), do: "Canceled — stale"
 

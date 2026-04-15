@@ -2,6 +2,7 @@ defmodule Sower.Workers.DeploySubscription do
   use Oban.Worker, queue: :default, max_attempts: 3
 
   alias Sower.Orchestration.{Deployment, Subscription}
+  alias SowerClient.Orchestration.Subscription.Policy
 
   require Logger
 
@@ -20,10 +21,10 @@ defmodule Sower.Workers.DeploySubscription do
         :ok
 
       sub ->
-        if Subscription.within_window?(sub, now) do
-          deploy(sub, deploy_fun)
-        else
-          :ok
+        case Policy.evaluate(sub.policy, :realtime, now, sub.seed_type, sub.timezone) do
+          {:allow, _action} -> deploy(sub, deploy_fun)
+          {:confirm, _action} -> :ok
+          :deny -> :ok
         end
     end
   end
