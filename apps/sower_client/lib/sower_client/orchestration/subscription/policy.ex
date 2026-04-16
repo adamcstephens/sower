@@ -59,7 +59,7 @@ defmodule SowerClient.Orchestration.Subscription.Policy do
   Returns `{:allow, action}`, `{:confirm, action}`, or `:deny`.
   """
   def evaluate(rules, trigger, now, seed_type, timezone \\ "Etc/UTC") do
-    rules = effective_rules(rules)
+    rules = rules |> normalize_rules() |> effective_rules()
     supported_actions = Map.get(@actions_by_seed_type, seed_type, [])
 
     @disruption_hierarchy
@@ -119,7 +119,7 @@ defmodule SowerClient.Orchestration.Subscription.Policy do
         rule
       end
 
-    [rule]
+    %{"default" => rule}
   end
 
   defp build_legacy_actions(reboot_policy) when reboot_policy in ["always", "when-required"],
@@ -153,7 +153,7 @@ defmodule SowerClient.Orchestration.Subscription.Policy do
   Returns true if any policy rule includes the realtime trigger.
   """
   def has_realtime_trigger?(rules) do
-    rules = effective_rules(rules)
+    rules = rules |> normalize_rules() |> effective_rules()
 
     Enum.any?(rules, fn rule ->
       case rule_triggers(rule) do
@@ -163,9 +163,25 @@ defmodule SowerClient.Orchestration.Subscription.Policy do
     end)
   end
 
+  defp normalize_rules(nil), do: nil
+  defp normalize_rules(rules) when is_list(rules), do: rules
+  defp normalize_rules(rules) when rules == %{}, do: []
+
+  defp normalize_rules(rules) when is_map(rules) do
+    Enum.map(rules, fn {name, rule} ->
+      Map.put(rule, :name, name)
+    end)
+  end
+
   defp effective_rules(nil), do: @default_policy
   defp effective_rules([]), do: @default_policy
-  defp effective_rules(rules), do: rules
+  defp effective_rules(rules) when rules == %{}, do: @default_policy
+
+  defp effective_rules(rules) when is_map(rules) do
+    Enum.map(rules, fn {_name, rule} -> rule end)
+  end
+
+  defp effective_rules(rules) when is_list(rules), do: rules
 
   defp action_matches?(rule, action) do
     actions = rule_actions(rule)
