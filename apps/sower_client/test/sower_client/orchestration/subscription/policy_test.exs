@@ -397,9 +397,17 @@ defmodule SowerClient.Orchestration.Subscription.PolicyTest do
   end
 
   describe "from_legacy/1" do
+    test "returns a map keyed by rule name" do
+      sub = %{reboot_policy: "never", allow_realtime: false, poll_on_connect: false, window: nil}
+      policy = Policy.from_legacy(sub)
+
+      assert is_map(policy)
+      assert Map.has_key?(policy, "default")
+    end
+
     test "basic subscription with defaults" do
       sub = %{reboot_policy: "never", allow_realtime: false, poll_on_connect: false, window: nil}
-      [rule] = Policy.from_legacy(sub)
+      %{"default" => rule} = Policy.from_legacy(sub)
 
       assert rule.actions == ["stage", "activate"]
       assert rule.triggers == ["manual", "scheduled"]
@@ -408,7 +416,7 @@ defmodule SowerClient.Orchestration.Subscription.PolicyTest do
 
     test "reboot_policy always adds restart action" do
       sub = %{reboot_policy: "always", allow_realtime: false, poll_on_connect: false, window: nil}
-      [rule] = Policy.from_legacy(sub)
+      %{"default" => rule} = Policy.from_legacy(sub)
 
       assert "restart" in rule.actions
     end
@@ -421,21 +429,21 @@ defmodule SowerClient.Orchestration.Subscription.PolicyTest do
         window: nil
       }
 
-      [rule] = Policy.from_legacy(sub)
+      %{"default" => rule} = Policy.from_legacy(sub)
 
       assert "restart" in rule.actions
     end
 
     test "allow_realtime adds realtime trigger" do
       sub = %{reboot_policy: "never", allow_realtime: true, poll_on_connect: false, window: nil}
-      [rule] = Policy.from_legacy(sub)
+      %{"default" => rule} = Policy.from_legacy(sub)
 
       assert "realtime" in rule.triggers
     end
 
     test "poll_on_connect adds poll_on_connect trigger" do
       sub = %{reboot_policy: "never", allow_realtime: false, poll_on_connect: true, window: nil}
-      [rule] = Policy.from_legacy(sub)
+      %{"default" => rule} = Policy.from_legacy(sub)
 
       assert "poll_on_connect" in rule.triggers
     end
@@ -455,7 +463,7 @@ defmodule SowerClient.Orchestration.Subscription.PolicyTest do
         window: window
       }
 
-      [rule] = Policy.from_legacy(sub)
+      %{"default" => rule} = Policy.from_legacy(sub)
 
       assert rule.window.days == ["mon", "fri"]
       assert rule.window.time_start == "09:00"
@@ -471,7 +479,7 @@ defmodule SowerClient.Orchestration.Subscription.PolicyTest do
         window: %{days: ["mon"], time_start: "02:00", time_end: "06:00", tz: "Etc/UTC"}
       }
 
-      [rule] = Policy.from_legacy(sub)
+      %{"default" => rule} = Policy.from_legacy(sub)
 
       assert rule.actions == ["stage", "activate", "restart"]
       assert "manual" in rule.triggers
@@ -489,7 +497,7 @@ defmodule SowerClient.Orchestration.Subscription.PolicyTest do
         "window" => nil
       }
 
-      [rule] = Policy.from_legacy(sub)
+      %{"default" => rule} = Policy.from_legacy(sub)
 
       assert "restart" in rule.actions
       assert "realtime" in rule.triggers
@@ -515,6 +523,37 @@ defmodule SowerClient.Orchestration.Subscription.PolicyTest do
     test "returns true with default policy (no realtime)" do
       # Default policy has manual, scheduled, poll_on_connect — no realtime
       refute Policy.has_realtime_trigger?([])
+    end
+
+    test "works with map-format policy" do
+      rules = %{"rt_rule" => %{actions: ["activate"], triggers: ["realtime"]}}
+      assert Policy.has_realtime_trigger?(rules)
+    end
+
+    test "returns false with empty map" do
+      refute Policy.has_realtime_trigger?(%{})
+    end
+  end
+
+  describe "evaluate/5 — map-format policy" do
+    test "evaluates map-format policy" do
+      policy = %{
+        "manual_activate" => %{actions: ["activate"], triggers: ["manual"]},
+        "reboot_window" => %{
+          actions: ["restart"],
+          window: %{
+            days: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
+            time_start: "02:00",
+            time_end: "04:00"
+          }
+        }
+      }
+
+      assert {:allow, :activate} = Policy.evaluate(policy, :manual, @now, "nixos")
+    end
+
+    test "empty map uses default policy" do
+      assert {:allow, :activate} = Policy.evaluate(%{}, :manual, @now, "nixos")
     end
   end
 end

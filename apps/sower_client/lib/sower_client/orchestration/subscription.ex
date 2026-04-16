@@ -70,10 +70,11 @@ defmodule SowerClient.Orchestration.Subscription do
       },
       window: __MODULE__.Window,
       policy: %Schema{
-        type: :array,
-        items: __MODULE__.Policy,
-        default: [],
-        description: "Policy rules controlling when and how deployment actions are permitted"
+        type: :object,
+        additionalProperties: __MODULE__.Policy,
+        default: %{},
+        description:
+          "Policy rules controlling when and how deployment actions are permitted, keyed by rule name"
       }
     },
     required: [:name, :seed_name, :seed_type],

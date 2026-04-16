@@ -285,6 +285,45 @@ defmodule SowerClient.ConfigTest do
       assert %Config{} = config
       assert config.access_token == "token-from-env"
     end
+
+    test "casts map-format policy from config" do
+      tmp_dir = System.tmp_dir!()
+      config_file = Path.join(tmp_dir, "policy_map_config_#{:rand.uniform(1000)}.json")
+
+      config_data = %{
+        "endpoint" => "https://my.sower.dev",
+        "subscriptions" => %{
+          "myhost" => %{
+            "seed_name" => "myhost",
+            "seed_type" => "nixos",
+            "policy" => %{
+              "weekday_activate" => %{
+                "actions" => ["activate"],
+                "triggers" => ["manual", "scheduled"]
+              },
+              "weekend_reboot" => %{
+                "actions" => ["restart"],
+                "triggers" => ["manual"]
+              }
+            }
+          }
+        }
+      }
+
+      File.write!(config_file, Jason.encode!(config_data))
+      on_exit(fn -> File.rm(config_file) end)
+
+      config = Config.load(config_path: config_file)
+
+      assert %Config{} = config
+      [sub] = config.subscriptions
+      assert sub.name == "myhost"
+      assert is_map(sub.policy)
+      assert map_size(sub.policy) == 2
+      assert Map.has_key?(sub.policy, "weekday_activate")
+      assert Map.has_key?(sub.policy, "weekend_reboot")
+      assert sub.policy["weekday_activate"].actions == ["activate"]
+    end
   end
 
   # Helper to temporarily set environment variables

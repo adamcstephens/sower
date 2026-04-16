@@ -209,7 +209,7 @@ defmodule Sower.Orchestration.Subscription do
     alias SowerClient.Orchestration.Subscription.Policy
 
     policy =
-      if sub.policy == nil or sub.policy == [] do
+      if sub.policy == nil or sub.policy == %{} or sub.policy == [] do
         Policy.from_legacy(sub)
       else
         sub.policy
@@ -227,16 +227,32 @@ defmodule Sower.Orchestration.Subscription do
       reboot_policy: sub.reboot_policy,
       allow_realtime: sub.allow_realtime,
       window: sub.window,
-      policy: policy
+      policy: policy_to_list(policy)
     }
 
     case create_subscription(attrs) do
       {:ok, subscription} ->
-        {:ok, SowerClient.Orchestration.Subscription.cast!(subscription)}
+        castable = Map.update!(subscription, :policy, &policy_list_to_map/1)
+        {:ok, SowerClient.Orchestration.Subscription.cast!(castable)}
 
       {:error, _} = error ->
         error
     end
+  end
+
+  defp policy_list_to_map(rules) when is_list(rules) do
+    Map.new(rules, fn rule ->
+      name = Map.get(rule, :name) || Map.get(rule, "name") || "unnamed"
+      {name, rule}
+    end)
+  end
+
+  defp policy_to_list(policy) when is_list(policy), do: policy
+
+  defp policy_to_list(policy) when is_map(policy) do
+    Enum.map(policy, fn {name, rule} ->
+      Map.put(rule, :name, name)
+    end)
   end
 
   def sync_subscriptions(subscriptions, garden_id) do
@@ -433,9 +449,10 @@ defmodule Sower.Orchestration.Subscription do
 
     alias Sower.Orchestration.Subscription.Window
 
-    @derive {Jason.Encoder, only: [:actions, :triggers, :window, :confirm]}
+    @derive {Jason.Encoder, only: [:name, :actions, :triggers, :window, :confirm]}
 
     embedded_schema do
+      field :name, :string
       field :actions, {:array, :string}
       field :triggers, {:array, :string}
       field :confirm, :boolean, default: false
@@ -448,7 +465,7 @@ defmodule Sower.Orchestration.Subscription do
 
     def changeset(rule, attrs) do
       rule
-      |> cast(attrs, [:actions, :triggers, :confirm])
+      |> cast(attrs, [:name, :actions, :triggers, :confirm])
       |> cast_embed(:window, with: &Window.changeset/2)
       |> validate_required([:actions])
     end
