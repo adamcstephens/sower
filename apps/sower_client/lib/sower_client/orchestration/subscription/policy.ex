@@ -87,6 +87,29 @@ defmodule SowerClient.Orchestration.Subscription.Policy do
   end
 
   @doc """
+  Returns the highest-disruption action permitted by any rule at the given time,
+  ignoring triggers. Used by the garden deployer to determine activation mode —
+  the server already approved the deployment, the garden just needs to know how
+  far it can go right now.
+
+  Returns `:restart`, `:activate`, `:stage`, or `nil`.
+  """
+  def highest_permitted_action(rules, now, seed_type, timezone \\ "Etc/UTC") do
+    rules = rules |> normalize_rules() |> effective_rules()
+    supported_actions = Map.get(@actions_by_seed_type, seed_type, [])
+
+    @disruption_hierarchy
+    |> Enum.filter(&(&1 in supported_actions))
+    |> Enum.find_value(nil, fn action ->
+      if Enum.any?(rules, fn rule ->
+           action_matches?(rule, action) and window_matches?(rule, now, timezone)
+         end) do
+        String.to_existing_atom(action)
+      end
+    end)
+  end
+
+  @doc """
   Map an audit reason to a policy trigger.
   """
   def trigger_for_reason(:user_triggered), do: :manual

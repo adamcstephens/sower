@@ -11,6 +11,7 @@ defmodule Garden.Socket.Lifecycle do
   alias SowerClient.Orchestration.DeploymentRequest
   alias SowerClient.Orchestration.DeploymentResult
   alias SowerClient.Orchestration.Subscription
+  alias SowerClient.Orchestration.Subscription.Policy
 
   def build_seed_report(
         subscriptions,
@@ -55,7 +56,14 @@ defmodule Garden.Socket.Lifecycle do
   end
 
   def poll_on_connect_subscriptions(subscriptions) do
-    Enum.filter(subscriptions, & &1.poll_on_connect)
+    now = DateTime.utc_now()
+
+    Enum.filter(subscriptions, fn sub ->
+      case Policy.evaluate(sub.policy, :poll_on_connect, now, sub.seed_type, sub.timezone) do
+        {:allow, _} -> true
+        _ -> false
+      end
+    end)
   end
 
   def complete_deployment(sid, result, active_deployments) do

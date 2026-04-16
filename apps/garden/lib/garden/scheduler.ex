@@ -137,13 +137,36 @@ defmodule Garden.Scheduler do
             )
 
           subscription ->
-            Logger.info(
-              msg: "Running scheduled deployment",
-              subscription_sid: sid,
-              schedule: schedule
-            )
+            alias SowerClient.Orchestration.Subscription.Policy
 
-            deploy_fun.(subscription)
+            case Policy.evaluate(
+                   subscription.policy,
+                   :scheduled,
+                   DateTime.utc_now(),
+                   subscription.seed_type,
+                   subscription.timezone
+                 ) do
+              {:allow, _} ->
+                Logger.info(
+                  msg: "Running scheduled deployment",
+                  subscription_sid: sid,
+                  schedule: schedule
+                )
+
+                deploy_fun.(subscription)
+
+              {:confirm, _} ->
+                Logger.info(
+                  msg: "Scheduled deploy requires confirmation, skipping",
+                  subscription_sid: sid
+                )
+
+              :deny ->
+                Logger.warning(
+                  msg: "Scheduled deploy denied by policy",
+                  subscription_sid: sid
+                )
+            end
         end
     end
   end
