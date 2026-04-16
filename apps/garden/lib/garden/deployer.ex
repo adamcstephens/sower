@@ -10,6 +10,7 @@ defmodule Garden.Deployer do
   alias SowerClient.Orchestration.SeedDeploymentResult
   alias SowerClient.Orchestration.SeedDeploymentStatus
   alias SowerClient.Orchestration.Subscription
+  alias SowerClient.Orchestration.Subscription.Policy
 
   @rebootable_seed_types ["nixos"]
 
@@ -96,71 +97,100 @@ defmodule Garden.Deployer do
     |> async_stream_fun.(fn
       {:ok, {downloading_line, {:ok, %SeedDeployment{seed: seed} = seed_deploy, download_output}}} ->
         subscription = find_subscription_fun.(seed_deploy.subscription_sid) || %Subscription{}
-        mode = Garden.Seed.activation_mode(subscription)
+
+        action =
+          Policy.highest_permitted_action(
+            subscription.policy,
+            DateTime.utc_now(),
+            subscription.seed_type,
+            subscription.timezone
+          )
+
+        mode = action_to_mode(action)
 
         preamble =
           [downloading_line | download_output] ++
-            [
-              decision_line("realized #{seed.name} (#{seed.seed_type})"),
-              decision_line("activating #{seed.name} (#{seed.seed_type}) with mode: #{mode}")
-            ]
+            [decision_line("realized #{seed.name} (#{seed.seed_type})")]
 
-        Logger.info(
-          msg: "Activating seed",
-          name: seed.name,
-          seed_sid: seed.sid,
-          seed_type: seed.seed_type,
-          artifact: seed.artifact,
-          deployment_sid: deployment.sid,
-          activation_args: get_in(subscription.activation_args)
-        )
+        if mode == nil do
+          Logger.info(
+            msg: "Stage only — skipping activation",
+            name: seed.name,
+            seed_sid: seed.sid,
+            deployment_sid: deployment.sid
+          )
 
-        report_seed_status_fun.(deployment, seed, :activating)
-        result = activate_seed_fun.(seed, subscription)
+          preamble =
+            preamble ++
+              [decision_line("staged #{seed.name} (#{seed.seed_type}), activation not permitted")]
 
-        case result do
-          {:ok, output} ->
-            Logger.info(
-              msg: "Completed activation",
-              deployment_sid: deployment.sid,
-              seed_sid: seed.sid
-            )
+          report_seed_status_fun.(deployment, seed, :completed)
+          report_seed_result_fun.(deployment, seed, :success, preamble)
+          {:ok, ["staged"]}
+        else
+          preamble =
+            preamble ++
+              [decision_line("activating #{seed.name} (#{seed.seed_type}) with mode: #{mode}")]
 
-            report_seed_status_fun.(deployment, seed, :completed)
-            report_seed_result_fun.(deployment, seed, :success, preamble ++ output)
+          Logger.info(
+            msg: "Activating seed",
+            name: seed.name,
+            seed_sid: seed.sid,
+            seed_type: seed.seed_type,
+            artifact: seed.artifact,
+            deployment_sid: deployment.sid,
+            mode: mode
+          )
 
-          {:error, _code, output} ->
-            Logger.error(
-              msg: "Error during activation",
-              deployment_sid: deployment.sid,
-              seed_sid: seed.sid
-            )
+          # Pass the policy-derived mode to the subscription so activate uses it
+          subscription = %{subscription | activation_args: [mode]}
+          report_seed_status_fun.(deployment, seed, :activating)
+          result = activate_seed_fun.(seed, subscription)
 
-            report_seed_result_fun.(deployment, seed, :failure, preamble ++ output)
+          case result do
+            {:ok, output} ->
+              Logger.info(
+                msg: "Completed activation",
+                deployment_sid: deployment.sid,
+                seed_sid: seed.sid
+              )
 
-          {:error, reason} when reason in [:activator_unavailable, :cmd_not_found] ->
-            Logger.error(
-              msg: "Missing activator during deployment activation",
-              deployment_sid: deployment.sid,
-              seed_sid: seed.sid,
-              reason: inspect(reason)
-            )
+              report_seed_status_fun.(deployment, seed, :completed)
+              report_seed_result_fun.(deployment, seed, :success, preamble ++ output)
 
-            report_seed_result_fun.(
-              deployment,
-              seed,
-              :failure,
-              preamble ++
-                [
-                  "FATAL: missing activator executable sower-activator; deployment cannot continue"
-                ]
-            )
+            {:error, _code, output} ->
+              Logger.error(
+                msg: "Error during activation",
+                deployment_sid: deployment.sid,
+                seed_sid: seed.sid
+              )
 
-          {:error, _reason} ->
-            :ok
+              report_seed_result_fun.(deployment, seed, :failure, preamble ++ output)
+
+            {:error, reason} when reason in [:activator_unavailable, :cmd_not_found] ->
+              Logger.error(
+                msg: "Missing activator during deployment activation",
+                deployment_sid: deployment.sid,
+                seed_sid: seed.sid,
+                reason: inspect(reason)
+              )
+
+              report_seed_result_fun.(
+                deployment,
+                seed,
+                :failure,
+                preamble ++
+                  [
+                    "FATAL: missing activator executable sower-activator; deployment cannot continue"
+                  ]
+              )
+
+            {:error, _reason} ->
+              :ok
+          end
+
+          result
         end
-
-        result
 
       {:ok,
        {downloading_line,
@@ -345,39 +375,27 @@ defmodule Garden.Deployer do
         find_sub \\ &find_subscription/1,
         read_link \\ &:file.read_link_all/1
       ) do
-    subscriptions =
+    now = DateTime.utc_now()
+
+    restart_permitted =
       seed_deployments
       |> Enum.filter(&(get_in(&1.seed.seed_type) in @rebootable_seed_types))
-      |> Enum.map(fn %SeedDeployment{subscription_sid: subscription_sid} ->
-        find_sub.(subscription_sid) || %Subscription{}
+      |> Enum.any?(fn %SeedDeployment{subscription_sid: subscription_sid} ->
+        sub = find_sub.(subscription_sid) || %Subscription{}
+        Policy.highest_permitted_action(sub.policy, now, sub.seed_type, sub.timezone) == :restart
       end)
 
-    cond do
-      subscriptions == [] ->
-        nil
-
-      Enum.any?(subscriptions, fn sub ->
-        sub.reboot_policy == "always"
-      end) ->
-        "policy_always"
-
-      Enum.any?(subscriptions, fn sub ->
-        sub.reboot_policy == "when-required" and
-          Garden.Seed.activation_mode(sub) == "boot" and
-            not is_nil(detect_boot_critical_change_reason(read_link))
-      end) ->
-        "boot_mode"
-
-      Enum.any?(subscriptions, fn sub ->
-        sub.reboot_policy == "when-required" and
-            Garden.Seed.activation_mode(sub) == "switch"
-      end) ->
-        detect_boot_critical_change_reason(read_link)
-
-      true ->
-        nil
+    if restart_permitted do
+      detect_boot_critical_change_reason(read_link)
+    else
+      nil
     end
   end
+
+  defp action_to_mode(:restart), do: "boot"
+  defp action_to_mode(:activate), do: "switch"
+  defp action_to_mode(:stage), do: nil
+  defp action_to_mode(nil), do: "switch"
 
   defp report_seed_status(%Deployment{} = deployment, seed, status) do
     seed_status =

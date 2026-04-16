@@ -105,6 +105,31 @@ defmodule Garden.SchedulerTest do
       assert log =~ "Subscription not found for scheduled deployment"
     end
 
+    test "skips when policy denies scheduled trigger", %{check_cooldown: check_cooldown} do
+      sid = "sub_denied_#{System.unique_integer([:positive])}"
+
+      sub = %Subscription{
+        sid: sid,
+        seed_name: "test",
+        seed_type: "nixos",
+        policy: [%{actions: ["activate"], triggers: ["manual"]}]
+      }
+
+      test_pid = self()
+
+      log =
+        capture_log([level: :info], fn ->
+          Scheduler.deploy_if_not_cooled_down(sid, "0 3",
+            deploy_fun: fn _sub -> send(test_pid, :deployed) end,
+            check_cooldown: check_cooldown,
+            read_subscriptions: fn -> [sub] end
+          )
+        end)
+
+      refute_received :deployed
+      assert log =~ "Scheduled deploy denied by policy"
+    end
+
     test "rapid-fire calls only deploy once", %{check_cooldown: check_cooldown} do
       sid = "sub_rapid_#{System.unique_integer([:positive])}"
       sub = %Subscription{sid: sid, seed_name: "test", seed_type: "nixos"}

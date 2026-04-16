@@ -112,20 +112,25 @@ defmodule Garden.Socket.LifecycleTest do
   end
 
   describe "poll_on_connect_subscriptions/1" do
-    test "filters to subscriptions with poll_on_connect true" do
+    test "includes subscriptions with poll_on_connect in policy" do
       subs = [
         Subscription.cast!(%{
           name: "host",
           seed_name: "host",
           seed_type: "nixos",
-          poll_on_connect: true,
-          sid: "sub_1"
+          sid: "sub_1",
+          policy: %{
+            "default" => %{actions: ["activate"], triggers: ["poll_on_connect"]}
+          }
         }),
         Subscription.cast!(%{
           name: "user",
           seed_name: "user",
           seed_type: "home-manager",
-          sid: "sub_2"
+          sid: "sub_2",
+          policy: %{
+            "default" => %{actions: ["activate"], triggers: ["manual"]}
+          }
         })
       ]
 
@@ -135,12 +140,28 @@ defmodule Garden.Socket.LifecycleTest do
       assert hd(result).seed_name == "host"
     end
 
-    test "returns empty list when none have poll_on_connect" do
+    test "returns empty list when no policy permits poll_on_connect" do
+      subs = [
+        Subscription.cast!(%{
+          name: "host",
+          seed_name: "host",
+          seed_type: "nixos",
+          sid: "sub_1",
+          policy: %{
+            "default" => %{actions: ["activate"], triggers: ["manual", "scheduled"]}
+          }
+        })
+      ]
+
+      assert Lifecycle.poll_on_connect_subscriptions(subs) == []
+    end
+
+    test "default policy includes poll_on_connect" do
       subs = [
         Subscription.cast!(%{name: "host", seed_name: "host", seed_type: "nixos", sid: "sub_1"})
       ]
 
-      assert Lifecycle.poll_on_connect_subscriptions(subs) == []
+      assert length(Lifecycle.poll_on_connect_subscriptions(subs)) == 1
     end
   end
 
