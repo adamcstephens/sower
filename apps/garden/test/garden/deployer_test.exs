@@ -97,21 +97,14 @@ defmodule Garden.DeployerTest do
       assert Deployer.reboot_reason(seed_deployments, fn _ -> %Subscription{} end) == nil
     end
 
-    test "returns policy_always when profile reboot policy is always" do
-      seed_deployments = [seed_deploy("sub_always")]
+    test "returns reason when policy permits restart and boot profile changed" do
+      seed_deployments = [seed_deploy("sub_restart")]
 
-      get_profile = fn "sub_always" ->
-        %Subscription{activation_args: ["switch"], reboot_policy: "always"}
-      end
-
-      assert Deployer.reboot_reason(seed_deployments, get_profile) == "policy_always"
-    end
-
-    test "returns boot_mode when profile is when-required and activation mode is boot" do
-      seed_deployments = [seed_deploy("sub_boot")]
-
-      get_profile = fn "sub_boot" ->
-        %Subscription{activation_args: ["boot"], reboot_policy: "when-required"}
+      get_sub = fn "sub_restart" ->
+        %Subscription{
+          seed_type: "nixos",
+          policy: [%{actions: ["restart"]}]
+        }
       end
 
       read_link = fn
@@ -120,14 +113,30 @@ defmodule Garden.DeployerTest do
         "/run/booted-system" -> {:ok, "/nix/store/sys-a"}
       end
 
-      assert Deployer.reboot_reason(seed_deployments, get_profile, read_link) == "boot_mode"
+      assert Deployer.reboot_reason(seed_deployments, get_sub, read_link) == "system_changed"
     end
 
-    test "returns nil when boot profile already matches running and booted system" do
-      seed_deployments = [seed_deploy("sub_boot")]
+    test "returns nil when policy does not permit restart" do
+      seed_deployments = [seed_deploy("sub_no_restart")]
 
-      get_profile = fn "sub_boot" ->
-        %Subscription{activation_args: ["boot"], reboot_policy: "when-required"}
+      get_sub = fn "sub_no_restart" ->
+        %Subscription{
+          seed_type: "nixos",
+          policy: [%{actions: ["activate"]}]
+        }
+      end
+
+      assert Deployer.reboot_reason(seed_deployments, get_sub) == nil
+    end
+
+    test "returns nil when boot profile already matches" do
+      seed_deployments = [seed_deploy("sub_restart")]
+
+      get_sub = fn "sub_restart" ->
+        %Subscription{
+          seed_type: "nixos",
+          policy: [%{actions: ["restart"]}]
+        }
       end
 
       read_link = fn
@@ -137,38 +146,24 @@ defmodule Garden.DeployerTest do
         "/run/booted-system" -> {:ok, "/nix/store/sys-a"}
       end
 
-      assert Deployer.reboot_reason(seed_deployments, get_profile, read_link) == nil
-    end
-
-    test "returns initrd_changed when when-required switch profile has boot-critical changes" do
-      seed_deployments = [seed_deploy("sub_switch")]
-
-      get_profile = fn "sub_switch" ->
-        %Subscription{activation_args: ["switch"], reboot_policy: "when-required"}
-      end
-
-      read_link = fn
-        "/nix/var/nix/profiles/system" -> {:ok, "/nix/store/sys-a"}
-        "/run/current-system" -> {:ok, "/nix/store/sys-a"}
-        "/run/booted-system" -> {:ok, "/nix/store/sys-b"}
-      end
-
-      assert Deployer.reboot_reason(seed_deployments, get_profile, read_link) == "initrd_changed"
+      assert Deployer.reboot_reason(seed_deployments, get_sub, read_link) == nil
     end
 
     test "returns nil and logs warning when boot-critical detection cannot read links" do
-      seed_deployments = [seed_deploy("sub_switch")]
+      seed_deployments = [seed_deploy("sub_restart")]
 
-      get_profile = fn "sub_switch" ->
-        %Subscription{activation_args: ["switch"], reboot_policy: "when-required"}
+      get_sub = fn "sub_restart" ->
+        %Subscription{
+          seed_type: "nixos",
+          policy: [%{actions: ["restart"]}]
+        }
       end
 
       logs =
         capture_log(fn ->
-          assert Deployer.reboot_reason(seed_deployments, get_profile, fn _ ->
+          assert Deployer.reboot_reason(seed_deployments, get_sub, fn _ ->
                    {:error, :enoent}
-                 end) ==
-                   nil
+                 end) == nil
         end)
 
       assert logs =~ "Could not evaluate reboot requirement from system profile links"
@@ -320,7 +315,10 @@ defmodule Garden.DeployerTest do
       logged_lines =
         capture_seed_result_lines(deployment,
           find_subscription_fun: fn _ ->
-            %Subscription{activation_args: ["boot"]}
+            %Subscription{
+              seed_type: "nixos",
+              policy: [%{actions: ["restart"]}]
+            }
           end
         )
 

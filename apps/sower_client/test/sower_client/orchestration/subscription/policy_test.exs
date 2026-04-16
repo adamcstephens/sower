@@ -556,4 +556,81 @@ defmodule SowerClient.Orchestration.Subscription.PolicyTest do
       assert {:allow, :activate} = Policy.evaluate(%{}, :manual, @now, "nixos")
     end
   end
+
+  describe "highest_permitted_action/4" do
+    test "returns highest action permitted by any rule" do
+      rules = [
+        %{actions: ["activate"], triggers: ["manual"]},
+        %{actions: ["restart"], triggers: ["scheduled"]}
+      ]
+
+      assert :restart = Policy.highest_permitted_action(rules, @now, "nixos")
+    end
+
+    test "respects window constraints" do
+      rules = [
+        %{actions: ["activate"]},
+        %{
+          actions: ["restart"],
+          window: %{days: ["sat"], time_start: "02:00", time_end: "04:00"}
+        }
+      ]
+
+      # Wednesday — restart window closed, activate is highest
+      assert :activate = Policy.highest_permitted_action(rules, @now, "nixos")
+    end
+
+    test "returns restart when window is open" do
+      # Friday at 23:00
+      friday_23 = DateTime.from_naive!(~N[2026-04-17 23:00:00], "Etc/UTC")
+
+      rules = [
+        %{actions: ["activate"]},
+        %{
+          actions: ["restart"],
+          window: %{days: ["fri"], time_start: "22:00", time_end: "06:00"}
+        }
+      ]
+
+      assert :restart = Policy.highest_permitted_action(rules, friday_23, "nixos")
+    end
+
+    test "skips unsupported actions for seed type" do
+      rules = [%{actions: ["restart", "activate", "stage"]}]
+
+      assert :activate = Policy.highest_permitted_action(rules, @now, "home-manager")
+    end
+
+    test "returns nil when no actions permitted" do
+      rules = [
+        %{
+          actions: ["activate"],
+          window: %{days: ["sat"], time_start: "02:00", time_end: "04:00"}
+        }
+      ]
+
+      # Wednesday — window closed, nothing permitted
+      assert nil == Policy.highest_permitted_action(rules, @now, "nixos")
+    end
+
+    test "ignores triggers" do
+      rules = [%{actions: ["restart"], triggers: ["manual"]}]
+
+      # Triggers are ignored — restart is permitted
+      assert :restart = Policy.highest_permitted_action(rules, @now, "nixos")
+    end
+
+    test "works with map-format policy" do
+      policy = %{
+        "activate_rule" => %{actions: ["activate"]},
+        "restart_rule" => %{actions: ["restart"]}
+      }
+
+      assert :restart = Policy.highest_permitted_action(policy, @now, "nixos")
+    end
+
+    test "default policy returns activate" do
+      assert :activate = Policy.highest_permitted_action([], @now, "nixos")
+    end
+  end
 end
