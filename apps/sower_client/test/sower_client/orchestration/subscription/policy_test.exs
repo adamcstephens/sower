@@ -1,6 +1,8 @@
 defmodule SowerClient.Orchestration.Subscription.PolicyTest do
   use ExUnit.Case, async: true
 
+  import ExUnit.CaptureLog
+
   alias SowerClient.Orchestration.Subscription.Policy
 
   # Wednesday 2026-04-15 at 14:00 UTC
@@ -323,6 +325,19 @@ defmodule SowerClient.Orchestration.Subscription.PolicyTest do
       rules = [%{actions: ["stage", "activate", "restart"]}]
       assert :deny = Policy.evaluate(rules, :manual, @now, "unknown")
     end
+
+    test "logs warning for unsupported action on seed type" do
+      rules = [%{actions: ["restart", "activate"]}]
+
+      log =
+        capture_log(fn ->
+          Policy.evaluate(rules, :manual, @now, "home-manager")
+        end)
+
+      assert log =~ "unsupported action"
+      assert log =~ "restart"
+      assert log =~ "home-manager"
+    end
   end
 
   describe "evaluate/5 — string key maps" do
@@ -501,6 +516,22 @@ defmodule SowerClient.Orchestration.Subscription.PolicyTest do
 
       assert "restart" in rule.actions
       assert "realtime" in rule.triggers
+    end
+
+    test "from_legacy poll_on_connect round-trips through evaluate" do
+      sub = %{reboot_policy: "never", allow_realtime: false, poll_on_connect: true, window: nil}
+      policy = Policy.from_legacy(sub)
+
+      now = DateTime.from_naive!(~N[2026-04-15 14:00:00], "Etc/UTC")
+      assert {:allow, :activate} = Policy.evaluate(policy, :poll_on_connect, now, "nixos")
+    end
+
+    test "from_legacy without poll_on_connect denies poll_on_connect trigger" do
+      sub = %{reboot_policy: "never", allow_realtime: false, poll_on_connect: false, window: nil}
+      policy = Policy.from_legacy(sub)
+
+      now = DateTime.from_naive!(~N[2026-04-15 14:00:00], "Etc/UTC")
+      assert :deny = Policy.evaluate(policy, :poll_on_connect, now, "nixos")
     end
   end
 
