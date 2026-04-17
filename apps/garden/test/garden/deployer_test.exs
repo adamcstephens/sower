@@ -328,6 +328,28 @@ defmodule Garden.DeployerTest do
              )
     end
 
+    test "uses restart mode for service seed type with activate action" do
+      deployment = %Deployment{
+        sid: "dep_svc",
+        seed_deployments: [seed_deploy_with_identity("seed_svc1", "service")]
+      }
+
+      logged_lines =
+        capture_seed_result_lines(deployment,
+          find_subscription_fun: fn _ ->
+            %Subscription{
+              seed_type: "service",
+              policy: [%{actions: ["activate"]}]
+            }
+          end
+        )
+
+      assert Enum.any?(
+               logged_lines,
+               &(&1 =~ "[garden]" and &1 =~ "restart" and &1 =~ "seed-seed_svc1")
+             )
+    end
+
     test "includes reboot decision in last seed log" do
       deployment = %Deployment{
         sid: "dep_reboot_log",
@@ -524,13 +546,13 @@ defmodule Garden.DeployerTest do
     }
   end
 
-  defp seed_deploy_with_identity(seed_sid) do
+  defp seed_deploy_with_identity(seed_sid, seed_type \\ "nixos") do
     %SeedDeployment{
       subscription_sid: "sub_#{seed_sid}",
       seed: %Seed{
         sid: seed_sid,
         name: "seed-#{seed_sid}",
-        seed_type: "nixos",
+        seed_type: seed_type,
         artifact: "/nix/store/#{seed_sid}"
       }
     }

@@ -106,7 +106,7 @@ defmodule Garden.Deployer do
             subscription.timezone
           )
 
-        mode = action_to_mode(action)
+        mode = action_to_mode(action, seed.seed_type)
 
         preamble =
           [downloading_line | download_output] ++
@@ -392,10 +392,11 @@ defmodule Garden.Deployer do
     end
   end
 
-  defp action_to_mode(:restart), do: "boot"
-  defp action_to_mode(:activate), do: "switch"
-  defp action_to_mode(:stage), do: nil
-  defp action_to_mode(nil), do: "switch"
+  defp action_to_mode(:restart, _seed_type), do: "boot"
+  defp action_to_mode(:activate, "service"), do: "restart"
+  defp action_to_mode(:activate, _seed_type), do: "switch"
+  defp action_to_mode(:stage, _seed_type), do: nil
+  defp action_to_mode(nil, _seed_type), do: "switch"
 
   defp report_seed_status(%Deployment{} = deployment, seed, status) do
     seed_status =

@@ -104,5 +104,7 @@ defmodule SowerWeb.SubscriptionLive.Show do
   defp page_title(:edit), do: "Edit Subscription"
 
   defp deploy_error_message(:garden_not_found), do: "Garden not found"
+  defp deploy_error_message(:policy_denied), do: "Denied by policy"
+  defp deploy_error_message(:confirmation_required), do: "Confirmation required"
   defp deploy_error_message(_), do: "Deployment failed"
 end
