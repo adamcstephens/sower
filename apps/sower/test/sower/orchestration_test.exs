@@ -1442,4 +1442,72 @@ defmodule Sower.OrchestrationTest do
 
     last_value
   end
+
+  describe "deploy_subscription/2 policy evaluation" do
+    import Sower.OrchestrationFixtures
+
+    test "returns policy_denied when policy blocks the trigger" do
+      garden = garden_fixture()
+      seed_fixture(%{name: "myhost", seed_type: "nixos"})
+
+      sub =
+        subscription_fixture(%{
+          garden_id: garden.id,
+          seed_name: "myhost",
+          seed_type: "nixos",
+          policy: [
+            %{actions: ["activate"], triggers: ["scheduled"]}
+          ]
+        })
+
+      assert {:error, :policy_denied} =
+               Orchestration.deploy_subscription(sub,
+                 actor_sid: "user_test",
+                 event_reason: :user_triggered
+               )
+    end
+
+    test "returns confirmation_required when matching rule has confirm" do
+      garden = garden_fixture()
+      seed_fixture(%{name: "myhost", seed_type: "nixos"})
+
+      sub =
+        subscription_fixture(%{
+          garden_id: garden.id,
+          seed_name: "myhost",
+          seed_type: "nixos",
+          policy: [
+            %{actions: ["activate"], triggers: ["manual"], confirm: true}
+          ]
+        })
+
+      assert {:error, :confirmation_required} =
+               Orchestration.deploy_subscription(sub,
+                 actor_sid: "user_test",
+                 event_reason: :user_triggered
+               )
+    end
+
+    @tag :capture_log
+    test "allows deployment when policy permits the trigger" do
+      garden = garden_fixture()
+      seed_fixture(%{name: "myhost", seed_type: "nixos"})
+
+      sub =
+        subscription_fixture(%{
+          garden_id: garden.id,
+          seed_name: "myhost",
+          seed_type: "nixos",
+          policy: [
+            %{actions: ["activate"], triggers: ["manual"]}
+          ]
+        })
+
+      assert {:ok, _request_id, _pid} =
+               Orchestration.deploy_subscription(sub,
+                 actor_sid: "user_test",
+                 event_reason: :user_triggered
+               )
+    end
+  end
 end

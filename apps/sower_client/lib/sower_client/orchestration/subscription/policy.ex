@@ -1,6 +1,8 @@
 defmodule SowerClient.Orchestration.Subscription.Policy do
   use SowerClient.Schema
 
+  require Logger
+
   alias SowerClient.Orchestration.Subscription.Window
 
   @actions ["stage", "activate", "restart"]
@@ -61,6 +63,7 @@ defmodule SowerClient.Orchestration.Subscription.Policy do
   def evaluate(rules, trigger, now, seed_type, timezone \\ "Etc/UTC") do
     rules = rules |> normalize_rules() |> effective_rules()
     supported_actions = Map.get(@actions_by_seed_type, seed_type, [])
+    warn_unsupported_actions(rules, supported_actions, seed_type)
 
     @disruption_hierarchy
     |> Enum.filter(&(&1 in supported_actions))
@@ -97,6 +100,7 @@ defmodule SowerClient.Orchestration.Subscription.Policy do
   def highest_permitted_action(rules, now, seed_type, timezone \\ "Etc/UTC") do
     rules = rules |> normalize_rules() |> effective_rules()
     supported_actions = Map.get(@actions_by_seed_type, seed_type, [])
+    warn_unsupported_actions(rules, supported_actions, seed_type)
 
     @disruption_hierarchy
     |> Enum.filter(&(&1 in supported_actions))
@@ -263,6 +267,21 @@ defmodule SowerClient.Orchestration.Subscription.Policy do
     in_closing_day = yesterday in days and Time.compare(time, end_time) != :gt
 
     in_opening_day or in_closing_day
+  end
+
+  defp warn_unsupported_actions(rules, supported_actions, seed_type) do
+    Enum.each(rules, fn rule ->
+      rule_actions(rule)
+      |> Enum.reject(&(&1 in supported_actions))
+      |> Enum.each(fn action ->
+        Logger.warning(
+          msg: "Policy rule references unsupported action for seed type",
+          action: action,
+          seed_type: seed_type,
+          supported_actions: supported_actions
+        )
+      end)
+    end)
   end
 
   # Field accessors that work with both maps (string/atom keys) and structs
