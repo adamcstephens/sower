@@ -12,6 +12,7 @@ defmodule Sower.Accounts.AccessToken do
   @derive {Phoenix.Param, key: :sid}
 
   schema "access_tokens" do
+    # unnamed sid since the full token has its own prefix
     field :sid, SowerClient.Sid, autogenerate: true
     field :expires_at, :date
     field :description, :string
