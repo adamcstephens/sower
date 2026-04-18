@@ -29,6 +29,7 @@ defmodule SowerClient do
       SowerClient.Orchestration.GardenSeedGeneration,
       SowerClient.Orchestration.GardenSeedProfile,
       SowerClient.Orchestration.GardenSeedsReport,
+      SowerClient.Orchestration.GardenReport,
       SowerClient.Orchestration.Deployment,
       SowerClient.Orchestration.DeploymentResult,
       SowerClient.Orchestration.DeploymentRequest,

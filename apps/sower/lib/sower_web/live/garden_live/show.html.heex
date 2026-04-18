@@ -16,6 +16,16 @@
 
   <div class="mt-8 space-y-10">
     <section>
+      <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4">Details</h2>
+      <dl class="text-sm text-zinc-700 dark:text-zinc-300">
+        <div class="flex gap-2">
+          <dt class="font-medium">Version:</dt>
+          <dd>{@garden.version || "unknown"}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section>
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200">Seed Generations</h2>
         <div class="flex items-center space-x-2">
