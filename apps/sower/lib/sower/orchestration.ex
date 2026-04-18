@@ -21,6 +21,7 @@ defmodule Sower.Orchestration do
   defdelegate list_gardens_with_latest_deployment(), to: Garden
   defdelegate list_gardens_flop(params \\ %{}), to: Garden
   defdelegate update_garden(garden, attrs), to: Garden
+  defdelegate update_garden_report(garden, report), to: Garden
 
   # Subscription delegates
   defdelegate change_subscription(subscription, attrs \\ %{}), to: Subscription

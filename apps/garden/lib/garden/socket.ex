@@ -7,6 +7,7 @@ defmodule Garden.Socket do
   alias Garden.Socket.Lifecycle
   alias Garden.Storage
   alias SowerClient.Orchestration.DeploymentStatus
+  alias SowerClient.Orchestration.GardenReport
   alias SowerClient.Orchestration.SeedDeploymentStatus
 
   def deploy(%SowerClient.Orchestration.Subscription{} = sub, opts \\ []) do
@@ -42,6 +43,17 @@ defmodule Garden.Socket do
 
         {:ok, _ref} = push(socket, private_channel(socket), "garden:seeds:report", report)
     end
+
+    {:noreply, socket}
+  end
+
+  @impl Slipstream
+  def handle_cast(:report_garden, socket) do
+    report = GardenReport.cast!(%{version: to_string(Application.spec(:garden, :vsn))})
+
+    Logger.debug(msg: "Reporting garden facts", version: report.version)
+
+    {:ok, _ref} = push_message(socket, report)
 
     {:noreply, socket}
   end
@@ -378,6 +390,7 @@ defmodule Garden.Socket do
 
     cast(:sync_subscriptions)
     cast(:report_seeds)
+    cast(:report_garden)
 
     {:ok, assign(socket, :conn_sid, conn_sid)}
   end

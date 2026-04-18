@@ -388,4 +388,15 @@ defmodule SowerWeb.GardenChannelHandleInTest do
       assert_reply ref, :ok, :ok, 1_000
     end
   end
+
+  describe "garden:report" do
+    test "persists reported version on the garden row" do
+      %{socket: socket, garden: garden} = connect_and_join_garden()
+
+      ref = push(socket, "garden:report", %{"version" => "1.2.3"})
+
+      assert_reply ref, :ok, _reply, 1_000
+      assert Sower.Orchestration.get_garden!(garden.id).version == "1.2.3"
+    end
+  end
 end

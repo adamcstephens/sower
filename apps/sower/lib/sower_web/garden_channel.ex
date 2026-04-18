@@ -146,6 +146,10 @@ defmodule SowerWeb.GardenChannel do
     Orchestration.update_garden_seed_generations(report, socket.assigns.garden)
   end)
 
+  handle_schema(SowerClient.Orchestration.GardenReport, fn report, socket ->
+    Orchestration.update_garden_report(socket.assigns.garden, report)
+  end)
+
   @impl Phoenix.Channel
   def handle_info(:track_presence, %Phoenix.Socket{assigns: %{garden: garden}} = socket) do
     Logger.debug(msg: "Tracking garden presence", garden_sid: garden.sid)
