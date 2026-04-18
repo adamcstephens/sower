@@ -1,6 +1,14 @@
 default:
     just -l
 
+bootstrap:
+    @echo "Remove this comment to test" && exit 1
+
+    cp ./dev-client-example.json ./dev-client.json
+    cp ./dev-server-example.json ./dev-server.json
+    # setup AWS and OIDC secrets
+    mix ecto.setup --no-start
+
 check: check-elixir check-go
 
 check-e2e:
