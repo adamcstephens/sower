@@ -27,6 +27,7 @@ defmodule Sower.Orchestration.Garden do
     field :name, :string
     field :org_id, Ecto.UUID
     field :oauth_client_id, :string
+    field :version, :string
 
     has_many :subscriptions, Sower.Orchestration.Subscription
     has_many :deployments, Sower.Orchestration.Deployment
@@ -40,7 +41,7 @@ defmodule Sower.Orchestration.Garden do
   @doc false
   def changeset(garden, attrs) do
     garden
-    |> cast(attrs, [:name, :org_id, :oauth_client_id])
+    |> cast(attrs, [:name, :org_id, :oauth_client_id, :version])
     |> validate_required([:name])
   end
 
@@ -118,6 +119,13 @@ defmodule Sower.Orchestration.Garden do
     garden
     |> changeset(attrs)
     |> Repo.update()
+  end
+
+  def update_garden_report(
+        %__MODULE__{} = garden,
+        %SowerClient.Orchestration.GardenReport{} = report
+      ) do
+    update_garden(garden, %{version: report.version})
   end
 
   defp delete_existing_client(%__MODULE__{oauth_client_id: nil}), do: :ok
