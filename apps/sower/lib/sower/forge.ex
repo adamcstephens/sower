@@ -115,6 +115,7 @@ defmodule Sower.Forge do
   """
   def create_connection(attrs \\ %{}) do
     %Connection{
+      sid: SowerClient.Sid.generate("forg"),
       org_id: Sower.Repo.get_org_id()
     }
     |> Connection.changeset(attrs)
@@ -263,6 +264,7 @@ defmodule Sower.Forge do
   """
   def create_repository(attrs \\ %{}) do
     %Repository{
+      sid: SowerClient.Sid.generate("repo"),
       org_id: Sower.Repo.get_org_id(),
       webhook_secret: 64 |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
     }
