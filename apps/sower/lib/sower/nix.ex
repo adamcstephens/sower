@@ -83,6 +83,7 @@ defmodule Sower.Nix do
   """
   def create_cache(attrs \\ %{}) do
     %Cache{
+      sid: SowerClient.Sid.generate("nxc"),
       org_id: Sower.Repo.get_org_id()
     }
     |> Cache.changeset(attrs)

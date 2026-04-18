@@ -31,7 +31,7 @@ defmodule Sower.Accounts.User do
   end
 
   def new(attrs) do
-    %User{}
+    %User{sid: SowerClient.Sid.generate("user")}
     |> changeset(attrs)
     |> Repo.insert()
   end

@@ -47,7 +47,15 @@ defmodule Sower.Accounts.UserToken do
   """
   def build_session_token(user) do
     token = :crypto.strong_rand_bytes(@rand_size)
-    {token, %UserToken{token: token, context: "session", user_id: user.id, org_id: user.org_id}}
+
+    {token,
+     %UserToken{
+       sid: SowerClient.Sid.generate("utok"),
+       token: token,
+       context: "session",
+       user_id: user.id,
+       org_id: user.org_id
+     }}
   end
 
   @doc """
@@ -91,6 +99,7 @@ defmodule Sower.Accounts.UserToken do
 
     {Base.url_encode64(token, padding: false),
      %UserToken{
+       sid: SowerClient.Sid.generate("utok"),
        token: hashed_token,
        context: context,
        sent_to: sent_to,
