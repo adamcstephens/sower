@@ -257,11 +257,11 @@ defmodule Garden.Socket do
       {:ok, _} = ok ->
         ok
 
-      {:error, reason} ->
+      {:error, {:reauthentication_failed, {:server_rejected, status}}} ->
         Logger.warning(
-          msg: "Reauthentication failed, clearing credentials and re-registering",
+          msg: "Server rejected credentials, clearing and re-registering",
           garden_sid: storage.garden_sid,
-          reason: inspect(reason)
+          status: to_string(status)
         )
 
         storage =
@@ -270,6 +270,15 @@ defmodule Garden.Socket do
           |> Map.delete(:oauth_credentials)
 
         try_http_registration(storage)
+
+      {:error, reason} = err ->
+        Logger.warning(
+          msg: "Reauthentication failed",
+          garden_sid: storage.garden_sid,
+          reason: inspect(reason)
+        )
+
+        err
     end
   end
 

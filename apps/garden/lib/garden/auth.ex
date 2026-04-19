@@ -51,11 +51,11 @@ defmodule Garden.Auth do
     token
   end
 
-  def request_token(client_id, private_key_pem) do
+  def request_token(client_id, private_key_pem, post_fun \\ &Req.post/2) do
     endpoint = Garden.Config.get().endpoint
     assertion = build_assertion(client_id, private_key_pem)
 
-    case Req.post("#{endpoint}/api/oauth/token",
+    case post_fun.("#{endpoint}/api/oauth/token",
            json: %{
              grant_type: "client_credentials",
              client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
@@ -71,18 +71,31 @@ defmodule Garden.Auth do
            token_type: body["token_type"]
          }}
 
-      {:ok, %{status: status, body: body}} ->
+      {:ok, %{status: status, body: body}} when status >= 400 and status < 500 ->
         Logger.warning(
-          msg: "Token request failed",
+          msg: "Token request rejected by server",
           status: to_string(status),
           error: inspect(body)
         )
 
-        {:error, :token_request_failed}
+        {:error, {:server_rejected, status}}
+
+      {:ok, %{status: status, body: body}} ->
+        Logger.warning(
+          msg: "Token request server error",
+          status: to_string(status),
+          error: inspect(body)
+        )
+
+        {:error, {:server_error, status}}
+
+      {:error, %Req.TransportError{reason: reason}} ->
+        Logger.warning(msg: "Token request transport error", reason: inspect(reason))
+        {:error, {:transport_error, reason}}
 
       {:error, error} ->
         Logger.warning(msg: "Token request error", error: inspect(error))
-        {:error, :token_request_failed}
+        {:error, {:request_error, error}}
     end
   end
 end
