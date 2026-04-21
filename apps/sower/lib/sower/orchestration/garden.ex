@@ -14,7 +14,7 @@ defmodule Sower.Orchestration.Garden do
   @derive {
     Flop.Schema,
     filterable: [],
-    sortable: [:name, :inserted_at],
+    sortable: [:name, :inserted_at, :version],
     default_limit: 20,
     default_order: %{
       order_by: [:name],
