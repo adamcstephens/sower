@@ -1,6 +1,30 @@
 <Layouts.app flash={@flash} current_user={@current_user} nav_section={assigns[:nav_section]}>
   <.header>
     Listing Gardens
+    <:actions>
+      <details class="relative">
+        <summary
+          class="flex list-none cursor-pointer items-center rounded-lg p-2 text-zinc-900 hover:bg-zinc-200 dark:text-zinc-200 dark:hover:bg-zinc-700"
+          aria-label="Toggle columns"
+          title="Columns"
+        >
+          <.icon name="hero-view-columns" class="h-5 w-5" />
+        </summary>
+        <ul class="absolute right-0 top-full z-50 mt-2 w-48 rounded-lg border border-zinc-300 bg-zinc-100 p-2 shadow-lg dark:border-zinc-600 dark:bg-zinc-700">
+          <li :for={col <- @columns} :if={not col.lockable}>
+            <label class="flex items-center gap-2 px-2 py-1 text-sm cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-600 rounded">
+              <input
+                type="checkbox"
+                checked={col.key in @visible_cols}
+                phx-click="toggle_col"
+                phx-value-col={col.key}
+              />
+              {col.label}
+            </label>
+          </li>
+        </ul>
+      </details>
+    </:actions>
   </.header>
 
   <.table
@@ -8,15 +32,20 @@
     rows={@gardens}
     row_click={fn garden -> JS.navigate(~p"/gardens/#{garden}") end}
     meta={@meta}
-    path={~p"/gardens"}
+    path={@cols_path}
     action_hide_on={:sm}
   >
-    <:col :let={garden} label="Name" field={:name}>{garden.name}</:col>
-    <:col :let={garden} label="Online">
+    <:col :let={garden} :if={:name in @visible_cols} label="Name" field={:name}>
+      {garden.name}
+    </:col>
+    <:col :let={garden} :if={:online in @visible_cols} label="Online">
       <.online state={garden.sid in Map.keys(@garden_presence)} />
     </:col>
-    <:col :let={garden} label="Deploy">
+    <:col :let={garden} :if={:deploy in @visible_cols} label="Deploy">
       <.result result={garden.latest_deployment && garden.latest_deployment.result} />
+    </:col>
+    <:col :let={garden} :if={:version in @visible_cols} label="Version" field={:version}>
+      {garden.version || "—"}
     </:col>
     <:action :let={garden}>
       <div class="sr-only">
@@ -25,7 +54,7 @@
     </:action>
   </.table>
 
-  <.pagination meta={@meta} path={~p"/gardens"} />
+  <.pagination meta={@meta} path={@cols_path} />
 
   <.modal
     :if={@live_action in [:new, :edit]}
