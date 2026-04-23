@@ -1503,11 +1503,14 @@ defmodule Sower.OrchestrationTest do
           ]
         })
 
-      assert {:ok, _request_id, _pid} =
+      assert {:ok, _request_id, pid} =
                Orchestration.deploy_subscription(sub,
                  actor_sid: "user_test",
                  event_reason: :user_triggered
                )
+
+      ref = Process.monitor(pid)
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5000
     end
   end
 end
