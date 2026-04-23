@@ -1,5 +1,5 @@
 ## Agent Workflow
-- **IMPORTANT**: before you do anything else, invoke the vein `orient` MCP prompt and heed its output with `/mcp__vein__orient`.
+- **IMPORTANT**: before you do anything else, invoke the vein `orient` MCP prompt and heed its output.
 - **Always** use `elixir-conventions` for elixir code. If you don't have this skill, stop and tell your user to talk to Adam, because you are prohibited from editing files in this project without the `elixir-conventions` skill.
 
 ## Rules
