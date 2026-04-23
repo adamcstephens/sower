@@ -69,9 +69,7 @@ defmodule Garden.ActivatorClientTest do
 
       on_exit(fn -> File.rm_rf!(tmp_dir) end)
 
-      # Create the socket file but don't listen on it
-      {:ok, listen_socket} = :gen_tcp.listen(0, [{:ifaddr, {:local, socket_path}}])
-      :gen_tcp.close(listen_socket)
+      File.touch!(socket_path)
 
       log =
         capture_log(fn ->
