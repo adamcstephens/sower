@@ -14,12 +14,15 @@ defmodule Sower.Orchestration.Garden do
   @derive {
     Flop.Schema,
     filterable: [],
-    sortable: [:name, :inserted_at, :version],
+    sortable: [:name, :inserted_at, :version, :deploy_result],
     default_limit: 20,
     default_order: %{
       order_by: [:name],
       order_directions: [:asc]
-    }
+    },
+    adapter_opts: [
+      join_fields: [deploy_result: [binding: :latest_deployment, field: :result]]
+    ]
   }
 
   schema "gardens" do
@@ -78,6 +81,7 @@ defmodule Sower.Orchestration.Garden do
       from(a in __MODULE__,
         as: :garden,
         left_lateral_join: d in subquery(latest_deployment_query),
+        as: :latest_deployment,
         on: true,
         select: %{a | latest_deployment: d}
       )

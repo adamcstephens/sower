@@ -41,7 +41,7 @@
     <:col :let={garden} :if={:online in @visible_cols} label="Online">
       <.online state={garden.sid in Map.keys(@garden_presence)} />
     </:col>
-    <:col :let={garden} :if={:deploy in @visible_cols} label="Deploy">
+    <:col :let={garden} :if={:deploy in @visible_cols} label="Deploy" field={:deploy_result}>
       <.result result={garden.latest_deployment && garden.latest_deployment.result} />
     </:col>
     <:col :let={garden} :if={:version in @visible_cols} label="Version" field={:version}>
