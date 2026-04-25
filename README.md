@@ -43,22 +43,23 @@ Through the garden's configuration, you can determine what the garden should sub
 
 Subscriptions are the main controls for how systems are deployed. They include:
 
-- A set of (currently primitive) seed tag matching rules
+- A set of seed tag matching rules
 - Schedule in cron format for pull-based deployments
-- Which deployment profile to use
+- A `policy` controlling which deployment actions are permitted, and when
 
-#### Deployment Profiles
+#### Policy
 
-Controls for what happens when the deploy occurs.
-
-- Arguments to pass to activation
-- Rules about rebooting (NixOS seeds only)
+Each subscription carries a `policy` map of named rules. Each rule permits a set
+of `actions` (`stage`, `activate`, `restart`) for a set of `triggers` (`manual`,
+`scheduled`, `realtime`, `poll_on_connect`), optionally constrained to a time
+`window`. Multiple rules are OR-ed; the highest-disruption permitted action
+wins. See `docs/spec-deployment-policy.org` for the full specification.
 
 #### Example garden config
 
 ```nix
 {
-  age.secrets.sower-next-api-token = {
+  age.secrets.sower-api-token = {
     file = cfg.access_token_secret;
     owner = "sower-garden";
   };
@@ -71,34 +72,42 @@ Controls for what happens when the deploy occurs.
 
     garden = {
       enable = true;
-      accessTokenFile = config.age.secrets.sower-next-api-token.path;
+      accessTokenFile = config.age.secrets.sower-api-token.path;
       package = inputs.sower-next.packages.${pkgs.stdenv.hostPlatform.system}.garden;
 
       settings = {
-        access_token_file = config.age.secrets.sower-next-api-token.path;
+        access_token_file = config.age.secrets.sower-api-token.path;
         endpoint = "http://localhost:7150";
 
-        deployment_profiles = {
-          boot = {
-            activation_args = [ "boot" ];
-            reboot_policy = "when-required";
-          };
-          switch = {
-            activation_args = [ "switch" ];
-            reboot_policy = "never";
-          };
-        };
-
-        subscriptions = [
-          {
+        subscriptions = {
+          ${config.networking.hostName} = {
             seed_name = config.networking.hostName;
             seed_type = "nixos";
             rules = [ "git_branch=main" ];
             # https://hexdocs.pm/crontab/cron_notation.html
-            schedule = "0 3";
-            deployment_profile = "boot";
-          }
-        ];
+            schedule = "0 3 * * *";
+            timezone = "America/New_York";
+
+            policy = {
+              # Allow manual activations anytime.
+              manual = {
+                actions = [ "activate" ];
+                triggers = [ "manual" ];
+              };
+              # Scheduled / poll-on-connect deploys may stage, activate, and
+              # reboot — but only inside the maintenance window.
+              maintenance = {
+                actions = [ "stage" "activate" "restart" ];
+                triggers = [ "scheduled" "poll_on_connect" ];
+                window = {
+                  days = [ "mon" "tue" "wed" "thu" "fri" "sat" "sun" ];
+                  time_start = "02:00";
+                  time_end = "04:00";
+                };
+              };
+            };
+          };
+        };
       };
     };
   };
