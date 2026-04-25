@@ -27,7 +27,8 @@ defmodule SowerClient.Orchestration.Subscription.Window do
       tz: %Schema{
         type: :string,
         description: "IANA timezone for window evaluation",
-        example: "America/New_York"
+        example: "America/New_York",
+        nullable: true
       }
     },
     required: [:days, :time_start, :time_end]
