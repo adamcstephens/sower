@@ -49,6 +49,56 @@ defmodule SowerWeb.GardenLive.ShowTest do
     refute has_element?(show_live, "button", "Deploy")
   end
 
+  test "live-updates version when garden report broadcast arrives", %{conn: conn, user: user} do
+    Sower.Repo.put_org_id(user.org_id)
+    garden = garden_fixture()
+
+    {:ok, show_live, html} = live(conn, ~p"/gardens/#{garden}")
+    assert html =~ "unknown"
+
+    {:ok, _} =
+      Sower.Orchestration.update_garden_report(
+        garden,
+        %SowerClient.Orchestration.GardenReport{version: "9.9.9"}
+      )
+
+    assert render(show_live) =~ "9.9.9"
+  end
+
+  test "live-updates seed generations when seeds report broadcast arrives", %{
+    conn: conn,
+    user: user
+  } do
+    Sower.Repo.put_org_id(user.org_id)
+    garden = garden_fixture()
+    seed = seed_fixture(%{name: "live-update-seed", seed_type: "nixos"})
+
+    {:ok, show_live, html} = live(conn, ~p"/gardens/#{garden}")
+    refute html =~ "live-update-seed"
+
+    report = %SowerClient.Orchestration.GardenSeedsReport{
+      profiles: [
+        %SowerClient.Orchestration.GardenSeedProfile{
+          profile_path: "/nix/var/nix/profiles/system",
+          tags: %{},
+          generations: [
+            %SowerClient.Orchestration.GardenSeedGeneration{
+              path: seed.artifact,
+              link: "/nix/var/nix/profiles/system-1-link",
+              created: DateTime.to_iso8601(DateTime.utc_now()),
+              generation_number: 1,
+              is_current: true
+            }
+          ]
+        }
+      ]
+    }
+
+    {:ok, :ok} = Sower.Orchestration.update_garden_seed_generations(report, garden)
+
+    assert render(show_live) =~ "live-update-seed"
+  end
+
   test "clicking deploy triggers deployment and redirects", %{conn: conn, user: user} do
     %{garden: garden, subscription: subscription} = create_garden_with_subscription(user)
 
