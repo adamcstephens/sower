@@ -77,6 +77,15 @@ defmodule SowerWeb.GardenLive.Show do
     {:noreply, assign(socket, :deployments, deployments)}
   end
 
+  def handle_info({:garden, _event, %Sower.Orchestration.Garden{}}, socket) do
+    {:noreply, refresh_garden(socket)}
+  end
+
+  def handle_info({:garden_seed_generations, _event, %Sower.Orchestration.Garden{}}, socket) do
+    generations = load_generations(socket.assigns.garden, socket.assigns.generations_filter)
+    {:noreply, assign(socket, :generations, generations)}
+  end
+
   def handle_info({SowerWeb.GardenLive.FormComponent, {:saved, garden}}, socket) do
     garden = Sower.Repo.preload(garden, :subscriptions)
     {:noreply, assign(socket, :garden, garden)}
@@ -165,6 +174,16 @@ defmodule SowerWeb.GardenLive.Show do
              |> assign(:retrying_deployment, nil)
              |> put_flash(:error, "Failed to retry deployment")}
         end
+    end
+  end
+
+  defp refresh_garden(socket) do
+    case Orchestration.get_garden_sid(socket.assigns.garden.sid) do
+      nil ->
+        socket
+
+      garden ->
+        assign(socket, :garden, Sower.Repo.preload(garden, :subscriptions))
     end
   end
 
