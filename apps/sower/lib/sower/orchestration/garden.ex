@@ -5,6 +5,7 @@ defmodule Sower.Orchestration.Garden do
 
   alias Sower.Repo
   alias Sower.Orchestration.Deployment
+  alias Sower.Orchestration.GardenPubSub
 
   require Logger
 
@@ -129,7 +130,14 @@ defmodule Sower.Orchestration.Garden do
         %__MODULE__{} = garden,
         %SowerClient.Orchestration.GardenReport{} = report
       ) do
-    update_garden(garden, %{version: report.version})
+    case update_garden(garden, %{version: report.version}) do
+      {:ok, updated} = result ->
+        GardenPubSub.broadcast_garden_change(updated, :updated)
+        result
+
+      other ->
+        other
+    end
   end
 
   defp delete_existing_client(%__MODULE__{oauth_client_id: nil}), do: :ok

@@ -4,7 +4,7 @@ defmodule Sower.Orchestration.GardenSeedGeneration do
   import Ecto.Query, warn: false
 
   alias Sower.Repo
-  alias Sower.Orchestration.{Garden, NixProfile, Seed}
+  alias Sower.Orchestration.{Garden, GardenPubSub, NixProfile, Seed}
 
   require Logger
 
@@ -108,19 +108,29 @@ defmodule Sower.Orchestration.GardenSeedGeneration do
         %SowerClient.Orchestration.GardenSeedsReport{} = report,
         %Garden{} = garden
       ) do
-    Repo.transaction(fn ->
-      if Enum.empty?(report.profiles) do
-        delete_all_garden_seed_generations(garden.id)
-      else
-        for profile <- report.profiles do
-          nix_profile = NixProfile.find_or_create!(profile.profile_path)
-          rows = resolve_profile_generation_rows(garden, profile)
-          sync_profile_generation_rows(garden, nix_profile, rows)
+    result =
+      Repo.transaction(fn ->
+        if Enum.empty?(report.profiles) do
+          delete_all_garden_seed_generations(garden.id)
+        else
+          for profile <- report.profiles do
+            nix_profile = NixProfile.find_or_create!(profile.profile_path)
+            rows = resolve_profile_generation_rows(garden, profile)
+            sync_profile_generation_rows(garden, nix_profile, rows)
+          end
         end
-      end
 
-      :ok
-    end)
+        :ok
+      end)
+
+    case result do
+      {:ok, :ok} ->
+        GardenPubSub.broadcast_seed_generations_change(garden, :updated)
+        result
+
+      _ ->
+        result
+    end
   end
 
   defp resolve_profile_generation_rows(%Garden{} = garden, profile) do
