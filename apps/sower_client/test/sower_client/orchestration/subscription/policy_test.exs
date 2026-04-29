@@ -5,6 +5,8 @@ defmodule SowerClient.Orchestration.Subscription.PolicyTest do
 
   alias SowerClient.Orchestration.Subscription.Policy
 
+  @moduletag :capture_log
+
   # Wednesday 2026-04-15 at 14:00 UTC
   @now DateTime.from_naive!(~N[2026-04-15 14:00:00], "Etc/UTC")
 

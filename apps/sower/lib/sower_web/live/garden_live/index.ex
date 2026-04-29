@@ -22,7 +22,7 @@ defmodule SowerWeb.GardenLive.Index do
     %Column{key: :name, label: "Name", default: true, lockable: true},
     %Column{key: :online, label: "Online", default: true},
     %Column{key: :deploy, label: "Deploy", default: true},
-    %Column{key: :version, label: "Version", default: true}
+    %Column{key: :version, label: "Version"}
   ]
 
   @impl Phoenix.LiveView

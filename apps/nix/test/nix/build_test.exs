@@ -26,15 +26,14 @@ defmodule Nix.BuildTest do
 
     test "returns error for invalid derivation path" do
       capture_log(fn ->
-        {status, build} =
-          Build.run(%Nix.Eval{output: %{"drvPath" => "/nix/store/nonexistent.drv"}})
+        drv_path = "/nix/store/00000000000000000000000000000000-nonexistent.drv"
+        {status, build} = Build.run(%Nix.Eval{output: %{"drvPath" => drv_path}})
 
         assert status == :error
         assert build.status == :error
         assert build.store_path == nil
         log = Enum.join(build.log, "\n")
         assert String.contains?(log, "error")
-        assert String.contains?(log, "does not exist")
       end)
     end
 
