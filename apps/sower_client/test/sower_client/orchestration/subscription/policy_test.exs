@@ -240,6 +240,118 @@ defmodule SowerClient.Orchestration.Subscription.PolicyTest do
     end
   end
 
+  describe "evaluate/5 — window with omitted days" do
+    test "allows when within time window on any weekday" do
+      # Wednesday at 14:00 UTC
+      rules = [
+        %{
+          actions: ["activate"],
+          triggers: ["manual"],
+          window: %{time_start: "09:00", time_end: "17:00"}
+        }
+      ]
+
+      assert {:allow, :activate} = Policy.evaluate(rules, :manual, @now, "nixos")
+    end
+
+    test "allows when within time window on a weekend" do
+      # Saturday at 14:00 UTC
+      saturday_14 = DateTime.from_naive!(~N[2026-04-18 14:00:00], "Etc/UTC")
+
+      rules = [
+        %{
+          actions: ["activate"],
+          triggers: ["manual"],
+          window: %{time_start: "09:00", time_end: "17:00"}
+        }
+      ]
+
+      assert {:allow, :activate} = Policy.evaluate(rules, :manual, saturday_14, "nixos")
+    end
+
+    test "denies when outside time window even with days omitted" do
+      # Wednesday at 14:00 UTC, window is 02:00-04:00
+      rules = [
+        %{
+          actions: ["activate"],
+          triggers: ["manual"],
+          window: %{time_start: "02:00", time_end: "04:00"}
+        }
+      ]
+
+      assert :deny = Policy.evaluate(rules, :manual, @now, "nixos")
+    end
+
+    test "allows during opening portion of overnight window with days omitted" do
+      # Friday at 23:00 UTC, window is 22:00-06:00
+      friday_23 = DateTime.from_naive!(~N[2026-04-17 23:00:00], "Etc/UTC")
+
+      rules = [
+        %{
+          actions: ["activate"],
+          triggers: ["manual"],
+          window: %{time_start: "22:00", time_end: "06:00"}
+        }
+      ]
+
+      assert {:allow, :activate} = Policy.evaluate(rules, :manual, friday_23, "nixos")
+    end
+
+    test "allows during closing portion of overnight window with days omitted" do
+      # Saturday at 03:00 UTC, window is 22:00-06:00
+      saturday_03 = DateTime.from_naive!(~N[2026-04-18 03:00:00], "Etc/UTC")
+
+      rules = [
+        %{
+          actions: ["activate"],
+          triggers: ["manual"],
+          window: %{time_start: "22:00", time_end: "06:00"}
+        }
+      ]
+
+      assert {:allow, :activate} = Policy.evaluate(rules, :manual, saturday_03, "nixos")
+    end
+
+    test "denies outside overnight window with days omitted" do
+      # Friday at 12:00 UTC, window is 22:00-06:00
+      friday_12 = DateTime.from_naive!(~N[2026-04-17 12:00:00], "Etc/UTC")
+
+      rules = [
+        %{
+          actions: ["activate"],
+          triggers: ["manual"],
+          window: %{time_start: "22:00", time_end: "06:00"}
+        }
+      ]
+
+      assert :deny = Policy.evaluate(rules, :manual, friday_12, "nixos")
+    end
+
+    test "explicit nil days is equivalent to omission" do
+      rules = [
+        %{
+          actions: ["activate"],
+          triggers: ["manual"],
+          window: %{days: nil, time_start: "09:00", time_end: "17:00"}
+        }
+      ]
+
+      assert {:allow, :activate} = Policy.evaluate(rules, :manual, @now, "nixos")
+    end
+
+    test "works with string-keyed window without days" do
+      rules = [
+        %{
+          "actions" => ["activate"],
+          "triggers" => ["manual"],
+          "window" => %{"time_start" => "09:00", "time_end" => "17:00"}
+        }
+      ]
+
+      assert {:allow, :activate} = Policy.evaluate(rules, :manual, @now, "nixos")
+    end
+  end
+
   describe "evaluate/5 — overnight window spans" do
     test "allows during opening portion of overnight window" do
       # Friday at 23:00 UTC, window is Fri 22:00-06:00
