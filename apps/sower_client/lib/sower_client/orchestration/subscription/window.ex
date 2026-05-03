@@ -12,7 +12,9 @@ defmodule SowerClient.Orchestration.Subscription.Window do
           type: :string,
           enum: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
         },
-        description: "Days of the week when deployments are allowed"
+        description:
+          "Days of the week when deployments are allowed. Omit to apply every day of the week.",
+        nullable: true
       },
       time_start: %Schema{
         type: :string,
@@ -31,6 +33,6 @@ defmodule SowerClient.Orchestration.Subscription.Window do
         nullable: true
       }
     },
-    required: [:days, :time_start, :time_end]
+    required: [:time_start, :time_end]
   })
 end

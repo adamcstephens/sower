@@ -301,8 +301,11 @@ defmodule SowerClient.Orchestration.Subscription.Policy do
   defp confirm?(%{"confirm" => true}), do: true
   defp confirm?(_), do: false
 
-  defp window_days(%{days: days}), do: days
-  defp window_days(%{"days" => days}), do: days
+  @all_days ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+
+  defp window_days(%{days: days}) when is_list(days), do: days
+  defp window_days(%{"days" => days}) when is_list(days), do: days
+  defp window_days(_), do: @all_days
 
   defp window_time_start(%{time_start: ts}), do: ts
   defp window_time_start(%{"time_start" => ts}), do: ts

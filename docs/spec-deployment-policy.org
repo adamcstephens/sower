@@ -112,13 +112,15 @@ A window constrains when a rule applies based on day of week and time of day.
 Windows naturally handle overnight spans — when =time_start= is after
 =time_end=, the window wraps across midnight.
 
-| Field      | Type     | Required | Description                            |
-|------------+----------+----------+----------------------------------------|
-| days       | string[] | yes      | Days of the week the window is active  |
-| time_start | string   | yes      | Start of window (HH:MM)               |
-| time_end   | string   | yes      | End of window (HH:MM)                 |
+| Field      | Type     | Required | Description                                                |
+|------------+----------+----------+------------------------------------------------------------|
+| days       | string[] | no       | Days of the week the window is active. Omit for every day. |
+| time_start | string   | yes      | Start of window (HH:MM)                                    |
+| time_end   | string   | yes      | End of window (HH:MM)                                      |
 
-Day values: =mon=, =tue=, =wed=, =thu=, =fri=, =sat=, =sun=.
+Day values: =mon=, =tue=, =wed=, =thu=, =fri=, =sat=, =sun=. Omitting =days=
+is equivalent to listing all seven — the window applies every day, constrained
+only by =time_start= and =time_end=.
 
 Timezone is specified once on the subscription (=timezone= field) and applies
 to all windows in the policy.
@@ -190,7 +192,6 @@ when the next poll fires within the window, or when a manual deploy is triggered
   {
     "actions": ["restart"],
     "window": {
-      "days": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
       "time_start": "02:00",
       "time_end": "04:00"
     }

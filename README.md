@@ -100,7 +100,6 @@ wins. See `docs/spec-deployment-policy.org` for the full specification.
                 actions = [ "stage" "activate" "restart" ];
                 triggers = [ "scheduled" "poll_on_connect" ];
                 window = {
-                  days = [ "mon" "tue" "wed" "thu" "fri" "sat" "sun" ];
                   time_start = "02:00";
                   time_end = "04:00";
                 };
