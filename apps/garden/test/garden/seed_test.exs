@@ -4,7 +4,6 @@ defmodule Garden.SeedTest do
   import ExUnit.CaptureLog
 
   alias Garden.Seed
-  alias SowerClient.Orchestration.Subscription
   alias SowerClient.Seed, as: ClientSeed
 
   describe "activate/1" do
@@ -98,7 +97,7 @@ defmodule Garden.SeedTest do
   end
 
   describe "activate/2" do
-    test "uses subscription activation_args for nixos mode" do
+    test "passes mode argument through to nixos activation" do
       {socket_path, server_pid} =
         start_mock_server(fn request_line, client_socket ->
           request = Jason.decode!(request_line)
@@ -119,12 +118,7 @@ defmodule Garden.SeedTest do
 
       seed = %ClientSeed{name: "test", seed_type: "nixos", artifact: "/nix/store/xyz"}
 
-      subscription = %Subscription{
-        activation_args: ["boot"],
-        reboot_policy: "never"
-      }
-
-      assert {:ok, []} = Seed.activate(seed, subscription)
+      assert {:ok, []} = Seed.activate(seed, "boot")
     end
   end
 

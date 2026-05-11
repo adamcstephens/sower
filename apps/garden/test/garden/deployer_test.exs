@@ -35,10 +35,6 @@ defmodule Garden.DeployerTest do
       }
 
       assert Deployer.maybe_reboot(deployment, :success,
-               reboot_reason_fun: fn _ ->
-                 send(self(), :reboot_reason_called)
-                 nil
-               end,
                reboot_fun: fn _ ->
                  send(self(), :reboot_called)
                  {:ok, []}
@@ -48,25 +44,19 @@ defmodule Garden.DeployerTest do
                report_seed_result_fun: fn _, _, _, _ -> :ok end
              ) == :ok
 
-      refute_received :reboot_reason_called
       refute_received :reboot_called
     end
 
-    test "evaluates reboot logic when deployment includes nixos seeds" do
+    test "skips reboot when reboot_reason returns nil" do
       deployment = %Deployment{sid: "dep_nixos", seed_deployments: [seed_deploy("sub1", "nixos")]}
 
       assert Deployer.maybe_reboot(deployment, :success,
-               reboot_reason_fun: fn _ ->
-                 send(self(), :reboot_reason_called)
-                 nil
-               end,
+               reboot_reason_fun: fn _ -> nil end,
                reboot_fun: fn _ -> flunk("reboot should not be requested") end,
                activation_enabled_fun: fn -> true end,
                report_seed_status_fun: fn _, _, _ -> :ok end,
                report_seed_result_fun: fn _, _, _, _ -> :ok end
              ) == :ok
-
-      assert_received :reboot_reason_called
     end
 
     test "requests reboot when nixos deployment requires it" do
@@ -76,7 +66,7 @@ defmodule Garden.DeployerTest do
       }
 
       assert Deployer.maybe_reboot(deployment, :success,
-               reboot_reason_fun: fn _ -> "policy_always" end,
+               reboot_reason_fun: fn _ -> "system_changed" end,
                reboot_fun: fn opts ->
                  send(self(), {:reboot_called, opts})
                  {:ok, ["ok"]}
@@ -86,87 +76,7 @@ defmodule Garden.DeployerTest do
                report_seed_result_fun: fn _, _, _, _ -> :ok end
              ) == :ok
 
-      assert_received {:reboot_called, [reason: "policy_always"]}
-    end
-  end
-
-  describe "reboot_reason/3" do
-    test "returns nil when there are no nixos seed deployments" do
-      seed_deployments = [seed_deploy("sub1", "home-manager")]
-
-      assert Deployer.reboot_reason(seed_deployments, fn _ -> %Subscription{} end) == nil
-    end
-
-    test "returns reason when policy permits restart and boot profile changed" do
-      seed_deployments = [seed_deploy("sub_restart")]
-
-      get_sub = fn "sub_restart" ->
-        %Subscription{
-          seed_type: "nixos",
-          policy: [%{actions: ["restart"]}]
-        }
-      end
-
-      read_link = fn
-        "/nix/var/nix/profiles/system" -> {:ok, "/nix/store/sys-b"}
-        "/run/current-system" -> {:ok, "/nix/store/sys-a"}
-        "/run/booted-system" -> {:ok, "/nix/store/sys-a"}
-      end
-
-      assert Deployer.reboot_reason(seed_deployments, get_sub, read_link) == "system_changed"
-    end
-
-    test "returns nil when policy does not permit restart" do
-      seed_deployments = [seed_deploy("sub_no_restart")]
-
-      get_sub = fn "sub_no_restart" ->
-        %Subscription{
-          seed_type: "nixos",
-          policy: [%{actions: ["activate"]}]
-        }
-      end
-
-      assert Deployer.reboot_reason(seed_deployments, get_sub) == nil
-    end
-
-    test "returns nil when boot profile already matches" do
-      seed_deployments = [seed_deploy("sub_restart")]
-
-      get_sub = fn "sub_restart" ->
-        %Subscription{
-          seed_type: "nixos",
-          policy: [%{actions: ["restart"]}]
-        }
-      end
-
-      read_link = fn
-        "/nix/var/nix/profiles/system" -> {:ok, "/nix/var/nix/profiles/system-123-link"}
-        "/nix/var/nix/profiles/system-123-link" -> {:ok, "/nix/store/sys-a"}
-        "/run/current-system" -> {:ok, "/nix/store/sys-a"}
-        "/run/booted-system" -> {:ok, "/nix/store/sys-a"}
-      end
-
-      assert Deployer.reboot_reason(seed_deployments, get_sub, read_link) == nil
-    end
-
-    test "returns nil and logs warning when boot-critical detection cannot read links" do
-      seed_deployments = [seed_deploy("sub_restart")]
-
-      get_sub = fn "sub_restart" ->
-        %Subscription{
-          seed_type: "nixos",
-          policy: [%{actions: ["restart"]}]
-        }
-      end
-
-      logs =
-        capture_log(fn ->
-          assert Deployer.reboot_reason(seed_deployments, get_sub, fn _ ->
-                   {:error, :enoent}
-                 end) == nil
-        end)
-
-      assert logs =~ "Could not evaluate reboot requirement from system profile links"
+      assert_received {:reboot_called, [reason: "system_changed"]}
     end
   end
 
@@ -366,15 +276,15 @@ defmodule Garden.DeployerTest do
             end,
             realize_seed_fun: fn sd -> {:ok, sd, []} end,
             find_subscription_fun: fn _ ->
-              %Subscription{reboot_policy: "always"}
+              %Subscription{seed_type: "nixos", policy: [%{actions: ["restart"]}]}
             end,
-            activate_seed_fun: fn _seed, _profile -> {:ok, ["ok"]} end,
+            activate_seed_fun: fn _seed, _mode -> {:ok, ["ok"]} end,
             report_seed_result_fun: fn _deployment, _seed, result, output_lines ->
               send(test_pid, {:seed_result, result, output_lines})
             end
           ],
           reboot_opts: [
-            reboot_reason_fun: fn _ -> "policy_always" end,
+            reboot_reason_fun: fn _ -> "system_changed" end,
             reboot_fun: fn _opts -> {:ok, ["rebooting"]} end,
             activation_enabled_fun: fn -> true end
           ]
@@ -388,7 +298,7 @@ defmodule Garden.DeployerTest do
 
       assert Enum.any?(
                reboot_lines,
-               &(&1 =~ "[garden]" and &1 =~ "reboot initiated: policy_always")
+               &(&1 =~ "[garden]" and &1 =~ "reboot initiated: system_changed")
              )
     end
 
@@ -539,7 +449,7 @@ defmodule Garden.DeployerTest do
     end
   end
 
-  defp seed_deploy(subscription_sid, seed_type \\ "nixos") do
+  defp seed_deploy(subscription_sid, seed_type) do
     %SeedDeployment{
       subscription_sid: subscription_sid,
       seed: %Seed{seed_type: seed_type}
