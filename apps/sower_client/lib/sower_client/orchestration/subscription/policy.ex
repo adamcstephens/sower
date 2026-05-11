@@ -123,60 +123,6 @@ defmodule SowerClient.Orchestration.Subscription.Policy do
   def trigger_for_reason(:poll_on_connect), do: :poll_on_connect
 
   @doc """
-  Convert legacy subscription fields to equivalent policy rules.
-
-  Accepts a subscription struct or map with old-style fields:
-  `reboot_policy`, `allow_realtime`, `poll_on_connect`, `window`, `activation_args`.
-  """
-  def from_legacy(subscription) do
-    reboot_policy = get_field(subscription, :reboot_policy, "never")
-    allow_realtime = get_field(subscription, :allow_realtime, false)
-    poll_on_connect = get_field(subscription, :poll_on_connect, false)
-    window = get_field(subscription, :window, nil)
-
-    actions = build_legacy_actions(reboot_policy)
-    triggers = build_legacy_triggers(allow_realtime, poll_on_connect)
-
-    rule = %{actions: actions, triggers: triggers}
-
-    rule =
-      if window do
-        Map.put(rule, :window, normalize_window(window))
-      else
-        rule
-      end
-
-    %{"default" => rule}
-  end
-
-  defp build_legacy_actions(reboot_policy) when reboot_policy in ["always", "when-required"],
-    do: ["stage", "activate", "restart"]
-
-  defp build_legacy_actions(_), do: ["stage", "activate"]
-
-  defp build_legacy_triggers(allow_realtime, poll_on_connect) do
-    base = ["manual", "scheduled"]
-    base = if poll_on_connect, do: base ++ ["poll_on_connect"], else: base
-    if allow_realtime, do: base ++ ["realtime"], else: base
-  end
-
-  defp normalize_window(%{days: _} = w),
-    do: %{days: w.days, time_start: w.time_start, time_end: w.time_end, tz: Map.get(w, :tz)}
-
-  defp normalize_window(%{"days" => _} = w),
-    do: %{
-      days: w["days"],
-      time_start: w["time_start"],
-      time_end: w["time_end"],
-      tz: w["tz"]
-    }
-
-  defp get_field(%{__struct__: _} = s, key, default), do: Map.get(s, key, default)
-
-  defp get_field(m, key, default) when is_map(m),
-    do: Map.get(m, key, Map.get(m, to_string(key), default))
-
-  @doc """
   Returns true if any policy rule includes the realtime trigger.
   """
   def has_realtime_trigger?(rules) do

@@ -63,7 +63,7 @@ defmodule Garden.Socket.LifecycleTest do
           name: "host",
           seed_name: "host",
           seed_type: "nixos",
-          poll_on_connect: true
+          policy: %{"default" => %{actions: ["activate"], triggers: ["poll_on_connect"]}}
         }),
         Subscription.cast!(%{name: "user", seed_name: "user", seed_type: "home-manager"})
       ]
@@ -82,7 +82,6 @@ defmodule Garden.Socket.LifecycleTest do
 
       assert length(result) == 2
       assert Enum.find(result, &(&1.seed_name == "host")).sid == "sub_abc"
-      assert Enum.find(result, &(&1.seed_name == "host")).poll_on_connect == true
       assert Enum.find(result, &(&1.seed_name == "user")).sid == "sub_def"
     end
 

@@ -365,7 +365,6 @@ defmodule SowerClient.Config do
         |> Map.put("name", name)
         |> parse_subscription_rules()
         |> fill_default_subscription_name()
-        |> maybe_convert_legacy_policy()
       end)
 
     Map.put(config, "subscriptions", normalized_subscriptions)
@@ -395,32 +394,6 @@ defmodule SowerClient.Config do
   end
 
   defp fill_default_subscription_name(sub), do: sub
-
-  @legacy_policy_fields ["reboot_policy", "allow_realtime", "activation_args", "window"]
-
-  defp maybe_convert_legacy_policy(%{"policy" => policy} = sub)
-       when is_map(policy) and map_size(policy) > 0 do
-    sub
-  end
-
-  defp maybe_convert_legacy_policy(sub) do
-    has_legacy = Enum.any?(@legacy_policy_fields, &Map.has_key?(sub, &1))
-
-    if has_legacy do
-      name = Map.get(sub, "name", "unknown")
-
-      Logger.warning(
-        msg: "Subscription uses deprecated policy fields, convert to policy map",
-        subscription: name,
-        deprecated_fields: Enum.filter(@legacy_policy_fields, &Map.has_key?(sub, &1))
-      )
-
-      policy = SowerClient.Orchestration.Subscription.Policy.from_legacy(sub)
-      Map.put(sub, "policy", policy)
-    else
-      sub
-    end
-  end
 
   defp process_side_effects(%SowerClient.Config{} = config) do
     # Configure websocket client (only if endpoint is set)

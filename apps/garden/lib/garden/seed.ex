@@ -1,29 +1,18 @@
 defmodule Garden.Seed do
   alias SowerClient.{Activator, Seed}
-  alias SowerClient.Orchestration.Subscription
 
   require Logger
 
   @default_socket_path "/run/sower-activator/activator.sock"
 
-  def activate(seed, subscription \\ %Subscription{})
+  def activate(seed, mode \\ "switch")
 
-  def activate(%Seed{seed_type: "home-manager"} = seed, _subscription) do
+  def activate(%Seed{seed_type: "home-manager"} = seed, _mode) do
     run_activation("home-manager", seed.artifact, tags: seed.tags)
   end
 
-  def activate(%Seed{seed_type: "nixos"} = seed, %Subscription{} = subscription) do
-    run_activation("nixos", seed.artifact, mode: activation_mode(subscription))
-  end
-
-  def activation_mode(%Subscription{} = subscription) do
-    case subscription.activation_args do
-      [mode | _] when is_binary(mode) and mode != "" ->
-        mode
-
-      _ ->
-        "switch"
-    end
+  def activate(%Seed{seed_type: "nixos"} = seed, mode) do
+    run_activation("nixos", seed.artifact, mode: mode)
   end
 
   defp run_activation(type, path, opts) do

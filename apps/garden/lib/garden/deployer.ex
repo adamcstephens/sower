@@ -142,10 +142,8 @@ defmodule Garden.Deployer do
             mode: mode
           )
 
-          # Pass the policy-derived mode to the subscription so activate uses it
-          subscription = %{subscription | activation_args: [mode]}
           report_seed_status_fun.(deployment, seed, :activating)
-          result = activate_seed_fun.(seed, subscription)
+          result = activate_seed_fun.(seed, mode)
 
           case result do
             {:ok, output} ->
@@ -297,7 +295,7 @@ defmodule Garden.Deployer do
   end
 
   defp maybe_reboot_seeds(%Deployment{} = deployment, :success, opts) do
-    reboot_reason_fun = Keyword.get(opts, :reboot_reason_fun, &reboot_reason/1)
+    reboot_reason_fun = Keyword.get(opts, :reboot_reason_fun, &compute_reboot_reason/1)
     reboot_fun = Keyword.get(opts, :reboot_fun, &Activator.reboot/1)
 
     activation_enabled_fun =
@@ -370,11 +368,11 @@ defmodule Garden.Deployer do
     end
   end
 
-  def reboot_reason(
-        seed_deployments,
-        find_sub \\ &find_subscription/1,
-        read_link \\ &:file.read_link_all/1
-      ) do
+  defp compute_reboot_reason(
+         seed_deployments,
+         find_sub \\ &find_subscription/1,
+         read_link \\ &:file.read_link_all/1
+       ) do
     now = DateTime.utc_now()
 
     restart_permitted =
