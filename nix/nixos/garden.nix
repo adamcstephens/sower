@@ -120,26 +120,6 @@ in
       }
     ];
 
-    warnings =
-      let
-        subs = cfg.settings.subscriptions or { };
-        legacyFields = [
-          "reboot_policy"
-          "allow_realtime"
-          "poll_on_connect"
-          "window"
-          "activation_args"
-        ];
-        subsWithLegacy = lib.filterAttrs (_name: sub: lib.any (field: sub ? ${field}) legacyFields) subs;
-      in
-      lib.mapAttrsToList (
-        name: sub:
-        let
-          found = lib.filter (field: sub ? ${field}) legacyFields;
-        in
-        "services.sower.garden: subscription '${name}' uses deprecated fields (${lib.concatStringsSep ", " found}); use 'policy' instead"
-      ) subsWithLegacy;
-
     boot.extraSystemdUnitPaths = lib.optionals manageServices [
       "/etc/sower/systemd/system"
     ];

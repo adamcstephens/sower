@@ -24,11 +24,7 @@ defmodule Sower.Orchestration.Subscription do
     field :seed_type, :string
     field :schedule, :string
     field :timezone, :string
-    field :activation_args, {:array, :string}, default: []
-    field :reboot_policy, :string, default: "never"
-    field :allow_realtime, :boolean, default: false
     embeds_many :rules, __MODULE__.Rule
-    embeds_one :window, __MODULE__.Window
     embeds_many :policy, __MODULE__.PolicyRule
 
     timestamps(type: :utc_datetime)
@@ -43,13 +39,9 @@ defmodule Sower.Orchestration.Subscription do
       :seed_name,
       :seed_type,
       :schedule,
-      :timezone,
-      :activation_args,
-      :reboot_policy,
-      :allow_realtime
+      :timezone
     ])
     |> cast_embed(:rules, with: &__MODULE__.Rule.changeset/2)
-    |> cast_embed(:window, with: &__MODULE__.Window.changeset/2)
     |> cast_embed(:policy, with: &__MODULE__.PolicyRule.changeset/2)
     |> unique_constraint([:garden_id, :org_id, :name])
   end
@@ -171,10 +163,6 @@ defmodule Sower.Orchestration.Subscription do
                 :rules,
                 :schedule,
                 :timezone,
-                :activation_args,
-                :reboot_policy,
-                :allow_realtime,
-                :window,
                 :policy
               ]},
            conflict_target: [:garden_id, :org_id, :name],
@@ -186,15 +174,6 @@ defmodule Sower.Orchestration.Subscription do
   end
 
   def register_subscription(%SowerClient.Orchestration.Subscription{} = sub, garden_id) do
-    alias SowerClient.Orchestration.Subscription.Policy
-
-    policy =
-      if sub.policy == nil or sub.policy == %{} or sub.policy == [] do
-        Policy.from_legacy(sub)
-      else
-        sub.policy
-      end
-
     attrs = %{
       garden_id: garden_id,
       name: sub.name,
@@ -203,11 +182,7 @@ defmodule Sower.Orchestration.Subscription do
       rules: sub.rules,
       schedule: sub.schedule,
       timezone: sub.timezone,
-      activation_args: sub.activation_args,
-      reboot_policy: sub.reboot_policy,
-      allow_realtime: sub.allow_realtime,
-      window: sub.window,
-      policy: policy_to_list(policy)
+      policy: policy_to_list(sub.policy)
     }
 
     case create_subscription(attrs) do
