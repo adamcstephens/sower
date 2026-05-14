@@ -9,7 +9,7 @@ bootstrap:
     # setup AWS and OIDC secrets
     mix ecto.setup --no-start
 
-check: check-elixir check-go
+check: check-elixir check-go check-rust
 
 check-e2e:
     nix build .#checks.x86_64-linux.default --print-build-logs
@@ -30,6 +30,14 @@ check-go-lint:
 
 check-go-test:
     go test ./...
+
+check-rust: check-rust-lint check-rust-test
+
+check-rust-test:
+    cargo test
+
+check-rust-lint:
+    cargo clippy
 
 clean:
     mix ecto.drop
@@ -57,6 +65,10 @@ format-elixir:
 
 format-go:
     gofmt -w .
+
+format-rust:
+    cargo fmt
+    nixfmt **/*.nix
 
 mix-nix-lock:
     mix deps.get

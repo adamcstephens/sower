@@ -1,0 +1,10 @@
+[package]
+name = "sower"
+version = "0.10.0-dev"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+clap_complete = { version = "4.6", features = ["unstable-dynamic"] }
+anyhow = "1"
+console = "0.16"
