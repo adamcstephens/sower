@@ -25,6 +25,8 @@
           inherit beamPackages version;
         };
 
+        rust-cli = pkgs.callPackage ./rust-cli.nix { };
+
         server = pkgs.callPackage ./server.nix {
           inherit beamPackages version sowerServicesHook;
 

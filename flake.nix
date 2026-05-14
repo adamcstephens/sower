@@ -59,8 +59,12 @@
                   beamPackages.elixir
                   beamPackages.hex
 
-                  # elixir deps build deps
+                  # rust
                   pkgs.cargo
+                  pkgs.clippy
+                  pkgs.rustc
+                  pkgs.rust-analyzer
+                  pkgs.rustfmt
 
                   # go
                   pkgs.go
