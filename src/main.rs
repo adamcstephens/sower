@@ -1,23 +1,10 @@
 use anyhow::Result;
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
-use clap_complete::engine::{ArgValueCompleter, CompletionCandidate};
 
 mod commands;
 mod ui;
 
-/// Replace with runtime-computed candidates (read state from disk, query an
-/// API, list files, etc.). Returning a static list here for illustration.
-fn complete_name(current: &std::ffi::OsStr) -> Vec<CompletionCandidate> {
-    let current = current.to_string_lossy();
-    ["alice", "bob", "charlie"]
-        .into_iter()
-        .filter(|n| n.starts_with(current.as_ref()))
-        .map(CompletionCandidate::new)
-        .collect()
-}
-
-/// A Rust CLI starter.
 #[derive(Parser)]
 #[command(name = "sower", version)]
 struct Cli {
@@ -27,12 +14,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Say hello to someone.
-    Hello {
-        /// Person to greet
-        #[arg(add = ArgValueCompleter::new(complete_name))]
-        name: String,
-    },
+    /// Handle a single activation request from a systemd-activated socket on stdin.
+    Activator(commands::activator::ActivatorArgs),
 
     /// Generate shell completion scripts.
     Completions {
@@ -54,7 +37,7 @@ fn main() {
 
 fn run(command: Command) -> Result<()> {
     match command {
-        Command::Hello { name } => commands::cmd_hello(&name),
+        Command::Activator(args) => commands::activator::run(args),
         Command::Completions { shell } => {
             let mut cmd = Cli::command();
             clap_complete::generate(shell, &mut cmd, "sower", &mut std::io::stdout());

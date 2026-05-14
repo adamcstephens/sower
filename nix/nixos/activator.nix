@@ -93,8 +93,7 @@ in
             # Build comma-separated GID list
             ALLOWED_GIDS="$SOCKET_GID${lib.optionalString (additionalGroupsArg != "") ",$EXTRA_GIDS"}"
 
-            exec ${lib.getExe config.services.sower.activator.package} \
-              --socket-mode \
+            exec ${lib.getExe config.services.sower.activator.package} activator \
               --allowed-gids "$ALLOWED_GIDS" \
               ${debugFlag}
           ''

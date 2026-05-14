@@ -9,9 +9,7 @@
     }:
     {
       packages = rec {
-        activator = pkgs.callPackage ./activator.nix {
-          inherit version;
-        };
+        activator = rust-cli;
 
         cli = pkgs.callPackage ./cli.nix {
           inherit activator beamPackages version;
