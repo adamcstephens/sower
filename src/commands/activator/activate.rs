@@ -9,6 +9,7 @@ use super::protocol::Request;
 pub const SEED_NIXOS: &str = "nixos";
 pub const SEED_HOME_MANAGER: &str = "home-manager";
 pub const REQ_REBOOT: &str = "reboot";
+pub const REQ_SERVICES: &str = "services";
 
 pub type OutputCallback = Arc<dyn Fn(&str, bool) + Send + Sync>;
 
@@ -23,6 +24,7 @@ pub fn run(req: &Request, callback: OutputCallback) -> Result<i32> {
             }
             stream(nixos_switch_cmd(&req.path, &req.mode), &callback)
         }
+        REQ_SERVICES => super::services::run(&req.seeds, &callback),
         other => Err(anyhow!("unsupported seed type: {other}")),
     }
 }
@@ -54,7 +56,7 @@ fn nixos_switch_cmd(store_path: &str, mode: &str) -> Command {
     cmd
 }
 
-fn stream(mut cmd: Command, callback: &OutputCallback) -> Result<i32> {
+pub fn stream(mut cmd: Command, callback: &OutputCallback) -> Result<i32> {
     tracing::debug!(cmd = ?cmd, "Running command");
 
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());

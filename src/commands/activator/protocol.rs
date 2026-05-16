@@ -11,6 +11,14 @@ pub struct Request {
     pub mode: String,
     #[serde(default)]
     pub reason: String,
+    #[serde(default)]
+    pub seeds: Vec<SeedRef>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SeedRef {
+    pub name: String,
+    pub path: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
