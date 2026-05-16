@@ -122,7 +122,7 @@ defmodule SowerClient.ActivatorTest do
     end
   end
 
-  describe "activate_via_cli/3" do
+  describe "activate_via_port/3" do
     test "returns error when executables not found" do
       # Ensure the executables don't exist in PATH
       original_path = System.get_env("PATH")
@@ -132,11 +132,51 @@ defmodule SowerClient.ActivatorTest do
 
       log =
         capture_log(fn ->
-          result = Activator.activate_via_cli("nixos", "/nix/store/xyz", mode: "switch")
+          result = Activator.activate_via_port("nixos", "/nix/store/xyz", mode: "switch")
           assert {:error, :cmd_not_found} = result
         end)
 
       assert log =~ "Required executables not found"
+    end
+
+    test "activates via Port end-to-end (JSON-over-stdio)" do
+      bin_dir = install_fake_sower(fake_sower_script_ok("ok line"))
+      stub_path_user("alice", bin_dir)
+
+      tags = [%{key: "username", value: "alice"}]
+
+      assert {:ok, ["ok line"]} =
+               Activator.activate_via_port("home-manager", "/nix/store/abc", tags: tags)
+    end
+
+    test "Port mode reports nonzero exit_code as error" do
+      bin_dir = install_fake_sower(fake_sower_script_fail(42, "failure"))
+      stub_path_user("alice", bin_dir)
+
+      tags = [%{key: "username", value: "alice"}]
+
+      assert {:error, 42, ["failure"]} =
+               Activator.activate_via_port("home-manager", "/nix/store/abc", tags: tags)
+    end
+
+    test "Port mode streams output to on_output callback" do
+      bin_dir =
+        install_fake_sower(fake_sower_script_lines(["line one", "line two", "line three"], 0))
+
+      stub_path_user("alice", bin_dir)
+
+      {:ok, agent} = Agent.start_link(fn -> [] end)
+      on_output = fn line -> Agent.update(agent, &[line | &1]) end
+
+      tags = [%{key: "username", value: "alice"}]
+
+      assert {:ok, ["line one", "line two", "line three"]} =
+               Activator.activate_via_port("home-manager", "/nix/store/abc",
+                 tags: tags,
+                 on_output: on_output
+               )
+
+      assert ["line one", "line two", "line three"] == Agent.get(agent, &Enum.reverse/1)
     end
   end
 
@@ -158,7 +198,7 @@ defmodule SowerClient.ActivatorTest do
                Activator.activate("nixos", "/nix/store/xyz", socket_path: socket_path)
     end
 
-    test "falls back to CLI when socket not available" do
+    test "falls back to Port when socket not available" do
       original_path = System.get_env("PATH")
       System.put_env("PATH", "/nonexistent")
 
@@ -175,7 +215,7 @@ defmodule SowerClient.ActivatorTest do
     test "home-manager with matching username bypasses socket" do
       {socket_path, server_pid} =
         start_mock_server(fn _request_line, _client_socket ->
-          # This should not be called - we're testing CLI bypass
+          # This should not be called - we're testing the Port bypass
           flunk("Socket should not be contacted for same-user home-manager")
         end)
 
@@ -261,7 +301,7 @@ defmodule SowerClient.ActivatorTest do
   end
 
   describe "reboot/1" do
-    test "falls back to CLI when socket is not available" do
+    test "falls back to Port when socket is not available" do
       original_path = System.get_env("PATH")
       System.put_env("PATH", "/nonexistent")
 
@@ -387,5 +427,81 @@ defmodule SowerClient.ActivatorTest do
   defp send_response(socket, response) do
     line = Jason.encode!(response) <> "\n"
     :gen_tcp.send(socket, line)
+  end
+
+  # Helpers for Port-mode tests
+
+  defp install_fake_sower(script_body) do
+    bin_dir = Path.join(System.tmp_dir!(), "fake-sower-bin-#{:rand.uniform(1_000_000)}")
+    File.mkdir_p!(bin_dir)
+    sower_path = Path.join(bin_dir, "sower-activator")
+    File.write!(sower_path, script_body)
+    File.chmod!(sower_path, 0o755)
+    on_exit(fn -> File.rm_rf!(bin_dir) end)
+    bin_dir
+  end
+
+  defp stub_path_user(username, bin_dir) do
+    original_user = System.get_env("USER")
+    original_path = System.get_env("PATH")
+    System.put_env("USER", username)
+    System.put_env("PATH", "#{bin_dir}:#{original_path}")
+
+    on_exit(fn ->
+      System.put_env("USER", original_user || "")
+      System.put_env("PATH", original_path)
+    end)
+  end
+
+  defp fake_sower_script_ok(line) do
+    """
+    #!/usr/bin/env bash
+    set -u
+    read -r request
+    if [[ "$request" =~ \\"id\\":\\"([^\\"]+)\\" ]]; then
+      id="${BASH_REMATCH[1]}"
+    else
+      id="unknown"
+    fi
+    printf '{"id":"%s","type":"output","data":"%s"}\\n' "$id" "#{line}"
+    printf '{"id":"%s","type":"complete","exit_code":0}\\n' "$id"
+    """
+  end
+
+  defp fake_sower_script_fail(exit_code, line) do
+    """
+    #!/usr/bin/env bash
+    set -u
+    read -r request
+    if [[ "$request" =~ \\"id\\":\\"([^\\"]+)\\" ]]; then
+      id="${BASH_REMATCH[1]}"
+    else
+      id="unknown"
+    fi
+    printf '{"id":"%s","type":"error","data":"%s"}\\n' "$id" "#{line}"
+    printf '{"id":"%s","type":"complete","exit_code":%d}\\n' "$id" #{exit_code}
+    """
+  end
+
+  defp fake_sower_script_lines(lines, exit_code) do
+    line_emits =
+      lines
+      |> Enum.map(fn line ->
+        ~s(printf '{"id":"%s","type":"output","data":"#{line}"}\\n' "$id")
+      end)
+      |> Enum.join("\n")
+
+    """
+    #!/usr/bin/env bash
+    set -u
+    read -r request
+    if [[ "$request" =~ \\"id\\":\\"([^\\"]+)\\" ]]; then
+      id="${BASH_REMATCH[1]}"
+    else
+      id="unknown"
+    fi
+    #{line_emits}
+    printf '{"id":"%s","type":"complete","exit_code":%d}\\n' "$id" #{exit_code}
+    """
   end
 end
