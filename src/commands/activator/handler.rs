@@ -1,54 +1,19 @@
 use anyhow::{Context, Result, anyhow};
-use std::io::{BufRead, BufReader, Write};
-use std::os::unix::net::UnixStream;
+use std::io::{BufRead, Write};
 use std::sync::{Arc, Mutex};
 
 use super::activate::{self, OutputCallback, REQ_REBOOT, SEED_HOME_MANAGER, SEED_NIXOS};
 use super::log_tee::CallbackSlot;
-use super::peercred;
 use super::protocol::{Request, Response, ResponseType};
 
 const VALID_MODES: &[&str] = &["switch", "boot", "test", "dry-activate"];
 
-pub fn run(conn: UnixStream, allowed_gids: &[u32], slot: &CallbackSlot) -> Result<()> {
-    let writer = Arc::new(Mutex::new(conn.try_clone().context("clone socket")?));
-    let send = |resp: &Response| {
-        let mut w = writer.lock().unwrap();
-        if let Err(err) = serde_json::to_writer(&mut *w, resp) {
-            tracing::error!(?err, "Failed to send response");
-            return;
-        }
-        if let Err(err) = w.write_all(b"\n") {
-            tracing::error!(?err, "Failed to send response");
-        }
-    };
+pub type SharedWriter = Arc<Mutex<dyn Write + Send>>;
 
-    let creds = match peercred::get(std::os::fd::AsFd::as_fd(&conn)) {
-        Ok(c) => c,
-        Err(err) => {
-            tracing::error!(?err, "Failed to get peer credentials");
-            send(&Response::error("", "failed to get peer credentials"));
-            return Ok(());
-        }
-    };
-    tracing::debug!(
-        pid = creds.pid,
-        uid = creds.uid,
-        gid = creds.gid,
-        "Connection from peer"
-    );
+pub fn run<R: BufRead>(mut reader: R, writer: SharedWriter, slot: &CallbackSlot) -> Result<()> {
+    let send = |resp: &Response| send_response(&writer, resp);
 
-    if !peercred::is_authorized(&creds, allowed_gids) {
-        tracing::warn!(
-            uid = creds.uid,
-            gid = creds.gid,
-            "Unauthorized connection attempt"
-        );
-        send(&Response::error("", "unauthorized"));
-        return Ok(());
-    }
-
-    let mut req = match read_request(&conn) {
+    let mut req = match read_request(&mut reader) {
         Ok(req) => req,
         Err(err) => {
             tracing::error!(?err, "Failed to read request");
@@ -102,8 +67,18 @@ pub fn run(conn: UnixStream, allowed_gids: &[u32], slot: &CallbackSlot) -> Resul
     Ok(())
 }
 
-fn read_request(conn: &UnixStream) -> Result<Request> {
-    let mut reader = BufReader::new(conn);
+pub fn send_response(writer: &SharedWriter, resp: &Response) {
+    let mut w = writer.lock().unwrap();
+    if let Err(err) = serde_json::to_writer(&mut *w, resp) {
+        tracing::error!(?err, "Failed to send response");
+        return;
+    }
+    if let Err(err) = w.write_all(b"\n") {
+        tracing::error!(?err, "Failed to send response");
+    }
+}
+
+fn read_request<R: BufRead>(reader: &mut R) -> Result<Request> {
     let mut line = String::new();
     let n = reader.read_line(&mut line).context("read request")?;
     if n == 0 {
