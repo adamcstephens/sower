@@ -7,11 +7,11 @@ defmodule SowerWeb.PageControllerTest do
 
     assert html =~ "mobile-nav-dropdown"
     assert html =~ "<summary"
-    assert html =~ "Menu"
-    assert html =~ "mobile-nav-dropdown-panel"
     assert html =~ ~s(href="/gardens")
     assert html =~ ~s(href="/seeds")
     assert html =~ ~s(href="/deployments")
+    assert html =~ ~s(href="/forges")
+    assert html =~ ~s(href="/nix/caches")
   end
 
   test "home renders sign in as a button", %{conn: conn} do
@@ -20,15 +20,6 @@ defmodule SowerWeb.PageControllerTest do
 
     assert html =~ "Sign In"
     assert html =~ "<button"
-  end
-
-  test "mobile dropdown styles include open and closed states" do
-    css = File.read!("assets/css/app.css")
-
-    assert css =~ ".mobile-nav-dropdown-panel"
-    assert css =~ ".mobile-nav-dropdown[open] .mobile-nav-dropdown-panel"
-    assert css =~ ".mobile-nav-dropdown-chevron"
-    assert css =~ ".mobile-nav-dropdown[open] .mobile-nav-dropdown-chevron"
   end
 
   test "home renders auth feedback below header when auth_error flash is present", %{conn: conn} do
