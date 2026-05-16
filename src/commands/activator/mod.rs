@@ -14,6 +14,7 @@ mod handler;
 mod log_tee;
 mod peercred;
 mod protocol;
+mod services;
 mod time;
 
 #[derive(Debug, Args)]
@@ -35,7 +36,8 @@ pub fn run(args: ActivatorArgs) -> Result<()> {
 
     let fd0 = unsafe { BorrowedFd::borrow_raw(0) };
     let stat = rustix::fs::fstat(fd0).context("fstat fd 0")?;
-    let is_socket = rustix::fs::FileType::from_raw_mode(stat.st_mode) == rustix::fs::FileType::Socket;
+    let is_socket =
+        rustix::fs::FileType::from_raw_mode(stat.st_mode) == rustix::fs::FileType::Socket;
 
     if is_socket {
         run_socket(&allowed_gids, &slot)

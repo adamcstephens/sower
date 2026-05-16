@@ -21,8 +21,7 @@ import (
 var version = "dev"
 
 type config struct {
-	Seed     *seedCmd     `arg:"subcommand:seed"`
-	Services *servicesCmd `arg:"subcommand:services"`
+	Seed *seedCmd `arg:"subcommand:seed"`
 
 	AccessTokenFile string   `arg:"--access-token-file,env:SOWER_ACCESS_TOKEN_FILE" json:"access_token_file"`
 	AccessToken     string   `arg:"--access-token,env:SOWER_ACCESS_TOKEN"`
@@ -62,15 +61,6 @@ type seedUpgradeCmd struct {
 	Mode string `arg:"--mode,-m" default:"switch"`
 	Yes  bool   `arg:"--yes,-y"`
 }
-
-type servicesCmd struct {
-	List     *servicesListCmd    `arg:"subcommand:list"`
-	Upgrade  *servicesUpgradeCmd `arg:"subcommand:upgrade"`
-	Services []client.SeedSeedType
-}
-
-type servicesListCmd struct{}
-type servicesUpgradeCmd struct{}
 
 func main() {
 	var cfg config
@@ -167,8 +157,6 @@ func main() {
 		if err != nil {
 			parsedConfig.WriteHelp(os.Stdout)
 		}
-	case cfg.Services != nil:
-		servicesCommand(cfg)
 	default:
 		parsedConfig.WriteHelp(os.Stdout)
 	}
@@ -336,93 +324,6 @@ func seedSubcommand(cfg config) error {
 	}
 
 	return nil
-}
-
-func servicesCommand(cfg config) {
-	if len(cfg.Services.Services) == 0 {
-		slog.Warn("No services configured")
-		os.Exit(0)
-	}
-
-	switch {
-	case cfg.Services.List != nil:
-		seedClient, err := client.NewSowerClient(cfg.Endpoint, cfg.AccessToken)
-		if err != nil {
-			slog.Error("Failed to initialize seed client")
-			os.Exit(1)
-		}
-
-		for _, service := range cfg.Services.Services {
-			seed, err := seedClient.GetLatestSeed(string(service), string(client.Service))
-			if err != nil {
-				slog.Error("Failed to get seed", "error", err, "name", string(service), "type", client.Service)
-				continue
-			}
-
-			slog.Info("Found service", "service", service, "artifact", seed.Artifact)
-		}
-	case cfg.Services.Upgrade != nil:
-		seedClient, err := client.NewSowerClient(cfg.Endpoint, cfg.AccessToken)
-		if err != nil {
-			slog.Error("Failed to initialize seed client")
-			os.Exit(1)
-		}
-
-		seeds := []client.Seed{}
-
-		if len(cfg.Services.Services) == 0 {
-			slog.Error("No services configured")
-			os.Exit(1)
-		}
-
-		servicesProfileDir := filepath.Join(profileParentDir(), "services")
-		_, err = os.Stat(servicesProfileDir)
-		if err != nil {
-			slog.Debug("Creating profile directory for services", "path", servicesProfileDir)
-			err = os.MkdirAll(servicesProfileDir, 0755)
-			if err != nil {
-				slog.Error("Failed to create profile directory for services", "error", err)
-				os.Exit(1)
-			}
-		}
-
-		for _, service := range cfg.Services.Services {
-			seed, err := seedClient.GetLatestSeed(string(service), string(client.Service))
-			if err != nil {
-				slog.Error("Failed to get seed", "error", err, "name", string(service), "type", client.Service)
-				continue
-			}
-
-			slog.Info("Found service", "service", service, "artifact", seed.Artifact)
-
-			caches, err := seedClient.GetNixCaches()
-			if err != nil {
-				slog.Error("Failed to get nix caches", "error", err)
-				os.Exit(1)
-			}
-
-			if err := realize(seed.Artifact, caches, false, filepath.Join(servicesProfileDir, string(service))); err != nil {
-				slog.Error("Failed realizing seed", "error", err)
-				os.Exit(1)
-			}
-
-			slog.Info("Downloaded seed", "name", seed.Name, "type", seed.SeedType, "artifact", seed.Artifact)
-
-			seeds = append(seeds, *seed)
-		}
-
-		servicesPath, err := buildServicesUnits(seeds)
-		if err != nil {
-			slog.Error("Failed to build services environment", "error", err)
-			os.Exit(1)
-		}
-
-		err = activateServices(servicesPath)
-		if err != nil {
-			slog.Error("Failed to activate services environment", "error", err)
-			os.Exit(1)
-		}
-	}
 }
 
 func default_config_path() (string, error) {

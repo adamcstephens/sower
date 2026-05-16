@@ -2,7 +2,9 @@ use anyhow::{Context, Result, anyhow};
 use std::io::{BufRead, Write};
 use std::sync::{Arc, Mutex};
 
-use super::activate::{self, OutputCallback, REQ_REBOOT, SEED_HOME_MANAGER, SEED_NIXOS};
+use super::activate::{
+    self, OutputCallback, REQ_REBOOT, REQ_SERVICES, SEED_HOME_MANAGER, SEED_NIXOS,
+};
 use super::log_tee::CallbackSlot;
 use super::protocol::{Request, Response, ResponseType};
 
@@ -24,7 +26,11 @@ pub fn run<R: BufRead>(mut reader: R, writer: SharedWriter, slot: &CallbackSlot)
 
     tracing::info!(
         "Received request id={} type={} path={} mode={} reason={}",
-        req.id, req.kind, req.path, req.mode, req.reason
+        req.id,
+        req.kind,
+        req.path,
+        req.mode,
+        req.reason
     );
 
     if let Err(err) = validate(&mut req) {
@@ -94,17 +100,97 @@ fn validate(req: &mut Request) -> Result<()> {
     if req.kind == REQ_REBOOT {
         return Ok(());
     }
+    if req.kind == REQ_SERVICES {
+        if req.seeds.is_empty() {
+            return Err(anyhow!("services request requires at least one seed"));
+        }
+        for seed in &req.seeds {
+            if seed.name.is_empty() {
+                return Err(anyhow!("seed name must not be empty"));
+            }
+            validate_store_path(&seed.path)?;
+        }
+        return Ok(());
+    }
     if req.kind != SEED_NIXOS && req.kind != SEED_HOME_MANAGER {
         return Err(anyhow!("invalid type: {}", req.kind));
     }
-    if !req.path.starts_with("/nix/store/") {
-        return Err(anyhow!("path must be in /nix/store"));
-    }
-    if req.path.split('/').any(|part| part == "..") {
-        return Err(anyhow!("invalid path"));
-    }
+    validate_store_path(&req.path)?;
     if req.kind == SEED_NIXOS && !VALID_MODES.contains(&req.mode.as_str()) {
         return Err(anyhow!("invalid mode: {}", req.mode));
     }
     Ok(())
+}
+
+fn validate_store_path(path: &str) -> Result<()> {
+    if !path.starts_with("/nix/store/") {
+        return Err(anyhow!("path must be in /nix/store"));
+    }
+    if path.split('/').any(|part| part == "..") {
+        return Err(anyhow!("invalid path"));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::commands::activator::protocol::SeedRef;
+
+    fn req(kind: &str) -> Request {
+        Request {
+            id: "id1".to_string(),
+            kind: kind.to_string(),
+            path: String::new(),
+            mode: String::new(),
+            reason: String::new(),
+            seeds: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn services_request_requires_seeds() {
+        let mut r = req(REQ_SERVICES);
+        assert!(validate(&mut r).is_err());
+    }
+
+    #[test]
+    fn services_request_accepts_valid_seeds() {
+        let mut r = req(REQ_SERVICES);
+        r.seeds = vec![SeedRef {
+            name: "foo".to_string(),
+            path: "/nix/store/aaa-foo".to_string(),
+        }];
+        assert!(validate(&mut r).is_ok());
+    }
+
+    #[test]
+    fn services_request_rejects_non_store_path() {
+        let mut r = req(REQ_SERVICES);
+        r.seeds = vec![SeedRef {
+            name: "foo".to_string(),
+            path: "/tmp/foo".to_string(),
+        }];
+        assert!(validate(&mut r).is_err());
+    }
+
+    #[test]
+    fn services_request_rejects_path_traversal() {
+        let mut r = req(REQ_SERVICES);
+        r.seeds = vec![SeedRef {
+            name: "foo".to_string(),
+            path: "/nix/store/../etc".to_string(),
+        }];
+        assert!(validate(&mut r).is_err());
+    }
+
+    #[test]
+    fn services_request_rejects_empty_seed_name() {
+        let mut r = req(REQ_SERVICES);
+        r.seeds = vec![SeedRef {
+            name: String::new(),
+            path: "/nix/store/aaa-foo".to_string(),
+        }];
+        assert!(validate(&mut r).is_err());
+    }
 }
