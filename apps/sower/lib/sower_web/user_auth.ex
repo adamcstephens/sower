@@ -198,6 +198,8 @@ defmodule SowerWeb.UserAuth do
   defp nav_section_from_path("/gardens" <> _), do: :gardens
   defp nav_section_from_path("/seeds" <> _), do: :seeds
   defp nav_section_from_path("/deployments" <> _), do: :deployments
+  defp nav_section_from_path("/forges" <> _), do: :forges
+  defp nav_section_from_path("/nix/caches" <> _), do: :caches
   defp nav_section_from_path(_), do: nil
 
   defp mount_current_user(socket, session) do
