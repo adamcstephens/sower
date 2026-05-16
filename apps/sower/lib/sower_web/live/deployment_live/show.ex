@@ -6,7 +6,12 @@ defmodule SowerWeb.DeploymentLive.Show do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} nav_section={assigns[:nav_section]}>
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      nav_section={assigns[:nav_section]}
+      sidebar_state={assigns[:sidebar_state]}
+    >
       <.header>
         <div class="flex items-center space-x-2 min-w-0">
           <.deployment_status state={@deployment.state} result={@deployment.result} />

@@ -50,7 +50,20 @@ let initAutoDismiss = () => {
   });
 };
 
+let Hooks = {};
+
+Hooks.SetCookie = {
+  mounted() {
+    this.handleEvent("sower:set-cookie", ({ key, value }) => {
+      if (typeof key !== "string" || typeof value !== "string") return;
+      const oneYear = 60 * 60 * 24 * 365;
+      document.cookie = `${key}=${encodeURIComponent(value)}; Max-Age=${oneYear}; Path=/; SameSite=Lax`;
+    });
+  },
+};
+
 let liveSocket = new LiveSocket("/live", Socket, {
+  hooks: Hooks,
   params: {
     _csrf_token: csrfToken,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,

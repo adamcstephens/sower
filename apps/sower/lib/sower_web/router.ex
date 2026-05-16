@@ -14,6 +14,7 @@ defmodule SowerWeb.Router do
     plug :protect_from_forgery
     plug :put_secure_browser_headers
     plug :fetch_current_user
+    plug SowerWeb.SidebarState
   end
 
   pipeline :api do
@@ -40,7 +41,11 @@ defmodule SowerWeb.Router do
   scope "/", SowerWeb do
     pipe_through [:browser, :require_authenticated_user]
 
-    live_session :authenticated, on_mount: [{SowerWeb.UserAuth, :ensure_authenticated}] do
+    live_session :authenticated,
+      on_mount: [
+        {SowerWeb.UserAuth, :ensure_authenticated},
+        {SowerWeb.SidebarState, :default}
+      ] do
       live "/gardens", GardenLive.Index, :index
       live "/gardens/new", GardenLive.Index, :new
       live "/gardens/:sid/edit", GardenLive.Index, :edit
