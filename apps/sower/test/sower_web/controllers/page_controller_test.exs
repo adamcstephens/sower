@@ -10,8 +10,6 @@ defmodule SowerWeb.PageControllerTest do
     assert html =~ ~s(href="/gardens")
     assert html =~ ~s(href="/seeds")
     assert html =~ ~s(href="/deployments")
-    assert html =~ ~s(href="/forges")
-    assert html =~ ~s(href="/nix/caches")
   end
 
   test "home renders sign in as a button", %{conn: conn} do

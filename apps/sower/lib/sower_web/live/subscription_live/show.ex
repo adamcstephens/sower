@@ -34,6 +34,11 @@ defmodule SowerWeb.SubscriptionLive.Show do
          |> assign(:garden, garden)
          |> assign(:page_title, page_title(socket.assigns.live_action))
          |> assign(:subscription, subscription)
+         |> assign(:crumbs, [
+           {"Gardens", ~p"/gardens"},
+           {garden.name, ~p"/gardens/#{garden}"},
+           {subscription.name, nil}
+         ])
          |> assign(:seeds, seeds)
          |> assign(:meta, meta)
          |> assign(:flop_params, flop_params)

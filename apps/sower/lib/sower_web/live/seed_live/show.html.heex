@@ -3,6 +3,7 @@
   current_user={@current_user}
   nav_section={assigns[:nav_section]}
   sidebar_state={assigns[:sidebar_state]}
+  crumbs={assigns[:crumbs] || []}
 >
   <.header>
     {@seed.name}
