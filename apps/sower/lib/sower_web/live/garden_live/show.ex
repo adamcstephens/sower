@@ -36,6 +36,7 @@ defmodule SowerWeb.GardenLive.Show do
           socket
           |> assign(:page_title, page_title(socket.assigns.live_action))
           |> assign(:garden, garden)
+          |> assign(:crumbs, [{"Gardens", ~p"/gardens"}, {garden.name, nil}])
           |> assign(:deployments, deployments)
           |> add_online_status()
           |> assign(:current_generation, %{})

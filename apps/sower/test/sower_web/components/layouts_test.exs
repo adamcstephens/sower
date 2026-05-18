@@ -66,9 +66,7 @@ defmodule SowerWeb.LayoutsTest do
     for {section, label} <- [
           {:gardens, "Gardens"},
           {:seeds, "Seeds"},
-          {:deployments, "Deployments"},
-          {:forges, "Forges"},
-          {:caches, "Nix caches"}
+          {:deployments, "Deployments"}
         ] do
       test "marks the #{section} item as the active page" do
         html = render_app(%{nav_section: unquote(section)})

@@ -16,6 +16,11 @@ defmodule SowerWeb.SubscriptionLive.Index do
     socket =
       socket
       |> assign(:garden, garden)
+      |> assign(:crumbs, [
+        {"Gardens", ~p"/gardens"},
+        {garden.name, ~p"/gardens/#{garden}"},
+        {"Subscriptions", nil}
+      ])
       |> stream(:subscriptions, Orchestration.list_subscriptions_for_garden(garden))
 
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}

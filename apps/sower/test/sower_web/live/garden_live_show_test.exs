@@ -31,6 +31,19 @@ defmodule SowerWeb.GardenLive.ShowTest do
     assert has_element?(show_live, "button", "Deploy")
   end
 
+  test "renders a breadcrumb trail from Gardens to the garden name", %{conn: conn, user: user} do
+    %{garden: garden} = create_garden_with_subscription(user)
+
+    {:ok, show_live, _html} = live(conn, ~p"/gardens/#{garden}")
+
+    crumbs = show_live |> element(~s(nav[aria-label="Breadcrumb"])) |> render()
+
+    assert crumbs =~ ~s(href="/gardens")
+    assert crumbs =~ "Gardens"
+    assert crumbs =~ garden.name
+    assert crumbs =~ ~s(aria-current="page")
+  end
+
   test "does not show deploy button when subscription has no matching seed", %{
     conn: conn,
     user: user
