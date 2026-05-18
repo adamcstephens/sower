@@ -11,6 +11,7 @@ defmodule SowerWeb.DeploymentLive.Show do
       current_user={@current_user}
       nav_section={assigns[:nav_section]}
       sidebar_state={assigns[:sidebar_state]}
+      crumbs={assigns[:crumbs] || []}
     >
       <.header>
         <div class="flex items-center space-x-2 min-w-0">
@@ -190,7 +191,8 @@ defmodule SowerWeb.DeploymentLive.Show do
         {:noreply,
          socket
          |> assign(:deployment, deployment)
-         |> assign(:expanded_seed_logs, MapSet.new())}
+         |> assign(:expanded_seed_logs, MapSet.new())
+         |> assign(:crumbs, [{"Deployments", ~p"/deployments"}, {deployment.sid, nil}])}
     end
   end
 
