@@ -15,6 +15,8 @@ rustPlatform.buildRustPackage {
       fileset = unions [
         ../../Cargo.toml
         ../../Cargo.lock
+        ../../build.rs
+        ../../openapi.json
         ../../src
       ];
     };
