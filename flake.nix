@@ -2,6 +2,7 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
+    crane.url = "github:ipetkov/crane";
   };
 
   outputs =
@@ -36,12 +37,14 @@
               }
             );
 
+            craneLib = inputs.crane.mkLib pkgs;
+
             arch = if pkgs.stdenv.isAarch64 then "arm64" else "x64";
             os = if pkgs.stdenv.isDarwin then "darwin" else "linux";
           in
           {
             _module.args = {
-              inherit beamPackages version;
+              inherit beamPackages craneLib version;
             };
 
             devShells = {
