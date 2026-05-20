@@ -225,7 +225,7 @@ defmodule SowerWeb.Layouts do
       <.crumbs crumbs={@crumbs} />
 
       <div class="flex-1" />
-
+      
     <!--
       <button
         type="button"
