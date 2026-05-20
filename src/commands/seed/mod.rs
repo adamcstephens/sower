@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use crate::api;
 
+mod config;
 mod download;
 mod info;
 mod ops;
@@ -26,6 +27,18 @@ pub struct SeedArgs {
     /// File containing the access token (ignored if --access-token is set)
     #[arg(long, env = "SOWER_ACCESS_TOKEN_FILE", global = true)]
     access_token_file: Option<PathBuf>,
+
+    /// JSON config file (repeatable). Defaults: root=/etc/sower/client.json,
+    /// non-root=$XDG_CONFIG_HOME/sower/client.json. Honored keys: endpoint,
+    /// access_token, access_token_file. Later files override earlier ones; CLI
+    /// flags override all config files.
+    #[arg(
+        long = "config-file",
+        short = 'c',
+        env = "SOWER_CONFIG_FILE",
+        global = true
+    )]
+    config_file: Vec<PathBuf>,
 
     /// Seed name (typically the hostname)
     #[arg(long, short = 'n', global = true)]
@@ -58,10 +71,16 @@ pub fn run(args: SeedArgs) -> Result<()> {
         endpoint,
         access_token,
         access_token_file,
+        config_file,
         name,
         seed_type,
         command,
     } = args;
+
+    let file_cfg = config::load(&config_file)?;
+    let endpoint = endpoint.or(file_cfg.endpoint);
+    let access_token = access_token.or(file_cfg.access_token);
+    let access_token_file = access_token_file.or(file_cfg.access_token_file);
 
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
