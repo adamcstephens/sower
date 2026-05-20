@@ -1,13 +1,10 @@
 {
+  craneLib,
   installShellFiles,
   lib,
-  rustPlatform,
 }:
 
-rustPlatform.buildRustPackage {
-  pname = "sower";
-  version = (lib.importTOML ../../Cargo.toml).package.version;
-
+let
   src =
     with lib.fileset;
     toSource {
@@ -21,23 +18,36 @@ rustPlatform.buildRustPackage {
       ];
     };
 
-  cargoLock.lockFile = ../../Cargo.lock;
+  commonArgs = {
+    inherit src;
+    pname = "sower";
+    version = (lib.importTOML ../../Cargo.toml).package.version;
+    strictDeps = true;
+  };
 
-  nativeBuildInputs = [
-    installShellFiles
-  ];
+  cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+in
+craneLib.buildPackage (
+  commonArgs
+  // {
+    inherit cargoArtifacts;
 
-  postInstall = ''
-    installShellCompletion --cmd sower \
-      --bash <(COMPLETE=bash $out/bin/sower) \
-      --fish <(COMPLETE=fish $out/bin/sower) \
-      --zsh <(COMPLETE=zsh $out/bin/sower)
+    nativeBuildInputs = [
+      installShellFiles
+    ];
 
-    # Symlink for use as a unique binary name (avoids PATH conflicts with the
-    # Elixir `sower` CLI). When invoked via this symlink, the binary detects
-    # argv[0] and routes to the `activator` subcommand.
-    ln --symbolic sower $out/bin/sower-activator
-  '';
+    postInstall = ''
+      installShellCompletion --cmd sower \
+        --bash <(COMPLETE=bash $out/bin/sower) \
+        --fish <(COMPLETE=fish $out/bin/sower) \
+        --zsh <(COMPLETE=zsh $out/bin/sower)
 
-  meta.mainProgram = "sower";
-}
+      # Symlink for use as a unique binary name (avoids PATH conflicts with the
+      # Elixir `sower` CLI). When invoked via this symlink, the binary detects
+      # argv[0] and routes to the `activator` subcommand.
+      ln --symbolic sower $out/bin/sower-activator
+    '';
+
+    meta.mainProgram = "sower";
+  }
+)

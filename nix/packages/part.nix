@@ -3,6 +3,7 @@
   perSystem =
     {
       beamPackages,
+      craneLib,
       pkgs,
       version,
       ...
@@ -23,7 +24,9 @@
           inherit beamPackages version;
         };
 
-        rust-cli = pkgs.callPackage ./rust-cli.nix { };
+        rust-cli = pkgs.callPackage ./rust-cli.nix {
+          inherit craneLib;
+        };
 
         server = pkgs.callPackage ./server.nix {
           inherit beamPackages version sowerServicesHook;
