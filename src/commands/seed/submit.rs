@@ -65,3 +65,51 @@ fn parse_tags(raw: &[String]) -> Result<Vec<types::SeedTag>> {
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_tags_empty() {
+        let got = parse_tags(&[]).unwrap();
+        assert!(got.is_empty());
+    }
+
+    #[test]
+    fn parse_tags_key_value() {
+        let raw = vec!["env=prod".to_owned(), "role=db".to_owned()];
+        let got = parse_tags(&raw).unwrap();
+        assert_eq!(got.len(), 2);
+        assert_eq!(got[0].key, "env");
+        assert_eq!(got[0].value, "prod");
+        assert_eq!(got[1].key, "role");
+        assert_eq!(got[1].value, "db");
+    }
+
+    #[test]
+    fn parse_tags_value_may_contain_equals() {
+        let raw = vec!["url=https://example.com/a=b".to_owned()];
+        let got = parse_tags(&raw).unwrap();
+        assert_eq!(got[0].key, "url");
+        assert_eq!(got[0].value, "https://example.com/a=b");
+    }
+
+    #[test]
+    fn parse_tags_empty_value_ok() {
+        let raw = vec!["k=".to_owned()];
+        let got = parse_tags(&raw).unwrap();
+        assert_eq!(got[0].key, "k");
+        assert_eq!(got[0].value, "");
+    }
+
+    #[test]
+    fn parse_tags_missing_equals_errors() {
+        let raw = vec!["bare".to_owned()];
+        let err = parse_tags(&raw).unwrap_err();
+        assert!(
+            err.to_string().contains("invalid tag format"),
+            "unexpected error: {err}"
+        );
+    }
+}
