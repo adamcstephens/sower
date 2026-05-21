@@ -36,9 +36,17 @@ pub fn run(args: Args) -> Result<()> {
 }
 
 fn needs_reboot() -> Result<bool> {
-    let profile = canonicalize("/nix/var/nix/profiles/system")?;
-    let current = canonicalize("/run/current-system")?;
-    let booted = canonicalize("/run/booted-system")?;
+    needs_reboot_at(
+        Path::new("/nix/var/nix/profiles/system"),
+        Path::new("/run/current-system"),
+        Path::new("/run/booted-system"),
+    )
+}
+
+fn needs_reboot_at(profile: &Path, current: &Path, booted: &Path) -> Result<bool> {
+    let profile = canonicalize(profile)?;
+    let current = canonicalize(current)?;
+    let booted = canonicalize(booted)?;
 
     if current != profile {
         tracing::debug!(
@@ -65,10 +73,92 @@ fn needs_reboot() -> Result<bool> {
     Ok(false)
 }
 
-fn canonicalize(p: &str) -> Result<PathBuf> {
-    std::fs::canonicalize(p).with_context(|| format!("eval symlink {p}"))
+fn canonicalize(p: &Path) -> Result<PathBuf> {
+    std::fs::canonicalize(p).with_context(|| format!("eval symlink {}", p.display()))
 }
 
 fn append(base: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(format!("{}{suffix}", base.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::symlink;
+
+    struct Fixture {
+        root: PathBuf,
+    }
+
+    impl Fixture {
+        fn new(label: &str) -> Self {
+            let mut root = std::env::temp_dir();
+            root.push(format!("sower-reboot-test-{}-{label}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&root);
+            std::fs::create_dir_all(&root).unwrap();
+            Self { root }
+        }
+
+        fn store(&self, name: &str) -> PathBuf {
+            let p = self.root.join(name);
+            std::fs::create_dir_all(&p).unwrap();
+            p
+        }
+
+        fn link(&self, name: &str, target: &Path) -> PathBuf {
+            let p = self.root.join(name);
+            symlink(target, &p).unwrap();
+            p
+        }
+    }
+
+    #[test]
+    fn no_reboot_when_all_match() {
+        let f = Fixture::new("match");
+        let a = f.store("a");
+        let profile = f.link("profile", &a);
+        let current = f.link("current", &a);
+        let booted = f.link("booted", &a);
+
+        assert!(!needs_reboot_at(&profile, &current, &booted).unwrap());
+    }
+
+    #[test]
+    fn reboot_when_current_differs_from_profile() {
+        let f = Fixture::new("profile-drift");
+        let a = f.store("a");
+        let b = f.store("b");
+        let profile = f.link("profile", &a);
+        let current = f.link("current", &b);
+        let booted = f.link("booted", &b);
+
+        assert!(needs_reboot_at(&profile, &current, &booted).unwrap());
+    }
+
+    #[test]
+    fn reboot_when_current_differs_from_booted() {
+        let f = Fixture::new("booted-drift");
+        let a = f.store("a");
+        let b = f.store("b");
+        let profile = f.link("profile", &a);
+        let current = f.link("current", &a);
+        let booted = f.link("booted", &b);
+
+        assert!(needs_reboot_at(&profile, &current, &booted).unwrap());
+    }
+
+    #[test]
+    fn missing_profile_symlink_errors() {
+        let f = Fixture::new("missing");
+        let a = f.store("a");
+        let current = f.link("current", &a);
+        let booted = f.link("booted", &a);
+        let missing = f.root.join("profile");
+
+        let err = needs_reboot_at(&missing, &current, &booted).unwrap_err();
+        assert!(
+            err.to_string().contains("eval symlink"),
+            "unexpected error: {err}"
+        );
+    }
 }
