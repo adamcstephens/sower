@@ -56,8 +56,9 @@
           }
         },
         "required": [
-          "name",
-          "seed_type"
+          "sid",
+          "url",
+          "public_key"
         ],
         "title": "Nix Cache",
         "type": "object",
