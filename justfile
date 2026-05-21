@@ -9,7 +9,7 @@ bootstrap:
     # setup AWS and OIDC secrets
     mix ecto.setup --no-start
 
-check: check-elixir check-go check-rust
+check: check-elixir check-rust
 
 check-e2e:
     nix build .#checks.x86_64-linux.default --print-build-logs
@@ -22,14 +22,6 @@ check-elixir-format:
 
 check-elixir-test: dev-services
     mix test
-
-check-go: check-go-lint check-go-test
-
-check-go-lint:
-    golangci-lint run
-
-check-go-test:
-    go test ./...
 
 check-rust: check-rust-lint check-rust-test
 
@@ -49,8 +41,8 @@ dev-add-user email:
     mix run apps/sower/priv/repo/seeds-user.exs {{ email }} --no-start
 
 dev-seed-from-local:
-    go run ./cmd/cli seed submit --name $(hostname -s) --type nixos --path $(readlink -f /run/current-system) --tag source=dev  --tag test=anotherval
-    go run ./cmd/cli seed submit --name $(hostname -s) --type home-manager --path $(readlink -f $HOME/.local/state/nix/profiles/home-manager) --tag source=dev
+    cargo run --quiet -- seed --name $(hostname -s) --type nixos submit --path $(readlink -f /run/current-system) --tag source=dev --tag test=anotherval
+    cargo run --quiet -- seed --name $(hostname -s) --type home-manager submit --path $(readlink -f $HOME/.local/state/nix/profiles/home-manager) --tag source=dev
 
 dev-services:
     process-compose list || process-compose up --detached
@@ -58,13 +50,10 @@ dev-services:
 get-incus-openapi:
     curl https://converter.swagger.io/api/convert?url=https://raw.githubusercontent.com/lxc/incus/refs/heads/main/doc/rest-api.yaml | jq . > apps/incus_client/priv/incus-rest-api.json
 
-format: format-elixir format-go
+format: format-elixir format-rust
 
 format-elixir:
     mix format
-
-format-go:
-    gofmt -w .
 
 format-rust:
     cargo fmt
@@ -84,12 +73,9 @@ openapi-output:
     MIX_ENV=test mix deps.get
     MIX_ENV=test mix openapi.spec.json --spec SowerWeb.ApiSpec --pretty=true openapi.json
 
-openapi-generate: openapi-output
-    go generate ./client-go
-
 reset: clean setup
 
-set-version: && openapi-generate
+set-version: && openapi-output
     @echo "Current version: $(cat VERSION)"
     @read -p "New version? " new_version; [ -n "$new_version" ] && echo -n $new_version > VERSION
 
@@ -130,7 +116,7 @@ start-pry:
 systemd-analyze unit:
     systemd-analyze security --no-pager --offline=yes --root "$(nix build --no-link --print-out-paths .#checks.x86_64-linux.default.nodes.server.system.build.etc)" {{ unit }}
 
-update: update-nix update-elixir update-go update-npins
+update: update-nix update-elixir update-npins
 
 update-nix:
     nix flake update --commit-lock-file
@@ -143,38 +129,6 @@ update-elixir:
     just mix-clean
     just mix-nix-lock
     jj commit -m 'server(chore): update elixir deps' mix.exs mix.lock nix/packages/deps.nix
-
-update-go:
-    go get -u ./...
-    go mod edit -go=$(go version | awk '{print $3}' | sed 's/go//')
-    go mod tidy
-    just update-go-hash activator
-    just update-go-hash go-cli
-    jj commit -m 'server(chore): update go deps' go.mod go.sum nix/packages/activator.nix nix/packages/go-cli.nix
-
-update-go-hash app:
-    #!/usr/bin/env bash
-
-    set -eou pipefail
-
-    setKV() {
-      sed -i "s|$1 = \".*\"|$1 = \"${2:-}\"|" ./nix/packages/{{ app }}.nix
-    }
-
-    setKV vendorHash "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=" # Necessary to force clean build.
-
-    set +e
-    VENDOR_HASH=$(nix build --no-link .#{{ app }} 2>&1 >/dev/null | grep "got:" | cut -d':' -f2 | sed 's| ||g')
-    set -e
-
-    if [ -n "${VENDOR_HASH:-}" ]; then
-      setKV vendorHash ${VENDOR_HASH}
-    else
-      echo "Update failed. VENDOR_HASH is empty."
-      exit 1
-    fi
-
-    git diff ./nix/packages/{{ app }}.nix
 
 update-npins:
     npins -d nix/tests/npins update

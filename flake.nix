@@ -69,14 +69,6 @@
                   pkgs.rust-analyzer
                   pkgs.rustfmt
 
-                  # go
-                  pkgs.go
-                  pkgs.delve
-                  # broken 2025-09-19 pkgs.gci
-                  pkgs.golangci-lint
-                  pkgs.gopls
-                  pkgs.oapi-codegen
-
                   pkgs.attic-client
                   pkgs.niks3
                   pkgs.nushell
@@ -103,9 +95,6 @@
                   ln -sf ${lib.getExe pkgs.tailwindcss_3} _build/tailwind-${os}-${arch}
                   ln -sf ${lib.getExe pkgs.esbuild} _build/esbuild-${os}-${arch}
                 '';
-
-                # go delve fix
-                hardeningDisable = [ "fortify" ];
               };
             };
           };

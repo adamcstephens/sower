@@ -15,7 +15,7 @@ If more than one of the rules conflict, ask before implementing.
 - formatting done, `just format`
 - tests pass,
   - `just check-elixir`
-  - `just check-go`-
+  - `just check-rust`
   - and importantly, `just check-e2e`
 - code committed with all ticket changes included
   - Ticket ID in the body

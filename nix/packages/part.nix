@@ -16,10 +16,6 @@
           inherit activator beamPackages version;
         };
 
-        go-cli = pkgs.callPackage ./go-cli.nix {
-          inherit version;
-        };
-
         garden = pkgs.callPackage ./garden.nix {
           inherit beamPackages version;
         };
