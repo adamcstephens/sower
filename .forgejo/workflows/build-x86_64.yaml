@@ -28,7 +28,7 @@ jobs:
           export HOME=$PWD
           nix develop .# --command just check-elixir-format
 
-  go:
+  rust-cli:
     runs-on: local/x86_64-linux
 
     steps:
@@ -36,7 +36,7 @@ jobs:
 
       - run: |
           export HOME=$PWD
-          nix develop .# --command just check-go
+          nix develop .# --command just check-rust
 
   e2e:
     runs-on: local/x86_64-linux

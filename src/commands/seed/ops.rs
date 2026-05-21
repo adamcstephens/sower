@@ -153,3 +153,113 @@ pub fn run_inherited(mut cmd: Command) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cache(url: &str, public_key: &str) -> types::NixCache {
+        types::NixCache {
+            sid: "sid".to_owned(),
+            url: url.to_owned(),
+            public_key: public_key.to_owned(),
+        }
+    }
+
+    fn tempdir(label: &str) -> PathBuf {
+        let mut p = std::env::temp_dir();
+        p.push(format!("sower-ops-test-{}-{label}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&p);
+        std::fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    #[test]
+    fn seed_type_round_trip() {
+        for (s, t) in [
+            ("nixos", SeedType::Nixos),
+            ("home-manager", SeedType::HomeManager),
+            ("nix-darwin", SeedType::NixDarwin),
+            ("service", SeedType::Service),
+        ] {
+            let parsed: SeedType = s.parse().unwrap();
+            assert_eq!(parsed.as_str(), t.as_str());
+            assert_eq!(parsed.as_str(), s);
+        }
+    }
+
+    #[test]
+    fn seed_type_unsupported_errors() {
+        let err = "windows".parse::<SeedType>().unwrap_err();
+        assert!(
+            err.to_string().contains("unsupported seed type"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn seed_type_into_api_matches_string() {
+        assert_eq!(SeedType::Nixos.into_api(), types::SeedSeedType::Nixos);
+        assert_eq!(
+            SeedType::HomeManager.into_api(),
+            types::SeedSeedType::HomeManager
+        );
+        assert_eq!(
+            SeedType::NixDarwin.into_api(),
+            types::SeedSeedType::NixDarwin
+        );
+        assert_eq!(SeedType::Service.into_api(), types::SeedSeedType::Service);
+    }
+
+    #[test]
+    fn caches_to_flags_empty() {
+        let (subs, keys) = caches_to_flags(&[]);
+        assert!(subs.is_empty());
+        assert!(keys.is_empty());
+    }
+
+    #[test]
+    fn caches_to_flags_preserves_order() {
+        let caches = vec![
+            cache("https://a.example", "a-key"),
+            cache("https://b.example", "b-key"),
+        ];
+        let (subs, keys) = caches_to_flags(&caches);
+        assert_eq!(subs, vec!["https://a.example", "https://b.example"]);
+        assert_eq!(keys, vec!["a-key", "b-key"]);
+    }
+
+    #[test]
+    fn precheck_nixos_requires_nixos_version() {
+        let dir = tempdir("precheck-nixos");
+        assert!(precheck(&dir, SeedType::Nixos).is_err());
+        std::fs::write(dir.join("nixos-version"), "25.05").unwrap();
+        precheck(&dir, SeedType::Nixos).unwrap();
+    }
+
+    #[test]
+    fn precheck_home_manager_requires_hm_version() {
+        let dir = tempdir("precheck-hm");
+        assert!(precheck(&dir, SeedType::HomeManager).is_err());
+        std::fs::write(dir.join("hm-version"), "24.11").unwrap();
+        precheck(&dir, SeedType::HomeManager).unwrap();
+    }
+
+    #[test]
+    fn precheck_service_requires_sower_systemd() {
+        let dir = tempdir("precheck-service");
+        assert!(precheck(&dir, SeedType::Service).is_err());
+        std::fs::create_dir_all(dir.join(".sower/systemd")).unwrap();
+        precheck(&dir, SeedType::Service).unwrap();
+    }
+
+    #[test]
+    fn precheck_nix_darwin_unsupported() {
+        let dir = tempdir("precheck-darwin");
+        let err = precheck(&dir, SeedType::NixDarwin).unwrap_err();
+        assert!(
+            err.to_string().contains("not supported"),
+            "unexpected error: {err}"
+        );
+    }
+}
