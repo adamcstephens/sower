@@ -113,12 +113,8 @@ fn caches_to_flags(caches: &[types::NixCache]) -> (Vec<String>, Vec<String>) {
     let mut subs = Vec::new();
     let mut keys = Vec::new();
     for cache in caches {
-        if let Some(url) = &cache.url {
-            subs.push(url.clone());
-        }
-        if let Some(pk) = &cache.public_key {
-            keys.push(pk.clone());
-        }
+        subs.push(cache.url.clone());
+        keys.push(cache.public_key.clone());
     }
     (subs, keys)
 }

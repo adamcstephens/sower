@@ -20,7 +20,7 @@ defmodule SowerClient.Nix.Cache do
         description: "Trusted public key for signed NARs"
       }
     },
-    required: ~w(name seed_type)a,
+    required: ~w(sid url public_key)a,
     example: %{
       "sid" => "example4ser3adju75ddusbr",
       "url" => "https://my.cache.org",
