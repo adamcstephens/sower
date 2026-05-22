@@ -90,14 +90,13 @@ setup:
 
 release: set-version
     mix sower.update_contract_baseline
-    git add VERSION openapi.json apps/sower_client/test/fixtures/contract_baseline.json
     jj commit -m "release: version $(cat VERSION)"
 
 release-push:
-    git tag -a -m v$(cat VERSION) v$(cat VERSION)
-    git push --tags
     jj bookmark move main --to @-
     jj git push
+    git tag -a -m v$(cat VERSION) v$(cat VERSION)
+    git push --tags
     just release
 
 start: dev-services start-all
