@@ -128,7 +128,7 @@ update-elixir:
     pushd apps/sower; MIX_ENV=test mix boruta.gen.migration; popd
     just mix-clean
     just mix-nix-lock
-    jj commit -m 'server(chore): update elixir deps' mix.exs mix.lock nix/packages/deps.nix
+    jj commit -m 'server(chore): update elixir deps' apps/*/mix.exs mix.exs mix.lock nix/packages/deps.nix
 
 update-npins:
     npins -d nix/tests/npins update
