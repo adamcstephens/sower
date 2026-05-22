@@ -28,16 +28,6 @@ jobs:
           export HOME=$PWD
           nix develop .# --command just check-elixir-format
 
-  rust-cli:
-    runs-on: local/x86_64-linux
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - run: |
-          export HOME=$PWD
-          nix develop .# --command just check-rust
-
   e2e:
     runs-on: local/x86_64-linux
 
