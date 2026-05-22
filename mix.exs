@@ -42,6 +42,7 @@ defmodule SowerUmbrella.MixProject do
   # Run "mix help deps" for examples and options.
   defp deps do
     [
+      {:mix_audit, "~> 2.0", only: [:test, :dev]},
       {:dialyxir, "~> 1.0", only: [:dev]},
       {:deps_nix, "~> 3.0", only: [:dev]},
       {:igniter, "~> 0.7", only: [:dev, :test], override: true}

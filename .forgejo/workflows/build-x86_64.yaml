@@ -18,7 +18,7 @@ jobs:
           export NIKS3_AUTH_TOKEN_FILE="$PWD/../niks3-token"
           nix develop .#ci --command sower build --cache niks3:// --eval-jobs 12 .#sowerJobs.x86_64-linux --push
 
-  elixir-format:
+  mix-tasks:
     runs-on: local/x86_64-linux
 
     steps:
@@ -27,6 +27,7 @@ jobs:
       - run: |
           export HOME=$PWD
           nix develop .# --command just check-elixir-format
+          nix develop .# --command just check-elixir-deps
 
   e2e:
     runs-on: local/x86_64-linux

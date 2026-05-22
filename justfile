@@ -16,6 +16,9 @@ check-e2e:
 
 check-elixir: check-elixir-format check-elixir-test
 
+check-elixir-audit:
+    mix deps.audit
+
 check-elixir-format:
     [ -d deps ] || mix deps.get
     mix format --check-formatted
