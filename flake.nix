@@ -64,6 +64,7 @@
 
                   # rust
                   pkgs.cargo
+                  pkgs.cargo-edit
                   pkgs.clippy
                   pkgs.rustc
                   pkgs.rust-analyzer

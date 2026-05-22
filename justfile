@@ -78,6 +78,7 @@ reset: clean setup
 set-version: && openapi-output
     @echo "Current version: $(cat VERSION)"
     @read -p "New version? " new_version; [ -n "$new_version" ] && echo -n $new_version > VERSION
+    cargo set-version $(cat VERSION)
 
 setup:
     mix deps.get
