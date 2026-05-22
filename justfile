@@ -116,7 +116,7 @@ start-pry:
 systemd-analyze unit:
     systemd-analyze security --no-pager --offline=yes --root "$(nix build --no-link --print-out-paths .#checks.x86_64-linux.default.nodes.server.system.build.etc)" {{ unit }}
 
-update: update-nix update-elixir update-npins
+update: update-nix update-elixir update-npins update-rust
 
 update-nix:
     nix flake update --commit-lock-file
@@ -128,8 +128,12 @@ update-elixir:
     pushd apps/sower; MIX_ENV=test mix boruta.gen.migration; popd
     just mix-clean
     just mix-nix-lock
-    jj commit -m 'server(chore): update elixir deps' apps/*/mix.exs mix.exs mix.lock nix/packages/deps.nix
+    jj commit -m 'chore: update elixir deps' apps/*/mix.exs mix.exs mix.lock nix/packages/deps.nix
 
 update-npins:
     npins -d nix/tests/npins update
     if jj diff --name-only | rg '^nix/tests/npins'; then jj commit -m 'chore: npins update' nix/tests/npins; fi
+
+update-rust:
+    cargo update
+    jj commit -m 'chore: update rust deps' Cargo.lock
