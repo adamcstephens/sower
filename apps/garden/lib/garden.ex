@@ -12,10 +12,8 @@ defmodule Garden do
   executed at the end of the current deployment (if one is in progress) or
   can be checked manually via `take_pending_reload/0`.
 
-  Intended to be called via RPC by ExecReload:
-
-      sower-garden rpc "Garden.request_reload()"
-
+  Invoked by the SIGHUP handler in `Garden.SignalHandler`, which is what
+  systemd `ExecReload` sends.
   """
   def request_reload() do
     :persistent_term.put(:sower_pending_reload, true)

@@ -5,8 +5,10 @@ defmodule Garden.Application do
 
   use Application
 
-  @impl true
+  @impl Application
   def start(_type, _args) do
+    Garden.SignalHandler.attach()
+
     config = Garden.Config.get()
 
     # Only start client-related processes if endpoint is configured
