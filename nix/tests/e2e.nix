@@ -21,12 +21,13 @@ let
 
   hmGardenStateDir = "/home/testuser/.local/state/sower-garden";
 
-  # Admin wrapper for home-manager garden RPC (must match RELEASE_NODE override)
+  # Admin wrapper for home-manager garden RPC (must match the RELEASE_NODE
+  # set by the home-manager module).
   hmGardenAdmin = pkgs.writeShellApplication {
     name = "sower-hm-garden";
     text = ''
       export RELEASE_MODE="interactive"
-      export RELEASE_NODE="garden_hm"
+      export RELEASE_NODE="sower-garden-hm"
       export SHELL="${lib.getExe pkgs.bash}"
       RELEASE_COOKIE=$(cat ${hmGardenStateDir}/release-cookie)
       export RELEASE_COOKIE
@@ -82,6 +83,8 @@ testers.runNixOSTest {
             garden = {
               enable = true;
               package = gardenPkg;
+              # the test drives ad-hoc deploys via `sower-garden rpc ...`
+              distribution = true;
 
               settings = {
                 access_token_file = "/run/sower/test_token";
@@ -147,6 +150,8 @@ testers.runNixOSTest {
               package = gardenPkg;
               activatorPackage = activatorPkg;
               accessTokenFile = "/run/sower/test_token";
+              # the test drives ad-hoc deploys via `sower-hm-garden rpc ...`
+              distribution = true;
 
               settings = {
                 endpoint = "http://localhost:4000";
@@ -170,8 +175,6 @@ testers.runNixOSTest {
           # Test overrides for home-manager garden
           home-manager.users.testuser.systemd.user.services.sower-garden.Service = {
             Restart = lib.mkForce "no";
-            # Avoid Erlang node name clash with system-level garden
-            Environment = lib.mkAfter [ "RELEASE_NODE=garden_hm" ];
           };
 
           virtualisation.diskSize = 4096;

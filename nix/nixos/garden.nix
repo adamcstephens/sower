@@ -57,29 +57,6 @@ let
       exec ${lib.getExe cfg.package} start
     '';
   };
-
-  stopScript = pkgs.writeShellApplication {
-    name = "sower-garden-stop";
-    text = ''
-      RELEASE_COOKIE=$(cat release-cookie)
-      export RELEASE_COOKIE
-      PID=$(${lib.getExe cfg.package} pid)
-
-      exec ${lib.getExe cfg.package} stop
-
-      while [ -d "/proc/$PID" ]; do sleep 1; done
-    '';
-  };
-
-  reloadScript = pkgs.writeShellApplication {
-    name = "sower-garden-reload";
-    text = ''
-      RELEASE_COOKIE=$(cat release-cookie)
-      export RELEASE_COOKIE
-
-      ${lib.getExe cfg.package} rpc "Garden.request_reload()"
-    '';
-  };
 in
 {
   options = {
@@ -109,6 +86,24 @@ in
         description = "Sower client (garden and cli) configuration file";
         default = { };
       };
+
+      distribution = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Enable Erlang distribution for the garden.
+
+          When disabled (default), the garden runs without distribution.
+          Lifecycle is driven by systemd signals (SIGTERM for stop, SIGHUP
+          for reload); release CLI subcommands that need distribution
+          (rpc, remote, pid, stop) will not work, and the `sower-garden`
+          admin wrapper is not installed.
+
+          Enable to allow ad-hoc RPC into the running BEAM. Multiple
+          gardens on one host require distinct RELEASE_NODE values to
+          avoid collisions on epmd.
+        '';
+      };
     };
   };
 
@@ -126,7 +121,7 @@ in
 
     environment.etc."sower/client.json".source = lib.mkIf (cfg.settings != null) jsonConfig;
 
-    environment.systemPackages = [
+    environment.systemPackages = lib.optionals cfg.distribution [
       adminScript
     ];
 
@@ -164,6 +159,13 @@ in
         RELEASE_MODE = "interactive";
 
         SOWER_CONFIG_FILE = "/etc/sower/client.json";
+      }
+      // lib.optionalAttrs (!cfg.distribution) {
+        RELEASE_DISTRIBUTION = "none";
+        # the release start script reads RELEASE_COOKIE unconditionally;
+        # with distribution off the value is unused but must be set so
+        # the script doesn't try to read a non-existent releases/COOKIE.
+        RELEASE_COOKIE = "disabled";
       }
       // lib.optionalAttrs (cfg.accessTokenFile != null) {
         SOWER_ACCESS_TOKEN_FILE = cfg.accessTokenFile;
@@ -238,13 +240,14 @@ in
         StateDirectoryMode = "0700";
         WorkingDirectory = "%S/sower-garden";
 
-        ExecStartPre = [
+        ExecStartPre = lib.optionals cfg.distribution [
           (lib.getExe secretsScript)
         ];
-        ExecStart = lib.getExe startScript;
-        ExecStop = lib.getExe stopScript;
-        # Request reload via RPC - the garden will restart itself at end of deployment
-        ExecReload = lib.getExe reloadScript;
+        ExecStart =
+          if cfg.distribution then lib.getExe startScript else "${lib.getExe cfg.package} start";
+        # SIGHUP triggers Garden.SignalHandler; the garden restarts itself at
+        # end of the deployment in progress.
+        ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
 
         MemoryAccounting = true;
         MemoryMax = "200M";
