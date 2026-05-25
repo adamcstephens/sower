@@ -608,18 +608,24 @@ defmodule Garden.Socket do
   def reload_garden_service do
     Logger.info(msg: "Restarting sower-garden service")
 
+    # XDG_RUNTIME_DIR is set by systemd for user services; in that case the
+    # unit lives on the user bus, not the system bus.
+    bus_args =
+      if System.get_env("XDG_RUNTIME_DIR"), do: ["--user"], else: []
+
     case System.cmd(
            "busctl",
-           [
-             "call",
-             "org.freedesktop.systemd1",
-             "/org/freedesktop/systemd1",
-             "org.freedesktop.systemd1.Manager",
-             "RestartUnit",
-             "ss",
-             "sower-garden.service",
-             "replace"
-           ],
+           bus_args ++
+             [
+               "call",
+               "org.freedesktop.systemd1",
+               "/org/freedesktop/systemd1",
+               "org.freedesktop.systemd1.Manager",
+               "RestartUnit",
+               "ss",
+               "sower-garden.service",
+               "replace"
+             ],
            stderr_to_stdout: true
          ) do
       {output, 0} ->
