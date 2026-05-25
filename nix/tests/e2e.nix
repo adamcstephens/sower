@@ -177,9 +177,70 @@ testers.runNixOSTest {
             Restart = lib.mkForce "no";
           };
 
+          # Second HM user exercises the signal-driven lifecycle with
+          # distribution disabled (module default).
+          users.users.nodist-user = {
+            isNormalUser = true;
+          };
+
+          home-manager.users.nodist-user = {
+            imports = [ ../home/module.nix ];
+
+            home.stateVersion = "24.11";
+
+            services.sower.garden = {
+              enable = true;
+              package = gardenPkg;
+              activatorPackage = activatorPkg;
+              accessTokenFile = "/run/sower/test_token";
+
+              settings = {
+                endpoint = "http://localhost:4000";
+              };
+            };
+          };
+
+          home-manager.users.nodist-user.systemd.user.services.sower-garden.Service = {
+            Restart = lib.mkForce "no";
+          };
+
           virtualisation.diskSize = 4096;
         };
 
+      };
+
+    # Second NixOS host runs only the system garden module with the
+    # default distribution=false, so the no-distribution path is exercised
+    # for the system service (different state dir, hardening, and unit
+    # config than the home-manager case).
+    client =
+      { ... }:
+      {
+        imports = [
+          ../nixos/module.nix
+        ];
+
+        config = {
+          boot.loader.grub.enable = false;
+
+          services.sower = {
+            activator.package = activatorPkg;
+
+            garden = {
+              enable = true;
+              package = gardenPkg;
+              # endpoint/access_token are required by config validation;
+              # this VM never actually reaches a server, the lifecycle test
+              # only cares that the BEAM starts and answers signals.
+              settings = {
+                endpoint = "http://localhost:1";
+                access_token = "dummy";
+              };
+            };
+          };
+          # if garden fails to start, fail immediately
+          systemd.services.sower-garden.serviceConfig.Restart = "no";
+        };
       };
   };
 
@@ -262,6 +323,59 @@ testers.runNixOSTest {
               " --grep=Completed.activation'",
               timeout=15,
           )
+
+      def assert_lifecycle(machine, unit, user=None):
+          if user:
+              grep_prefix = (
+                  f"su -l {user} -c '"
+                  f"journalctl --user --no-pager -u {unit}"
+              )
+              grep_suffix = "'"
+          else:
+              grep_prefix = f"journalctl --no-pager -u {unit}"
+              grep_suffix = ""
+
+          # systemctl reload sends SIGHUP; Garden.SignalHandler logs receipt.
+          # The handler also asks Garden.Socket to self-restart, but that
+          # cascade is exercised by Garden tests; here we only verify the
+          # signal reached the BEAM and the unit stayed healthy.
+          before = machine.succeed("date -u +%s").strip()
+          machine.systemctl(f"reload {unit}", user)
+          machine.wait_until_succeeds(
+              f"{grep_prefix} --since=@{before} --grep=Received.SIGHUP{grep_suffix}",
+              timeout=10,
+          )
+          machine.execute("sleep 3")
+          machine.wait_for_unit(unit, user)
+
+          # systemctl restart cycles the unit cleanly.
+          machine.systemctl(f"restart {unit}", user)
+          machine.wait_for_unit(unit, user)
+
+          # systemctl stop sends SIGTERM; BEAM shuts down before SIGKILL fallback.
+          machine.systemctl(f"stop {unit}", user)
+          status, _ = machine.systemctl(f"is-active {unit}", user)
+          assert status != 0, f"{unit} still active after stop (user={user})"
+
+      with subtest("nixos signal-driven lifecycle (distribution off)"):
+          client.wait_for_unit("sower-garden.service")
+          assert_lifecycle(client, "sower-garden.service")
+
+      with subtest("home-manager signal-driven lifecycle (distribution off)"):
+          server.succeed("loginctl enable-linger nodist-user")
+          server.systemctl("daemon-reload", "nodist-user")
+          server.systemctl("start sower-garden.service", "nodist-user")
+          server.wait_for_unit("sower-garden.service", "nodist-user")
+          assert_lifecycle(server, "sower-garden.service", "nodist-user")
+
+      with subtest("home-manager signal-driven lifecycle (distribution on)"):
+          # testuser's garden is still running from prior subtests.
+          assert_lifecycle(server, "sower-garden.service", "testuser")
+
+      with subtest("nixos signal-driven lifecycle (distribution on)"):
+          # system garden on server has distribution=true; run last because
+          # the stop call leaves it inactive.
+          assert_lifecycle(server, "sower-garden.service")
 
     '';
 }
