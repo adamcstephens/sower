@@ -8,6 +8,8 @@ defmodule Garden.SignalHandler do
 
   @behaviour :gen_event
 
+  require Logger
+
   def attach do
     :os.set_signal(:sighup, :handle)
     :gen_event.add_handler(:erl_signal_server, __MODULE__, [])
@@ -17,7 +19,8 @@ defmodule Garden.SignalHandler do
   def init(_args), do: {:ok, %{}}
 
   @impl :gen_event
-  def handle_event({:signal, :sighup}, state) do
+  def handle_event(:sighup, state) do
+    Logger.info(msg: "Received SIGHUP, requesting reload")
     Garden.request_reload()
     {:ok, state}
   end
