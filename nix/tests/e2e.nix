@@ -325,6 +325,7 @@ testers.runNixOSTest {
           )
 
       def assert_lifecycle(machine, unit, user=None):
+          ctl = f"systemctl --machine={user}@.host --user" if user else "systemctl"
           if user:
               grep_prefix = (
                   f"su -l {user} -c '"
@@ -335,18 +336,22 @@ testers.runNixOSTest {
               grep_prefix = f"journalctl --no-pager -u {unit}"
               grep_suffix = ""
 
-          # systemctl reload sends SIGHUP; Garden.SignalHandler logs receipt.
-          # The handler also asks Garden.Socket to self-restart, but that
-          # cascade is exercised by Garden tests; here we only verify the
-          # signal reached the BEAM and the unit stayed healthy.
+          # systemctl reload sends SIGHUP; Garden.SignalHandler logs receipt
+          # and Garden.Socket triggers an in-app self-restart via busctl,
+          # which cycles the BEAM. Verify both the signal log and that the
+          # MainPID actually changed and the unit ended back up active.
           before = machine.succeed("date -u +%s").strip()
+          pid_before = machine.succeed(f"{ctl} show -p MainPID --value {unit}").strip()
           machine.systemctl(f"reload {unit}", user)
           machine.wait_until_succeeds(
               f"{grep_prefix} --since=@{before} --grep=Received.SIGHUP{grep_suffix}",
               timeout=10,
           )
-          machine.execute("sleep 3")
-          machine.wait_for_unit(unit, user)
+          machine.wait_until_succeeds(
+              f"[ \"$({ctl} show -p MainPID --value {unit})\" != \"{pid_before}\" ]"
+              f" && [ \"$({ctl} is-active {unit})\" = active ]",
+              timeout=20,
+          )
 
           # systemctl restart cycles the unit cleanly.
           machine.systemctl(f"restart {unit}", user)
