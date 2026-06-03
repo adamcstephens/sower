@@ -15,6 +15,33 @@ defmodule Garden.Socket do
     GenServer.cast(__MODULE__, {:deployment_request, sub, force?})
   end
 
+  @doc """
+  Read the inflight deployments, keyed by deployment sid.
+
+  Returns an empty map when the socket client is not running (e.g. a garden
+  configured without an endpoint), so admin status works while disconnected.
+  """
+  def active_deployments do
+    case GenServer.whereis(__MODULE__) do
+      nil ->
+        %{}
+
+      _pid ->
+        try do
+          GenServer.call(__MODULE__, :active_deployments, 1_000)
+        catch
+          :exit, _ -> %{}
+        end
+    end
+  end
+
+  @impl Slipstream
+  def handle_call(:active_deployments, _from, socket) do
+    {:reply, socket.active_deployments, socket}
+  end
+
+  def handle_call(message, from, socket), do: super(message, from, socket)
+
   @impl Slipstream
   def handle_cast({:deployment_request, %{sid: sid}, force?}, socket) do
     {:ok, upgrade_request} = Lifecycle.build_deployment_request(sid, force?)

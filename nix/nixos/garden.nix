@@ -10,9 +10,16 @@ let
   json = pkgs.formats.json { };
   jsonType = json.type;
 
+  # The garden BEAM binds this admin socket itself (no .socket unit); the dir is
+  # provided by RuntimeDirectory below.
+  adminSocketPath = "/run/sower-garden/admin.sock";
+
   # Build garden settings, optionally including activator socket path
   gardenSettings =
     cfg.settings
+    // {
+      admin_socket = adminSocketPath;
+    }
     // (lib.optionalAttrs activatorCfg.enable { activator_socket = activatorCfg.socketPath; });
 
   jsonConfig = json.generate "sower-client.json" gardenSettings;
@@ -239,6 +246,11 @@ in
         StateDirectory = "sower-garden";
         StateDirectoryMode = "0700";
         WorkingDirectory = "%S/sower-garden";
+
+        # Dir for the BEAM-bound admin socket (/run/sower-garden/admin.sock).
+        # Group-traversable so sower-garden members can reach the socket.
+        RuntimeDirectory = "sower-garden";
+        RuntimeDirectoryMode = "0750";
 
         ExecStartPre = lib.optionals cfg.distribution [
           (lib.getExe secretsScript)

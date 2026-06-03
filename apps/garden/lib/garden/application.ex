@@ -26,6 +26,9 @@ defmodule Garden.Application do
       [
         {Garden.Storage, []},
         {Task.Supervisor, name: Garden.TaskSupervisor},
+        # Admin socket starts unconditionally so admin commands work even when
+        # the garden has no endpoint / is disconnected.
+        {Garden.AdminSocket, []},
         :systemd.ready()
       ] ++ client_children
 
