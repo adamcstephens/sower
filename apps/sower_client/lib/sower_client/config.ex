@@ -13,7 +13,7 @@ defmodule SowerClient.Config do
   require OpenApiSpex
 
   @config_file_env "SOWER_CONFIG_FILE"
-  @path_setting_keys ["state_directory"]
+  @path_setting_keys ["state_directory", "admin_socket"]
   @env_var_pattern ~r/\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\})/
 
   OpenApiSpex.schema(%{
@@ -24,6 +24,10 @@ defmodule SowerClient.Config do
         type: :string,
         description: "Sower access token",
         readOnly: true
+      },
+      admin_socket: %Schema{
+        type: :string,
+        description: "Unix socket path for garden admin commands (garden-only)"
       },
       caches: %Schema{
         type: :array,
@@ -112,6 +116,7 @@ defmodule SowerClient.Config do
     %{
       "name" => default_client_name(),
       "state_directory" => default_state_dir(),
+      "admin_socket" => default_admin_socket(),
       "default" => "/var/lib/sower-garden"
     }
   end
@@ -199,6 +204,24 @@ defmodule SowerClient.Config do
 
   def default_state_dir do
     SowerClient.Config.xdg_state_path("sower-garden")
+  end
+
+  @doc """
+  Default garden admin socket path.
+
+  Mirrors `state_directory` resolution: a user garden binds under
+  `$XDG_RUNTIME_DIR/sower-garden`, a system garden under `/run/sower-garden`.
+  Nix passes an explicit `admin_socket` for both, so this only covers
+  dev / unconfigured runs.
+  """
+  def default_admin_socket do
+    runtime_dir =
+      case {System.get_env("USER"), System.get_env("XDG_RUNTIME_DIR")} do
+        {user, dir} when user != "root" and is_binary(dir) -> dir
+        _ -> "/run"
+      end
+
+    Path.join([runtime_dir, "sower-garden", "admin.sock"])
   end
 
   def xdg_config_path(app_name, filename) do

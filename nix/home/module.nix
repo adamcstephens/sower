@@ -128,6 +128,12 @@ in
 
             WorkingDirectory = "-${stateDir}";
 
+            # Dir for the BEAM-bound admin socket; resolves to
+            # $XDG_RUNTIME_DIR/sower-garden, matching the garden's default
+            # admin_socket path. User-private (only the owning user connects).
+            RuntimeDirectory = "sower-garden";
+            RuntimeDirectoryMode = "0700";
+
             MemoryAccounting = true;
             MemoryMax = "200M";
           };

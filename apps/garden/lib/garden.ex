@@ -17,7 +17,14 @@ defmodule Garden do
   """
   def request_reload() do
     :persistent_term.put(:sower_pending_reload, true)
-    send(Garden.Socket, :check_pending_reload)
+
+    # The socket client only runs when an endpoint is configured; guard the send
+    # so reload (SIGHUP or admin socket) never crashes on a disconnected garden.
+    case Process.whereis(Garden.Socket) do
+      nil -> :ok
+      pid -> send(pid, :check_pending_reload)
+    end
+
     :ok
   end
 

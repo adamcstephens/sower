@@ -23,6 +23,9 @@ defmodule SowerClient do
       components: %OpenApiSpex.Components{schemas: %{}}
     }
     |> OpenApiSpex.add_schemas([
+      SowerClient.Admin.Request,
+      SowerClient.Admin.Reply,
+      SowerClient.Admin.Status,
       SowerClient.GardenRegistration,
       SowerClient.Auth.OAuthCredentials,
       SowerClient.Auth.TokenInfo,
