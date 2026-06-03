@@ -1090,6 +1090,31 @@ defmodule Sower.OrchestrationTest do
       assert refreshed.state == :canceled
       assert refreshed.result == :failure
     end
+
+    test "skips overdue subscriptions denied by policy without crashing", %{organization: _org} do
+      garden = garden_fixture()
+
+      # A scheduled subscription whose policy does not permit the :scheduled
+      # trigger (mirrors a maintenance window closed at reconnect time): the
+      # catch-up deploy is correctly denied and must not crash reconcile.
+      subscription =
+        subscription_fixture(%{
+          garden_id: garden.id,
+          seed_name: "windowed-host",
+          seed_type: "nixos",
+          schedule: "0 5 * * *",
+          timezone: "Etc/UTC",
+          policy: [
+            %{name: "manual-only", actions: ["activate"], triggers: ["manual"]}
+          ]
+        })
+
+      assert {:ok, %{replayed: [], cancelled: [], overdue: overdue}} =
+               Orchestration.Deployment.reconcile_deployments_on_connect(garden)
+
+      assert Enum.map(overdue, & &1.sid) == [subscription.sid]
+      assert Orchestration.Deployment.list_deployments(garden) == []
+    end
   end
 
   describe "finalize_stale_deployments/1" do
