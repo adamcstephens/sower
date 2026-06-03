@@ -302,16 +302,30 @@ defmodule Sower.Orchestration.Deployment do
       SowerWeb.Endpoint.broadcast("garden:#{garden.sid}", "deployment", payload)
     end)
 
-    # 4. Deploy fresh for all overdue subscriptions
-    overdue_tasks =
-      Enum.map(overdue, fn sub ->
-        {:ok, _request_id, pid} =
-          deploy_subscription(sub, actor_sid: garden.sid, event_reason: :schedule_triggered)
+    # 4. Deploy fresh for all overdue subscriptions. A denial (policy window
+    #    closed, confirmation required, garden missing) is an expected outcome,
+    #    not an error — log it and skip so the subscription stays overdue for the
+    #    next in-window connect, and a denied subscription never starves a
+    #    deployable sibling in the same batch.
+    overdue_pids =
+      Enum.flat_map(overdue, fn sub ->
+        case deploy_subscription(sub, actor_sid: garden.sid, event_reason: :schedule_triggered) do
+          {:ok, _request_id, pid} ->
+            [pid]
 
-        pid
+          {:error, reason} ->
+            Logger.info(
+              msg: "Skipping overdue scheduled deployment",
+              garden_sid: garden.sid,
+              subscription_sid: sub.sid,
+              reason: to_string(reason)
+            )
+
+            []
+        end
       end)
 
-    Enum.each(overdue_tasks, fn pid ->
+    Enum.each(overdue_pids, fn pid ->
       ref = Process.monitor(pid)
 
       receive do
