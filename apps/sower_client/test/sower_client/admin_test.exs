@@ -2,63 +2,70 @@ defmodule SowerClient.AdminTest do
   use ExUnit.Case, async: true
 
   alias SowerClient.Admin
+  alias SowerClient.Admin.{Deploy, Reload, Reply, Request, Status, StatusReport}
 
-  describe "Request.cast/1" do
-    test "casts a deploy request and defaults v and force" do
-      assert {:ok, request} = Admin.Request.cast(%{"id" => "abc", "kind" => "deploy"})
-      assert request.id == "abc"
-      assert request.kind == "deploy"
-      assert request.v == 1
-      assert request.force == false
-      assert request.seed_type == nil
-      assert request.sid == nil
-    end
-
-    test "keeps deploy scoping fields" do
-      assert {:ok, request} =
-               Admin.Request.cast(%{
+  describe "decode_request/1" do
+    test "decodes a deploy envelope into a typed command" do
+      assert {:ok, %Request{v: 1, id: "abc", message: %Deploy{} = deploy}} =
+               Admin.decode_request(%{
+                 "v" => 1,
                  "id" => "abc",
                  "kind" => "deploy",
-                 "seed_type" => "nixos",
-                 "force" => true
+                 "payload" => %{"seed_type" => "nixos", "force" => true}
                })
 
-      assert request.seed_type == "nixos"
-      assert request.force == true
+      assert deploy.seed_type == "nixos"
+      assert deploy.force == true
+    end
+
+    test "decodes the field-less commands with no payload" do
+      assert {:ok, %Request{message: %Reload{}}} =
+               Admin.decode_request(%{"id" => "a", "kind" => "reload"})
+
+      assert {:ok, %Request{message: %Status{}}} =
+               Admin.decode_request(%{"id" => "a", "kind" => "status"})
+    end
+
+    test "defaults v and force" do
+      assert {:ok, %Request{v: 1, message: %Deploy{force: false}}} =
+               Admin.decode_request(%{"id" => "a", "kind" => "deploy"})
     end
 
     test "rejects an unknown kind" do
-      assert {:error, _} = Admin.Request.cast(%{"id" => "abc", "kind" => "frobnicate"})
+      assert {:error, {:unknown_kind, "frobnicate"}} =
+               Admin.decode_request(%{"id" => "a", "kind" => "frobnicate"})
     end
 
-    test "rejects an unknown seed_type" do
+    test "rejects an invalid payload" do
       assert {:error, _} =
-               Admin.Request.cast(%{"id" => "abc", "kind" => "deploy", "seed_type" => "bogus"})
+               Admin.decode_request(%{
+                 "id" => "a",
+                 "kind" => "deploy",
+                 "payload" => %{"seed_type" => "bogus"}
+               })
+    end
+
+    test "rejects a missing kind" do
+      assert {:error, :missing_kind} = Admin.decode_request(%{"id" => "a"})
     end
   end
 
-  describe "Status.cast/1" do
-    test "defaults active_deployments to an empty list" do
-      assert {:ok, status} = Admin.Status.cast(%{"version" => "1.2.3"})
-      assert status.version == "1.2.3"
-      assert status.active_deployments == []
+  describe "schemas" do
+    test "StatusReport defaults active_deployments to an empty list" do
+      assert {:ok, %StatusReport{version: "1.2.3", active_deployments: []}} =
+               StatusReport.cast(%{"version" => "1.2.3"})
     end
-  end
 
-  describe "Reply.cast/1" do
-    test "casts a complete frame with an exit code" do
-      assert {:ok, reply} =
-               Admin.Reply.cast(%{"id" => "abc", "kind" => "complete", "exit_code" => 0})
-
-      assert reply.kind == "complete"
-      assert reply.exit_code == 0
+    test "Reply casts a complete frame with an exit code" do
+      assert {:ok, %Reply{kind: "complete", exit_code: 0}} =
+               Reply.cast(%{"id" => "a", "kind" => "complete", "exit_code" => 0})
     end
   end
 
   test "admin schemas are registered in the spec but excluded from server-pushed titles" do
     spec = SowerClient.spec()
 
-    for title <- ["AdminRequest", "AdminReply", "AdminStatus"] do
+    for title <- ["AdminDeploy", "AdminReload", "AdminStatus", "AdminStatusReport", "AdminReply"] do
       assert Map.has_key?(spec.components.schemas, title), "#{title} missing from spec()"
       refute title in SowerClient.server_pushed_schema_titles()
     end

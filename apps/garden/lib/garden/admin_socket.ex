@@ -214,8 +214,8 @@ defmodule Garden.AdminSocket do
 
   defp authorized_outcome(client, handler) do
     case read_request(client) do
-      {:ok, request} ->
-        {:dispatch, request.id, handler.(request)}
+      {:ok, %Admin.Request{id: id, message: message}} ->
+        {:dispatch, id, handler.(message)}
 
       # An over-long line puts the OTP socket into :enotconn, so we can't reply —
       # just drop the connection (the Rust client enforces the same cap).
@@ -243,7 +243,7 @@ defmodule Garden.AdminSocket do
   defp emit(client, {:dispatch, id, {:error, message}}),
     do: send_frames(client, id, :error, %{"data" => message})
 
-  defp emit(client, {:dispatch, id, {:status, %Admin.Status{} = status}}),
+  defp emit(client, {:dispatch, id, {:status, %Admin.StatusReport{} = status}}),
     do: send_frames(client, id, :ok, %{"status" => status_map(status)})
 
   defp emit(client, {:reply_error, id, message}),
@@ -263,7 +263,7 @@ defmodule Garden.AdminSocket do
     %{"v" => 1, "id" => id, "kind" => "complete", "exit_code" => exit_code}
   end
 
-  defp status_map(%Admin.Status{version: version, active_deployments: active}) do
+  defp status_map(%Admin.StatusReport{version: version, active_deployments: active}) do
     %{"version" => version, "active_deployments" => active}
   end
 
@@ -283,14 +283,8 @@ defmodule Garden.AdminSocket do
 
   defp decode_request(line) do
     case Jason.decode(line) do
-      {:ok, map} ->
-        case Admin.Request.cast(map) do
-          {:ok, request} -> {:ok, request}
-          {:error, errors} -> {:error, {:cast, errors}}
-        end
-
-      {:error, reason} ->
-        {:error, {:json, reason}}
+      {:ok, map} -> Admin.decode_request(map)
+      {:error, reason} -> {:error, {:json, reason}}
     end
   end
 
