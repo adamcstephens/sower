@@ -1,6 +1,7 @@
 defmodule SowerClient.Admin.Status do
   @moduledoc """
-  Garden status payload returned on the `ok` frame of a `status` admin request.
+  `status` command payload for the garden admin socket — no fields; the garden
+  replies with an `AdminStatusReport` on the ok frame.
   """
 
   use SowerClient.Schema
@@ -8,18 +9,7 @@ defmodule SowerClient.Admin.Status do
   OpenApiSpex.schema(%{
     title: "AdminStatus",
     type: :object,
-    properties: %{
-      version: %Schema{
-        type: :string,
-        description: "Running garden version"
-      },
-      active_deployments: %Schema{
-        type: :array,
-        items: %Schema{type: :string},
-        default: [],
-        description: "Sids of deployments currently inflight"
-      }
-    },
-    required: [:version]
+    properties: %{},
+    required: []
   })
 end

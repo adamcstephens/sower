@@ -37,7 +37,7 @@ defmodule SowerClient.Admin.Reply do
         nullable: true,
         description: "Exit code, present on the terminal complete frame"
       },
-      status: SowerClient.Admin.Status
+      status: SowerClient.Admin.StatusReport
     },
     required: [:id, :kind]
   })

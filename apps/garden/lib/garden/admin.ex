@@ -7,18 +7,21 @@ defmodule Garden.Admin do
 
   import SowerClient.Seed, only: [is_seed_type?: 1]
 
-  alias SowerClient.Admin.Request
+  alias SowerClient.Admin.Deploy
+  alias SowerClient.Admin.Reload
   alias SowerClient.Admin.Status
+  alias SowerClient.Admin.StatusReport
 
   @doc """
-  Dispatch a decoded admin socket request.
+  Dispatch a decoded admin socket command struct.
 
-  Returns one of `{:ok, message}`, `{:error, message}`, or `{:status, %Status{}}`
-  for `Garden.AdminSocket` to encode into reply frames.
+  Returns one of `{:ok, message}`, `{:error, message}`, or
+  `{:status, %StatusReport{}}` for `Garden.AdminSocket` to encode into reply
+  frames.
   """
-  def handle(%Request{kind: "deploy"} = request), do: deploy_request(request)
-  def handle(%Request{kind: "reload"}), do: reload()
-  def handle(%Request{kind: "status"}), do: status()
+  def handle(%Deploy{} = command), do: deploy_command(command)
+  def handle(%Reload{}), do: reload()
+  def handle(%Status{}), do: status()
 
   @doc """
   Request a service reload, the same path as a SIGHUP.
@@ -35,21 +38,21 @@ defmodule Garden.Admin do
     version = to_string(Application.spec(:garden, :vsn))
     active = Garden.Socket.active_deployments() |> Map.keys()
 
-    {:status, Status.cast!(%{version: version, active_deployments: active})}
+    {:status, StatusReport.cast!(%{version: version, active_deployments: active})}
   end
 
-  defp deploy_request(%Request{sid: sid, force: force}) when is_binary(sid) do
+  defp deploy_command(%Deploy{sid: sid, force: force}) when is_binary(sid) do
     case Enum.find(Garden.Storage.read().subscriptions, &(&1.sid == sid)) do
       nil -> {:error, "subscription not found for sid #{sid}"}
       sub -> enqueue(Garden.Socket.deploy(sub, force: force))
     end
   end
 
-  defp deploy_request(%Request{seed_type: seed_type, force: force}) when is_binary(seed_type) do
+  defp deploy_command(%Deploy{seed_type: seed_type, force: force}) when is_binary(seed_type) do
     enqueue(deploy(seed_type, force: force))
   end
 
-  defp deploy_request(%Request{}) do
+  defp deploy_command(%Deploy{}) do
     {:error, "deploy requires a seed_type or sid"}
   end
 

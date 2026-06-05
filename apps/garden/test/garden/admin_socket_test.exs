@@ -26,12 +26,12 @@ defmodule Garden.AdminSocketTest do
   end
 
   describe "request dispatch" do
-    test "streams an ok then complete frame for an ok result" do
+    test "passes the typed command to the handler and streams ok then complete" do
       test_pid = self()
 
       path =
-        start_socket(fn request ->
-          send(test_pid, {:handled, request})
+        start_socket(fn message ->
+          send(test_pid, {:handled, message})
           {:ok, "deployment enqueued"}
         end)
 
@@ -40,14 +40,10 @@ defmodule Garden.AdminSocketTest do
           "v" => 1,
           "id" => "req-1",
           "kind" => "deploy",
-          "seed_type" => "nixos",
-          "force" => true
+          "payload" => %{"seed_type" => "nixos", "force" => true}
         })
 
-      assert_received {:handled, %Admin.Request{} = request}
-      assert request.kind == "deploy"
-      assert request.seed_type == "nixos"
-      assert request.force == true
+      assert_received {:handled, %Admin.Deploy{seed_type: "nixos", force: true}}
 
       assert [ok, complete] = frames
       assert ok == %{"v" => 1, "id" => "req-1", "kind" => "ok", "data" => "deployment enqueued"}
@@ -69,9 +65,9 @@ defmodule Garden.AdminSocketTest do
       assert complete == %{"v" => 1, "id" => "req-2", "kind" => "complete", "exit_code" => 1}
     end
 
-    test "encodes a status payload on the ok frame" do
-      status = Admin.Status.cast!(%{version: "9.9.9", active_deployments: ["dep-1"]})
-      path = start_socket(fn _ -> {:status, status} end)
+    test "encodes a status report on the ok frame" do
+      report = Admin.StatusReport.cast!(%{version: "9.9.9", active_deployments: ["dep-1"]})
+      path = start_socket(fn _ -> {:status, report} end)
 
       assert [ok, complete] = request(path, %{"id" => "req-3", "kind" => "status"})
 
@@ -89,10 +85,23 @@ defmodule Garden.AdminSocketTest do
     test "drops the connection on an over-long request line" do
       path = start_socket(fn _ -> {:ok, "unreachable"} end)
 
-      oversized = %{"id" => "req-4", "kind" => "deploy", "sid" => String.duplicate("x", 70_000)}
+      oversized = %{
+        "id" => "req-4",
+        "kind" => "deploy",
+        "payload" => %{"sid" => String.duplicate("x", 70_000)}
+      }
 
       # The connection is dropped without any reply frame.
       assert request(path, oversized) == []
+    end
+
+    test "rejects an unknown kind" do
+      path = start_socket(fn _ -> {:ok, "unreachable"} end)
+
+      assert [error, complete] = request(path, %{"id" => "req-5", "kind" => "frobnicate"})
+      assert error["kind"] == "error"
+      assert error["data"] =~ "invalid request"
+      assert complete["exit_code"] == 1
     end
 
     test "rejects malformed JSON" do
@@ -112,7 +121,7 @@ defmodule Garden.AdminSocketTest do
     test "default handler reports the garden version on status" do
       path = start_socket(&Garden.Admin.handle/1)
 
-      assert [ok, _complete] = request(path, %{"id" => "req-5", "kind" => "status"})
+      assert [ok, _complete] = request(path, %{"id" => "req-6", "kind" => "status"})
       assert ok["kind"] == "ok"
       assert ok["status"]["version"] == to_string(Application.spec(:garden, :vsn))
       assert ok["status"]["active_deployments"] == []
