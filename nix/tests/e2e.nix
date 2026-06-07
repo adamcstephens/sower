@@ -19,21 +19,9 @@ let
   cliPkg = flake.packages.${system}.cli;
   serverPkg = flake.packages.${system}.server;
 
-  hmGardenStateDir = "/home/testuser/.local/state/sower-garden";
-
-  # Admin wrapper for home-manager garden RPC (must match the RELEASE_NODE
-  # set by the home-manager module).
-  hmGardenAdmin = pkgs.writeShellApplication {
-    name = "sower-hm-garden";
-    text = ''
-      export RELEASE_MODE="interactive"
-      export RELEASE_NODE="sower-garden-hm"
-      export SHELL="${lib.getExe pkgs.bash}"
-      RELEASE_COOKIE=$(cat ${hmGardenStateDir}/release-cookie)
-      export RELEASE_COOKIE
-      exec ${lib.getExe gardenPkg} "$@"
-    '';
-  };
+  # The Rust CLI provides `sower garden`; the Elixir `cli` package (cliPkg) on
+  # PATH still serves the seed subcommands the test drives.
+  rustCli = flake.packages.${system}.rust-cli;
 in
 testers.runNixOSTest {
   name = "sower";
@@ -64,7 +52,6 @@ testers.runNixOSTest {
 
           environment.systemPackages = [
             cliPkg
-            hmGardenAdmin
             pkgs.python3
           ];
 
@@ -83,7 +70,8 @@ testers.runNixOSTest {
             garden = {
               enable = true;
               package = gardenPkg;
-              # the test drives ad-hoc deploys via `sower-garden rpc ...`
+              # kept on to exercise the distribution-on lifecycle subtest;
+              # deploys now go over the admin socket (sow-204 drops distribution).
               distribution = true;
 
               settings = {
@@ -150,7 +138,8 @@ testers.runNixOSTest {
               package = gardenPkg;
               activatorPackage = activatorPkg;
               accessTokenFile = "/run/sower/test_token";
-              # the test drives ad-hoc deploys via `sower-hm-garden rpc ...`
+              # kept on to exercise the distribution-on lifecycle subtest;
+              # deploys now go over the admin socket (sow-204 drops distribution).
               distribution = true;
 
               settings = {
@@ -276,7 +265,14 @@ testers.runNixOSTest {
           server.succeed("sower seed upgrade --name server --type nixos --debug")
 
       with subtest("nixos garden deployment"):
-          server.wait_until_succeeds('sower-garden rpc "Garden.Admin.deploy(\\\"nixos\\\")"', timeout=15)
+          # `sower garden` lives in the Rust CLI; the Elixir `sower` on PATH is
+          # used for seed commands. Resolve the admin socket from the garden's
+          # client.json (admin_socket). The CLI bounds its own reply wait.
+          server.wait_until_succeeds(
+              "${rustCli}/bin/sower garden deploy --type nixos"
+              " --config-file /etc/sower/client.json",
+              timeout=30,
+          )
           server.wait_until_succeeds(
               "journalctl --no-pager -u sower-garden"
               " --grep='Completed.activation'",
@@ -314,8 +310,13 @@ testers.runNixOSTest {
               f" --artifact {hm_generation}"
               f" --tag username=testuser"
           )
-          server.succeed(
-              'sower-hm-garden rpc "Garden.Admin.deploy(\\\"home-manager\\\")"'
+          # testuser's garden binds its socket under its own XDG_RUNTIME_DIR;
+          # root connects to it explicitly (authorized as uid 0).
+          hm_uid = server.succeed("id -u testuser").strip()
+          server.wait_until_succeeds(
+              f"${rustCli}/bin/sower garden deploy --type home-manager"
+              f" --socket /run/user/{hm_uid}/sower-garden/admin.sock",
+              timeout=30,
           )
           server.wait_until_succeeds(
               "su -l testuser -c '"

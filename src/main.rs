@@ -21,6 +21,9 @@ enum Command {
     /// Manage seeds against a Sower server.
     Seed(commands::seed::SeedArgs),
 
+    /// Drive the garden admin socket (deploy, reload, status).
+    Garden(commands::garden::GardenArgs),
+
     /// Generate shell completion scripts.
     Completions {
         /// Shell to generate completions for
@@ -63,6 +66,10 @@ fn run(command: Command) -> Result<()> {
         Command::Seed(args) => {
             init_default_tracing();
             commands::seed::run(args)
+        }
+        Command::Garden(args) => {
+            init_default_tracing();
+            commands::garden::run(args)
         }
         Command::Completions { shell } => {
             let mut cmd = Cli::command();
