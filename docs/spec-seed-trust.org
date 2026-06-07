@@ -1,0 +1,309 @@
+* Seed Trust & Supply-Chain Architecture — Specification
+
+#+begin_quote
+Status: DRAFT for refinement. Captures the trust model for how seeds are
+built, signed, distributed, and verified before a garden activates them as
+root. Supersedes the implicit "trust the server" model that today's code
+relies on. See the "Decisions" and "Open Questions" sections for what is
+settled vs. still under discussion.
+#+end_quote
+
+** Overview
+
+A garden activates whatever Nix store path it is told to, *as root*
+(=switch-to-configuration=, =nix-env --set --profile=). The security of every
+managed node therefore reduces to a single question:
+
+#+begin_quote
+Who is allowed to decide what code a garden runs as root, and how does the
+garden verify that decision without trusting the orchestrator?
+#+end_quote
+
+Today the answer is "the server" — the garden/CLI fetches both the store path
+*and* the trust anchor (cache public key) from the server and feeds the
+server-supplied key to =nix --extra-trusted-public-keys=. A compromised or
+malicious server (or a network MITM) thus obtains root on the entire fleet.
+This spec replaces that with a model where the trust anchor is *operator-owned*
+and *independent of the orchestrator*, the signing authority is *scoped and
+ephemeral*, and the *activator* is the single point that enforces operator
+policy.
+
+** Goals & Non-Goals
+
+*** Goals
+
+- A compromise of the main server MUST NOT yield code execution on gardens.
+- The operator, not the server, owns the root(s) of trust.
+- Signing authority is scoped per tenant and bounded in time.
+- Verification is enforced at the last privileged boundary (the activator),
+  independent of the server and of the garden BEAM.
+- Provenance (who built what, from which source) is auditable.
+
+*** Non-Goals / Honest Framing
+
+- *"Trust nothing" is not achievable.* Something must vouch for "builder B may
+  sign for tenant T"; that something is in the Trusted Computing Base (TCB) by
+  definition. The goal is to make the TCB *small, isolated, and auditable* —
+  not empty. This is the Sigstore posture (a tiny CA + transparency log are
+  trusted; everything else is not).
+- *Availability is out of scope.* A compromised server can always withhold,
+  delay, or DoS deployments. We bound *integrity*, not *availability*.
+- Reproducible builds / independent re-verification of builder output is a
+  desirable future layer, not required here.
+
+** Threat Model
+
+*** Actors
+
+| Actor                 | Role                                                     | Trusted?                    |
+|-----------------------+---------------------------------------------------------+-----------------------------|
+| Operator              | Owns the fleet; pins roots of trust                     | Yes (the human root)        |
+| Main server           | Orchestrates deployments, stores metadata, web UI       | *No* (defended against)     |
+| Issuer / STS          | Authenticates builders, mints short-lived signer creds  | Yes (minimal, isolated)     |
+| Builder garden        | Evals/builds/caches/signs seeds (optional capability)   | Partially (scoped)          |
+| Consumer garden       | Realizes + activates seeds as root                      | Self only                   |
+| Transparency log      | Timestamps/records signatures for offline verification  | Yes (minimal, append-only)  |
+| Network               | Path between all components                              | *No*                        |
+| External git repo     | Build input (source of truth for what is built)         | Per operator-pinned mapping |
+
+*** What an attacker must not be able to do
+
+- Cause a garden to activate code not authorized by the operator.
+- Re-point a garden's trust anchor.
+- Redirect a build to an attacker-controlled source.
+- Silently downgrade a garden to an older authorized-but-vulnerable seed.
+- Escape tenant isolation (affect another tenant's gardens).
+
+** Roots of Trust (operator-owned, server-independent)
+
+The operator pins the following, out of band (base image / system config /
+activator config), where the server cannot change them:
+
+1. *Issuer root* — the public key / CA root the issuer uses to attest signer
+   identities. Verification chains to this.
+2. *Tenant → builder policy* — which signer identities may sign for which
+   tenant/targets.
+3. *Tenant → source policy* — which git repos/refs are authorized to build a
+   given target.
+4. *Version floor (optional)* — per-target monotonic generation, with an
+   operator-signed rollback escape.
+
+These four constitute the operator's contribution to the TCB. The runtime TCB
+is: operator roots + issuer + transparency log + the activator's enforcement.
+
+** Architecture
+
+#+begin_example
+                 (operator pins: issuer root, tenant policy, source policy)
+                                        |
+   external git repo  --build input-->  |
+        (signed/pinned ref)             v
+                              +--------------------+        +------------------+
+   builder garden  --jwt-->   |  Issuer / STS      |        | Transparency log |
+   (private_key_jwt)          |  (separate domain) |        | (append-only)    |
+        |   <--short-TTL------|  mints signer cred |        +------------------+
+        |       signer cred   +--------------------+               ^
+        v                                                          |
+   eval/build (sandboxed)  --> sign closure (ephemeral) ----------/ (record)
+        |                          |
+        |  push NAR + narinfo       |  register seed metadata (store path,
+        v                          v    attestation ref, repo+SHA)
+   +-----------+             +--------------+
+   | binary    |             | main server  |  <-- UNTRUSTED: routes metadata,
+   | cache (S3)|             | (orchestrate)|      selects among authorized seeds
+   +-----------+             +--------------+
+        |                          |
+        |  substitute (require-sigs)| deployment msg (store path only)
+        v                          v
+   +-----------------------------------------------+
+   | consumer garden  (sower-garden, non-root)     |
+   |   nix-store --realize  (daemon enforces sigs) |
+   |             |                                 |
+   |             v                                 |
+   |   ACTIVATOR (root) -- ENFORCES operator policy|
+   |     - attestation chains to issuer root?      |
+   |     - signer in tenant's allowed builders?    |
+   |     - built from authorized repo/ref?         |
+   |     - version >= floor (or signed rollback)?  |
+   |     => switch-to-configuration                |
+   +-----------------------------------------------+
+#+end_example
+
+*** Two distinct verification layers (do not conflate)
+
+| Layer                | Question answered                       | Mechanism                                   |
+|----------------------+-----------------------------------------+---------------------------------------------|
+| Cache/transport      | "Is this NAR untampered in transit?"    | nix =require-sigs= + stable key in          |
+| integrity            |                                         | =trusted-public-keys= (low stakes)          |
+| Authorization        | "Is this builder allowed to produce     | app-layer attestation verified in the       |
+| (the real boundary)  | this seed for this target?"             | activator against operator-pinned roots     |
+
+The nix-native signature model is *flat* (=key:sig= verified against a static
+=trusted-public-keys=, requires ≥1 trusted sig, no identity/cert binding, no
+k-of-n). Identity-scoped, ephemeral, and multi-sig checks therefore live in the
+app layer *around* nix, not inside it.
+
+** Decisions (settled in discussion)
+
+*** D1 — Operator owns the trust anchor; server only conveys store paths
+
+The server (and the bootstrap path) may transport a *store path* (metadata) but
+must never originate or supply a *verification key*. The CLI/garden never passes
+=--extra-trusted-public-keys <server value>= and never disables =require-sigs=.
+
+*** D2 — Tenant-scoped signing & verification
+
+Signer credentials are scoped to a tenant. A consumer garden accepts only
+signatures from signer identities in *its own tenant's* allowed-builder set, so
+a compromised builder's blast radius is bounded to its tenant.
+
+*** D3 — Ephemeral signing, verification wrapped around nix
+
+Builders do not hold long-lived signing keys. A builder exchanges its existing
+=private_key_jwt= identity (Boruta/RS512) for a short-TTL, =builder:sign=-scoped
+credential from the issuer. Consequence: because signer creds are short-lived
+but seeds persist, verification needs a *transparency log / trusted timestamp*
+to prove a signature was made while its cert was valid. (Sigstore/Rekor shape.)
+
+*** D4 — Activator is the single enforcement point
+
+All authorization checks (attestation chains to issuer root, signer ∈ tenant
+policy, source ∈ authorized repo/ref, version ≥ floor) run in the root activator
+before =switch-to-configuration=. This makes enforcement independent of both the
+server and the garden BEAM, and simultaneously closes the current activator
+findings (it presently trusts any =/nix/store= path).
+
+*** D5 — Inputs are external git repositories, with guards
+
+Builds are driven from git repos (content-addressed by commit SHA, deps pinned
+by =flake.lock=). Provenance (repo + SHA) is recorded in the attestation. This
+is *necessary but not sufficient*; see D5a–c.
+
+- D5a *Operator-pinned source mapping.* The (tenant/target → allowed repo +
+  allowed refs) mapping is operator-controlled, so the untrusted server cannot
+  redirect a build to an attacker repo/ref.
+- D5b *Signed / pinned refs.* Build only from signed tags or operator-pinned
+  SHAs (or refs whose commits are signed by an operator-trusted key) — not
+  arbitrary mutable branches. "Who can push an authorized ref" is the source TCB.
+- D5c *Sandboxed eval.* Flake eval is code execution; a malicious repo must not
+  be able to reach or exfiltrate the builder's ephemeral signing credential.
+  Acquire/use the cred only for a clean, sandboxed build result.
+
+** Open Questions
+
+*** OQ1 — Split the issuer into its own component? (leaning yes)
+
+Splitting the issuer/STS out of the main server is an improvement *iff* it
+yields an *independent compromise domain* (separate host/credentials/network)
+and a *minimal surface* ("authenticate builder, check policy, mint short-TTL
+cred" — no web app, no big DB). The win: popping the large internet-facing
+server no longer grants signing authority; the operator's trust collapses onto
+a small, auditable STS. Trap to avoid: the issuer's *authorization policy* is
+itself in the TCB — it must be operator-controlled data, not fed to the issuer
+by the (untrusted) server.
+
+*** OQ2 — Promotion gates / version monotonicity? (leaning: version floor now)
+
+This is the *only* lever on the server's residual power: deployment *selection*
+(downgrade, mis-target, premature promotion among validly-signed seeds).
+
+- Cheap 80%: a *monotonic version floor* enforced in the activator — refuse a
+  seed older than the current generation unless an operator-signed rollback
+  token is present. Kills silent downgrade, allows legitimate rollback.
+- Heavyweight: prod targets require an *additional* operator/release signature
+  (k-of-n) the server cannot produce. Defer unless env-tier separation beyond
+  tenant scoping is needed.
+
+Decision needed: must prod integrity survive server compromise? If yes, at
+least the version floor is required.
+
+*** OQ3 — Where does the issuer root / tenant policy physically live on a garden?
+
+Proposed: system-level config consumed by the activator (so it is part of the
+operator-built image, not writable by the BEAM or fetchable from the server).
+Needs a concrete format + a refresh/rotation story.
+
+*** OQ4 — Transparency log: build vs. adopt?
+
+Adopting Sigstore (Fulcio/Rekor) vs. a minimal in-house append-only log. Affects
+offline-verification UX and the trust we place in the log.
+
+*** OQ5 — Issuer-root rotation & revocation
+
+How operators rotate the issuer root and revoke a builder identity without a
+flag-day re-deploy of every garden.
+
+** Bootstrap
+
+The bootstrap script's purpose is to help a *new* host discover the store path
+of the initial =sower= CLI package, so the host can realize and run it to do
+the first =switch=.
+
+- The script (and server) convey a *store path only*; the trust to realize it is
+  pinned out of band (operator base image / =NIX_CONFIG= the operator supplies
+  at invocation — never a key baked into the server's response).
+- =NIX_CONFIG= trust pass-through works only for trusted users (root), which is
+  exactly the bootstrap context; it cannot and must not be relied on for the
+  steady-state non-root agent (which uses system =nix.conf=).
+- The CLI binary itself runs as root, so it must be operator-provisioned (a
+  package in the base image / =nix run= of an operator-trusted, signed output) —
+  not =curl | chmod +x | eval='d. Delivering the CLI as a signed closure realized
+  against operator-pinned trust unifies "get the CLI" and "realize the first
+  seed" and closes the current bootstrap integrity gap.
+
+** Compromise Analysis (target architecture)
+
+| Compromised component   | Can do                                                        | Cannot do                                                              |
+|-------------------------+--------------------------------------------------------------+-----------------------------------------------------------------------|
+| Main server             | Choose among already-authorized, correctly-targeted,         | Forge code; mint signer creds; re-point trust; redirect build inputs;  |
+| (the likely target)     | monotonic seeds; withhold/delay/DoS; read store-path metadata| downgrade (version floor); cross-tenant; root the fleet               |
+| Issuer / STS            | Mint signer creds → sign seeds gardens accept → fleet RCE    | Hide it: transparency log makes misuse detectable. (Hence: tiny,       |
+| (THE trusted node)      | within verification policy                                    | isolated, HSM-backed, monitored)                                      |
+| Builder garden          | Sign malicious seeds for *its* tenant/targets during the     | Affect other tenants; sign after cred expiry; evade provenance         |
+|                         | short cred window                                            | (repo+SHA logged)                                                     |
+| Network (MITM)          | (With TLS floor) nothing beyond traffic analysis             | Forge signatures; inject deployments (activator verifies attestation)  |
+| Single consumer garden  | Act as itself within its own tenant/garden                   | Sign seeds; affect other gardens (channel garden_id + tenant binding)  |
+| Authorized git repo     | Get malicious code built+signed for targets bound to that    | Affect targets not bound to that repo; steal builder cred (sandboxed   |
+| (push access)           | repo                                                          | eval); build from unauthorized refs (signed/pinned)                   |
+
+*** Irreducible residuals
+
+- *Availability:* the server can always withhold/delay deployments.
+- *Selection within authorized set:* bounded by tenant scope, source mapping,
+  and the version floor — but the server still chooses *which* authorized seed,
+  *when*. Promotion gates (OQ2) tighten this further if required.
+- *The issuer is trusted.* We minimize and audit it; we do not eliminate it.
+
+** Relationship to Current Code (what changes)
+
+| Area                          | Today                                                              | Target                                                          |
+|-------------------------------+-------------------------------------------------------------------+----------------------------------------------------------------|
+| =src/commands/seed/ops.rs=    | Passes server-supplied cache key to                               | Never pass server keys; rely on operator-pinned host config /  |
+|   (=caches_to_flags=, ~97)    | =--extra-trusted-public-keys= (CLI runs as root)                  | operator-supplied =NIX_CONFIG=; keep =require-sigs=             |
+| =GET /api/v1/nix/caches=      | Returns =url= + =public_key= used as trust anchor                 | Advisory substituter URL only (or removed); no trust key       |
+| =nix/nixos/garden.nix=        | No =nix.settings= trust pinned; relies on host defaults           | Operator-required =trusted-public-keys= + =substituters=;      |
+|                               |                                                                   | keep =sower-garden= out of =trusted-users= (load-bearing)      |
+| Activator                     | Validates only =/nix/store= prefix + =..= (=handler.rs:125=);     | Verifies attestation (issuer root, tenant, source, version)    |
+|   =src/commands/activator/=   | activates any path as root                                        | before activation — the enforcement point (D4)                 |
+| Bootstrap                     | =curl \| chmod +x \| eval= a raw binary (=bootstrap_controller=)   | Convey store path only; CLI provisioned as signed closure      |
+| Seed =artifact= field         | Free-form string, no validation                                   | Validate store-path grammar at API + garden; carry attestation |
+
+This spec addresses review findings SECRETS-1, WIRE-1, RESTAPI-2, PRIVLOCAL-1,
+PRIVLOCAL-2, SECRETS-2 (server→garden activation trust) and complements TLS-1 /
+TLS-2 (an enforced HTTPS/WSS floor is assumed; cleartext defeats every layer
+here).
+
+** Suggested Phasing
+
+1. *Pin trust, stop leaking it.* Operator-pinned =trusted-public-keys= in
+   =garden.nix=; CLI stops injecting server keys; =/nix/caches= demoted to
+   advisory; validate =artifact= grammar. (Closes SECRETS-1 / WIRE-1 / RESTAPI-2
+   with the current static-key model.)
+2. *Activator becomes the verifier.* Move signature/trust verification into the
+   activator; add the version floor. (Closes PRIVLOCAL-1/2; enables OQ2.)
+3. *Tenant scoping.* Per-tenant key sets / verification policy.
+4. *Issuer + ephemeral signing + transparency log.* The full CI/builder model
+   (D3, OQ1, OQ4); builders exchange =private_key_jwt= for short-TTL signer
+   creds; provenance logged.
+5. *Source guards.* Operator-pinned repo/ref mapping, signed refs, sandboxed
+   eval (D5a–c).
