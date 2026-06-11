@@ -324,9 +324,8 @@ defmodule SowerWeb.GardenChannelHandleInTest do
       assert names == ["sync-host-1", "sync-host-2"]
     end
 
-    @tag :capture_log
-    test "replies with encodable errors when validation fails" do
-      %{socket: socket} = connect_and_join_garden()
+    test "accepts a policy window without days (daily window)" do
+      %{socket: socket, garden: garden} = connect_and_join_garden()
 
       ref =
         push(socket, "subscriptions:sync", %{
@@ -351,9 +350,14 @@ defmodule SowerWeb.GardenChannelHandleInTest do
           ]
         })
 
-      assert_reply ref, :error, payload, 1_000
-      assert {:ok, _} = Jason.encode(payload)
-      assert %{errors: _} = payload
+      assert_reply ref, :ok, %{subscriptions: [subscription]}, 1_000
+      assert subscription.name == "daily-window"
+
+      [stored] = Sower.Orchestration.list_subscriptions_for_garden(garden)
+      [policy_rule] = stored.policy
+      assert policy_rule.window.days == nil
+      assert policy_rule.window.time_start == "02:00"
+      assert policy_rule.window.time_end == "07:00"
     end
 
     @tag :capture_log
