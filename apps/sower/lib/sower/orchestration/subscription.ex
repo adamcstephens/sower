@@ -394,7 +394,7 @@ defmodule Sower.Orchestration.Subscription do
     def changeset(window, attrs) do
       window
       |> cast(attrs, [:days, :time_start, :time_end, :tz])
-      |> validate_required([:days, :time_start, :time_end])
+      |> validate_required([:time_start, :time_end])
     end
   end
 
