@@ -324,6 +324,41 @@ defmodule SowerWeb.GardenChannelHandleInTest do
       assert names == ["sync-host-1", "sync-host-2"]
     end
 
+    test "accepts a policy window without days (daily window)" do
+      %{socket: socket, garden: garden} = connect_and_join_garden()
+
+      ref =
+        push(socket, "subscriptions:sync", %{
+          "subscriptions" => [
+            %{
+              "name" => "daily-window",
+              "seed_name" => "daily-window",
+              "seed_type" => "nixos",
+              "policy" => %{
+                "maintenance" => %{
+                  "actions" => ["stage", "activate", "restart"],
+                  "triggers" => ["scheduled", "poll_on_connect"],
+                  "window" => %{
+                    "days" => nil,
+                    "time_start" => "02:00",
+                    "time_end" => "07:00",
+                    "tz" => nil
+                  }
+                }
+              }
+            }
+          ]
+        })
+
+      assert_reply ref, :ok, %{subscriptions: [subscription]}, 1_000
+      assert subscription.name == "daily-window"
+
+      [stored] = Sower.Orchestration.list_subscriptions_for_garden(garden)
+      [policy_rule] = stored.policy
+      assert policy_rule.window.days == nil
+      assert policy_rule.window.time_start == "02:00"
+      assert policy_rule.window.time_end == "07:00"
+    end
     test "removes subscriptions not in the sync list" do
       %{socket: socket, garden: garden} = connect_and_join_garden()
 
