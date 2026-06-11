@@ -45,7 +45,7 @@ defmodule SowerUmbrella.MixProject do
       {:mix_audit, "~> 2.0", only: [:test, :dev]},
       {:dialyxir, "~> 1.0", only: [:dev]},
       {:deps_nix, "~> 3.0", only: [:dev]},
-      {:igniter, "~> 0.7", only: [:dev, :test], override: true}
+      {:igniter, "~> 0.8", only: [:dev, :test], override: true}
     ]
   end
 end
