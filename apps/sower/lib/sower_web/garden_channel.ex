@@ -190,8 +190,30 @@ defmodule SowerWeb.GardenChannel do
       nil ->
         {:reply, {:error, :not_found}, socket}
 
+      {:error, %Ecto.Changeset{} = changeset} ->
+        error = SowerWeb.Api.ChangesetJSON.error(%{changeset: changeset})
+
+        Logger.error(
+          msg: "Channel handler validation error",
+          errors: inspect(error.errors),
+          topic: socket.topic
+        )
+
+        {:reply, {:error, error}, socket}
+
+      {:error, [%OpenApiSpex.Cast.Error{} | _] = cast_errors} ->
+        errors = Enum.map(cast_errors, &OpenApiSpex.Cast.Error.message_with_path/1)
+
+        Logger.error(
+          msg: "Channel message cast error",
+          errors: inspect(errors),
+          topic: socket.topic
+        )
+
+        {:reply, {:error, %{errors: errors}}, socket}
+
       {:error, _} = error ->
-        Logger.error(msg: "Channel handler error", error: error, topic: socket.topic)
+        Logger.error(msg: "Channel handler error", error: inspect(error), topic: socket.topic)
         {:reply, error, socket}
     end
   end

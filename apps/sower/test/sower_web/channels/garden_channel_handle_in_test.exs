@@ -324,6 +324,64 @@ defmodule SowerWeb.GardenChannelHandleInTest do
       assert names == ["sync-host-1", "sync-host-2"]
     end
 
+    @tag :capture_log
+    test "replies with encodable errors when validation fails" do
+      %{socket: socket} = connect_and_join_garden()
+
+      ref =
+        push(socket, "subscriptions:sync", %{
+          "subscriptions" => [
+            %{
+              "name" => "daily-window",
+              "seed_name" => "daily-window",
+              "seed_type" => "nixos",
+              "policy" => %{
+                "maintenance" => %{
+                  "actions" => ["stage", "activate", "restart"],
+                  "triggers" => ["scheduled", "poll_on_connect"],
+                  "window" => %{
+                    "days" => nil,
+                    "time_start" => "02:00",
+                    "time_end" => "07:00",
+                    "tz" => nil
+                  }
+                }
+              }
+            }
+          ]
+        })
+
+      assert_reply ref, :error, payload, 1_000
+      assert {:ok, _} = Jason.encode(payload)
+      assert %{errors: _} = payload
+    end
+
+    @tag :capture_log
+    test "replies with encodable errors when the payload fails schema cast" do
+      %{socket: socket} = connect_and_join_garden()
+
+      ref =
+        push(socket, "subscriptions:sync", %{
+          "subscriptions" => [
+            %{
+              "name" => "bad-window",
+              "seed_name" => "bad-window",
+              "seed_type" => "nixos",
+              "policy" => %{
+                "maintenance" => %{
+                  "actions" => ["activate"],
+                  "window" => %{"days" => ["sun"]}
+                }
+              }
+            }
+          ]
+        })
+
+      assert_reply ref, :error, payload, 1_000
+      assert {:ok, _} = Jason.encode(payload)
+      assert %{errors: _} = payload
+    end
+
     test "removes subscriptions not in the sync list" do
       %{socket: socket, garden: garden} = connect_and_join_garden()
 
