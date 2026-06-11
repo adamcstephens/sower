@@ -27,7 +27,7 @@ jobs:
       - run: |
           export HOME=$PWD
           nix develop .# --command just check-elixir-format
-          nix develop .# --command just check-elixir-deps
+          nix develop .# --command just check-elixir-audit
 
   e2e:
     runs-on: local/x86_64-linux
