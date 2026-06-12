@@ -73,38 +73,10 @@ defmodule Nix.Cache.Niks3 do
         Logger.error(
           msg: "Upload failed",
           backend: "niks3",
-          exit_code: to_string(exit_code),
-          output: String.slice(output, 0, 500)
+          exit_code: to_string(exit_code)
         )
 
-        error_reason = parse_error(output, exit_code)
-        {:error, error_reason}
-    end
-  end
-
-  defp parse_error(output, exit_code) do
-    cond do
-      String.contains?(output, "401") or
-        String.contains?(output, "unauthorized") or
-          String.contains?(output, "Unauthorized") ->
-        "authentication failed - check auth token"
-
-      String.contains?(output, "connection refused") or
-          String.contains?(output, "Connection refused") ->
-        "connection refused - check server URL"
-
-      String.contains?(output, "no such host") or
-          String.contains?(output, "No such host") ->
-        "server not found - check server URL"
-
-      true ->
-        first_line =
-          output
-          |> String.split("\n", parts: 2)
-          |> List.first()
-          |> String.slice(0, 200)
-
-        {exit_code, first_line}
+        {:error, %Nix.Cache.UploadError{backend: "niks3", exit_code: exit_code, output: output}}
     end
   end
 end

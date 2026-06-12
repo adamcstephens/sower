@@ -177,8 +177,13 @@ defmodule SowerCli.Output do
     end
   end
 
-  def push_summary(cache_url, {:error, reason}) do
-    error("Push to #{cache_url} failed: #{inspect(reason)}")
+  def push_summary(cache_url, {:error, %Nix.Cache.UploadError{} = err}) do
+    error("Push to #{cache_url} failed (exit #{err.exit_code})")
+    IO.puts(err.output)
+  end
+
+  def push_summary(cache_url, {:error, reason}) when is_binary(reason) do
+    error("Push to #{cache_url} failed: #{reason}")
   end
 
   @doc """
