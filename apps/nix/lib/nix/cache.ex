@@ -22,10 +22,16 @@ defmodule Nix.Cache do
       {:ok, %{uploaded: ["/nix/store/abc-foo"], failed: [{"/nix/store/xyz-bar", "permission denied"}]}}
 
       {:error, "invalid destination"}
+
+      {:error, %Nix.Cache.UploadError{backend: "niks3", exit_code: 1, output: "..."}}
+
+  Setup failures (missing command, bad config) return a binary reason;
+  a failed upload command returns a `Nix.Cache.UploadError` carrying the
+  full command output.
   """
   @callback upload(paths :: [String.t()] | String.t(), config :: map()) ::
               {:ok, %{uploaded: [String.t()], failed: [{String.t(), term()}]}}
-              | {:error, term()}
+              | {:error, Nix.Cache.UploadError.t() | String.t()}
 
   @doc """
   Validate the backend configuration.

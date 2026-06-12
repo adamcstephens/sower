@@ -78,41 +78,13 @@ defmodule Nix.Cache.NixCopy do
               msg: "Upload failed",
               backend: "nix copy",
               destination: dest,
-              exit_code: exit_code,
-              output: String.slice(output, 0, 500)
+              exit_code: to_string(exit_code)
             )
 
-            error_reason = parse_error(output, exit_code)
-            {:error, error_reason}
+            {:error,
+             %Nix.Cache.UploadError{backend: "nix copy", exit_code: exit_code, output: output}}
         end
       end
-    end
-  end
-
-  defp parse_error(output, exit_code) do
-    cond do
-      String.contains?(output, "permission denied") or
-          String.contains?(output, "Permission denied") ->
-        "permission denied"
-
-      String.contains?(output, "No such file or directory") ->
-        "destination not found"
-
-      String.contains?(output, "Connection refused") ->
-        "connection refused"
-
-      String.contains?(output, "Host key verification failed") ->
-        "SSH host key verification failed"
-
-      true ->
-        # Return exit code and first line of output
-        first_line =
-          output
-          |> String.split("\n", parts: 2)
-          |> List.first()
-          |> String.slice(0, 200)
-
-        {exit_code, first_line}
     end
   end
 end

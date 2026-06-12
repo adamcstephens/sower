@@ -94,12 +94,11 @@ defmodule Nix.Cache.Attic do
               msg: "Upload failed",
               backend: "attic",
               cache: cache,
-              exit_code: exit_code,
-              output: String.slice(output, 0, 500)
+              exit_code: to_string(exit_code)
             )
 
-            error_reason = parse_error(output, exit_code)
-            {:error, error_reason}
+            {:error,
+             %Nix.Cache.UploadError{backend: "attic", exit_code: exit_code, output: output}}
         end
       end
     end
@@ -143,33 +142,5 @@ defmodule Nix.Cache.Attic do
       stdout: stdout |> Enum.reverse() |> IO.iodata_to_binary(),
       stderr: stderr |> Enum.reverse() |> IO.iodata_to_binary()
     }
-  end
-
-  defp parse_error(output, exit_code) do
-    cond do
-      String.contains?(output, "401 Unauthorized") or
-          String.contains?(output, "permission denied") ->
-        "authentication failed - check token in attic config"
-
-      String.contains?(output, "404 Not Found") ->
-        "cache not found"
-
-      String.contains?(output, "Connection refused") or
-          String.contains?(output, "failed to connect") ->
-        "connection refused - check cache endpoint"
-
-      String.contains?(output, "No cache named") ->
-        "cache not configured in ~/.config/attic/config.toml"
-
-      true ->
-        # Return exit code and first line of output
-        first_line =
-          output
-          |> String.split("\n", parts: 2)
-          |> List.first()
-          |> String.slice(0, 200)
-
-        {exit_code, first_line}
-    end
   end
 end
