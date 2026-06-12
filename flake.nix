@@ -38,9 +38,6 @@
             );
 
             craneLib = inputs.crane.mkLib pkgs;
-
-            arch = if pkgs.stdenv.isAarch64 then "arm64" else "x64";
-            os = if pkgs.stdenv.isDarwin then "darwin" else "linux";
           in
           {
             _module.args = {
@@ -90,12 +87,11 @@
                   pkgs.inotify-tools
                 ];
 
-                shellHook = ''
-                  mkdir -vp _build
-
-                  ln -sf ${lib.getExe pkgs.tailwindcss_3} _build/tailwind-${os}-${arch}
-                  ln -sf ${lib.getExe pkgs.esbuild} _build/esbuild-${os}-${arch}
-                '';
+                env = {
+                  # prevent mix from trying to download binaries
+                  TAILWIND_PATH = lib.getExe pkgs.tailwindcss_3;
+                  ESBUILD_PATH = lib.getExe pkgs.esbuild;
+                };
               };
             };
           };
