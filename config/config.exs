@@ -49,9 +49,11 @@ config :sower, Sower.Orchestration,
 
 config :sower, Sower.Orchestration.StaleDeploymentFinalizer, interval_ms: :timer.minutes(5)
 
-# Configure esbuild (the version is required)
+# Configure esbuild. ESBUILD_PATH points at an externally provided binary
+# (set by the nix builds); when unset, mix downloads the default version.
 config :esbuild,
   version_check: false,
+  path: System.get_env("ESBUILD_PATH"),
   sower: [
     args:
       ~w(js/app.js --bundle --target=es2017 --outdir=../priv/static/assets --external:/fonts/* --external:/images/*),
@@ -59,9 +61,11 @@ config :esbuild,
     env: %{"NODE_PATH" => Path.expand("../deps", __DIR__)}
   ]
 
-# Configure tailwind (the version is required)
+# Configure tailwind. TAILWIND_PATH points at an externally provided binary
+# (set by the nix builds); when unset, mix downloads the default version.
 config :tailwind,
   version_check: false,
+  path: System.get_env("TAILWIND_PATH"),
   sower: [
     args: ~w(
       --config=tailwind.config.js

@@ -1,8 +1,6 @@
 defmodule Garden.ActivatorClientTest do
   use ExUnit.Case, async: true
 
-  import ExUnit.CaptureLog
-
   alias Garden.ActivatorClient
   alias Garden.ActivatorClient.{Request, Response}
 
@@ -71,14 +69,9 @@ defmodule Garden.ActivatorClientTest do
 
       File.touch!(socket_path)
 
-      log =
-        capture_log(fn ->
-          result = ActivatorClient.activate("nixos", "/nix/store/xyz", socket_path: socket_path)
-          assert {:error, _} = result
-        end)
+      result = ActivatorClient.activate("nixos", "/nix/store/xyz", socket_path: socket_path)
 
-      # Log might be empty if connection refused happens before logging
-      assert log == "" or log =~ "Failed to connect"
+      assert result == {:error, :connection_refused}
     end
 
     test "successful activation with streaming output" do
