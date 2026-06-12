@@ -1,6 +1,6 @@
 [package]
 name = "sower"
-version = "0.10.0-rc0"
+version = "0.10.0"
 edition = "2024"
 
 [dependencies]
