@@ -181,6 +181,4 @@ defmodule Nix.Build do
     |> Enum.reverse()
     |> Enum.flat_map(&String.split(&1, "\n"))
   end
-
-  defp finalize_output(output), do: output
 end

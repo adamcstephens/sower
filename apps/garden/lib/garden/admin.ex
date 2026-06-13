@@ -66,7 +66,7 @@ defmodule Garden.Admin do
   end
 
   def deploy(seed_type) when is_atom(seed_type) do
-    seed_type |> String.to_existing_atom() |> deploy()
+    seed_type |> Atom.to_string() |> deploy()
   end
 
   def deploy(seed_type) when is_seed_type?(seed_type) do

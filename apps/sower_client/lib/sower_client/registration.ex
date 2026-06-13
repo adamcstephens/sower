@@ -1,6 +1,4 @@
 defmodule SowerClient.Registration do
-  require Logger
-
   def register(%Req.Request{} = req, name, public_key_pem) do
     case Req.post(req,
            url: "/gardens/register",

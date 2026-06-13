@@ -1,6 +1,4 @@
 defmodule SowerWeb.Plugs.Parsers do
-  require Logger
-
   @parser Plug.Parsers.init(
             parsers: [:urlencoded, :multipart, :json],
             pass: ["*/*"],
