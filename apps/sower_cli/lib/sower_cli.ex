@@ -3,8 +3,6 @@ defmodule SowerCli do
   Sower CLI - Build and deploy Nix flakes.
   """
 
-  require Logger
-
   @version Path.expand("../../../VERSION", __DIR__) |> File.read!() |> String.trim()
 
   def main(argv) do
@@ -87,12 +85,6 @@ defmodule SowerCli do
 
   defp run({subcommands, _}) when is_list(subcommands) do
     print_usage(subcommands)
-  end
-
-  defp run(_) do
-    config()
-    |> Optimus.help()
-    |> IO.puts()
   end
 
   defp apply_global_overrides(%{options: options}) do

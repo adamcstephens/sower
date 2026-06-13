@@ -155,7 +155,7 @@ defmodule SowerClient.Seed do
     end
   end
 
-  def create(%Req.Request{} = req, %__MODULE__{} = seed, opts \\ []) do
+  def create(%Req.Request{} = req, %__MODULE__{} = seed, opts) do
     case Req.post(req,
            url: "/seeds",
            json: seed,

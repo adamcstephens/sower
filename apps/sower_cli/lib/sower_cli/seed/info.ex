@@ -6,8 +6,6 @@ defmodule SowerCli.Seed.Info do
   then displays its metadata without downloading or activating.
   """
 
-  require Logger
-
   alias SowerCli.{Auth, Output}
 
   def run(flags, options) do

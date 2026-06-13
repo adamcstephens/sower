@@ -3,8 +3,6 @@ defmodule SowerCli.Seed.Download do
   Download and realize a seed from the server.
   """
 
-  require Logger
-
   alias SowerCli.{Auth, Output}
 
   def run(flags, options) do

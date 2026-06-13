@@ -37,7 +37,7 @@ defmodule Garden.Socket do
 
   @impl Slipstream
   def handle_call(:active_deployments, _from, socket) do
-    {:reply, socket.active_deployments, socket}
+    {:reply, socket.assigns.active_deployments, socket}
   end
 
   def handle_call(message, from, socket), do: super(message, from, socket)
@@ -149,7 +149,7 @@ defmodule Garden.Socket do
   def init(_args) do
     case do_connect() do
       {:ok, socket} ->
-        {:ok, Map.put(socket, :active_deployments, %{})}
+        {:ok, assign(socket, :active_deployments, %{})}
 
       {:error, reason} ->
         Logger.warning(
@@ -159,7 +159,7 @@ defmodule Garden.Socket do
 
         socket =
           new_socket()
-          |> Map.put(:active_deployments, %{})
+          |> assign(:active_deployments, %{})
           |> assign(:reconnect_counter, 0)
 
         {:ok, schedule_reconnect(socket)}
@@ -446,7 +446,7 @@ defmodule Garden.Socket do
       when topic == garden_sid do
     case SowerClient.Orchestration.Deployment.cast(payload) do
       {:ok, deployment} ->
-        case Lifecycle.receive_deployment(deployment, socket.active_deployments) do
+        case Lifecycle.receive_deployment(deployment, socket.assigns.active_deployments) do
           {:enqueue, active_deployments} ->
             Logger.debug(
               msg: "Received deployment",
@@ -455,7 +455,7 @@ defmodule Garden.Socket do
             )
 
             send(self(), {:run_deployment, deployment.sid})
-            {:ok, %{socket | active_deployments: active_deployments}}
+            {:ok, assign(socket, :active_deployments, active_deployments)}
 
           :duplicate ->
             Logger.debug(
@@ -515,7 +515,7 @@ defmodule Garden.Socket do
 
   @impl Slipstream
   def handle_info({:run_deployment, sid}, socket) do
-    case Lifecycle.lookup_deployment(sid, socket.active_deployments) do
+    case Lifecycle.lookup_deployment(sid, socket.assigns.active_deployments) do
       :not_found ->
         Logger.warning(msg: "Deployment not found", sid: sid)
         {:noreply, socket}
@@ -563,7 +563,7 @@ defmodule Garden.Socket do
   end
 
   def handle_info({:deployment_completed, sid, result}, socket) do
-    case Lifecycle.complete_deployment(sid, result, socket.active_deployments) do
+    case Lifecycle.complete_deployment(sid, result, socket.assigns.active_deployments) do
       :not_found ->
         Logger.warning(msg: "Deployment not found during completion", sid: sid)
         {:noreply, socket}
@@ -574,7 +574,7 @@ defmodule Garden.Socket do
         cast(:report_seeds)
         send(self(), :check_pending_reload)
 
-        {:noreply, %{socket | active_deployments: active_deployments}}
+        {:noreply, assign(socket, :active_deployments, active_deployments)}
     end
   end
 
@@ -621,7 +621,7 @@ defmodule Garden.Socket do
   end
 
   def handle_info(:check_pending_reload, socket) do
-    if Lifecycle.should_reload?(socket.active_deployments, Garden.take_pending_reload()) do
+    if Lifecycle.should_reload?(socket.assigns.active_deployments, Garden.take_pending_reload()) do
       reload_garden_service()
     end
 

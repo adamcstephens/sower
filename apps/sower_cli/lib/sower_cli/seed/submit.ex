@@ -5,8 +5,6 @@ defmodule SowerCli.Seed.Submit do
   Registers a Nix store path as a seed with the given name, type, and optional tags.
   """
 
-  require Logger
-
   alias SowerCli.{Auth, Output}
 
   def run(flags, options) do

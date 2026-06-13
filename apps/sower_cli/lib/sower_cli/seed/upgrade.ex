@@ -3,8 +3,6 @@ defmodule SowerCli.Seed.Upgrade do
   Download and activate a seed.
   """
 
-  require Logger
-
   alias SowerCli.{Auth, Output}
 
   def run(flags, options) do

@@ -8,7 +8,6 @@ defmodule Sower.Accounts.AccessToken do
   import Ecto.Changeset
   import Ecto.Query
 
-  require Logger
   @derive {Phoenix.Param, key: :sid}
 
   schema "access_tokens" do
