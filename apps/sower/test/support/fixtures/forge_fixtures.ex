@@ -13,7 +13,7 @@ defmodule Sower.ForgeFixtures do
       |> Enum.into(%{
         client_id: "some client_id",
         client_secret: "some client_secret",
-        name: Faker.Company.bullshit(),
+        name: "some name",
         type: :forgejo,
         url: "some url"
       })
