@@ -255,8 +255,7 @@ in
         ExecStartPre = lib.optionals cfg.distribution [
           (lib.getExe secretsScript)
         ];
-        ExecStart =
-          if cfg.distribution then lib.getExe startScript else "${lib.getExe cfg.package} start";
+        ExecStart = if cfg.distribution then lib.getExe startScript else "${lib.getExe cfg.package} start";
         # SIGHUP triggers Garden.SignalHandler; the garden restarts itself at
         # end of the deployment in progress.
         ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
@@ -285,7 +284,6 @@ in
 
     security.polkit = {
       enable = true;
-      debug = true;
       extraConfig = # javascript
         ''
           polkit.addRule(function(action, subject) {
