@@ -110,12 +110,8 @@ in
             ];
 
             ExecStartPre =
-              if cfg.distribution then
-                lib.getExe secretsScript
-              else
-                "${pkgs.coreutils}/bin/mkdir -p ${stateDir}";
-            ExecStart =
-              if cfg.distribution then lib.getExe startScript else "${lib.getExe cfg.package} start";
+              if cfg.distribution then lib.getExe secretsScript else "${pkgs.coreutils}/bin/mkdir -p ${stateDir}";
+            ExecStart = if cfg.distribution then lib.getExe startScript else "${lib.getExe cfg.package} start";
             ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
 
             Type = "notify";
