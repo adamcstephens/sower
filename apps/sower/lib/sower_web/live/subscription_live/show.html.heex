@@ -64,7 +64,7 @@
               Triggers: any
             </p>
             <p :if={rule.window}>
-              Window: {Enum.join(rule.window.days, ", ")}
+              Window: {Enum.join(rule.window.days || ["any day"], ", ")}
               {rule.window.time_start}–{rule.window.time_end}
             </p>
             <p :if={rule.confirm} class="text-amber-600 dark:text-amber-400">
