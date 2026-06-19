@@ -668,23 +668,6 @@ let
         in
         drv;
 
-      faker =
-        let
-          version = "0.18.0";
-          drv = buildMix {
-            inherit version;
-            name = "faker";
-            appConfigPath = ../../config;
-
-            src = fetchHex {
-              inherit version;
-              pkg = "faker";
-              sha256 = "bfbdd83958d78e2788e99ec9317c4816e651ad05e24cfd1196ce5db5b3e81797";
-            };
-          };
-        in
-        drv;
-
       file_system =
         let
           version = "1.1.1";
@@ -2098,10 +2081,11 @@ let
             name = "typedstruct";
             appConfigPath = ../../config;
 
-            src = fetchHex {
-              inherit version;
-              pkg = "typedstruct";
-              sha256 = "ffaef36d5dbaebdbf4ed07f7fb2ebd1037b2c1f757db6fb8e7bcbbfabbe608d8";
+            src = fetchFromGitHub {
+              owner = "adamcstephens";
+              repo = "typedstruct";
+              rev = "fde3afb4d9d5a1973161feba6ff4fd178708bf53";
+              hash = "sha256-aPvIjLK6sFmR9fdJbusiEtwFqPyZjpS1N51IEksi5xc=";
             };
           };
         in

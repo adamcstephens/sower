@@ -5,7 +5,7 @@ defmodule SowerWeb.CacheLiveTest do
   import Sower.NixFixtures
 
   def create_attrs do
-    %{public_key: "some public_key", url: Faker.Internet.url()}
+    %{public_key: "some public_key", url: "some created url"}
   end
 
   def update_attrs do

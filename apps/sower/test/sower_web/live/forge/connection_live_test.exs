@@ -6,9 +6,9 @@ defmodule SowerWeb.Forge.ConnectionLiveTest do
 
   def create_attrs() do
     %{
-      name: Faker.Company.bullshit(),
+      name: "some name",
       type: :forgejo,
-      url: Faker.Internet.url(),
+      url: "some created url",
       client_id: "some client_id",
       client_secret: "some client_secret"
     }
@@ -16,7 +16,7 @@ defmodule SowerWeb.Forge.ConnectionLiveTest do
 
   def update_attrs() do
     %{
-      name: Faker.Company.bullshit(),
+      name: "some updated name",
       type: :forgejo,
       url: "some updated url",
       client_id: "some updated client_id",

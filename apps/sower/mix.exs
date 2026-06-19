@@ -38,7 +38,6 @@ defmodule Sower.MixProject do
       {:open_api_spex, "~> 3.22"},
       {:ex_aws, "~> 2.6"},
       {:ex_aws_s3, "~> 2.5"},
-      {:faker, "~> 0.18", only: :test},
       {:flop, "~> 0.26"},
       {:flop_phoenix, "~> 0.25"},
       {:finch, "~> 0.13"},

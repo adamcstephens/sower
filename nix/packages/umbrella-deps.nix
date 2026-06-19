@@ -57,12 +57,6 @@ callPackages ./deps.nix {
       patches = [ ./esbuild-loadpaths.patch ];
     });
 
-    typedstruct = prev.typedstruct.override (old: {
-      preConfigure = ''
-        substituteInPlace mix.exs --replace-fail 'version = vsn()' 'version = "${old.version}"'
-      '';
-    });
-
     tailwind = prev.tailwind.override (old: {
       patches = [ ./tailwind-loadpaths.patch ];
     });
