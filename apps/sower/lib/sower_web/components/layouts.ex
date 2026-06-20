@@ -89,10 +89,28 @@ defmodule SowerWeb.Layouts do
         nav_items={@nav_items}
         expanded={@sidebar_state == :expanded}
       />
-      <.sidebar_toggle expanded={@sidebar_state == :expanded} />
+      <div class="mt-auto flex-shrink-0">
+        <.sidebar_version expanded={@sidebar_state == :expanded} />
+        <.sidebar_toggle expanded={@sidebar_state == :expanded} />
+      </div>
     </aside>
     """
   end
+
+  attr(:expanded, :boolean, required: true)
+
+  defp sidebar_version(assigns) do
+    ~H"""
+    <div
+      :if={@expanded}
+      class="px-4 pb-2 text-[11px] text-zinc-600 tabular-nums tracking-tight"
+    >
+      v{server_version()}
+    </div>
+    """
+  end
+
+  defp server_version, do: to_string(Application.spec(:sower, :vsn))
 
   attr(:expanded, :boolean, required: true)
 
@@ -191,7 +209,7 @@ defmodule SowerWeb.Layouts do
 
   defp sidebar_toggle(assigns) do
     ~H"""
-    <div class="mt-auto border-t border-zinc-900 py-2 flex justify-center flex-shrink-0">
+    <div class="border-t border-zinc-900 py-2 flex justify-center">
       <button
         type="button"
         phx-click="toggle_sidebar"
