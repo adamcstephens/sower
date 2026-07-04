@@ -15,8 +15,9 @@ If more than one of the rules conflict, ask before implementing.
 - formatting done, `just format`
 - tests pass, `just check-elixir`, `just check-rust`, or `just check-e2e`
 - code committed with all ticket changes included
+  - Prefer no or very short commit body
   - Ticket ID in the body
-  - Co-Authored-By line always included
+  - Assisted-By line always included
 - *important* After committing, stop and get user approval for completion.
 - ticket marked complete once approved
 
