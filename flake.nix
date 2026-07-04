@@ -48,7 +48,7 @@
               ci = pkgs.mkShell {
                 packages = [
                   pkgs.niks3
-                  self'.packages.cli
+                  self'.packages.sower
                 ];
               };
 

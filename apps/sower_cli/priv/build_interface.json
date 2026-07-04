@@ -1,0 +1,22 @@
+{
+  "flags": [
+    "attr",
+    "debug",
+    "eval-only",
+    "fail-fast",
+    "non-authoritative",
+    "push",
+    "seed",
+    "use-eval-cache"
+  ],
+  "options": [
+    "access-token-file",
+    "build-jobs",
+    "cache",
+    "endpoint",
+    "eval-jobs",
+    "eval-type",
+    "memory-limit",
+    "tag"
+  ]
+}

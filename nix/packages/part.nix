@@ -13,7 +13,7 @@
         activator = rust-cli;
 
         cli = pkgs.callPackage ./cli.nix {
-          inherit activator beamPackages version;
+          inherit beamPackages version;
         };
 
         garden = pkgs.callPackage ./garden.nix {
@@ -22,6 +22,10 @@
 
         rust-cli = pkgs.callPackage ./rust-cli.nix {
           inherit craneLib;
+        };
+
+        sower = pkgs.callPackage ./sower.nix {
+          inherit cli rust-cli;
         };
 
         server = pkgs.callPackage ./server.nix {

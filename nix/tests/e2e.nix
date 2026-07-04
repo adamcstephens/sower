@@ -16,11 +16,11 @@ let
   simple-service = flake.packages.${system}.tests-simple-service;
   gardenPkg = flake.packages.${system}.garden;
   activatorPkg = flake.packages.${system}.activator;
-  cliPkg = flake.packages.${system}.cli;
   serverPkg = flake.packages.${system}.server;
 
-  # The Rust CLI provides `sower garden`; the Elixir `cli` package (cliPkg) on
-  # PATH still serves the seed subcommands the test drives.
+  # `sower` on PATH is the Rust CLI wrapped with the Elixir `sower-cli` build
+  # engine, so seed/garden commands run natively and `sower build` forwards.
+  sowerPkg = flake.packages.${system}.sower;
   rustCli = flake.packages.${system}.rust-cli;
 in
 testers.runNixOSTest {
@@ -51,7 +51,7 @@ testers.runNixOSTest {
           ];
 
           environment.systemPackages = [
-            cliPkg
+            sowerPkg
             pkgs.python3
           ];
 
@@ -108,7 +108,7 @@ testers.runNixOSTest {
 
               log_level = "debug";
 
-              clients."${system}".path = builtins.toString cliPkg;
+              clients."${system}".path = builtins.toString rustCli;
             };
           };
           # if server fails to start, fail immediately
@@ -261,15 +261,18 @@ testers.runNixOSTest {
 
       with subtest("basic cli submission and activation"):
           server_profile = server.succeed("readlink -f /run/booted-system").strip()
-          server.succeed(f"sower seed submit --name server --type nixos --artifact {server_profile} --debug")
-          server.succeed("sower seed upgrade --name server --type nixos --debug")
+          server.succeed(f"RUST_LOG=debug sower seed --name server --type nixos submit --path {server_profile}")
+          server.succeed("RUST_LOG=debug sower seed --name server --type nixos upgrade")
+
+      with subtest("rust cli forwards build to the elixir cli"):
+          server.succeed("echo '_: { }' > /root/empty.nix")
+          server.succeed("sower build --eval-only --eval-type path /root/empty.nix")
 
       with subtest("nixos garden deployment"):
-          # `sower garden` lives in the Rust CLI; the Elixir `sower` on PATH is
-          # used for seed commands. Resolve the admin socket from the garden's
-          # client.json (admin_socket). The CLI bounds its own reply wait.
+          # Resolve the admin socket from the garden's client.json
+          # (admin_socket). The CLI bounds its own reply wait.
           server.wait_until_succeeds(
-              "${rustCli}/bin/sower garden deploy --type nixos"
+              "sower garden deploy --type nixos"
               " --config-file /etc/sower/client.json",
               timeout=30,
           )
@@ -306,15 +309,15 @@ testers.runNixOSTest {
               "readlink -f /home/testuser/.local/state/home-manager/gcroots/current-home"
           ).strip()
           server.succeed(
-              f"sower seed submit --name testuser --type home-manager"
-              f" --artifact {hm_generation}"
+              f"sower seed --name testuser --type home-manager submit"
+              f" --path {hm_generation}"
               f" --tag username=testuser"
           )
           # testuser's garden binds its socket under its own XDG_RUNTIME_DIR;
           # root connects to it explicitly (authorized as uid 0).
           hm_uid = server.succeed("id -u testuser").strip()
           server.wait_until_succeeds(
-              f"${rustCli}/bin/sower garden deploy --type home-manager"
+              f"sower garden deploy --type home-manager"
               f" --socket /run/user/{hm_uid}/sower-garden/admin.sock",
               timeout=30,
           )

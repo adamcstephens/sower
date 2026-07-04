@@ -15,6 +15,9 @@ let
         ../../build.rs
         ../../openapi.json
         ../../src
+        ../../tests
+        # interface-drift guardrail fixture shared with the Elixir CLI
+        ../../apps/sower_cli/priv/build_interface.json
       ];
     };
 
@@ -42,9 +45,8 @@ craneLib.buildPackage (
         --fish <(COMPLETE=fish $out/bin/sower) \
         --zsh <(COMPLETE=zsh $out/bin/sower)
 
-      # Symlink for use as a unique binary name (avoids PATH conflicts with the
-      # Elixir `sower` CLI). When invoked via this symlink, the binary detects
-      # argv[0] and routes to the `activator` subcommand.
+      # When invoked via this symlink, the binary detects argv[0] and routes
+      # to the `activator` subcommand.
       ln --symbolic sower $out/bin/sower-activator
     '';
 

@@ -18,6 +18,9 @@ enum Command {
     /// Handle a single activation request from a systemd-activated socket on stdin.
     Activator(commands::activator::ActivatorArgs),
 
+    /// Build derivations from a Nix attribute or flake (forwards to the Elixir build CLI).
+    Build(commands::build::BuildArgs),
+
     /// Manage seeds against a Sower server.
     Seed(commands::seed::SeedArgs),
 
@@ -63,6 +66,7 @@ fn invoked_as_activator() -> bool {
 fn run(command: Command) -> Result<()> {
     match command {
         Command::Activator(args) => commands::activator::run(args),
+        Command::Build(args) => commands::build::run(args),
         Command::Seed(args) => {
             init_default_tracing();
             commands::seed::run(args)

@@ -3,7 +3,6 @@ defmodule SowerCli.MixProject do
 
   def project do
     [
-      aliases: aliases(),
       app: :sower_cli,
       build_path: "../../_build",
       config_path: "./config/config.exs",
@@ -21,12 +20,6 @@ defmodule SowerCli.MixProject do
   def application do
     [
       extra_applications: [:logger]
-    ]
-  end
-
-  defp aliases() do
-    [
-      cli: ["run ./cli.exs"]
     ]
   end
 
