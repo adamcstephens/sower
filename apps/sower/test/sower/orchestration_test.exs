@@ -1538,4 +1538,106 @@ defmodule Sower.OrchestrationTest do
       assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5000
     end
   end
+
+  describe "deploy_subscription/2 with seed_sid" do
+    import Sower.OrchestrationFixtures
+
+    @tag :capture_log
+    test "deploys the specified seed instead of the latest match" do
+      garden = garden_fixture()
+      older = seed_fixture(%{name: "myhost", seed_type: "nixos"})
+
+      Process.sleep(10)
+
+      newer = seed_fixture(%{name: "myhost", seed_type: "nixos"})
+
+      sub =
+        subscription_fixture(%{
+          garden_id: garden.id,
+          seed_name: "myhost",
+          seed_type: "nixos"
+        })
+
+      Phoenix.PubSub.subscribe(Sower.PubSub, "garden:#{garden.sid}")
+
+      assert {:ok, _request_id, pid} =
+               Orchestration.deploy_subscription(sub,
+                 actor_sid: "user_test",
+                 event_reason: :user_triggered,
+                 seed_sid: older.sid
+               )
+
+      ref = Process.monitor(pid)
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5000
+
+      assert_receive %Phoenix.Socket.Broadcast{event: "deployment", payload: payload}
+      assert Enum.map(payload.seed_deployments, & &1.seed.sid) == [older.sid]
+      refute Enum.any?(payload.seed_deployments, &(&1.seed.sid == newer.sid))
+    end
+
+    test "returns seed_not_matching when the seed does not match the subscription" do
+      garden = garden_fixture()
+      seed_fixture(%{name: "myhost", seed_type: "nixos"})
+      other = seed_fixture(%{name: "otherhost", seed_type: "nixos"})
+
+      sub =
+        subscription_fixture(%{
+          garden_id: garden.id,
+          seed_name: "myhost",
+          seed_type: "nixos"
+        })
+
+      assert {:error, :seed_not_matching} =
+               Orchestration.deploy_subscription(sub,
+                 actor_sid: "user_test",
+                 event_reason: :user_triggered,
+                 seed_sid: other.sid
+               )
+    end
+
+    test "returns seed_not_matching when the seed violates subscription rules" do
+      garden = garden_fixture()
+
+      dev_seed =
+        seed_fixture(%{
+          name: "myhost",
+          seed_type: "nixos",
+          tags: [%{key: "branch", value: "dev"}]
+        })
+
+      sub =
+        subscription_fixture(%{
+          garden_id: garden.id,
+          seed_name: "myhost",
+          seed_type: "nixos",
+          rules: [%{key: "branch", op: :eq, value: "main"}]
+        })
+
+      assert {:error, :seed_not_matching} =
+               Orchestration.deploy_subscription(sub,
+                 actor_sid: "user_test",
+                 event_reason: :user_triggered,
+                 seed_sid: dev_seed.sid
+               )
+    end
+
+    test "returns seed_not_matching for an unknown seed sid" do
+      garden = garden_fixture()
+      seed_fixture(%{name: "myhost", seed_type: "nixos"})
+
+      sub =
+        subscription_fixture(%{
+          garden_id: garden.id,
+          seed_name: "myhost",
+          seed_type: "nixos"
+        })
+
+      assert {:error, :seed_not_matching} =
+               Orchestration.deploy_subscription(sub,
+                 actor_sid: "user_test",
+                 event_reason: :user_triggered,
+                 seed_sid: "seed_doesnotexist"
+               )
+    end
+  end
 end

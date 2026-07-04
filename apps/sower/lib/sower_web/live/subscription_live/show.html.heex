@@ -143,6 +143,18 @@
         <:col :let={seed} label="Updated" field={:updated_at} hide_on={:md}>
           <.local_datetime datetime={seed.updated_at} user_timezone={@user_timezone} />
         </:col>
+        <:action :let={seed}>
+          <.button
+            variant={:secondary}
+            type="button"
+            phx-click="deploy_seed"
+            phx-value-seed_sid={seed.sid}
+            phx-disable-with="Deploying..."
+            disabled={@deploying}
+          >
+            Deploy
+          </.button>
+        </:action>
       </.table>
       <p
         :if={@seeds == []}

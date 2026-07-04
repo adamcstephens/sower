@@ -321,6 +321,7 @@ defmodule Sower.Orchestration.Seed do
 
   ## Options
     * `:limit` - Maximum number of seeds to return (default: 1)
+    * `:sid` - Restrict matching to the seed with this sid
   """
   def list_matching(name, seed_type, tags, opts \\ [])
 
@@ -333,6 +334,7 @@ defmodule Sower.Orchestration.Seed do
         order_by: [desc: s.updated_at, desc: s.id],
         limit: ^limit
       )
+      |> filter_sid(Keyword.get(opts, :sid))
 
     Repo.all(query)
     |> Repo.preload([:tags])
@@ -347,6 +349,7 @@ defmodule Sower.Orchestration.Seed do
         order_by: [desc: s.updated_at, desc: s.id],
         limit: ^limit
       )
+      |> filter_sid(Keyword.get(opts, :sid))
 
     query =
       Enum.reduce(tags, base_query, fn %{key: key, value: value}, query ->
@@ -366,6 +369,9 @@ defmodule Sower.Orchestration.Seed do
     Repo.all(query)
     |> Repo.preload([:tags])
   end
+
+  defp filter_sid(query, nil), do: query
+  defp filter_sid(query, sid), do: from(s in query, where: s.sid == ^sid)
 
   def latest(name, seed_type) do
     Repo.one(

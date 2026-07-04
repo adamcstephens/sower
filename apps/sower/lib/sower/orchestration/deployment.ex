@@ -357,6 +357,17 @@ defmodule Sower.Orchestration.Deployment do
     Seed.latest(subscription.seed_name, subscription.seed_type, tags)
   end
 
+  def match_seed(%Subscription{} = subscription, seed_sid) do
+    tags =
+      Enum.map(subscription.rules || [], fn rule ->
+        %{key: rule.key, value: rule.value}
+      end)
+
+    subscription.seed_name
+    |> Seed.list_matching(subscription.seed_type, tags, sid: seed_sid, limit: 1)
+    |> List.first()
+  end
+
   def list_matching_seeds(%Subscription{} = subscription, limit \\ 10) do
     tags =
       Enum.map(subscription.rules || [], fn rule ->
@@ -390,9 +401,18 @@ defmodule Sower.Orchestration.Deployment do
                subscription.timezone
              ) do
           {:allow, _action} ->
-            request_id = SowerClient.Sid.generate("req")
-            {:ok, request_id, pid} = process_deployment(request_id, [subscription], garden, opts)
-            {:ok, request_id, pid}
+            case resolve_seed(subscription, opts) do
+              {:ok, opts} ->
+                request_id = SowerClient.Sid.generate("req")
+
+                {:ok, request_id, pid} =
+                  process_deployment(request_id, [subscription], garden, opts)
+
+                {:ok, request_id, pid}
+
+              {:error, reason} ->
+                {:error, reason}
+            end
 
           {:confirm, _action} ->
             {:error, :confirmation_required}
@@ -581,6 +601,19 @@ defmodule Sower.Orchestration.Deployment do
 
   defp validate_request_subscriptions(_), do: {:error, :subscription_not_found}
 
+  defp resolve_seed(%Subscription{} = subscription, opts) do
+    case Keyword.get(opts, :seed_sid) do
+      nil ->
+        {:ok, opts}
+
+      seed_sid ->
+        case match_seed(subscription, seed_sid) do
+          nil -> {:error, :seed_not_matching}
+          %Seed{} = seed -> {:ok, Keyword.put(opts, :seed, seed)}
+        end
+    end
+  end
+
   defp validate_deployment_request(
          %SowerClient.Orchestration.DeploymentRequest{} = request,
          garden_id
@@ -608,7 +641,7 @@ defmodule Sower.Orchestration.Deployment do
     seed_deploys =
       subscriptions
       |> Enum.reduce([], fn sub, acc ->
-        case match_seed(sub) do
+        case Keyword.get(opts, :seed) || match_seed(sub) do
           nil ->
             acc
 

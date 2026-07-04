@@ -68,6 +68,26 @@ defmodule SowerWeb.SubscriptionLive.Show do
   end
 
   @impl Phoenix.LiveView
+  def handle_event("deploy_seed", %{"seed_sid" => seed_sid}, socket) do
+    socket = assign(socket, deploying: true, deploy_error: nil)
+
+    user = socket.assigns.current_user
+
+    case Orchestration.deploy_subscription(socket.assigns.subscription,
+           force: true,
+           actor_sid: user.sid,
+           event_reason: :user_triggered,
+           seed_sid: seed_sid
+         ) do
+      {:ok, _request_id, _pid} ->
+        {:noreply, socket}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, deploying: false, deploy_error: deploy_error_message(reason))}
+    end
+  end
+
+  @impl Phoenix.LiveView
   def handle_info({:deployment, :created, deployment}, socket) do
     if socket.assigns.deploying do
       {:noreply,
@@ -109,6 +129,7 @@ defmodule SowerWeb.SubscriptionLive.Show do
   defp page_title(:edit), do: "Edit Subscription"
 
   defp deploy_error_message(:garden_not_found), do: "Garden not found"
+  defp deploy_error_message(:seed_not_matching), do: "Seed does not match subscription"
   defp deploy_error_message(:policy_denied), do: "Denied by policy"
   defp deploy_error_message(:confirmation_required), do: "Confirmation required"
   defp deploy_error_message(_), do: "Deployment failed"

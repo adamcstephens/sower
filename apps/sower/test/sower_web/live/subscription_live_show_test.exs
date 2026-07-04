@@ -55,7 +55,7 @@ defmodule SowerWeb.SubscriptionLive.ShowTest do
       live(conn, ~p"/gardens/#{garden}/subscriptions/#{subscription}")
 
     show_live
-    |> element("button", "Deploy")
+    |> element(~s{button[phx-click="deploy_subscription"]}, "Deploy")
     |> render_click()
 
     deployment =
@@ -63,6 +63,41 @@ defmodule SowerWeb.SubscriptionLive.ShowTest do
         [d | _] = Sower.Orchestration.list_deployments(garden, limit: 1)
         d
       end)
+
+    assert_redirect(show_live, ~p"/deployments/#{deployment.sid}")
+  end
+
+  test "clicking a seed row deploy triggers deployment of that seed", %{conn: conn, user: user} do
+    Sower.Repo.put_org_id(user.org_id)
+    garden = garden_fixture()
+    older = seed_fixture(%{name: "rowhost", seed_type: "nixos"})
+
+    Process.sleep(10)
+
+    _newer = seed_fixture(%{name: "rowhost", seed_type: "nixos"})
+
+    subscription =
+      subscription_fixture(%{
+        garden_id: garden.id,
+        seed_name: "rowhost",
+        seed_type: "nixos"
+      })
+
+    {:ok, show_live, _html} =
+      live(conn, ~p"/gardens/#{garden}/subscriptions/#{subscription}")
+
+    show_live
+    |> element(~s{#subscription-seeds button[phx-value-seed_sid="#{older.sid}"]})
+    |> render_click()
+
+    deployment =
+      eventually(fn ->
+        [d | _] = Sower.Orchestration.list_deployments(garden, limit: 1)
+        d
+      end)
+
+    deployment = Sower.Repo.preload(deployment, :seeds)
+    assert Enum.map(deployment.seeds, & &1.sid) == [older.sid]
 
     assert_redirect(show_live, ~p"/deployments/#{deployment.sid}")
   end
