@@ -25,9 +25,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - run: |
-          export HOME=$PWD
-          nix develop .# --command just check-elixir-format
-          nix develop .# --command just check-elixir-audit
+          nix build .#checks.x86_64-linux.mix
 
   e2e:
     runs-on: local/x86_64-linux
@@ -36,5 +34,4 @@ jobs:
       - uses: actions/checkout@v4
 
       - run: |
-          export HOME=$PWD
           nix develop .# --command just check-e2e

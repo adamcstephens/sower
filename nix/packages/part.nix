@@ -9,6 +9,12 @@
       ...
     }:
     {
+      checks = {
+        mix = pkgs.callPackage ./mix-checks.nix {
+          inherit beamPackages version;
+        };
+      };
+
       packages = rec {
         activator = rust-cli;
 
