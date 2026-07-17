@@ -6,6 +6,11 @@ A pipeline orchestrates the path from Nix source to running gardens: evaluate
 a flake, build what the evaluation produces, upload to a binary cache,
 register seeds, and roll seeds out to gardens in phases gated by checks.
 
+Pipelines come in two flavors sharing every mechanism: *eval-flavored* runs
+start from source and produce seeds; *resolve-flavored* runs skip evaluation
+entirely and deploy what subscriptions already select (see the =resolve=
+step).
+
 This spec covers the *user-facing definition* and the *contract* it produces —
 the data model the server validates and executes against. The scheduler that
 executes this contract is out of scope and will be specified separately.
@@ -96,6 +101,13 @@ For a build phase, =concurrency= is the item-level parallelism that
 Fans out over the items the referenced phase produces. Items arrive as the
 producing phase completes them (streaming); only items that completed their
 chain successfully flow onward.
+
+#+begin_src json
+{ "from": "resolve", "except": ["door"] }
+#+end_src
+
+=only= and =except= restrict the collection by item name. Filters are by
+name only — there are no predicates over item payloads.
 
 *** Gardens
 
@@ -199,11 +211,32 @@ come from the item's =meta.sower.seed= plus the fields below. Adds =seed=
 | tags          | object   | no       | {}      | Extra tags merged with git/meta tags.        |
 | authoritative | boolean  | no       | true    | Same semantics as =sower-build= (rename on artifact match). |
 
+*** resolve
+
+Resolves the subscriptions of a set of gardens against the seed registry —
+the matching half of subscription processing without the acting half — and
+emits one item per garden with a *pending change* (a resolved seed differing
+from the garden's current generation). Gardens already running their
+resolved seeds produce no item. This is the registry-side twin of =eval=:
+both are entry-point steps producing a collection from a source of truth.
+
+| Field   | Type   | Required | Default | Description                                       |
+|---------+--------+----------+---------+---------------------------------------------------|
+| gardens | object | yes      |         | Garden selector, as in Item Sources. All subscriptions of the selected gardens are resolved. |
+
+Resolution is a snapshot: it happens once, at its step's execution, and
+later phases deploy that snapshot even if newer seeds are registered
+mid-run — a coordinated rollout deploys what its earlier phases validated.
+Newer seeds wait for the next run.
+
+Items are named by garden name and carry =garden= plus =seeds= (all pending
+subscription resolutions for that garden).
+
 *** deploy
 
 Creates a targeted deployment of previously registered seeds to the item's
-garden, then waits for the garden's feedback. The item must come from a
-=gardens= source. Completion means the deployment reached a terminal state
+garden, then waits for the garden's feedback. The item must carry a
+=garden= — from a =gardens= source or a =resolve= producer. Completion means the deployment reached a terminal state
 and the garden reported a result via the existing
 =SeedDeploymentStatus= / =SeedDeploymentResult= / =DeploymentResult= flow —
 the report is the step's output, not a side channel. Adds =deployment= (sid,
@@ -211,8 +244,12 @@ state, result, per-seed results, achieved actions).
 
 | Field   | Type  | Required | Default | Description                                     |
 |---------+-------+----------+---------+-------------------------------------------------|
-| seeds   | ref[] | yes      |         | Items carrying =seed= fields (i.e. produced by a chain containing a =seed= step). One deployment with one seed deployment per ref. |
+| seeds   | ref[] | no       | item's seeds | Items carrying =seed= fields (i.e. produced by a chain containing a =seed= step). One deployment with one seed deployment per entry. |
 | timeout | string | no      | 30m     | Deadline for the garden to report a terminal result. Covers policy =confirm= holds. |
+
+When =seeds= is omitted, the seeds come from the item itself — the
+resolve-flavored form, where a =resolve= step already placed the garden's
+pending seeds on the item. Validation requires one of the two.
 
 The deploy item fails unless the deployment result is =success=. Note that a
 garden whose policy permits only =stage= reports success after staging
@@ -263,6 +300,7 @@ Items accrete fields as they flow. All fields are snake_case JSON.
 | eval             | =name=, =attr=, =drv_path=, =system=, =meta= (incl. =meta.sower.seed=), or =error= |
 | gardens source   | =name=, =garden= (sid, name)                                    |
 | static source    | as written in the list                                          |
+| resolve          | =name=, =garden= (sid, name), =seeds= (pending subscription resolutions) |
 | build            | =out_paths=                                                     |
 | push             | =cache= (url, uploaded)                                         |
 | seed             | =seed= (sid, name, seed_type, artifact, tags)                   |
@@ -286,7 +324,8 @@ Builtin steps skip when their key matches a previously successful execution:
 | deploy | seed artifacts + garden sid                        |
 
 Keys are declared per kind — fields outside the key (metadata, timestamps)
-never invalidate. =check= and =effect= are never skipped. Re-running a
+never invalidate. =check= and =effect= are never skipped. Neither is
+=resolve= — it is a cheap query against live registry state. Re-running a
 pipeline after a failed canary re-evaluates nothing, rebuilds nothing, and
 resumes at the deploy.
 
@@ -314,6 +353,61 @@ trigger must not receive pipeline deployments. The server gates dispatch on
 the garden's reported =version=. This follows the existing contract
 discipline (=@server_pushed_schema_titles=, contract baseline).
 
+** Pipelines and Subscriptions
+
+The rule of thumb: *no cross-system ordering or gating → subscription;
+ordering, gates, or coordinated waves → pipeline.* A pipeline that just
+deploys everywhere on a timer is a subscription reimplemented with more
+moving parts.
+
+The two are different modes, not duplicates:
+
+- A *subscription* is per-garden convergence: pull-based, garden-autonomous,
+  works through disconnects, no cross-garden awareness.
+- A *pipeline* is coordinated propagation: push-based, ordered, run-scoped —
+  it exists for the cross-system sequencing subscriptions cannot express.
+
+For gardens managed by coordinated rollouts, the subscription narrows to its
+declarative core — the matching rules, i.e. desired state. When and in what
+order moves to the pipeline; the garden's policy grants the =pipeline=
+trigger and withholds =scheduled=/=realtime=. Pick *one actuation path per
+garden*: a policy granting both =pipeline= and =realtime= lets the garden
+self-deploy mid-rollout, defeating the phases.
+
+A pipeline sequences convergence but is never the only path to it: a broken
+or stuck run blocks nothing, and a garden whose policy also grants its own
+triggers still converges through its subscription. The never-strand
+principle is preserved by construction.
+
+Mixing flavors composes through seed tags. A =seed= step fires the same
+registration events that drive =realtime= subscriptions, so an eval-flavored
+pipeline should register seeds with a pre-release tag that fleet
+subscriptions do not match, deploy its phases targeted, and finish by
+promoting the seed to the release channel (a tag mutation — see Future
+Considerations for a builtin =promote= step). Subscriptions matching the
+promoted channel then take over for the long tail: CI pipeline and scheduled
+rollout pipeline meet at the tag.
+
+** Scheduled Runs
+
+A schedule is a run trigger; the definition contract does not change. The
+cron and the source (repository and branch) live on the server-side
+registered pipeline resource — matching where subscriptions keep their
+=schedule= — not in the flake.
+
+A scheduled pipeline points at a moving flake ref. At run start the server
+resolves and pins it; =self= means that pinned rev for the whole run.
+Memoization then turns the schedule into a polling model: an unchanged input
+no-ops in seconds (eval keyed on the locked rev, builds on drv paths,
+deploys on artifact and garden), while a change flows exactly as far as it
+reaches. Resolve-flavored pipelines get the same property from =resolve=
+emitting only pending changes.
+
+A scheduled run will reach gardens whose policy windows are closed. The
+deployment holds garden-side until policy permits or the deploy step's
+=timeout= expires; aligning the run schedule with wave windows is an
+operator concern, with the timeout as backstop.
+
 ** Definition Contract
 
 The JSON produced by evaluating the pipeline attribute. This document —
@@ -332,9 +426,10 @@ Validation at submission:
 2. Every ref resolves to an existing phase (and item form is permitted for
    the source kind).
 3. The data-flow graph (refs plus =needs=) is acyclic.
-4. Field provenance: a step requiring fields (e.g. =deploy.seeds= requires
-   =seed=; =build= requires =drv_path=) must be reachable only from
-   producers of those fields.
+4. Field provenance: a step requiring fields (e.g. =build= requires
+   =drv_path=) must be reachable only from producers of those fields.
+   =deploy= must get seed fields from its =seeds= refs or from an item
+   chain that produces them (=resolve=).
 5. Collection/scalar shape: =items.from= must reference a phase, not a
    single item; step refs like =deploy.seeds= entries must reference items
    or single-item phases.
@@ -399,6 +494,50 @@ and registered independently. Nothing deploys until every seed finishes
 (=needs = [ "seeds" ]=). The fleet waits for the canary phase, which passes
 only when its garden reports a successful deployment and the http check
 succeeds within ten minutes.
+
+*** Scheduled deploy-only rollout
+
+No eval, no build: deploy whatever the fleet's subscriptions already select,
+in waves. Run nightly against a fixed definition.
+
+#+begin_src nix
+sower.pipelines.nightly-rollout = {
+  version = 1;
+  name = "nightly-rollout";
+  phases = [
+    {
+      name = "resolve";
+      steps = [
+        { kind = "resolve";
+          gardens = { names = [ "door" "gate" "wall" "keep" ]; }; }
+      ];
+    }
+    {
+      name = "canary";
+      items = { from = "resolve"; only = [ "door" ]; };
+      steps = [
+        { kind = "deploy"; }
+        { kind = "check"; app = "checks/http";
+          wait = { timeout = "10m"; interval = "15s"; }; }
+      ];
+    }
+    {
+      name = "rest";
+      needs = [ "canary" ];
+      items = { from = "resolve"; except = [ "door" ]; };
+      steps = [
+        { kind = "deploy"; }
+        { kind = "check"; app = "checks/http"; }
+      ];
+    }
+  ];
+};
+#+end_src
+
+Gardens already running their resolved seeds produce no items, so an
+unchanged fleet makes the nightly run a near-instant no-op. The =rest= wave
+deploys the same snapshot the canary validated, even if newer seeds were
+registered mid-run.
 
 *** Selective barrier
 
@@ -468,13 +607,22 @@ in
   deploy) reusing the existing =sower-build= step vocabulary; =effect= is
   the extension point.
 - *Pipeline deploys are targeted deployments gated by a new opt-in
-  =pipeline= policy trigger.* Subscriptions are not involved.
+  =pipeline= policy trigger.* Subscriptions are not involved in dispatch.
+- *=resolve= reuses subscriptions.* Deploy-only pipelines resolve existing
+  subscription matching rules; there is no second matching concept.
+- *Resolution is a snapshot.* Later waves deploy what earlier phases
+  validated; newer seeds wait for the next run.
+- *Schedules live on the server-side pipeline resource*, with the moving
+  flake ref re-resolved and pinned at each run start.
 
 ** Future Considerations
 
-- Pipeline triggers: what starts a run (manual/API first; git events and
-  schedules later). Run-state observation contract lives with the scheduler
-  spec.
+- Pipeline triggers beyond manual/API and schedules (git events, webhooks).
+  Run-state observation contract lives with the scheduler spec.
+- A builtin =promote= step (seed tag mutation) formalizing the channel
+  handoff between pipelines and subscriptions.
+- Richer =resolve= selection (by subscription, seed type) beyond garden
+  name lists.
 - Garden labels/groups for selection beyond explicit name lists.
 - A required-action field on =deploy= (fail if policy permitted only
   =stage= when the pipeline expected activation).
