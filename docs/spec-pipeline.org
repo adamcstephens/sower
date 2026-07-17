@@ -1,0 +1,487 @@
+* Pipelines — Specification
+
+** Overview
+
+A pipeline orchestrates the path from Nix source to running gardens: evaluate
+a flake, build what the evaluation produces, upload to a binary cache,
+register seeds, and roll seeds out to gardens in phases gated by checks.
+
+This spec covers the *user-facing definition* and the *contract* it produces —
+the data model the server validates and executes against. The scheduler that
+executes this contract is out of scope and will be specified separately.
+
+Pipelines are the "separate orchestration layer above the policy system"
+anticipated by the deployment policy spec (spec-deployment-policy.org, Future
+Considerations), and the orchestration substrate for the "full CI/builder
+model" described in spec-seed-trust.org. Deployment policy remains
+authoritative: a pipeline can never make a garden do something its policy
+denies.
+
+** Design Principles
+
+- The pipeline definition is data, not a program. All user logic lives in the
+  flake (Nix expressions compute what to build; flake apps implement checks
+  and effects), where it is testable with =nix eval= and =nix run=.
+- Ordering derives from data flow. A phase that consumes another phase's
+  output depends on it. Explicit =needs= exists only for ordering without
+  data flow.
+- Streaming is the default. Work on an item starts as soon as the item
+  exists; barriers are explicit.
+- Steps are functions of their declared inputs plus their item context.
+  Checks and effects receive the item as structured input by convention —
+  there is no string templating.
+- Outputs are references and small facts (store paths, sids, reports), never
+  blobs. The Nix store and binary cache remain the artifact layer.
+- Operations the engine owns (eval, build, push, seed, deploy) are builtin
+  step kinds. Everything else is an =effect= or =check=, restricted to
+  =nix run= so side effects are pinned in a flake closure.
+- Builtin steps are memoized on content-addressed keys. Re-running a pipeline
+  skips work whose inputs have not changed.
+- Deployment policy is evaluated as usual on every garden. Pipelines
+  introduce a new trigger; they do not bypass policy.
+
+** Model
+
+| Term     | Meaning                                                              |
+|----------+----------------------------------------------------------------------|
+| Pipeline | A named set of phases forming a DAG via data-flow references.        |
+| Phase    | An item source plus a chain of steps applied to each item.           |
+| Step     | One operation in a phase's chain, of a builtin or user-defined kind. |
+| Item     | A JSON document that flows through a phase's chain, accreting fields as each step completes. |
+
+The word *phase* is deliberate: =stage= is already a deployment policy action
+(download and pin a closure) and cannot be reused as a structural term.
+
+A phase's chain streams: each item advances through the chain independently,
+so one item can be uploading while another is still building. A phase without
+an =items= source has a single implicit item — its chain runs once.
+
+** Definition Format
+
+The blessed front-end is Nix. A pipeline is a flake output:
+
+#+begin_example
+sower.pipelines.<name>
+#+end_example
+
+evaluated with =nix eval --json= to produce the definition contract
+(see Definition Contract below). The JSON contract is normative; the Nix
+front-end is convention. Reuse and generation (e.g. producing N rollout
+phases from a list of garden groups) are ordinary Nix functions.
+
+The evaluation of the pipeline attribute itself must be cheap. It is separate
+from any =eval= step the pipeline contains.
+
+** Phases
+
+| Field       | Type   | Required | Default   | Description                                          |
+|-------------+--------+----------+-----------+------------------------------------------------------|
+| name        | string | yes      |           | Unique within the pipeline. Addressable in refs.     |
+| items       | object | no       | (single implicit item) | Item source (see Item Sources).         |
+| needs       | ref[]  | no       | []        | Explicit barriers in addition to data-flow edges.    |
+| steps       | step[] | yes      |           | Chain applied to each item, in order.                |
+| concurrency | int    | no       | engine    | Max items in flight in this phase.                   |
+
+For a build phase, =concurrency= is the item-level parallelism that
+=sower-build --build-jobs= expresses today.
+
+** Item Sources
+
+*** From another phase
+
+#+begin_src json
+{ "from": "eval" }
+#+end_src
+
+Fans out over the items the referenced phase produces. Items arrive as the
+producing phase completes them (streaming); only items that completed their
+chain successfully flow onward.
+
+*** Gardens
+
+#+begin_src json
+{ "gardens": { "names": ["door", "gate"] } }
+#+end_src
+
+Resolved by the server against registered gardens at run time. Selection is
+by explicit name list initially; richer selectors (labels/groups) are a
+future consideration — gardens have no tags today.
+
+*** Static list
+
+#+begin_src json
+{ "list": [ { "name": "x86_64-linux" }, { "name": "aarch64-linux" } ] }
+#+end_src
+
+Each entry becomes an item. Useful for fanning a single step (e.g. eval)
+over a fixed set.
+
+** References
+
+A ref addresses a phase's output collection or a single item within it:
+
+| Form             | Meaning                                       | Resolves when                          |
+|------------------+-----------------------------------------------+----------------------------------------|
+| ="phase"=        | The whole collection.                         | Phase closed with zero failed items.   |
+| ="phase/item"=   | One named item.                               | That item's chain completed successfully. |
+
+Item names are assigned by the source: eval items are named by attribute
+path, garden items by garden name, static items by their =name= field.
+
+A ref used in =needs= is a pure barrier. A ref used in a step field (e.g.
+=deploy.seeds=) both orders execution and delivers the referenced item(s).
+Depending on a single item does not wait for its siblings — "make sure builds
+x, y and z pass" is three item refs; "make sure all builds pass" is a
+whole-collection ref.
+
+** Steps
+
+Every step accepts:
+
+| Field   | Type   | Required | Default     | Description                     |
+|---------+--------+----------+-------------+---------------------------------|
+| kind    | string | yes      |             | One of the kinds below.         |
+| timeout | string | no       | kind-specific | Per-attempt execution limit.  |
+
+A step failure fails its item: the rest of the chain is skipped for that
+item, and the item does not flow to consumers. The phase's aggregate result
+mirrors deployment results: =success= (all items succeeded), =partial=, or
+=failure=.
+
+*** eval
+
+Evaluates a flake attribute and emits one item per derivation found,
+streaming as evaluation proceeds. Maps onto the existing =Nix.Eval.Jobs=
+worker-pool machinery (=sower-build --eval-jobs= / =--memory-limit=).
+
+| Field        | Type   | Required | Default | Description                                        |
+|--------------+--------+----------+---------+----------------------------------------------------|
+| flake        | string | no       | self    | Flake ref. =self= is the flake defining the pipeline, pinned at submission. |
+| attr         | string | yes      |         | Attribute to evaluate (recursed into).             |
+| workers      | int    | no       | 8       | Parallel eval workers.                             |
+| memory_limit | int    | no       | none    | Per-worker memory ceiling, same semantics as =sower-build --memory-limit=. |
+
+Each emitted item carries =attr=, =drv_path=, =system=, and =meta=
+(including =meta.sower.seed=, which is how eval-time knowledge reaches the
+=seed= step with no extra plumbing). An attribute that fails to evaluate
+becomes a failed item carrying =error= — evaluation continues (keep-going),
+but the phase aggregate cannot be =success=.
+
+*** build
+
+Realizes the item's derivation. One derivation per item; parallelism is the
+phase's =concurrency=. The engine deduplicates identical =drv_path= values
+across items. Adds =out_paths=.
+
+| Field | Type | Required | Default | Description |
+|-------+------+----------+---------+-------------|
+| (none beyond common fields) | | | | |
+
+*** push
+
+Uploads the item's built paths to a binary cache. The cache URL scheme
+selects the backend as today (=niks3://=, =attic://=, otherwise =nix copy=).
+Adds =cache= (url, uploaded count).
+
+| Field | Type   | Required | Default | Description                       |
+|-------+--------+----------+---------+-----------------------------------|
+| cache | string | yes      |         | Cache URL.                        |
+
+*** seed
+
+Registers the item as a seed with the server, exactly as the =:seed= step of
+=sower-build= does today (=SowerClient.Seed.create=). Name, type, and tags
+come from the item's =meta.sower.seed= plus the fields below. Adds =seed=
+(sid, name, seed_type, artifact, tags).
+
+| Field         | Type     | Required | Default | Description                                  |
+|---------------+----------+----------+---------+----------------------------------------------|
+| tags          | object   | no       | {}      | Extra tags merged with git/meta tags.        |
+| authoritative | boolean  | no       | true    | Same semantics as =sower-build= (rename on artifact match). |
+
+*** deploy
+
+Creates a targeted deployment of previously registered seeds to the item's
+garden, then waits for the garden's feedback. The item must come from a
+=gardens= source. Completion means the deployment reached a terminal state
+and the garden reported a result via the existing
+=SeedDeploymentStatus= / =SeedDeploymentResult= / =DeploymentResult= flow —
+the report is the step's output, not a side channel. Adds =deployment= (sid,
+state, result, per-seed results, achieved actions).
+
+| Field   | Type  | Required | Default | Description                                     |
+|---------+-------+----------+---------+-------------------------------------------------|
+| seeds   | ref[] | yes      |         | Items carrying =seed= fields (i.e. produced by a chain containing a =seed= step). One deployment with one seed deployment per ref. |
+| timeout | string | no      | 30m     | Deadline for the garden to report a terminal result. Covers policy =confirm= holds. |
+
+The deploy item fails unless the deployment result is =success=. Note that a
+garden whose policy permits only =stage= reports success after staging
+without activating — the deployment result alone does not assert activation.
+Follow a =deploy= with a =check= to assert observed behavior; declaring a
+required action on the step is a future consideration.
+
+*** check
+
+Runs a flake app and interprets its exit code: zero passes, non-zero fails.
+Without =wait=, a single attempt — a gate. With =wait=, retries until success
+or deadline. Appends to =checks= (app, attempts, passed).
+
+| Field | Type    | Required | Default | Description                                    |
+|-------+---------+----------+---------+------------------------------------------------|
+| app   | string  | yes      |         | Installable in the pipeline flake, run via =nix run <flake>#<app>=. |
+| args  | string[] | no      | []      | Extra arguments appended after =--=.           |
+| wait  | object  | no       | none    | ={ "timeout": "10m", "interval": "15s" }= — retry until success or deadline. |
+
+*** effect
+
+Runs a flake app for its side effect. Same invocation convention as =check=;
+no retry. Appends to =effects= (app, exit_code).
+
+| Field | Type     | Required | Default | Description                        |
+|-------+----------+----------+---------+------------------------------------|
+| app   | string   | yes      |         | Installable in the pipeline flake. |
+| args  | string[] | no       | []      | Extra arguments after =--=.        |
+
+Effects and checks are restricted to =nix run=: side effects are pinned in
+the same closure discipline as everything else. Arbitrary argv is rejected
+at validation.
+
+** Item Context Convention
+
+Every =check= and =effect= invocation receives its item as JSON on stdin.
+An http check against a canary garden reads the garden's identity from the
+item; nothing is interpolated into arguments by the engine. Stdout and
+stderr are captured as the step log. Builtin steps receive the item
+natively.
+
+** Item Payload
+
+Items accrete fields as they flow. All fields are snake_case JSON.
+
+| Producer         | Fields added                                                    |
+|------------------+-----------------------------------------------------------------|
+| eval             | =name=, =attr=, =drv_path=, =system=, =meta= (incl. =meta.sower.seed=), or =error= |
+| gardens source   | =name=, =garden= (sid, name)                                    |
+| static source    | as written in the list                                          |
+| build            | =out_paths=                                                     |
+| push             | =cache= (url, uploaded)                                         |
+| seed             | =seed= (sid, name, seed_type, artifact, tags)                   |
+| deploy           | =deployment= (sid, state, result, seed_results, actions)        |
+| check            | appends to =checks= (app, attempts, passed)                     |
+| effect           | appends to =effects= (app, exit_code)                           |
+
+Fields are references and small facts. Logs are addressed by reference
+(deployment sid, run step id), not embedded.
+
+** Memoization
+
+Builtin steps skip when their key matches a previously successful execution:
+
+| Step   | Key                                                |
+|--------+----------------------------------------------------|
+| eval   | pinned flake (locked rev) + attr                   |
+| build  | drv_path                                           |
+| push   | out_paths + cache url                              |
+| seed   | artifact + seed_type + name + tags                 |
+| deploy | seed artifacts + garden sid                        |
+
+Keys are declared per kind — fields outside the key (metadata, timestamps)
+never invalidate. =check= and =effect= are never skipped. Re-running a
+pipeline after a failed canary re-evaluates nothing, rebuilds nothing, and
+resumes at the deploy.
+
+** Deploy Semantics and Policy
+
+Pipeline deployments are *targeted*: the server creates a deployment for the
+named gardens, as a manual deploy does today. Subscriptions are untouched —
+they remain the pull/matching mechanism and pipelines do not create or
+modify them.
+
+Policy interplay:
+
+- A new policy trigger =pipeline= is added, with audit reason
+  =pipeline_triggered=. Both are additive enum changes.
+- The default policy does *not* include =pipeline= — like =realtime=, it is
+  an explicit opt-in. A garden participates in pipeline rollouts only if its
+  subscription policy grants actions for the =pipeline= trigger.
+- =confirm: true= rules hold the deployment pending approval as usual; the
+  deploy step's =timeout= bounds how long the pipeline waits.
+- The never-strand principle is unaffected: pipelines add a way to deploy,
+  never a new way to block existing ones.
+
+Compatibility: gardens below the version that understands the =pipeline=
+trigger must not receive pipeline deployments. The server gates dispatch on
+the garden's reported =version=. This follows the existing contract
+discipline (=@server_pushed_schema_titles=, contract baseline).
+
+** Definition Contract
+
+The JSON produced by evaluating the pipeline attribute. This document —
+not the Nix that generated it — is what the server accepts, validates, and
+stores.
+
+| Field   | Type    | Required | Description                     |
+|---------+---------+----------+---------------------------------|
+| version | int     | yes      | Contract version. Currently =1=. |
+| name    | string  | yes      | Pipeline name.                  |
+| phases  | phase[] | yes      | As specified above.             |
+
+Validation at submission:
+
+1. Phase names are unique; item names are validated per source kind.
+2. Every ref resolves to an existing phase (and item form is permitted for
+   the source kind).
+3. The data-flow graph (refs plus =needs=) is acyclic.
+4. Field provenance: a step requiring fields (e.g. =deploy.seeds= requires
+   =seed=; =build= requires =drv_path=) must be reachable only from
+   producers of those fields.
+5. Collection/scalar shape: =items.from= must reference a phase, not a
+   single item; step refs like =deploy.seeds= entries must reference items
+   or single-item phases.
+6. =effect=/=check= apps are flake installables; arbitrary commands are
+   rejected.
+7. Garden names resolve against registered gardens.
+
+The contract schemas belong in =sower_client= (OpenApiSpex, registered in
+=sower_client.ex=) and are covered by the contract baseline like every other
+cross-component schema.
+
+** Examples
+
+*** Release pipeline
+
+#+begin_src nix
+sower.pipelines.release = {
+  version = 1;
+  name = "release";
+  phases = [
+    {
+      name = "eval";
+      steps = [
+        { kind = "eval"; attr = "sowerSeeds"; workers = 4; memory_limit = 2048; }
+      ];
+    }
+    {
+      name = "seeds";
+      items = { from = "eval"; };
+      concurrency = 8;
+      steps = [
+        { kind = "build"; }
+        { kind = "push"; cache = "niks3://cache.example.org"; }
+        { kind = "seed"; }
+      ];
+    }
+    {
+      name = "canary";
+      needs = [ "seeds" ];                     # all seeds built and registered
+      items = { gardens = { names = [ "door" ]; }; };
+      steps = [
+        { kind = "deploy"; seeds = [ "seeds/web" ]; }
+        { kind = "check"; app = "checks/http";
+          wait = { timeout = "10m"; interval = "15s"; }; }
+      ];
+    }
+    {
+      name = "fleet";
+      needs = [ "canary" ];
+      items = { gardens = { names = [ "gate" "wall" "keep" ]; }; };
+      steps = [
+        { kind = "deploy"; seeds = [ "seeds/web" ]; }
+        { kind = "check"; app = "checks/http"; }
+      ];
+    }
+  ];
+};
+#+end_src
+
+Builds stream out of eval as attributes complete; each seed is built, pushed,
+and registered independently. Nothing deploys until every seed finishes
+(=needs = [ "seeds" ]=). The fleet waits for the canary phase, which passes
+only when its garden reports a successful deployment and the http check
+succeeds within ten minutes.
+
+*** Selective barrier
+
+Deploy as soon as the two seeds that matter are ready, while the rest of the
+set is still building:
+
+#+begin_src nix
+{
+  name = "edge";
+  items = { gardens = { names = [ "edge-1" ]; }; };
+  steps = [
+    { kind = "deploy"; seeds = [ "seeds/proxy" "seeds/dns" ]; }
+  ];
+}
+#+end_src
+
+The refs to =seeds/proxy= and =seeds/dns= are the only dependencies — no
+whole-phase barrier.
+
+*** Gate, effect, wait
+
+A single-item phase (no =items=) runs its chain once:
+
+#+begin_src nix
+{
+  name = "publish";
+  needs = [ "seeds" ];
+  steps = [
+    { kind = "check"; app = "checks/release-policy"; }        # gate: one attempt
+    { kind = "effect"; app = "announce"; }
+    { kind = "check"; app = "checks/mirrors-synced";
+      wait = { timeout = "30m"; interval = "1m"; }; }         # wait with deadline
+  ];
+}
+#+end_src
+
+*** Generated rollout waves
+
+Phase generation is ordinary Nix:
+
+#+begin_src nix
+let
+  wave = prev: gardens: {
+    name = "wave-${builtins.head gardens}";
+    needs = [ prev ];
+    items = { gardens = { names = gardens; }; };
+    steps = [
+      { kind = "deploy"; seeds = [ "seeds/web" ]; }
+      { kind = "check"; app = "checks/http"; }
+    ];
+  };
+in
+# fold waves into the phase list, each needing the previous
+#+end_src
+
+** Resolved Decisions
+
+- *The JSON contract is normative; Nix is the blessed front-end.* Other
+  front-ends may exist later; they all produce the same contract.
+- *Phases, not stages.* =stage= is a policy action and stays that way.
+- *Effects and checks are =nix run= only.* Pinned side effects; no arbitrary
+  argv.
+- *Item context via stdin JSON.* No templating language in the definition.
+- *Streaming is the default; barriers are explicit* — either =needs= or a
+  data-flow ref on a whole phase.
+- *Engine-owned operations are builtin kinds* (eval, build, push, seed,
+  deploy) reusing the existing =sower-build= step vocabulary; =effect= is
+  the extension point.
+- *Pipeline deploys are targeted deployments gated by a new opt-in
+  =pipeline= policy trigger.* Subscriptions are not involved.
+
+** Future Considerations
+
+- Pipeline triggers: what starts a run (manual/API first; git events and
+  schedules later). Run-state observation contract lives with the scheduler
+  spec.
+- Garden labels/groups for selection beyond explicit name lists.
+- A required-action field on =deploy= (fail if policy permitted only
+  =stage= when the pipeline expected activation).
+- Checks/effects enriching the item via structured stdout.
+- Partial-tolerant barriers (proceed when ≥N of a collection succeeded).
+- An approval step kind (pipeline-level analog of policy =confirm=).
+- Execution placement: eval/build/push/seed steps run on builders (today:
+  wherever =sower-build= runs; eventually builder gardens per
+  spec-seed-trust.org). Deploy/check coordination belongs to the server.
+  Both are scheduler concerns, out of scope here.
