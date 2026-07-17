@@ -3,7 +3,7 @@
 ** Overview
 
 A pipeline orchestrates the path from Nix source to running gardens: evaluate
-a flake, build what the evaluation produces, upload to a binary cache,
+it, build what the evaluation produces, upload to a binary cache,
 register seeds, and roll seeds out to gardens in phases gated by checks.
 
 Pipelines come in two flavors sharing every mechanism: *eval-flavored* runs
@@ -39,7 +39,8 @@ denies.
   blobs. The Nix store and binary cache remain the artifact layer.
 - Operations the engine owns (eval, build, push, seed, deploy) are builtin
   step kinds. Everything else is an =effect= or =check=, restricted to
-  =nix run= so side effects are pinned in a flake closure.
+  built executables from evaluated derivations so side effects are pinned
+  in a closure.
 - Builtin steps are memoized on content-addressed keys. Re-running a pipeline
   skips work whose inputs have not changed.
 - Step software is Nix: execution environments are NixOS modules on a
@@ -65,7 +66,8 @@ an =items= source has a single implicit item — its chain runs once.
 
 ** Definition Format
 
-The blessed front-end is Nix. A pipeline is a flake output:
+The front-end is Nix. In the default source mode a pipeline is a flake
+output:
 
 #+begin_example
 sower.pipelines.<name>
@@ -78,6 +80,27 @@ list of garden groups) are ordinary Nix functions.
 
 The evaluation of the pipeline attribute itself must be cheap. It is separate
 from any =eval= step the pipeline contains.
+
+*** Source Modes
+
+The contract is source-mode agnostic — nothing in it records which mode
+produced it. The registered pipeline resource's source carries the mode:
+
+- =flake= (default, blessed): definitions are flake outputs
+  (=sower.pipelines.<name>=, =sower.environments.<name>=); attrpaths
+  resolve as flake attrs; eval defaults to the run's own source.
+- =nix= (classic): a conventional entrypoint =sower.nix= at the repository
+  root exposes the same shape (=pipelines.<name>=, =environments.<name>=);
+  evaluation uses the path-based evaluator (the dual mode =Nix.Eval=
+  already implements).
+
+Evaluation is *pure* in both modes: every external input must be
+content-addressed — the flake lock in flake mode; niv/npins-style pins or
+hashed fetches in classic mode. Unhashed fetches and =NIX_PATH= are
+rejected. This is what "the definition cannot introduce moving inputs"
+means, independent of mode. Classic mode is capability-equal and
+ergonomically second-class: purity is enforced rather than default, and
+there is no =self= convenience.
 
 *** Run Context
 
@@ -204,13 +227,15 @@ mirrors deployment results: =success= (all items succeeded), =partial=, or
 
 *** eval
 
-Evaluates a flake attribute and emits one item per derivation found,
-streaming as evaluation proceeds. Maps onto the existing =Nix.Eval.Jobs=
-worker-pool machinery (=sower-build --eval-jobs= / =--memory-limit=).
+Evaluates an attribute of the run's source and emits one item per
+derivation found, streaming as evaluation proceeds. Maps onto the existing
+=Nix.Eval.Jobs= worker-pool machinery (=sower-build --eval-jobs= /
+=--memory-limit=), including its flake and path dual mode.
 
 | Field        | Type   | Required | Default | Description                                        |
 |--------------+--------+----------+---------+----------------------------------------------------|
-| flake        | string | no       | self    | Flake ref. =self= is the flake defining the pipeline, pinned at submission. |
+| flake        | string | no       | run source | Flake ref to evaluate (flake mode).             |
+| file         | string | no       | run source | Nix file to evaluate (classic mode).            |
 | attr         | string | yes      |         | Attribute to evaluate (recursed into).             |
 | workers      | int    | no       | 8       | Parallel eval workers.                             |
 | memory_limit | int    | no       | none    | Per-worker memory ceiling, same semantics as =sower-build --memory-limit=. |
@@ -301,13 +326,14 @@ required action on the step is a future consideration.
 
 *** check
 
-Runs a flake app and interprets its exit code: zero passes, non-zero fails.
+Runs the executable of an evaluated derivation and interprets its exit
+code: zero passes, non-zero fails.
 Without =wait=, a single attempt — a gate. With =wait=, retries until success
 or deadline. Appends to =checks= (app, attempts, passed).
 
 | Field | Type    | Required | Default | Description                                    |
 |-------+---------+----------+---------+------------------------------------------------|
-| app     | string   | yes      |         | Installable in the pipeline flake, run via =nix run <flake>#<app>=. |
+| app     | string   | yes      |         | Attrpath in the pipeline source evaluating to a derivation with an executable (flake app or =meta.mainProgram=); the engine builds and runs it. |
 | args    | string[] | no       | []      | Extra arguments appended after =--=.           |
 | wait    | object   | no       | none    | ={ "timeout": "10m", "interval": "15s" }= — retry until success or deadline. |
 | env     | object   | no       | {}      | Static environment variables. Literal strings only — dynamic data arrives via the item on stdin. |
@@ -315,19 +341,20 @@ or deadline. Appends to =checks= (app, attempts, passed).
 
 *** effect
 
-Runs a flake app for its side effect. Same invocation convention as =check=;
-no retry. Appends to =effects= (app, exit_code).
+Runs the executable of an evaluated derivation for its side effect. Same
+invocation convention as =check=; no retry. Appends to =effects=
+(app, exit_code).
 
 | Field | Type     | Required | Default | Description                        |
 |-------+----------+----------+---------+------------------------------------|
-| app     | string   | yes      |         | Installable in the pipeline flake. |
+| app     | string   | yes      |         | Attrpath in the pipeline source, as in =check=. |
 | args    | string[] | no       | []      | Extra arguments after =--=.        |
 | env     | object   | no       | {}      | Static environment variables. Literal strings only. |
 | secrets | string[] | no       | []      | Named secrets mounted for this invocation (see Secrets). |
 
-Effects and checks are restricted to =nix run=: side effects are pinned in
-the same closure discipline as everything else. Arbitrary argv is rejected
-at validation.
+Effects and checks are restricted to built executables: side effects are
+pinned in the same closure discipline as everything else. Arbitrary argv
+is rejected at validation.
 
 ** Item Context Convention
 
@@ -346,7 +373,7 @@ Server-side steps (=resolve=, =deploy=) are engine operations and accept no
 references; all software configuration is Nix.
 
 The default guest is the sower *stock image*: prebuilt, shipped with the
-builder, requiring no user-flake evaluation. Builtin steps need the sower
+builder, requiring no user-source evaluation. Builtin steps need the sower
 machinery it provides and default to it; specifying =environment= is the
 exception — chiefly for =check= and =effect=, or to control eval's
 toolchain (a different Nix version changes eval results, which is why the
@@ -368,9 +395,10 @@ that reach out.
 
 *** environment
 
-An installable in the pipeline flake producing a complete guest system,
-assembled with =sower.lib.mkEnvironment= (sower is a flake input to the
-pipeline flake). The user writes ordinary NixOS modules — extra packages,
+An installable in the pipeline source producing a complete guest system,
+assembled with =sower.lib.mkEnvironment= (sower as a flake input, or
+imported as a plain Nix library in classic mode — sower is consumable
+without flakes). The user writes ordinary NixOS modules — extra packages,
 services (a per-step database for an integration check), container
 support — and =mkEnvironment= composes them onto the sower base module:
 
@@ -399,9 +427,10 @@ cross-component contract; builders reject images whose marker is missing
 or out of range. There is no supported path to an environment that
 bypasses =mkEnvironment=.
 
-Everything in the environment is pinned by the pipeline flake's lock —
-nixpkgs, the user's modules, and the sower base they compose against; the
-definition cannot introduce moving inputs. The VM is ephemeral: services
+Everything in the environment is pinned by the source's content-addressed
+inputs — nixpkgs, the user's modules, and the sower base they compose
+against; pure evaluation enforces that the definition cannot introduce
+moving inputs. The VM is ephemeral: services
 start with the step and die with it, which is the hermetic semantic steps
 already promise.
 
@@ -520,7 +549,7 @@ Builtin steps skip when their key matches a previously successful execution:
 
 | Step   | Key                                                |
 |--------+----------------------------------------------------|
-| eval   | pinned flake (locked rev) + attr + environment closure |
+| eval   | pinned source rev + attr + environment closure     |
 | build  | drv_path                                           |
 | push   | out_paths + cache url                              |
 | seed   | artifact + seed_type + name + tags                 |
@@ -529,7 +558,9 @@ Builtin steps skip when their key matches a previously successful execution:
 Keys are declared per kind — fields outside the key (metadata, timestamps)
 never invalidate. The environment joins eval's key because the toolchain
 can change evaluation results; build's key stays =drv_path= alone — the
-derivation fully determines its output. =check= and =effect= are never
+derivation fully determines its output. Rev-based keys are sound in both
+source modes: pure evaluation means the rev transitively covers every
+content-addressed external. =check= and =effect= are never
 skipped. Neither is =resolve= — it is a cheap query against live registry
 state. Re-running a pipeline after a failed canary re-evaluates nothing,
 rebuilds nothing, and resumes at the deploy.
@@ -600,8 +631,9 @@ cron and the source (repository and branch) live on the server-side
 registered pipeline resource — matching where subscriptions keep their
 =schedule= — not in the flake.
 
-A scheduled pipeline points at a moving flake ref. At run start the server
-resolves and pins it; =self= means that pinned rev for the whole run.
+A scheduled pipeline points at a moving source ref. At run start the
+server resolves and pins it; the run's source means that pinned rev for
+the whole run.
 Memoization then turns the schedule into a polling model: an unchanged input
 no-ops in seconds (eval keyed on the locked rev, builds on drv paths,
 deploys on artifact and garden), while a change flows exactly as far as it
@@ -624,7 +656,7 @@ Every run proceeds in a fixed order:
 4. Validate the resulting definition.
 5. Execute.
 
-Admission runs *before* evaluation: evaluating a flake is the first
+Admission runs *before* evaluation: evaluating Nix source is the first
 execution of repository content, and untrusted content should not get that
 far.
 
@@ -674,8 +706,9 @@ Validation at submission:
 5. Collection/scalar shape: =items.from= must reference a phase, not a
    single item; step refs like =deploy.seeds= entries must reference items
    or single-item phases.
-6. =effect=/=check= apps and =environment= refs are flake installables;
-   arbitrary commands are rejected.
+6. =effect=/=check= apps and =environment= refs are attrpaths in the
+   pipeline source evaluating to derivations; arbitrary commands are
+   rejected.
 7. Garden names resolve against registered gardens.
 8. Declared =secrets= resolve against the org's secret store; =vm.caches=
    entries resolve against registered cache resources.
@@ -841,8 +874,12 @@ in
 - *The JSON contract is normative; Nix is the blessed front-end.* Other
   front-ends may exist later; they all produce the same contract.
 - *Phases, not stages.* =stage= is a policy action and stays that way.
-- *Effects and checks are =nix run= only.* Pinned side effects; no arbitrary
-  argv.
+- *Effects and checks are built executables only.* Side effects pinned in
+  closures; no arbitrary argv.
+- *Flakes are the blessed source mode, not a requirement.* Classic Nix is
+  capability-equal via the =sower.nix= entrypoint, with purity enforced;
+  the contract never records the mode. Sower itself is importable without
+  flakes.
 - *Item context via stdin JSON.* No templating language in the definition.
 - *Streaming is the default; barriers are explicit* — either =needs= or a
   data-flow ref on a whole phase.
