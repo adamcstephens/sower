@@ -47,6 +47,9 @@ denies.
   sower-provided base. The contract carries only resources and references.
 - Deployment policy is evaluated as usual on every garden. Pipelines
   introduce a new trigger; they do not bypass policy.
+- Definitions react to trust signals; they never grant authority.
+  Capabilities and secret access are computed server-side from the same
+  run context the definition sees.
 
 ** Model
 
@@ -122,12 +125,17 @@ Conditional phases and steps are therefore ordinary Nix — there is no
 condition language in the contract. Wildcard branch matching is
 =lib.hasPrefix= or =builtins.match=.
 
-| Field   | Description                                                        |
-|---------+--------------------------------------------------------------------|
-| branch  | Branch the run was resolved from.                                  |
-| rev     | The pinned revision.                                               |
-| trigger | What started the run (manual, schedule).                           |
-| signer  | Verified signer identity, when run admission verified one (see Run Admission). |
+| Field      | Description                                                     |
+|------------+-----------------------------------------------------------------|
+| branch     | Source branch the run was resolved from.                        |
+| rev        | The pinned revision the run executes (the synthetic merge, in merge mode). |
+| trigger    | What started the run (manual, schedule, push, pull_request, tag). |
+| mode       | =head= or =merge= (see Run Modes).                              |
+| target     | Target branch of a merge run.                                   |
+| target_rev | Pinned target head of a merge run.                              |
+| source_rev | Pinned source-branch head of a merge run.                       |
+| pr         | Pull request data: number, source repo, whether it is a fork.   |
+| signature  | Recorded verification result: verified, key, enrolled — per parent in merge mode (see Run Admission). |
 
 The context is an open set — fields will be added. Take =ctx= whole or
 destructure with =...=; exact destructuring breaks when fields appear. The
@@ -523,6 +531,45 @@ under =/run/sower/secrets/<name>=. Files, not environment variables — env
 vars leak through =/proc=, child processes, and shell tracing. =env= is for
 non-secret configuration only.
 
+*Access* is rule-based, on the secret resource, evaluated by the server
+against the run context — never by the definition, which in a PR run is
+authored by the party requesting the secret. The rule shape is deployment
+policy's: allow-only, unordered any-match, fields ANDed within a rule,
+omitted field means any. The vocabulary is a *closed* set of context
+dimensions — =refs=, =modes=, =forks=, =signed_by=, =triggers=,
+=pipelines= — so rules stay data.
+
+#+begin_src json
+"access": [
+  { "refs": ["main"] },
+  { "refs": ["release/*"], "signed_by": ["key-release"] },
+  { "refs": ["*"], "triggers": ["manual"], "forks": false }
+]
+#+end_src
+
+Read: runs of =main= always; runs of =release/*= only when the executing
+commit is signed by the release key; any other branch only for manual,
+non-fork runs. =refs= matches the run's *source* ref. =modes= matters
+because only a =head= run's signature covers the exact tree executing —
+high-stakes secrets pair =signed_by= with =modes: ["head"]=.
+
+A secret with no rules (or an empty list) gets a documented narrow
+default:
+
+#+begin_src json
+[ { "refs": ["<default branch>"], "modes": ["head"], "forks": false } ]
+#+end_src
+
+so a fresh secret works for runs of the default branch's own code and
+nowhere dangerous. Any explicit rules replace the default entirely — no
+merging, exactly as deployment policy behaves. There is no rule spelling
+for "deny everyone": a secret nobody may read is equivalent to deleting
+it.
+
+Rules are evaluated at run start (the courtesy — a denied declaration
+fails validation with a clear error) and enforced at injection (the
+boundary — the host never mounts what the rules do not grant).
+
 ** Item Payload
 
 Items accrete fields as they flow. All fields are snake_case JSON.
@@ -645,13 +692,67 @@ deployment holds garden-side until policy permits or the deploy step's
 =timeout= expires; aligning the run schedule with wave windows is an
 operator concern, with the timeout as backstop.
 
+** Repository Input
+
+*** Triggers
+
+What starts a run is configured on the server-side pipeline resource,
+never in the definition — mode selection decides which tree the
+definition is read from, so it must precede reading it:
+
+| Trigger      | Runs on                                                                |
+|--------------+------------------------------------------------------------------------|
+| manual       | The requested ref's head.                                              |
+| schedule     | The configured branch's head (see Scheduled Runs).                     |
+| push         | The pushed branch's head, with branch filters.                         |
+| pull_request | A synthetic merge of the PR into its target (default), or the PR head. |
+| tag          | The tagged commit.                                                     |
+
+Forge adapters (webhook integration per forge) may be implemented
+incrementally; the trigger contract and context fields are fixed now so
+adapters slot in without contract changes.
+
+*** Run Modes
+
+A run executes in one of two checkout modes:
+
+- =head=: a real branch commit — durable, addressable, signed or not.
+  Every property in this spec holds directly.
+- =merge=: a server-synthesized merge of a source branch into a target,
+  for PR validation ("what would the target become"). The server fetches
+  both heads, records signature verification for *both parents*, and
+  synthesizes the merge itself; a conflict fails the run at admission
+  with a distinct outcome, before anything executes. The merge SHA is
+  ephemeral and reachable from no branch.
+
+Merge-mode eval memoization rarely hits (the synthetic rev moves whenever
+either parent moves); drv-level build dedup absorbs most of the cost.
+
+*** Sources Are Inputs
+
+Builtin steps never fetch repositories at run time. External sources
+enter as pinned inputs of the pipeline source (flake inputs,
+niv/npins-style pins) — a lock bump is a reviewable commit, and the run's
+rev then covers exactly what was used. Inputs are fetched by hash
+(fixed-output derivations are the sanctioned mechanism — the hash makes
+them content-addressed despite touching the network) or substituted from
+a cache; private inputs use scoped read credentials minted like any other
+step credential.
+
+The honest boundary: an =effect= or =check= with =network= set to =full=
+can fetch anything, and no engine can prevent it. Anything fetched at run
+time is outside provenance, memoization, and admission — if it affects
+what gets built or deployed, it must be an input. Runtime fetching is for
+genuinely external interaction, which is what effects are for.
+
 ** Run Admission
 
 Every run proceeds in a fixed order:
 
-1. Resolve the source ref and pin the revision.
-2. Verify the pipeline resource's admission policy against the pinned
-   revision.
+1. Resolve the source ref(s) and pin the revision — both parents for a
+   merge run.
+2. Admission: evaluate the pipeline resource's policy → *allow*, *hold*,
+   or *deny* — and compute the run's capability set.
 3. Evaluate the pipeline attribute (with run context).
 4. Validate the resulting definition.
 5. Execute.
@@ -662,23 +763,60 @@ far.
 
 The admission policy lives on the server-side pipeline resource, never in
 the flake — a requirement evaluated from the revision it gates can be
-removed by the same commit it should have stopped. Initially one policy
-kind: commit signature requirements.
+removed by the same commit it should have stopped.
+
+*** Signatures
+
+Signature verification always runs; its result is recorded into the run
+context (=ctx.signature=) whether or not the policy requires it.
+Requiring it is a per-pipeline choice:
 
 | Policy           | What it provides                                       |
 |------------------+--------------------------------------------------------|
+| none required    | Verification is recorded for policy and definition use; nothing is gated. |
 | any signature    | Hygiene only. Any key can sign anything; this attests that signing infrastructure works, not that the author was authorized. |
 | allowlisted keys | A real boundary: trust moves from "whoever can write to the repository" to "whoever holds an enrolled key". Defends against forge and repository-credential compromise. |
 
-A commit signature covers the tree hash, so verifying the pinned revision's
-signature covers the full content of the run. Known limits: an authorized
-signer's merge commit blesses whatever it merges; the boundary is only as
-strong as key custody; and signatures do not prevent pointing a run at an
-old, signed, vulnerable revision — downgrade protection needs monotonic
-source pinning (Future Considerations).
+A commit signature covers the tree hash, so a verified =head= run's
+signature covers the exact tree executing. A =merge= run can never make
+that statement: only its parents were verified; the executing tree is a
+server-authored combination. Known limits: an authorized signer's merge
+commit blesses whatever it merges; the boundary is only as strong as key
+custody; and signatures do not prevent pointing a run at an old, signed,
+vulnerable revision — downgrade protection needs monotonic source pinning
+(Future Considerations).
 
-The verified signer identity is passed into the run context (=ctx.signer=)
-so definitions can make soft decisions on it; the hard gate is admission.
+One verification, three consumption tiers: an optional hard gate (this
+policy), server-side capability and secret decisions (below), and soft
+definition logic (=ctx.signature=). Security-bearing decisions are always
+the server's, evaluated against the context — never the definition's,
+which in a PR run is authored by the very party being judged.
+
+*** Hold
+
+=hold= parks the run pending operator approval before anything evaluates
+or executes — for origins the policy distrusts (forks, unsigned commits,
+first-time contributors). This guards builder compute as much as secrets.
+It is the run-level analog of deployment policy's =confirm=.
+
+*** Capabilities
+
+Admission computes the run's capability set from trigger, mode, fork
+provenance, signature result, and pipeline policy:
+
+| Capability           | =head= run                                                    | =merge= run                                                            |
+|----------------------+---------------------------------------------------------------+------------------------------------------------------------------------|
+| eval, build, resolve | yes                                                           | yes                                                                    |
+| push                 | policy-decidable; conservative default for forks and unsigned runs (quarantine cache or none) | same                                                                   |
+| seed                 | policy-decidable; default deny for forks and unsigned runs    | never — the ephemeral SHA would be provenance pointing at a commit that will cease to exist |
+| deploy               | policy-decidable                                              | never — denied outright, not just transitively; validation runs have no business touching gardens |
+| secrets              | per-secret access rules (see Secrets)                         | same rules; =merge= mode matches only rules that allow it              |
+
+Enforcement is layered, deliberately redundantly: run-start validation
+rejects definitions exceeding the run's capabilities with a clear error
+(the courtesy); the credential minter refuses to mint authority the run
+does not have, the server refuses server-side steps, and the host mounts
+only granted secrets (the boundary).
 
 ** Definition Contract
 
@@ -710,8 +848,11 @@ Validation at submission:
    pipeline source evaluating to derivations; arbitrary commands are
    rejected.
 7. Garden names resolve against registered gardens.
-8. Declared =secrets= resolve against the org's secret store; =vm.caches=
-   entries resolve against registered cache resources.
+8. Declared =secrets= resolve against the org's secret store and must be
+   admitted by their access rules for this run; =vm.caches= entries
+   resolve against registered cache resources.
+9. The definition must not exceed the run's capability set — e.g. =seed=
+   or =deploy= steps in a merge run are rejected.
 
 The contract schemas belong in =sower_client= (OpenApiSpex, registered in
 =sower_client.ex=) and are covered by the contract baseline like every other
@@ -914,11 +1055,23 @@ in
 - *Environment sources may be pinned by branch or rev*, defaulting to the
   run's own rev. Pinned revs pass the same admission verification as the
   run source.
+- *Triggers, PRs, and merge runs are first-class contract.* Forge
+  adapters may lag; the contract does not.
+- *Signature verification always runs and is recorded in context.*
+  Requiring it is per-pipeline admission policy.
+- *Runs carry server-computed capability sets.* Merge runs are
+  validation-only — no seed, no deploy — on provenance grounds.
+- *Secret access is rule-based over run context*, evaluated server-side,
+  with a narrow non-empty default in deployment policy's style.
+- *External sources are pinned inputs.* Builtin steps never fetch
+  repositories at run time.
 
 ** Future Considerations
 
-- Pipeline triggers beyond manual/API and schedules (git events, webhooks).
-  Run-state observation contract lives with the scheduler spec.
+- Per-forge trigger adapters (github, forgejo) — the trigger contract is
+  fixed; adapters land incrementally. Run-state observation contract
+  lives with the scheduler spec.
+- Quarantine cache design for untrusted runs (builder spec).
 - A builtin =promote= step (seed tag mutation) formalizing the channel
   handoff between pipelines and subscriptions.
 - Richer =resolve= selection (by subscription, seed type) beyond garden
