@@ -125,7 +125,7 @@ attribute name.
 | steps       | step[] | yes      |           | Chain applied to each item, in order.                |
 | concurrency | int    | no       | engine    | Max items in flight in this phase.                   |
 | vm          | object | no       | pipeline default | Default VM resources for this phase's steps (see Execution Environment). |
-| environment | string | no       | pipeline default | Default environment for this phase's steps.   |
+| environment | string or object | no | pipeline default | Default environment for this phase's steps. |
 
 For a build phase, =concurrency= is the item-level parallelism that
 =sower-build --build-jobs= expresses today.
@@ -195,7 +195,7 @@ Every step accepts:
 | kind        | string | yes      |               | One of the kinds below.         |
 | timeout     | string | no       | kind-specific | Per-attempt execution limit.    |
 | vm          | object | no       | phase default | VM resources (see Execution Environment). |
-| environment | string | no       | phase default | Environment module ref (see Execution Environment). |
+| environment | string or object | no | phase default | Environment ref, optionally source-pinned (see Execution Environment). |
 
 A step failure fails its item: the rest of the chain is skipped for that
 item, and the item does not flow to consumers. The phase's aggregate result
@@ -409,6 +409,38 @@ How the guest reaches the Nix store (shared from the host or hydrated from
 a cache) is a builder concern, out of scope here; the contract is agnostic
 to it.
 
+*** Environment pinning
+
+The =environment= ref optionally pins its source:
+
+| Form                                                      | Materialized from                              |
+|-----------------------------------------------------------+------------------------------------------------|
+| ="environments/integration"=                              | The run's own pinned rev (default).            |
+| ={ "attr": "environments/integration", "ref": "main" }=   | =main=, resolved and pinned once at run start. |
+| ={ "attr": "environments/integration", "rev": "aaaaaa" }= | That rev, frozen until the pin is edited.      |
+
+The string form is shorthand for ={ "attr": ... }=.
+
+Pinning is the cheap answer to materialization cost: under the default,
+every feature branch's first run pays a materialization because its rev
+differs from main's; with =ref= pointing at =main=, all branches share
+main's image and re-materialization happens only when main moves. A =rev=
+pin never re-materializes until the pin itself changes — invalidation is a
+reviewed diff.
+
+The trade is explicit staleness: a branch that edits environment modules
+without moving the pin keeps running the pinned image — deliberately not
+what that branch's tree defines. The escape hatch composes with run
+context: point =ref= at =ctx.branch= (or drop the pin) while iterating on
+an environment, restore the pin before merge. Both the staleness and the
+override are data in the resolved definition — diffable and reviewable,
+never silent.
+
+Pinned sources go through admission: the environment's source rev is
+verified against the same admission policy as the run source before
+materialization. Without this, pinning would be a bypass channel for
+unverified code into builder VMs.
+
 *** Environment seeds
 
 Materializing an environment is the builtin chain applied to itself: an
@@ -417,9 +449,10 @@ image as a seed of a new stage-only =environment= seed type (joining the
 policy spec's actions-by-seed-type table alongside =gcroot=). The seed
 registry is the server-side tracking:
 
-- The seed's tags carry the materialization key — pinned pipeline flake
-  rev plus environment attr — which the scheduler computes *without
-  evaluating anything*, since the rev is pinned at admission.
+- The seed's tags carry the materialization key — the environment's source
+  rev (the run's rev by default, or the pinned one) plus the attr — which
+  the scheduler computes *without evaluating anything*, since revs are
+  pinned at run start. Pinning converges many runs onto one key.
 - Registry hit: the artifact path is known; builders substitute from cache
   and pin it. No evaluation anywhere.
 - Miss: materialize once, register, and every subsequent run and builder
@@ -429,12 +462,14 @@ registry is the server-side tracking:
   before a run asks. Staging already means "download and pin a closure";
   no new machinery.
 
-Cost accounting for pipelines that override stock: each new commit pays
-one environment evaluation (module definitions live in the repository, so
-the key must include the rev), in a stock VM, prefetchable off the
-critical path; the build almost always resolves to an existing store path
-and registration dedupes to a no-op. Pipelines that never specify
-=environment= pay nothing.
+Cost accounting for pipelines that override stock: with an unpinned
+environment, each new commit — and each branch's first run — pays one
+environment evaluation (module definitions live in the repository, so the
+key must include the rev), in a stock VM, prefetchable off the critical
+path; the build almost always resolves to an existing store path and
+registration dedupes to a no-op. Pinned environments pay only when the
+pin's target moves. Pipelines that never specify =environment= pay
+nothing.
 
 A failed environment is a distinct, attributed failure — "environment
 =integration= failed to build" — that transitively fails the steps
@@ -839,6 +874,9 @@ in
 - *Environments are tracked as stage-only =environment= seeds.*
   Materialization reuses the builtin chain; pre-warming reuses
   subscriptions.
+- *Environment sources may be pinned by branch or rev*, defaulting to the
+  run's own rev. Pinned revs pass the same admission verification as the
+  run source.
 
 ** Future Considerations
 
@@ -860,7 +898,9 @@ in
   mapping convenience.
 - Host capability flags on =vm= (e.g. nested virtualisation).
 - Narrower environment materialization keys (input hashing below whole-rev
-  granularity, to skip re-evaluation on unrelated commits).
+  granularity) — likely unnecessary now that source pinning exists.
+- Full flake refs as environment sources (org-shared environment
+  repositories).
 - Execution placement: eval/build/push/seed steps run on builders (today:
   wherever =sower-build= runs; eventually builder gardens per
   spec-seed-trust.org). Deploy/check coordination belongs to the server.
