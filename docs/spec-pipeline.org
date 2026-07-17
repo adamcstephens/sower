@@ -633,18 +633,27 @@ rebuilds nothing, and resumes at the deploy.
 
 ** Deploy Semantics and Policy
 
-Pipeline deployments are *targeted*: the server creates a deployment for the
-named gardens, as a manual deploy does today. Subscriptions are untouched —
-they remain the pull/matching mechanism and pipelines do not create or
-modify them.
+Pipeline deployments are *targeted* but *subscription-mediated*: at
+dispatch, the server finds a subscription on the target garden whose
+matching rules match the seed being deployed, and the deployment carries
+that subscription — the garden-side policy lookup works exactly as it does
+for every other deployment, evaluated with the =pipeline= trigger. A
+garden with no matching subscription fails the deploy item at run-start
+validation with an attributed error, before anything dispatches.
+
+Breadth is a property of matching rules: a garden that should accept
+arbitrary pipeline deploys carries a *catch-all subscription* — match-all
+rules, a policy granting only the =pipeline= trigger, no schedule. That is
+not a workaround; it is the garden explicitly declaring what pipelines may
+put there, in reviewable configuration. Pipelines never create or modify
+subscriptions.
 
 Policy interplay:
 
 - A new policy trigger =pipeline= is added, with audit reason
   =pipeline_triggered=. Both are additive enum changes.
 - The default policy does *not* include =pipeline= — like =realtime=, it is
-  an explicit opt-in. A garden participates in pipeline rollouts only if its
-  subscription policy grants actions for the =pipeline= trigger.
+  an explicit opt-in in the matching subscription's policy.
 - =confirm: true= rules hold the deployment pending approval as usual; the
   deploy step's =timeout= bounds how long the pipeline waits.
 - The never-strand principle is unaffected: pipelines add a way to deploy,
@@ -743,6 +752,11 @@ A run executes in one of two checkout modes:
   synthesizes the merge itself; a conflict fails the run at admission
   with a distinct outcome, before anything executes. The merge SHA is
   ephemeral and reachable from no branch.
+
+Merge mode exists only through the =pull_request= trigger, and the target
+is always the PR's declared base branch — never requester-chosen. Manual,
+scheduled, push, and tag runs are always =head=; there is no way to
+request a synthetic merge by hand.
 
 Merge-mode eval memoization rarely hits (the synthetic rev moves whenever
 either parent moves); drv-level build dedup absorbs most of the cost.
@@ -866,7 +880,8 @@ Validation at submission:
 6. =effect=/=check= apps and =environment= refs are attrpaths in the
    pipeline source evaluating to derivations; arbitrary commands are
    rejected.
-7. Garden names resolve against registered gardens.
+7. Garden names resolve against registered gardens; deploy targets must
+   hold a subscription matching the deployed seeds.
 8. Declared =secrets= resolve against the org's secret store and must be
    admitted by their access rules for this run; =vm.caches= entries and
    =push.cache= resolve against registered cache resources.
@@ -876,6 +891,22 @@ Validation at submission:
 The contract schemas belong in =sower_client= (OpenApiSpex, registered in
 =sower_client.ex=) and are covered by the contract baseline like every other
 cross-component schema.
+
+** Pipeline Resource
+
+The server-side registered pipeline — the operator-owned half of the
+contract, holding everything that must not live in the repository. The
+definition says what a run does; the resource says what runs, when, and
+with how much trust. Consolidated here; each field's semantics are
+normative in the referenced section.
+
+| Field        | Description                                                            | Section                         |
+|--------------+------------------------------------------------------------------------+---------------------------------|
+| source       | Repository, branch, source mode (=flake=/=nix=), entrypoint attribute. | Definition Format, Source Modes |
+| triggers     | Enabled triggers and their filters (push branches, pull_request).      | Repository Input                |
+| schedule     | Cron for scheduled runs.                                               | Scheduled Runs                  |
+| admission    | Signature policy and hold rules.                                       | Run Admission                   |
+| capabilities | Policy knobs for fork and unsigned runs (seed, push defaults).         | Run Admission                   |
 
 ** Examples
 
@@ -1087,8 +1118,13 @@ in
 - *Engine-owned operations are builtin kinds* (eval, build, push, seed,
   deploy) reusing the existing =sower-build= step vocabulary; =effect= is
   the extension point.
-- *Pipeline deploys are targeted deployments gated by a new opt-in
-  =pipeline= policy trigger.* Subscriptions are not involved in dispatch.
+- *Pipeline deploys are targeted but subscription-mediated.* Dispatch
+  requires a subscription on the garden matching the seed; its policy is
+  evaluated with the opt-in =pipeline= trigger. Catch-all subscriptions
+  are the sanctioned wide-open configuration.
+- *Merge runs come only from =pull_request= triggers.* The target is the
+  PR's declared base; manual, scheduled, push, and tag runs are always
+  =head=.
 - *=resolve= reuses subscriptions.* Deploy-only pipelines resolve existing
   subscription matching rules; there is no second matching concept.
 - *Resolution is a snapshot.* Later waves deploy what earlier phases
