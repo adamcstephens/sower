@@ -54,16 +54,16 @@ is the single point that enforces operator policy.
 
 ### Actors
 
-| Actor | Role | Trusted? |
-|----|----|----|
-| Operator | Owns the fleet; pins roots of trust | Yes (the human root) |
-| Main server | Orchestrates deployments, stores metadata, web UI | **No** (defended against) |
-| Issuer / STS | Authenticates builders, mints short-lived signer creds | Yes (minimal, isolated) |
-| Builder garden | Evals/builds/caches/signs seeds (optional capability) | Partially (scoped) |
-| Consumer garden | Realizes + activates seeds as root | Self only |
-| Transparency log | Timestamps/records signatures for offline verification | Yes (minimal, append-only) |
-| Network | Path between all components | **No** |
-| External git repo | Build input (source of truth for what is built) | Per operator-pinned mapping |
+| Actor             | Role                                                   | Trusted?                    |
+| ----------------- | ------------------------------------------------------ | --------------------------- |
+| Operator          | Owns the fleet; pins roots of trust                    | Yes (the human root)        |
+| Main server       | Orchestrates deployments, stores metadata, web UI      | **No** (defended against)   |
+| Issuer / STS      | Authenticates builders, mints short-lived signer creds | Yes (minimal, isolated)     |
+| Builder garden    | Evals/builds/caches/signs seeds (optional capability)  | Partially (scoped)          |
+| Consumer garden   | Realizes + activates seeds as root                     | Self only                   |
+| Transparency log  | Timestamps/records signatures for offline verification | Yes (minimal, append-only)  |
+| Network           | Path between all components                            | **No**                      |
+| External git repo | Build input (source of truth for what is built)        | Per operator-pinned mapping |
 
 ### What an attacker must not be able to do
 
@@ -117,27 +117,27 @@ eval/build (sandboxed)  --> sign closure (ephemeral) ----------/ (record)
      |  substitute (require-sigs)| deployment msg (store path only)
      v                          v
 +-----------------------------------------------+
-| consumer garden  (sower-garden, non-root)     |
-|   nix-store --realize  (daemon enforces sigs) |
-|             |                                 |
-|             v                                 |
-|   ACTIVATOR (root) -- ENFORCES operator policy|
-|     - attestation chains to issuer root?      |
-|     - signer in tenant's allowed builders?    |
-|     - built from authorized repo/ref?         |
-|     - version >= floor (or signed rollback)?  |
-|     => switch-to-configuration                |
+| consumer garden  (sower-garden, non-root)    |     |
+| nix-store --realize  (daemon enforces sigs)  |     |
+|                                              |     |
+| v                                            |     |
+| ACTIVATOR (root) -- ENFORCES operator policy |     |
+| - attestation chains to issuer root?         |     |
+| - signer in tenant's allowed builders?       |     |
+| - built from authorized repo/ref?            |     |
+| - version >= floor (or signed rollback)?     |     |
+| => switch-to-configuration                   |     |
 +-----------------------------------------------+
 ```
 
 ### Two distinct verification layers (do not conflate)
 
-| Layer | Question answered | Mechanism |
-|----|----|----|
-| Cache/transport | "Is this NAR untampered in transit?" | nix `require-sigs` + stable key in |
-| integrity |  | `trusted-public-keys` (low stakes) |
-| Authorization | "Is this builder allowed to produce | app-layer attestation verified in the |
-| (the real boundary) | this seed for this target?" | activator against operator-pinned roots |
+| Layer               | Question answered                    | Mechanism                               |
+| ------------------- | ------------------------------------ | --------------------------------------- |
+| Cache/transport     | "Is this NAR untampered in transit?" | nix `require-sigs` + stable key in      |
+| integrity           |                                      | `trusted-public-keys` (low stakes)      |
+| Authorization       | "Is this builder allowed to produce  | app-layer attestation verified in the   |
+| (the real boundary) | this seed for this target?"          | activator against operator-pinned roots |
 
 The nix-native signature model is **flat** (`key:sig` verified against a
 static `trusted-public-keys`, requires ≥1 trusted sig, no identity/cert
@@ -266,18 +266,18 @@ and run it to do the first `switch`.
 
 ## Compromise Analysis (target architecture)
 
-| Compromised component | Can do | Cannot do |
-|----|----|----|
-| Main server | Choose among already-authorized, correctly-targeted, | Forge code; mint signer creds; re-point trust; redirect build inputs; |
-| (the likely target) | monotonic seeds; withhold/delay/DoS; read store-path metadata | downgrade (version floor); cross-tenant; root the fleet |
-| Issuer / STS | Mint signer creds → sign seeds gardens accept → fleet RCE | Hide it: transparency log makes misuse detectable. (Hence: tiny, |
-| (THE trusted node) | within verification policy | isolated, HSM-backed, monitored) |
-| Builder garden | Sign malicious seeds for **its** tenant/targets during the | Affect other tenants; sign after cred expiry; evade provenance |
-|  | short cred window | (repo+SHA logged) |
-| Network (MITM) | (With TLS floor) nothing beyond traffic analysis | Forge signatures; inject deployments (activator verifies attestation) |
-| Single consumer garden | Act as itself within its own tenant/garden | Sign seeds; affect other gardens (channel garden_id + tenant binding) |
-| Authorized git repo | Get malicious code built+signed for targets bound to that | Affect targets not bound to that repo; steal builder cred (sandboxed |
-| (push access) | repo | eval); build from unauthorized refs (signed/pinned) |
+| Compromised component  | Can do                                                        | Cannot do                                                             |
+| ---------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Main server            | Choose among already-authorized, correctly-targeted,          | Forge code; mint signer creds; re-point trust; redirect build inputs; |
+| (the likely target)    | monotonic seeds; withhold/delay/DoS; read store-path metadata | downgrade (version floor); cross-tenant; root the fleet               |
+| Issuer / STS           | Mint signer creds → sign seeds gardens accept → fleet RCE     | Hide it: transparency log makes misuse detectable. (Hence: tiny,      |
+| (THE trusted node)     | within verification policy                                    | isolated, HSM-backed, monitored)                                      |
+| Builder garden         | Sign malicious seeds for **its** tenant/targets during the    | Affect other tenants; sign after cred expiry; evade provenance        |
+|                        | short cred window                                             | (repo+SHA logged)                                                     |
+| Network (MITM)         | (With TLS floor) nothing beyond traffic analysis              | Forge signatures; inject deployments (activator verifies attestation) |
+| Single consumer garden | Act as itself within its own tenant/garden                    | Sign seeds; affect other gardens (channel garden_id + tenant binding) |
+| Authorized git repo    | Get malicious code built+signed for targets bound to that     | Affect targets not bound to that repo; steal builder cred (sandboxed  |
+| (push access)          | repo                                                          | eval); build from unauthorized refs (signed/pinned)                   |
 
 ### Irreducible residuals
 
@@ -291,17 +291,17 @@ and run it to do the first `switch`.
 
 ## Relationship to Current Code (what changes)
 
-| Area | Today | Target |
-|----|----|----|
-| `src/commands/seed/ops.rs` | Passes server-supplied cache key to | Never pass server keys; rely on operator-pinned host config / |
-| (`caches_to_flags`, ~97) | `--extra-trusted-public-keys` (CLI runs as root) | operator-supplied `NIX_CONFIG`; keep `require-sigs` |
-| `GET /api/v1/nix/caches` | Returns `url` + `public_key` used as trust anchor | Advisory substituter URL only (or removed); no trust key |
-| `nix/nixos/garden.nix` | No `nix.settings` trust pinned; relies on host defaults | Operator-required `trusted-public-keys` + `substituters`; |
-|  |  | keep `sower-garden` out of `trusted-users` (load-bearing) |
-| Activator | Validates only `/nix/store` prefix + `..` (`handler.rs:125`); | Verifies attestation (issuer root, tenant, source, version) |
-| `src/commands/activator/` | activates any path as root | before activation — the enforcement point (D4) |
-| Bootstrap | `curl \| chmod +x \| eval` a raw binary (`bootstrap_controller`) | Convey store path only; CLI provisioned as signed closure |
-| Seed `artifact` field | Free-form string, no validation | Validate store-path grammar at API + garden; carry attestation |
+| Area                       | Today                                                            | Target                                                         |
+| -------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------- |
+| `src/commands/seed/ops.rs` | Passes server-supplied cache key to                              | Never pass server keys; rely on operator-pinned host config /  |
+| (`caches_to_flags`, ~97)   | `--extra-trusted-public-keys` (CLI runs as root)                 | operator-supplied `NIX_CONFIG`; keep `require-sigs`            |
+| `GET /api/v1/nix/caches`   | Returns `url` + `public_key` used as trust anchor                | Advisory substituter URL only (or removed); no trust key       |
+| `nix/nixos/garden.nix`     | No `nix.settings` trust pinned; relies on host defaults          | Operator-required `trusted-public-keys` + `substituters`;      |
+|                            |                                                                  | keep `sower-garden` out of `trusted-users` (load-bearing)      |
+| Activator                  | Validates only `/nix/store` prefix + `..` (`handler.rs:125`);    | Verifies attestation (issuer root, tenant, source, version)    |
+| `src/commands/activator/`  | activates any path as root                                       | before activation — the enforcement point (D4)                 |
+| Bootstrap                  | `curl \| chmod +x \| eval` a raw binary (`bootstrap_controller`) | Convey store path only; CLI provisioned as signed closure      |
+| Seed `artifact` field      | Free-form string, no validation                                  | Validate store-path grammar at API + garden; carry attestation |
 
 This spec addresses review findings SECRETS-1, WIRE-1, RESTAPI-2,
 PRIVLOCAL-1, PRIVLOCAL-2, SECRETS-2 (server→garden activation trust) and

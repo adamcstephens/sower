@@ -29,16 +29,16 @@ deployment action is allowed to proceed.
 
 Actions represent what a deployment does, generalized across seed types.
 
-| Action | Description | Disruption |
-|----|----|----|
-| stage | Download and pin a closure (gcroot). No runtime changes. | None |
-| activate | Apply the configuration via the seed type's activation. | Service |
-| restart | Full machine reboot. | Full |
+| Action   | Description                                              | Disruption |
+| -------- | -------------------------------------------------------- | ---------- |
+| stage    | Download and pin a closure (gcroot). No runtime changes. | None       |
+| activate | Apply the configuration via the seed type's activation.  | Service    |
+| restart  | Full machine reboot.                                     | Full       |
 
 ### Actions by Seed Type
 
 | Seed Type    | stage | activate | restart |
-|--------------|-------|----------|---------|
+| ------------ | ----- | -------- | ------- |
 | nixos        | yes   | yes      | yes     |
 | home-manager | yes   | yes      | no      |
 | gcroot       | yes   | no       | no      |
@@ -58,7 +58,7 @@ mechanism.
 1.  NixOS
 
     | Permitted Actions  | Activation Mode | Behavior                          |
-    |--------------------|-----------------|-----------------------------------|
+    | ------------------ | --------------- | --------------------------------- |
     | activate only      | switch          | Activate immediately, set as boot |
     | activate + restart | boot            | Set as boot config, then reboot   |
     | stage only         | (none)          | Download and pin closure only     |
@@ -78,21 +78,21 @@ mechanism.
 2.  Home-manager
 
     | Permitted Actions | Activation Mode | Behavior                      |
-    |-------------------|-----------------|-------------------------------|
+    | ----------------- | --------------- | ----------------------------- |
     | activate          | switch          | Activate new generation       |
     | stage only        | (none)          | Download and pin closure only |
 
 3.  Service
 
     | Permitted Actions | Activation Mode | Behavior                      |
-    |-------------------|-----------------|-------------------------------|
+    | ----------------- | --------------- | ----------------------------- |
     | activate          | restart         | Restart the service           |
     | stage only        | (none)          | Download and pin closure only |
 
 4.  Gcroot
 
     | Permitted Actions | Activation Mode | Behavior                      |
-    |-------------------|-----------------|-------------------------------|
+    | ----------------- | --------------- | ----------------------------- |
     | stage             | (none)          | Download and pin closure only |
 
 ## Triggers
@@ -100,13 +100,13 @@ mechanism.
 Triggers represent how a deployment was initiated. These align with the
 existing `deployment_events` audit system's `reason` field.
 
-| Trigger | Audit Reason | Description | Source |
-|----|----|----|----|
-| manual | user_triggered | User clicked deploy in the UI or invoked via API | Human |
-| manual | user_retry | User retried a failed deployment | Human |
-| scheduled | schedule_triggered | Cron schedule fired and a new seed was found | Automated |
-| realtime | realtime_triggered | A matching seed was registered | Automated |
-| poll_onconnect | poll_onconnect | Garden connected and polled for pending seeds | Automated |
+| Trigger        | Audit Reason       | Description                                      | Source    |
+| -------------- | ------------------ | ------------------------------------------------ | --------- |
+| manual         | user_triggered     | User clicked deploy in the UI or invoked via API | Human     |
+| manual         | user_retry         | User retried a failed deployment                 | Human     |
+| scheduled      | schedule_triggered | Cron schedule fired and a new seed was found     | Automated |
+| realtime       | realtime_triggered | A matching seed was registered                   | Automated |
+| poll_onconnect | poll_onconnect     | Garden connected and polled for pending seeds    | Automated |
 
 Multiple audit reasons can map to the same policy trigger. The policy
 engine evaluates against the trigger column; the audit reason is
@@ -119,11 +119,11 @@ A window constrains when a rule applies based on day of week and time of
 day. Windows naturally handle overnight spans — when `time_start` is
 after `time_end`, the window wraps across midnight.
 
-| Field | Type | Required | Description |
-|----|----|----|----|
-| days | string\[\] | no | Days of the week the window is active. Omit for every day. |
-| time_start | string | yes | Start of window (HH:MM) |
-| time_end | string | yes | End of window (HH:MM) |
+| Field      | Type       | Required | Description                                                |
+| ---------- | ---------- | -------- | ---------------------------------------------------------- |
+| days       | string\[\] | no       | Days of the week the window is active. Omit for every day. |
+| time_start | string     | yes      | Start of window (HH:MM)                                    |
+| time_end   | string     | yes      | End of window (HH:MM)                                      |
 
 Day values: `mon`, `tue`, `wed`, `thu`, `fri`, `sat`, `sun`. Omitting
 `days` is equivalent to listing all seven — the window applies every
@@ -144,12 +144,12 @@ any time.
 
 A single policy rule:
 
-| Field | Type | Required | Default | Description |
-|----|----|----|----|----|
-| actions | string\[\] | yes |  | Actions this rule permits |
-| triggers | string\[\] | no | any | Triggers this rule applies to. Omit for all. |
-| window | object | no | none | Time window constraint (see Windows section) |
-| confirm | boolean | no | false | Require explicit confirmation before proceeding |
+| Field    | Type       | Required | Default | Description                                     |
+| -------- | ---------- | -------- | ------- | ----------------------------------------------- |
+| actions  | string\[\] | yes      |         | Actions this rule permits                       |
+| triggers | string\[\] | no       | any     | Triggers this rule applies to. Omit for all.    |
+| window   | object     | no       | none    | Time window constraint (see Windows section)    |
+| confirm  | boolean    | no       | false   | Require explicit confirmation before proceeding |
 
 Multiple rules are ORed (any-match). Within a rule, all fields are ANDed
 — the action, trigger, and window must all match.
@@ -160,7 +160,7 @@ Actions form a disruption hierarchy. Each level subsumes the levels
 below it:
 
 | Level | Action   | Implies         |
-|-------|----------|-----------------|
+| ----- | -------- | --------------- |
 | 3     | restart  | activate, stage |
 | 2     | activate | stage           |
 | 1     | stage    | (none)          |
@@ -291,12 +291,12 @@ deploy is triggered.
 
 The following subscription fields are replaced by policy rules:
 
-| Old Field | Replacement |
-|----|----|
-| reboot_policy | `restart` action in policy rules with window constraints |
-| allow_realtime | `realtime` trigger in policy rules |
-| poll_onconnect | `poll_on_connect` trigger in policy rules |
-| window | `window` on policy rules |
+| Old Field       | Replacement                                                                   |
+| --------------- | ----------------------------------------------------------------------------- |
+| reboot_policy   | `restart` action in policy rules with window constraints                      |
+| allow_realtime  | `realtime` trigger in policy rules                                            |
+| poll_onconnect  | `poll_on_connect` trigger in policy rules                                     |
+| window          | `window` on policy rules                                                      |
 | activation_args | Derived from permitted actions per seed type (see Activation Mode Derivation) |
 
 ### Audit Reason Alignment
@@ -304,15 +304,15 @@ The following subscription fields are replaced by policy rules:
 The existing `deployment_events.reason` enum needs updates to align with
 policy triggers:
 
-| Current Reason | Change |
-|----|----|
-| user_triggered | Keep — maps to `manual` trigger |
-| retry | Rename to `user_retry` — maps to `manual` trigger |
-| schedule_triggered | Keep — maps to `scheduled` trigger |
-| realtime_triggered | Keep — maps to `realtime` trigger |
-| (new) | Add `poll_on_connect` — maps to `poll_on_connect` trigger |
-| superseded | Keep — lifecycle event, not a trigger |
-| stale | Keep — lifecycle event, not a trigger |
+| Current Reason     | Change                                                    |
+| ------------------ | --------------------------------------------------------- |
+| user_triggered     | Keep — maps to `manual` trigger                           |
+| retry              | Rename to `user_retry` — maps to `manual` trigger         |
+| schedule_triggered | Keep — maps to `scheduled` trigger                        |
+| realtime_triggered | Keep — maps to `realtime` trigger                         |
+| (new)              | Add `poll_on_connect` — maps to `poll_on_connect` trigger |
+| superseded         | Keep — lifecycle event, not a trigger                     |
+| stale              | Keep — lifecycle event, not a trigger                     |
 
 The `poll_on_connect` audit reason is currently missing. Garden-side
 poll-on-connect deploys do not pass audit context to the server. This

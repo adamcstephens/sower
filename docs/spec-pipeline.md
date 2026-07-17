@@ -57,12 +57,12 @@ its policy denies.
 
 ## Model
 
-| Term | Meaning |
-|----|----|
-| Pipeline | A named set of phases forming a DAG via data-flow references. |
-| Phase | An item source plus a chain of steps applied to each item. |
-| Step | One operation in a phase's chain, of a builtin or user-defined kind. |
-| Item | A JSON document that flows through a phase's chain, accreting fields as each step completes. |
+| Term     | Meaning                                                                                      |
+| -------- | -------------------------------------------------------------------------------------------- |
+| Pipeline | A named set of phases forming a DAG via data-flow references.                                |
+| Phase    | An item source plus a chain of steps applied to each item.                                   |
+| Step     | One operation in a phase's chain, of a builtin or user-defined kind.                         |
+| Item     | A JSON document that flows through a phase's chain, accreting fields as each step completes. |
 
 The word **phase** is deliberate: `stage` is already a deployment policy
 action (download and pin a closure) and cannot be reused as a structural
@@ -131,17 +131,17 @@ Conditional phases and steps are therefore ordinary Nix — there is no
 condition language in the contract. Wildcard branch matching is
 `lib.hasPrefix` or `builtins.match`.
 
-| Field | Description |
-|----|----|
-| branch | Source branch the run was resolved from. |
-| rev | The pinned revision the run executes (the synthetic merge, in merge mode). |
-| trigger | What started the run (manual, schedule, push, pull_request, tag). |
-| mode | `head` or `merge` (see Run Modes). |
-| target | Target branch of a merge run. |
-| target_rev | Pinned target head of a merge run. |
-| source_rev | Pinned source-branch head of a merge run. |
-| pr | Pull request data: number, source repo, whether it is a fork. |
-| signature | Recorded verification result: verified, key, enrolled — per parent in merge mode (see Run Admission). |
+| Field      | Description                                                                                           |
+| ---------- | ----------------------------------------------------------------------------------------------------- |
+| branch     | Source branch the run was resolved from.                                                              |
+| rev        | The pinned revision the run executes (the synthetic merge, in merge mode).                            |
+| trigger    | What started the run (manual, schedule, push, pull_request, tag).                                     |
+| mode       | `head` or `merge` (see Run Modes).                                                                    |
+| target     | Target branch of a merge run.                                                                         |
+| target_rev | Pinned target head of a merge run.                                                                    |
+| source_rev | Pinned source-branch head of a merge run.                                                             |
+| pr         | Pull request data: number, source repo, whether it is a fork.                                         |
+| signature  | Recorded verification result: verified, key, enrolled — per parent in merge mode (see Run Admission). |
 
 The context is an open set — fields will be added. Take `ctx` whole or
 destructure with `...`; exact destructuring breaks when fields appear.
@@ -154,15 +154,15 @@ attribute name.
 
 ## Phases
 
-| Field | Type | Required | Default | Description |
-|----|----|----|----|----|
-| name | string | yes |  | Unique within the pipeline. Addressable in refs. |
-| items | object | no | (single implicit item) | Item source (see Item Sources). |
-| needs | ref\[\] | no | \[\] | Explicit barriers in addition to data-flow edges. |
-| steps | step\[\] | yes |  | Chain applied to each item, in order. |
-| concurrency | int | no | engine | Max items in flight in this phase. |
-| vm | object | no | pipeline default | Default VM resources for this phase's steps (see Execution Environment). |
-| environment | string or object | no | pipeline default | Default environment for this phase's steps. |
+| Field       | Type             | Required | Default                | Description                                                              |
+| ----------- | ---------------- | -------- | ---------------------- | ------------------------------------------------------------------------ |
+| name        | string           | yes      |                        | Unique within the pipeline. Addressable in refs.                         |
+| items       | object           | no       | (single implicit item) | Item source (see Item Sources).                                          |
+| needs       | ref[]            | no       | []                     | Explicit barriers in addition to data-flow edges.                        |
+| steps       | step[]           | yes      |                        | Chain applied to each item, in order.                                    |
+| concurrency | int              | no       | engine                 | Max items in flight in this phase.                                       |
+| vm          | object           | no       | pipeline default       | Default VM resources for this phase's steps (see Execution Environment). |
+| environment | string or object | no       | pipeline default       | Default environment for this phase's steps.                              |
 
 For a build phase, `concurrency` is the item-level parallelism that
 `sower-build --build-jobs` expresses today.
@@ -209,10 +209,10 @@ over a fixed set.
 
 A ref addresses a phase's output collection or a single item within it:
 
-| Form | Meaning | Resolves when |
-|----|----|----|
-| `"phase"` | The whole collection. | Phase closed with zero failed items. |
-| `"phase/item"` | One named item. | That item's chain completed successfully. |
+| Form           | Meaning               | Resolves when                             |
+| -------------- | --------------------- | ----------------------------------------- |
+| `"phase"`      | The whole collection. | Phase closed with zero failed items.      |
+| `"phase/item"` | One named item.       | That item's chain completed successfully. |
 
 Item names are assigned by the source: eval items are named by attribute
 path, garden items by garden name, static items by their `name` field.
@@ -227,12 +227,12 @@ builds pass" is a whole-collection ref.
 
 Every step accepts:
 
-| Field | Type | Required | Default | Description |
-|----|----|----|----|----|
-| kind | string | yes |  | One of the kinds below. |
-| timeout | string | no | kind-specific | Per-attempt execution limit. |
-| vm | object | no | phase default | VM resources (see Execution Environment). |
-| environment | string or object | no | phase default | Environment ref, optionally source-pinned (see Execution Environment). |
+| Field       | Type             | Required | Default       | Description                                                            |
+| ----------- | ---------------- | -------- | ------------- | ---------------------------------------------------------------------- |
+| kind        | string           | yes      |               | One of the kinds below.                                                |
+| timeout     | string           | no       | kind-specific | Per-attempt execution limit.                                           |
+| vm          | object           | no       | phase default | VM resources (see Execution Environment).                              |
+| environment | string or object | no       | phase default | Environment ref, optionally source-pinned (see Execution Environment). |
 
 A step failure fails its item: the rest of the chain is skipped for that
 item, and the item does not flow to consumers. The phase's aggregate
@@ -247,13 +247,13 @@ existing `Nix.Eval.Jobs` worker-pool machinery
 (`sower-build --eval-jobs` / `--memory-limit`), including its flake and
 path dual mode.
 
-| Field | Type | Required | Default | Description |
-|----|----|----|----|----|
-| flake | string | no | run source | Flake ref to evaluate (flake mode). |
-| file | string | no | run source | Nix file to evaluate (classic mode). |
-| attr | string | yes |  | Attribute to evaluate (recursed into). |
-| workers | int | no | 8 | Parallel eval workers. |
-| memory_limit | int | no | none | Per-worker memory ceiling, same semantics as `sower-build --memory-limit`. |
+| Field        | Type   | Required | Default    | Description                                                                |
+| ------------ | ------ | -------- | ---------- | -------------------------------------------------------------------------- |
+| flake        | string | no       | run source | Flake ref to evaluate (flake mode).                                        |
+| file         | string | no       | run source | Nix file to evaluate (classic mode).                                       |
+| attr         | string | yes      |            | Attribute to evaluate (recursed into).                                     |
+| workers      | int    | no       | 8          | Parallel eval workers.                                                     |
+| memory_limit | int    | no       | none       | Per-worker memory ceiling, same semantics as `sower-build --memory-limit`. |
 
 Each emitted item carries `attr`, `drv_path`, `system`, and `meta`
 (including `meta.sower.seed`, which is how eval-time knowledge reaches
@@ -268,7 +268,7 @@ the phase's `concurrency`. The engine deduplicates identical `drv_path`
 values across items. Adds `out_paths`.
 
 | Field                       | Type | Required | Default | Description |
-|-----------------------------|------|----------|---------|-------------|
+| --------------------------- | ---- | -------- | ------- | ----------- |
 | (none beyond common fields) |      |          |         |             |
 
 ### push
@@ -280,9 +280,9 @@ quarantine cache without touching them. The resource's URL scheme
 selects the backend as today (`niks3://`, `attic://`, otherwise
 `nix copy`). Adds `cache` (name, uploaded count).
 
-| Field | Type | Required | Default | Description |
-|----|----|----|----|----|
-| cache | string | yes |  | Registered cache resource (by name), as in `vm.caches`. |
+| Field | Type   | Required | Default | Description                                             |
+| ----- | ------ | -------- | ------- | ------------------------------------------------------- |
+| cache | string | yes      |         | Registered cache resource (by name), as in `vm.caches`. |
 
 ### seed
 
@@ -291,10 +291,10 @@ step of `sower-build` does today (`SowerClient.Seed.create`). Name,
 type, and tags come from the item's `meta.sower.seed` plus the fields
 below. Adds `seed` (sid, name, seed_type, artifact, tags).
 
-| Field | Type | Required | Default | Description |
-|----|----|----|----|----|
-| tags | object | no | {} | Extra tags merged with git/meta tags. |
-| authoritative | boolean | no | true | Same semantics as `sower-build` (rename on artifact match). |
+| Field         | Type    | Required | Default | Description                                                 |
+| ------------- | ------- | -------- | ------- | ----------------------------------------------------------- |
+| tags          | object  | no       | {}      | Extra tags merged with git/meta tags.                       |
+| authoritative | boolean | no       | true    | Same semantics as `sower-build` (rename on artifact match). |
 
 ### resolve
 
@@ -306,9 +306,9 @@ their resolved seeds produce no item. This is the registry-side twin of
 `eval`: both are entry-point steps producing a collection from a source
 of truth.
 
-| Field | Type | Required | Default | Description |
-|----|----|----|----|----|
-| gardens | object | yes |  | Garden selector, as in Item Sources. All subscriptions of the selected gardens are resolved. |
+| Field   | Type   | Required | Default | Description                                                                                  |
+| ------- | ------ | -------- | ------- | -------------------------------------------------------------------------------------------- |
+| gardens | object | yes      |         | Garden selector, as in Item Sources. All subscriptions of the selected gardens are resolved. |
 
 Resolution is a snapshot: it happens once, at its step's execution, and
 later phases deploy that snapshot even if newer seeds are registered
@@ -329,10 +329,10 @@ result via the existing `SeedDeploymentStatus` / `SeedDeploymentResult`
 channel. Adds `deployment` (sid, state, result, per-seed results,
 achieved actions).
 
-| Field | Type | Required | Default | Description |
-|----|----|----|----|----|
-| seeds | ref\[\] | no | item's seeds | Items carrying `seed` fields (i.e. produced by a chain containing a `seed` step). One deployment with one seed deployment per entry. |
-| timeout | string | no | 30m | Deadline for the garden to report a terminal result. Covers policy `confirm` holds. |
+| Field   | Type    | Required | Default      | Description                                                                                                                          |
+| ------- | ------- | -------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| seeds   | ref[]   | no       | item's seeds | Items carrying `seed` fields (i.e. produced by a chain containing a `seed` step). One deployment with one seed deployment per entry. |
+| timeout | string  | no       | 30m          | Deadline for the garden to report a terminal result. Covers policy `confirm` holds.                                                  |
 
 When `seeds` is omitted, the seeds come from the item itself — the
 resolve-flavored form, where a `resolve` step already placed the
@@ -352,13 +352,13 @@ code: zero passes, non-zero fails. Without `wait`, a single attempt — a
 gate. With `wait`, retries until success or deadline. Appends to
 `checks` (app, attempts, passed).
 
-| Field | Type | Required | Default | Description |
-|----|----|----|----|----|
-| app | string | yes |  | Attrpath in the pipeline source evaluating to a derivation with an executable (flake app or `meta.mainProgram`); the engine builds and runs it. |
-| args | string\[\] | no | \[\] | Extra arguments appended after `--`. |
-| wait | object | no | none | `{ "timeout": "10m", "interval": "15s" }` — retry until success or deadline. |
-| env | object | no | {} | Static environment variables. Literal strings only — dynamic data arrives via the item on stdin. |
-| secrets | string\[\] | no | \[\] | Named secrets mounted for this invocation (see Secrets). |
+| Field   | Type       | Required | Default | Description                                                                                                                                     |
+| ------- | ---------- | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| app     | string     | yes      |         | Attrpath in the pipeline source evaluating to a derivation with an executable (flake app or `meta.mainProgram`); the engine builds and runs it. |
+| args    | string[]   | no       | []      | Extra arguments appended after `--`.                                                                                                            |
+| wait    | object     | no       | none    | `{ "timeout": "10m", "interval": "15s" }` — retry until success or deadline.                                                                    |
+| env     | object     | no       | {}      | Static environment variables. Literal strings only — dynamic data arrives via the item on stdin.                                                |
+| secrets | string[]   | no       | []      | Named secrets mounted for this invocation (see Secrets).                                                                                        |
 
 Targets are the check's own concern: the item identifies its subject (a
 garden's sid and name, a seed's fields); mapping identity to a network
@@ -373,12 +373,12 @@ Runs the executable of an evaluated derivation for its side effect. Same
 invocation convention as `check`; no retry. Appends to `effects` (app,
 exit_code).
 
-| Field | Type | Required | Default | Description |
-|----|----|----|----|----|
-| app | string | yes |  | Attrpath in the pipeline source, as in `check`. |
-| args | string\[\] | no | \[\] | Extra arguments after `--`. |
-| env | object | no | {} | Static environment variables. Literal strings only. |
-| secrets | string\[\] | no | \[\] | Named secrets mounted for this invocation (see Secrets). |
+| Field   | Type       | Required | Default | Description                                              |
+| ------- | ---------- | -------- | ------- | -------------------------------------------------------- |
+| app     | string     | yes      |         | Attrpath in the pipeline source, as in `check`.          |
+| args    | string[]   | no       | []      | Extra arguments after `--`.                              |
+| env     | object     | no       | {}      | Static environment variables. Literal strings only.      |
+| secrets | string[]   | no       | []      | Named secrets mounted for this invocation (see Secrets). |
 
 Effects and checks are restricted to built executables: side effects are
 pinned in the same closure discipline as everything else. Arbitrary argv
@@ -409,12 +409,12 @@ why the environment closure sits in eval's memoization key).
 
 ### vm
 
-| Field | Type | Required | Default | Description |
-|----|----|----|----|----|
-| cpus | int | no | engine | Virtual CPUs. |
-| memory | int | no | engine | Memory in MiB. Bounds the whole step; step-internal knobs (e.g. eval's `memory_limit`) operate within it. |
-| network | string | no | none | `none`, `cache-only`, or `full`. |
-| caches | string\[\] | no | \[\] | Registered cache resources (by name) the VM may substitute from. The server materializes substituter configuration; raw URLs and keys do not appear in the definition. |
+| Field   | Type       | Required | Default | Description                                                                                                                                                            |
+| ------- | ---------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| cpus    | int        | no       | engine  | Virtual CPUs.                                                                                                                                                          |
+| memory  | int        | no       | engine  | Memory in MiB. Bounds the whole step; step-internal knobs (e.g. eval's `memory_limit`) operate within it.                                                              |
+| network | string     | no       | none    | `none`, `cache-only`, or `full`.                                                                                                                                       |
+| caches  | string[]   | no       | []      | Registered cache resources (by name) the VM may substitute from. The server materializes substituter configuration; raw URLs and keys do not appear in the definition. |
 
 Settable on a step, a phase (default for its steps), or the pipeline
 `defaults`. `network` is enforced by the host, not the guest: `none` for
@@ -471,11 +471,11 @@ agnostic to it.
 
 The `environment` ref optionally pins its source:
 
-| Form | Materialized from |
-|----|----|
-| `"environments/integration"` | The run's own pinned rev (default). |
-| `{ "attr": "environments/integration", "ref": "main" }` | `main`, resolved and pinned once at run start. |
-| `{ "attr": "environments/integration", "rev": "aaaaaa" }` | That rev, frozen until the pin is edited. |
+| Form                                                      | Materialized from                              |
+| --------------------------------------------------------- | ---------------------------------------------- |
+| `"environments/integration"`                              | The run's own pinned rev (default).            |
+| `{ "attr": "environments/integration", "ref": "main" }`   | `main`, resolved and pinned once at run start. |
+| `{ "attr": "environments/integration", "rev": "aaaaaa" }` | That rev, frozen until the pin is edited.      |
 
 The string form is shorthand for `{ "attr": ... }`.
 
@@ -606,18 +606,18 @@ boundary — the host never mounts what the rules do not grant).
 Items accrete fields as they flow. All fields are snake_case
 JSON.
 
-| Producer | Fields added |
-|----|----|
-| eval | `name`, `attr`, `drv_path`, `system`, `meta` (incl. `meta.sower.seed`), or `error` |
-| gardens source | `name`, `garden` (sid, name) |
-| static source | as written in the list |
-| resolve | `name`, `garden` (sid, name), `seeds` (pending subscription resolutions) |
-| build | `out_paths` |
-| push | `cache` (url, uploaded) |
-| seed | `seed` (sid, name, seed_type, artifact, tags) |
-| deploy | `deployment` (sid, state, result, seed_results, actions) |
-| check | appends to `checks` (app, attempts, passed) |
-| effect | appends to `effects` (app, exit_code) |
+| Producer       | Fields added                                                                       |
+| -------------- | ---------------------------------------------------------------------------------- |
+| eval           | `name`, `attr`, `drv_path`, `system`, `meta` (incl. `meta.sower.seed`), or `error` |
+| gardens source | `name`, `garden` (sid, name)                                                       |
+| static source  | as written in the list                                                             |
+| resolve        | `name`, `garden` (sid, name), `seeds` (pending subscription resolutions)           |
+| build          | `out_paths`                                                                        |
+| push           | `cache` (url, uploaded)                                                            |
+| seed           | `seed` (sid, name, seed_type, artifact, tags)                                      |
+| deploy         | `deployment` (sid, state, result, seed_results, actions)                           |
+| check          | appends to `checks` (app, attempts, passed)                                        |
+| effect         | appends to `effects` (app, exit_code)                                              |
 
 Fields are references and small facts. Logs are addressed by reference
 (deployment sid, run step id), not embedded.
@@ -628,11 +628,11 @@ Builtin steps skip when their key matches a previously successful
 execution:
 
 | Step   | Key                                            |
-|--------|------------------------------------------------|
+| ------ | ---------------------------------------------- |
 | eval   | pinned source rev + attr + environment closure |
-| build  | drv_path                             |
-| push   | out_paths + cache url                |
-| seed   | artifact + seed_type + name + tags   |
+| build  | drv_path                                       |
+| push   | out_paths + cache url                          |
+| seed   | artifact + seed_type + name + tags             |
 | deploy | seed artifacts + garden sid                    |
 
 Keys are declared per kind — fields outside the key (metadata,
@@ -745,13 +745,13 @@ What starts a run is configured on the server-side pipeline resource,
 never in the definition — mode selection decides which tree the
 definition is read from, so it must precede reading it:
 
-| Trigger | Runs on |
-|----|----|
-| manual | The requested ref's head. |
-| schedule | The configured branch's head (see Scheduled Runs). |
-| push | The pushed branch's head, with branch filters (`*` globbing). |
+| Trigger      | Runs on                                                                |
+| ------------ | ---------------------------------------------------------------------- |
+| manual       | The requested ref's head.                                              |
+| schedule     | The configured branch's head (see Scheduled Runs).                     |
+| push         | The pushed branch's head, with branch filters (`*` globbing).          |
 | pull_request | A synthetic merge of the PR into its target (default), or the PR head. |
-| tag | The tagged commit. |
+| tag          | The tagged commit.                                                     |
 
 Forge adapters (webhook integration per forge) may be implemented
 incrementally; the trigger contract and context fields are fixed now so
@@ -823,10 +823,10 @@ Signature verification always runs; its result is recorded into the run
 context (`ctx.signature`) whether or not the policy requires it.
 Requiring it is a per-pipeline choice:
 
-| Policy | What it provides |
-|----|----|
-| none required | Verification is recorded for policy and definition use; nothing is gated. |
-| any signature | Hygiene only. Any key can sign anything; this attests that signing infrastructure works, not that the author was authorized. |
+| Policy           | What it provides                                                                                                                                                        |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| none required    | Verification is recorded for policy and definition use; nothing is gated.                                                                                               |
+| any signature    | Hygiene only. Any key can sign anything; this attests that signing infrastructure works, not that the author was authorized.                                            |
 | allowlisted keys | A real boundary: trust moves from "whoever can write to the repository" to "whoever holds an enrolled key". Defends against forge and repository-credential compromise. |
 
 A commit signature covers the tree hash, so a verified `head` run's
@@ -857,13 +857,13 @@ secrets. It is the run-level analog of deployment policy's `confirm`.
 Admission computes the run's capability set from trigger, mode, fork
 provenance, signature result, and pipeline policy:
 
-| Capability | `head` run | `merge` run |
-|----|----|----|
-| eval, build, resolve | yes | yes |
-| push | policy-decidable; conservative default for forks and unsigned runs (quarantine cache or none) | same |
-| seed | policy-decidable; default deny for forks and unsigned runs | never — the ephemeral SHA would be provenance pointing at a commit that will cease to exist |
-| deploy | policy-decidable | never — denied outright, not just transitively; validation runs have no business touching gardens |
-| secrets | per-secret access rules (see Secrets) | same rules; `merge` mode matches only rules that allow it |
+| Capability           | `head` run                                                                                    | `merge` run                                                                                       |
+| -------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| eval, build, resolve | yes                                                                                           | yes                                                                                               |
+| push                 | policy-decidable; conservative default for forks and unsigned runs (quarantine cache or none) | same                                                                                              |
+| seed                 | policy-decidable; default deny for forks and unsigned runs                                    | never — the ephemeral SHA would be provenance pointing at a commit that will cease to exist       |
+| deploy               | policy-decidable                                                                              | never — denied outright, not just transitively; validation runs have no business touching gardens |
+| secrets              | per-secret access rules (see Secrets)                                                         | same rules; `merge` mode matches only rules that allow it                                         |
 
 Enforcement is layered, deliberately redundantly: run-start validation
 rejects definitions exceeding the run's capabilities with a clear error
@@ -877,12 +877,12 @@ The JSON produced by evaluating the pipeline attribute. This document —
 not the Nix that generated it — is what the server accepts, validates,
 and stores.
 
-| Field | Type | Required | Description |
-|----|----|----|----|
-| version | int | yes | Contract version. Currently `1`. |
-| name | string | yes | Pipeline name. |
-| phases | phase\[\] | yes | As specified above. |
-| defaults | object | no | Default `vm` and `environment` applied where phases and steps do not override. |
+| Field    | Type      | Required | Description                                                                    |
+| -------- | --------- | -------- | ------------------------------------------------------------------------------ |
+| version  | int       | yes      | Contract version. Currently `1`.                                               |
+| name     | string    | yes      | Pipeline name.                                                                 |
+| phases   | phase[]   | yes      | As specified above.                                                            |
+| defaults | object    | no       | Default `vm` and `environment` applied where phases and steps do not override. |
 
 Validation at submission:
 
@@ -920,13 +920,13 @@ definition says what a run does; the resource says what runs, when, and
 with how much trust. Consolidated here; each field's semantics are
 normative in the referenced section.
 
-| Field | Description | Section |
-|----|----|----|
-| source | Repository, branch, source mode (`flake=/=nix`), entrypoint attribute. | Definition Format, Source Modes |
-| triggers | Enabled triggers and their filters (push branches, pull_request). | Repository Input |
-| schedule | Cron for scheduled runs. | Scheduled Runs |
-| admission | Signature policy and hold rules. | Run Admission |
-| capabilities | Policy knobs for fork and unsigned runs (seed, push defaults). | Run Admission |
+| Field        | Description                                                            | Section                         |
+| ------------ | ---------------------------------------------------------------------- | ------------------------------- |
+| source       | Repository, branch, source mode (`flake=/=nix`), entrypoint attribute. | Definition Format, Source Modes |
+| triggers     | Enabled triggers and their filters (push branches, pull_request).      | Repository Input                |
+| schedule     | Cron for scheduled runs.                                               | Scheduled Runs                  |
+| admission    | Signature policy and hold rules.                                       | Run Admission                   |
+| capabilities | Policy knobs for fork and unsigned runs (seed, push defaults).         | Run Admission                   |
 
 ## Examples
 
