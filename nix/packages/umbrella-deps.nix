@@ -30,11 +30,6 @@ callPackages ./deps.nix {
       }
     );
 
-    # certifi = prev.certifi.override (_: {
-    #   env.DEBUG = "1";
-    #   env.DIAGNOSTIC = "1";
-    # });
-
     rexec = prev.rexec.override (
       old:
       let

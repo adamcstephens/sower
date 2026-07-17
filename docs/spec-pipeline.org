@@ -266,13 +266,16 @@ across items. Adds =out_paths=.
 
 *** push
 
-Uploads the item's built paths to a binary cache. The cache URL scheme
-selects the backend as today (=niks3://=, =attic://=, otherwise =nix copy=).
-Adds =cache= (url, uploaded count).
+Uploads the item's built paths to a binary cache, referenced as a
+registered cache resource by name — raw URLs and keys never appear in
+definitions, and the capability layer can redirect untrusted runs to a
+quarantine cache without touching them. The resource's URL scheme selects
+the backend as today (=niks3://=, =attic://=, otherwise =nix copy=). Adds
+=cache= (name, uploaded count).
 
-| Field | Type   | Required | Default | Description                       |
-|-------+--------+----------+---------+-----------------------------------|
-| cache | string | yes      |         | Cache URL.                        |
+| Field | Type   | Required | Default | Description                                             |
+|-------+--------+----------+---------+---------------------------------------------------------|
+| cache | string | yes      |         | Registered cache resource (by name), as in =vm.caches=. |
 
 *** seed
 
@@ -346,6 +349,13 @@ or deadline. Appends to =checks= (app, attempts, passed).
 | wait    | object   | no       | none    | ={ "timeout": "10m", "interval": "15s" }= — retry until success or deadline. |
 | env     | object   | no       | {}      | Static environment variables. Literal strings only — dynamic data arrives via the item on stdin. |
 | secrets | string[] | no       | []      | Named secrets mounted for this invocation (see Secrets). |
+
+Targets are the check's own concern: the item identifies its subject (a
+garden's sid and name, a seed's fields); mapping identity to a network
+endpoint lives in the check app's own configuration. Gardens connect
+outbound, so the server assumes no routable address for them —
+garden-advertised endpoints may become garden-level config later (Future
+Considerations).
 
 *** effect
 
@@ -499,6 +509,14 @@ registry is the server-side tracking:
   before a run asks. Staging already means "download and pin a closure";
   no new machinery.
 
+Merge runs materialize without registering: their seed capability is
+absent, and the synthetic rev is no durable provenance. The image is
+built — and pushed where the run's push capability allows — then used for
+that run only, so iterating on an environment through a PR works; it
+re-materializes whenever a parent moves. Pinned environments behave
+normally in merge runs: their source revs are durable and
+admission-verified.
+
 Cost accounting for pipelines that override stock: with an unpinned
 environment, each new commit — and each branch's first run — pays one
 environment evaluation (module definitions live in the repository, so the
@@ -551,7 +569,8 @@ Read: runs of =main= always; runs of =release/*= only when the executing
 commit is signed by the release key; any other branch only for manual,
 non-fork runs. =refs= matches the run's *source* ref. =modes= matters
 because only a =head= run's signature covers the exact tree executing —
-high-stakes secrets pair =signed_by= with =modes: ["head"]=.
+high-stakes secrets pair =signed_by= with =modes: ["head"]=. Ref patterns
+use simple =*= wildcard globbing.
 
 A secret with no rules (or an empty list) gets a documented narrow
 default:
@@ -704,7 +723,7 @@ definition is read from, so it must precede reading it:
 |--------------+------------------------------------------------------------------------|
 | manual       | The requested ref's head.                                              |
 | schedule     | The configured branch's head (see Scheduled Runs).                     |
-| push         | The pushed branch's head, with branch filters.                         |
+| push         | The pushed branch's head, with branch filters (=*= globbing).          |
 | pull_request | A synthetic merge of the PR into its target (default), or the PR head. |
 | tag          | The tagged commit.                                                     |
 
@@ -849,8 +868,8 @@ Validation at submission:
    rejected.
 7. Garden names resolve against registered gardens.
 8. Declared =secrets= resolve against the org's secret store and must be
-   admitted by their access rules for this run; =vm.caches= entries
-   resolve against registered cache resources.
+   admitted by their access rules for this run; =vm.caches= entries and
+   =push.cache= resolve against registered cache resources.
 9. The definition must not exceed the run's capability set — e.g. =seed=
    or =deploy= steps in a merge run are rejected.
 
@@ -862,55 +881,68 @@ cross-component schema.
 
 *** Release pipeline
 
+A context function: every run evaluates and builds, but only head runs of
+=main= register and roll out. A =pull_request= run of this same pipeline
+is a pure validation run — its definition contains no steps its
+capability set forbids.
+
 #+begin_src nix
-sower.pipelines.release = {
-  version = 1;
-  name = "release";
-  phases = [
-    {
-      name = "eval";
-      steps = [
-        { kind = "eval"; attr = "sowerSeeds"; workers = 4; memory_limit = 2048; }
-      ];
-    }
-    {
-      name = "seeds";
-      items = { from = "eval"; };
-      concurrency = 8;
-      steps = [
-        { kind = "build"; }
-        { kind = "push"; cache = "niks3://cache.example.org"; }
-        { kind = "seed"; }
-      ];
-    }
-    {
-      name = "canary";
-      needs = [ "seeds" ];                     # all seeds built and registered
-      items = { gardens = { names = [ "door" ]; }; };
-      steps = [
-        { kind = "deploy"; seeds = [ "seeds/web" ]; }
-        { kind = "check"; app = "checks/http";
-          wait = { timeout = "10m"; interval = "15s"; }; }
-      ];
-    }
-    {
-      name = "fleet";
-      needs = [ "canary" ];
-      items = { gardens = { names = [ "gate" "wall" "keep" ]; }; };
-      steps = [
-        { kind = "deploy"; seeds = [ "seeds/web" ]; }
-        { kind = "check"; app = "checks/http"; }
-      ];
-    }
-  ];
-};
+sower.pipelines.release = ctx:
+  let releasing = ctx.mode == "head" && ctx.branch == "main";
+  in {
+    version = 1;
+    name = "release";
+    phases = [
+      {
+        name = "eval";
+        steps = [
+          { kind = "eval"; attr = "sowerSeeds"; workers = 4; memory_limit = 2048; }
+        ];
+      }
+      {
+        name = "build";
+        items = { from = "eval"; };
+        concurrency = 8;
+        steps = [
+          { kind = "build"; }
+          { kind = "push"; cache = "central"; }
+        ];
+      }
+    ] ++ lib.optionals releasing [
+      {
+        name = "register";
+        items = { from = "build"; };
+        steps = [ { kind = "seed"; } ];
+      }
+      {
+        name = "canary";
+        needs = [ "register" ];
+        items = { gardens = { names = [ "door" ]; }; };
+        steps = [
+          { kind = "deploy"; seeds = [ "register/web" ]; }
+          { kind = "check"; app = "checks/http";
+            wait = { timeout = "10m"; interval = "15s"; }; }
+        ];
+      }
+      {
+        name = "fleet";
+        needs = [ "canary" ];
+        items = { gardens = { names = [ "gate" "wall" "keep" ]; }; };
+        steps = [
+          { kind = "deploy"; seeds = [ "register/web" ]; }
+          { kind = "check"; app = "checks/http"; }
+        ];
+      }
+    ];
+  };
 #+end_src
 
-Builds stream out of eval as attributes complete; each seed is built, pushed,
-and registered independently. Nothing deploys until every seed finishes
-(=needs = [ "seeds" ]=). The fleet waits for the canary phase, which passes
-only when its garden reports a successful deployment and the http check
-succeeds within ten minutes.
+Builds stream out of eval as attributes complete and push to the
+registered =central= cache. On =main=, registration waits for the full
+build set (=needs= via the =register= barrier), the canary garden must
+report a successful deployment and pass its http check within ten
+minutes, and only then does the fleet follow. On any other branch — and
+in any merge run — the pipeline is eval/build/push only.
 
 *** Scheduled deploy-only rollout
 
@@ -990,6 +1022,34 @@ A single-item phase (no =items=) runs its chain once:
   ];
 }
 #+end_src
+
+*** Custom environment and secrets
+
+An integration check with its own guest system and a notification effect
+using a declared secret. The environment is pinned to =main= so feature
+branches share its image instead of materializing their own:
+
+#+begin_src nix
+{
+  name = "verify";
+  needs = [ "build" ];
+  steps = [
+    { kind = "check";
+      app = "checks/integration";
+      environment = { attr = "environments/integration"; ref = "main"; };
+      vm = { cpus = 4; memory = 4096; network = "cache-only"; };
+      env = { PGHOST = "/run/postgresql"; }; }
+    { kind = "effect";
+      app = "notify";
+      secrets = [ "statuspage-token" ];
+      vm = { network = "full"; }; }
+  ];
+}
+#+end_src
+
+The secret injects only where its access rules admit the run; a PR run
+declaring it without a matching rule fails validation before anything
+executes.
 
 *** Generated rollout waves
 
@@ -1072,6 +1132,7 @@ in
   fixed; adapters land incrementally. Run-state observation contract
   lives with the scheduler spec.
 - Quarantine cache design for untrusted runs (builder spec).
+- Garden-advertised endpoints for checks (garden-level config).
 - A builtin =promote= step (seed tag mutation) formalizing the channel
   handoff between pipelines and subscriptions.
 - Richer =resolve= selection (by subscription, seed type) beyond garden
