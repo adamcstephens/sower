@@ -53,7 +53,7 @@ Each subscription carries a `policy` map of named rules. Each rule permits a set
 of `actions` (`stage`, `activate`, `restart`) for a set of `triggers` (`manual`,
 `scheduled`, `realtime`, `poll_on_connect`), optionally constrained to a time
 `window`. Multiple rules are OR-ed; the highest-disruption permitted action
-wins. See `docs/spec-deployment-policy.org` for the full specification.
+wins. See `docs/spec-deployment-policy.md` for the full specification.
 
 #### Example garden config
 

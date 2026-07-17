@@ -1,0 +1,44 @@
+# TODO add more metadata to seed, e.g. ref and branch
+
+# TODO bail out nixos if not root
+
+# TODO boot check for containers
+
+can we just check if boot-system matches out_path?
+
+# TODO differentiate built seed branch?
+
+# handle our own substituter configs?
+
+# if network is lost, kill realization, restart when reconnected
+
+# Stories
+
+- I want to switch nightly but boot/reboot once a week
+- I want some systems to never downgrade manually applied changes
+
+-Janik (might pick up the 🥐 language) raitobezarius (FoosterOS on
+System76 laptops wen): now I want systemd-unit like logic for colmena
+where one can specify groups of targets with before/after some other
+group.
+
+# Bootstrapping a host
+
+- Requires a cache to realize
+
+# Scheduling
+
+Time/Day windows Frequency/cron scheduler
+
+- download
+- switch
+- boot
+- reboot
+
+# Inhbiting
+
+Allow for inhibiting of all phases of maintenance. Settings for not
+rolling back manually applied generations. May want to have client load
+track generations<->out_path Provide a runtime inhibition.
+So I can connect to a system, inhibit in /run and when I reboot
+inhibition will be gone

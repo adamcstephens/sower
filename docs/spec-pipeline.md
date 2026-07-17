@@ -1,0 +1,1218 @@
+# Pipelines — Specification
+
+## Overview
+
+A pipeline orchestrates the path from Nix source to running gardens:
+evaluate it, build what the evaluation produces, upload to a binary
+cache, register seeds, and roll seeds out to gardens in phases gated by
+checks.
+
+Pipelines come in two flavors sharing every mechanism: **eval-flavored**
+runs start from source and produce seeds; **resolve-flavored** runs skip
+evaluation entirely and deploy what subscriptions already select (see
+the `resolve` step).
+
+This spec covers the **user-facing definition** and the **contract** it
+produces — the data model the server validates and executes against. The
+scheduler that executes this contract is out of scope and will be
+specified separately.
+
+Pipelines are the "separate orchestration layer above the policy system"
+anticipated by the deployment policy spec (spec-deployment-policy.md,
+Future Considerations), and the orchestration substrate for the "full
+CI/builder model" described in spec-seed-trust.md. Deployment policy
+remains authoritative: a pipeline can never make a garden do something
+its policy denies.
+
+## Design Principles
+
+- The pipeline definition is data, not a program. All user logic lives
+  in the flake (Nix expressions compute what to build; flake apps
+  implement checks and effects), where it is testable with `nix eval`
+  and `nix run`.
+- Ordering derives from data flow. A phase that consumes another phase's
+  output depends on it. Explicit `needs` exists only for ordering
+  without data flow.
+- Streaming is the default. Work on an item starts as soon as the item
+  exists; barriers are explicit.
+- Steps are functions of their declared inputs plus their item context.
+  Checks and effects receive the item as structured input by convention
+  — there is no string templating.
+- Outputs are references and small facts (store paths, sids, reports),
+  never blobs. The Nix store and binary cache remain the artifact layer.
+- Operations the engine owns (eval, build, push, seed, deploy) are
+  builtin step kinds. Everything else is an `effect` or `check`,
+  restricted to built executables from evaluated derivations so side
+  effects are pinned in a closure.
+- Builtin steps are memoized on content-addressed keys. Re-running a
+  pipeline skips work whose inputs have not changed.
+- Step software is Nix: execution environments are NixOS modules on a
+  sower-provided base. The contract carries only resources and
+  references.
+- Deployment policy is evaluated as usual on every garden. Pipelines
+  introduce a new trigger; they do not bypass policy.
+- Definitions react to trust signals; they never grant authority.
+  Capabilities and secret access are computed server-side from the same
+  run context the definition sees.
+
+## Model
+
+| Term | Meaning |
+|----|----|
+| Pipeline | A named set of phases forming a DAG via data-flow references. |
+| Phase | An item source plus a chain of steps applied to each item. |
+| Step | One operation in a phase's chain, of a builtin or user-defined kind. |
+| Item | A JSON document that flows through a phase's chain, accreting fields as each step completes. |
+
+The word **phase** is deliberate: `stage` is already a deployment policy
+action (download and pin a closure) and cannot be reused as a structural
+term.
+
+A phase's chain streams: each item advances through the chain
+independently, so one item can be uploading while another is still
+building. A phase without an `items` source has a single implicit item —
+its chain runs once.
+
+## Definition Format
+
+The front-end is Nix. In the default source mode a pipeline is a flake
+output:
+
+``` example
+sower.pipelines.<name>
+```
+
+evaluated at run start to produce the definition contract (see
+Definition Contract below). The JSON contract is normative; the Nix
+front-end is convention. Reuse and generation (e.g. producing N rollout
+phases from a list of garden groups) are ordinary Nix functions.
+
+The evaluation of the pipeline attribute itself must be cheap. It is
+separate from any `eval` step the pipeline contains.
+
+### Source Modes
+
+The contract is source-mode agnostic — nothing in it records which mode
+produced it. The registered pipeline resource's source carries the mode:
+
+- `flake` (default, blessed): definitions are flake outputs
+  (`sower.pipelines.<name>`, `sower.environments.<name>`); attrpaths
+  resolve as flake attrs; eval defaults to the run's own source.
+- `nix` (classic): a conventional entrypoint `sower.nix` at the
+  repository root exposes the same shape (`pipelines.<name>`,
+  `environments.<name>`); evaluation uses the path-based evaluator (the
+  dual mode `Nix.Eval` already implements).
+
+Evaluation is **pure** in both modes: every external input must be
+content-addressed — the flake lock in flake mode; niv/npins-style pins
+or hashed fetches in classic mode. Unhashed fetches and `NIX_PATH` are
+rejected. This is what "the definition cannot introduce moving inputs"
+means, independent of mode. Classic mode is capability-equal and
+ergonomically second-class: purity is enforced rather than default, and
+there is no `self` convenience.
+
+### Run Context
+
+The attribute may be a plain attrset or a function of the run context —
+the module-system convention. When it is a function, the server applies
+the context during evaluation:
+
+``` nix
+sower.pipelines.release = ctx: {
+  version = 1;
+  name = "release";
+  phases =
+    [ evalPhase seedsPhase ]
+    ++ lib.optionals (ctx.branch == "master") [ canaryPhase fleetPhase ];
+};
+```
+
+Conditional phases and steps are therefore ordinary Nix — there is no
+condition language in the contract. Wildcard branch matching is
+`lib.hasPrefix` or `builtins.match`.
+
+| Field | Description |
+|----|----|
+| branch | Source branch the run was resolved from. |
+| rev | The pinned revision the run executes (the synthetic merge, in merge mode). |
+| trigger | What started the run (manual, schedule, push, pull_request, tag). |
+| mode | `head` or `merge` (see Run Modes). |
+| target | Target branch of a merge run. |
+| target_rev | Pinned target head of a merge run. |
+| source_rev | Pinned source-branch head of a merge run. |
+| pr | Pull request data: number, source repo, whether it is a fork. |
+| signature | Recorded verification result: verified, key, enrolled — per parent in merge mode (see Run Admission). |
+
+The context is an open set — fields will be added. Take `ctx` whole or
+destructure with `...`; exact destructuring breaks when fields appear.
+The context never contains secrets: the evaluated result is stored as
+the run's definition and is not a secret channel.
+
+Each run stores the resolved definition it executed; the registered
+pipeline resource holds only the source (repository, branch) and the
+attribute name.
+
+## Phases
+
+| Field | Type | Required | Default | Description |
+|----|----|----|----|----|
+| name | string | yes |  | Unique within the pipeline. Addressable in refs. |
+| items | object | no | (single implicit item) | Item source (see Item Sources). |
+| needs | ref\[\] | no | \[\] | Explicit barriers in addition to data-flow edges. |
+| steps | step\[\] | yes |  | Chain applied to each item, in order. |
+| concurrency | int | no | engine | Max items in flight in this phase. |
+| vm | object | no | pipeline default | Default VM resources for this phase's steps (see Execution Environment). |
+| environment | string or object | no | pipeline default | Default environment for this phase's steps. |
+
+For a build phase, `concurrency` is the item-level parallelism that
+`sower-build --build-jobs` expresses today.
+
+## Item Sources
+
+### From another phase
+
+``` json
+{ "from": "eval" }
+```
+
+Fans out over the items the referenced phase produces. Items arrive as
+the producing phase completes them (streaming); only items that
+completed their chain successfully flow onward.
+
+``` json
+{ "from": "resolve", "except": ["door"] }
+```
+
+`only` and `except` restrict the collection by item name. Filters are by
+name only — there are no predicates over item payloads.
+
+### Gardens
+
+``` json
+{ "gardens": { "names": ["door", "gate"] } }
+```
+
+Resolved by the server against registered gardens at run time. Selection
+is by explicit name list initially; richer selectors (labels/groups) are
+a future consideration — gardens have no tags today.
+
+### Static list
+
+``` json
+{ "list": [ { "name": "x86_64-linux" }, { "name": "aarch64-linux" } ] }
+```
+
+Each entry becomes an item. Useful for fanning a single step (e.g. eval)
+over a fixed set.
+
+## References
+
+A ref addresses a phase's output collection or a single item within it:
+
+| Form | Meaning | Resolves when |
+|----|----|----|
+| `"phase"` | The whole collection. | Phase closed with zero failed items. |
+| `"phase/item"` | One named item. | That item's chain completed successfully. |
+
+Item names are assigned by the source: eval items are named by attribute
+path, garden items by garden name, static items by their `name` field.
+
+A ref used in `needs` is a pure barrier. A ref used in a step field
+(e.g. `deploy.seeds`) both orders execution and delivers the referenced
+item(s). Depending on a single item does not wait for its siblings —
+"make sure builds x, y and z pass" is three item refs; "make sure all
+builds pass" is a whole-collection ref.
+
+## Steps
+
+Every step accepts:
+
+| Field | Type | Required | Default | Description |
+|----|----|----|----|----|
+| kind | string | yes |  | One of the kinds below. |
+| timeout | string | no | kind-specific | Per-attempt execution limit. |
+| vm | object | no | phase default | VM resources (see Execution Environment). |
+| environment | string or object | no | phase default | Environment ref, optionally source-pinned (see Execution Environment). |
+
+A step failure fails its item: the rest of the chain is skipped for that
+item, and the item does not flow to consumers. The phase's aggregate
+result mirrors deployment results: `success` (all items succeeded),
+`partial`, or `failure`.
+
+### eval
+
+Evaluates an attribute of the run's source and emits one item per
+derivation found, streaming as evaluation proceeds. Maps onto the
+existing `Nix.Eval.Jobs` worker-pool machinery
+(`sower-build --eval-jobs` / `--memory-limit`), including its flake and
+path dual mode.
+
+| Field | Type | Required | Default | Description |
+|----|----|----|----|----|
+| flake | string | no | run source | Flake ref to evaluate (flake mode). |
+| file | string | no | run source | Nix file to evaluate (classic mode). |
+| attr | string | yes |  | Attribute to evaluate (recursed into). |
+| workers | int | no | 8 | Parallel eval workers. |
+| memory_limit | int | no | none | Per-worker memory ceiling, same semantics as `sower-build --memory-limit`. |
+
+Each emitted item carries `attr`, `drv_path`, `system`, and `meta`
+(including `meta.sower.seed`, which is how eval-time knowledge reaches
+the `seed` step with no extra plumbing). An attribute that fails to
+evaluate becomes a failed item carrying `error` — evaluation continues
+(keep-going), but the phase aggregate cannot be `success`.
+
+### build
+
+Realizes the item's derivation. One derivation per item; parallelism is
+the phase's `concurrency`. The engine deduplicates identical `drv_path`
+values across items. Adds `out_paths`.
+
+| Field                       | Type | Required | Default | Description |
+|-----------------------------|------|----------|---------|-------------|
+| (none beyond common fields) |      |          |         |             |
+
+### push
+
+Uploads the item's built paths to a binary cache, referenced as a
+registered cache resource by name — raw URLs and keys never appear in
+definitions, and the capability layer can redirect untrusted runs to a
+quarantine cache without touching them. The resource's URL scheme
+selects the backend as today (`niks3://`, `attic://`, otherwise
+`nix copy`). Adds `cache` (name, uploaded count).
+
+| Field | Type | Required | Default | Description |
+|----|----|----|----|----|
+| cache | string | yes |  | Registered cache resource (by name), as in `vm.caches`. |
+
+### seed
+
+Registers the item as a seed with the server, exactly as the `:seed`
+step of `sower-build` does today (`SowerClient.Seed.create`). Name,
+type, and tags come from the item's `meta.sower.seed` plus the fields
+below. Adds `seed` (sid, name, seed_type, artifact, tags).
+
+| Field | Type | Required | Default | Description |
+|----|----|----|----|----|
+| tags | object | no | {} | Extra tags merged with git/meta tags. |
+| authoritative | boolean | no | true | Same semantics as `sower-build` (rename on artifact match). |
+
+### resolve
+
+Resolves the subscriptions of a set of gardens against the seed registry
+— the matching half of subscription processing without the acting half —
+and emits one item per garden with a **pending change** (a resolved seed
+differing from the garden's current generation). Gardens already running
+their resolved seeds produce no item. This is the registry-side twin of
+`eval`: both are entry-point steps producing a collection from a source
+of truth.
+
+| Field | Type | Required | Default | Description |
+|----|----|----|----|----|
+| gardens | object | yes |  | Garden selector, as in Item Sources. All subscriptions of the selected gardens are resolved. |
+
+Resolution is a snapshot: it happens once, at its step's execution, and
+later phases deploy that snapshot even if newer seeds are registered
+mid-run — a coordinated rollout deploys what its earlier phases
+validated. Newer seeds wait for the next run.
+
+Items are named by garden name and carry `garden` plus `seeds` (all
+pending subscription resolutions for that garden).
+
+### deploy
+
+Creates a targeted deployment of previously registered seeds to the
+item's garden, then waits for the garden's feedback. The item must carry
+a `garden` — from a `gardens` source or a `resolve` producer. Completion
+means the deployment reached a terminal state and the garden reported a
+result via the existing `SeedDeploymentStatus` / `SeedDeploymentResult`
+/ `DeploymentResult` flow — the report is the step's output, not a side
+channel. Adds `deployment` (sid, state, result, per-seed results,
+achieved actions).
+
+| Field | Type | Required | Default | Description |
+|----|----|----|----|----|
+| seeds | ref\[\] | no | item's seeds | Items carrying `seed` fields (i.e. produced by a chain containing a `seed` step). One deployment with one seed deployment per entry. |
+| timeout | string | no | 30m | Deadline for the garden to report a terminal result. Covers policy `confirm` holds. |
+
+When `seeds` is omitted, the seeds come from the item itself — the
+resolve-flavored form, where a `resolve` step already placed the
+garden's pending seeds on the item. Validation requires one of the two.
+
+The deploy item fails unless the deployment result is `success`. Note
+that a garden whose policy permits only `stage` reports success after
+staging without activating — the deployment result alone does not assert
+activation. Follow a `deploy` with a `check` to assert observed
+behavior; declaring a required action on the step is a future
+consideration.
+
+### check
+
+Runs the executable of an evaluated derivation and interprets its exit
+code: zero passes, non-zero fails. Without `wait`, a single attempt — a
+gate. With `wait`, retries until success or deadline. Appends to
+`checks` (app, attempts, passed).
+
+| Field | Type | Required | Default | Description |
+|----|----|----|----|----|
+| app | string | yes |  | Attrpath in the pipeline source evaluating to a derivation with an executable (flake app or `meta.mainProgram`); the engine builds and runs it. |
+| args | string\[\] | no | \[\] | Extra arguments appended after `--`. |
+| wait | object | no | none | `{ "timeout": "10m", "interval": "15s" }` — retry until success or deadline. |
+| env | object | no | {} | Static environment variables. Literal strings only — dynamic data arrives via the item on stdin. |
+| secrets | string\[\] | no | \[\] | Named secrets mounted for this invocation (see Secrets). |
+
+Targets are the check's own concern: the item identifies its subject (a
+garden's sid and name, a seed's fields); mapping identity to a network
+endpoint lives in the check app's own configuration. Gardens connect
+outbound, so the server assumes no routable address for them —
+garden-advertised endpoints may become garden-level config later (Future
+Considerations).
+
+### effect
+
+Runs the executable of an evaluated derivation for its side effect. Same
+invocation convention as `check`; no retry. Appends to `effects` (app,
+exit_code).
+
+| Field | Type | Required | Default | Description |
+|----|----|----|----|----|
+| app | string | yes |  | Attrpath in the pipeline source, as in `check`. |
+| args | string\[\] | no | \[\] | Extra arguments after `--`. |
+| env | object | no | {} | Static environment variables. Literal strings only. |
+| secrets | string\[\] | no | \[\] | Named secrets mounted for this invocation (see Secrets). |
+
+Effects and checks are restricted to built executables: side effects are
+pinned in the same closure discipline as everything else. Arbitrary argv
+is rejected at validation.
+
+## Item Context Convention
+
+Every `check` and `effect` invocation receives its item as JSON on
+stdin. An http check against a canary garden reads the garden's identity
+from the item; nothing is interpolated into arguments by the engine.
+Stdout and stderr are captured as the step log. Builtin steps receive
+the item natively.
+
+## Execution Environment
+
+Steps that execute work — `eval`, `build`, `push`, `seed`, `check`,
+`effect` — each run in their own cloud-hypervisor microVM on a builder.
+Server-side steps (`resolve`, `deploy`) are engine operations and accept
+no `vm` or `environment` config. The contract carries resources and
+references; all software configuration is Nix.
+
+The default guest is the sower **stock image**: prebuilt, shipped with
+the builder, requiring no user-source evaluation. Builtin steps need the
+sower machinery it provides and default to it; specifying `environment`
+is the exception — chiefly for `check` and `effect`, or to control
+eval's toolchain (a different Nix version changes eval results, which is
+why the environment closure sits in eval's memoization key).
+
+### vm
+
+| Field | Type | Required | Default | Description |
+|----|----|----|----|----|
+| cpus | int | no | engine | Virtual CPUs. |
+| memory | int | no | engine | Memory in MiB. Bounds the whole step; step-internal knobs (e.g. eval's `memory_limit`) operate within it. |
+| network | string | no | none | `none`, `cache-only`, or `full`. |
+| caches | string\[\] | no | \[\] | Registered cache resources (by name) the VM may substitute from. The server materializes substituter configuration; raw URLs and keys do not appear in the definition. |
+
+Settable on a step, a phase (default for its steps), or the pipeline
+`defaults`. `network` is enforced by the host, not the guest: `none` for
+hermetic work, `cache-only` for substitution, `full` for checks and
+effects that reach out.
+
+### environment
+
+An installable in the pipeline source producing a complete guest system,
+assembled with `sower.lib.mkEnvironment` (sower as a flake input, or
+imported as a plain Nix library in classic mode — sower is consumable
+without flakes). The user writes ordinary NixOS modules — extra
+packages, services (a per-step database for an integration check),
+container support — and `mkEnvironment` composes them onto the sower
+base module:
+
+``` nix
+sower.environments.integration = inputs.sower.lib.mkEnvironment {
+  modules = [
+    ({ pkgs, ... }: {
+      environment.systemPackages = [ pkgs.postgresql ];
+      services.postgresql = {
+        enable = true;
+        ensureDatabases = [ "checks" ];
+      };
+    })
+  ];
+};
+```
+
+The base module is mandatory and sower-owned. It supplies the step
+runtime and the boot-time optimizations a hand-rolled NixOS system would
+not get (direct kernel boot, trimmed initrd and services, read-only
+root), pins its invariants with module priorities so user modules cannot
+break them, and stamps the image with a versioned guest-contract marker
+(`/etc/sower/env.json`). The guest runtime talks to the host — item on
+stdin, secrets, logs — so that surface is versioned like every other
+cross-component contract; builders reject images whose marker is missing
+or out of range. There is no supported path to an environment that
+bypasses `mkEnvironment`.
+
+Everything in the environment is pinned by the source's
+content-addressed inputs — nixpkgs, the user's modules, and the sower
+base they compose against; pure evaluation enforces that the definition
+cannot introduce moving inputs. The VM is ephemeral: services start with
+the step and die with it, which is the hermetic semantic steps already
+promise.
+
+How the guest reaches the Nix store (shared from the host or hydrated
+from a cache) is a builder concern, out of scope here; the contract is
+agnostic to it.
+
+### Environment pinning
+
+The `environment` ref optionally pins its source:
+
+| Form | Materialized from |
+|----|----|
+| `"environments/integration"` | The run's own pinned rev (default). |
+| `{ "attr": "environments/integration", "ref": "main" }` | `main`, resolved and pinned once at run start. |
+| `{ "attr": "environments/integration", "rev": "aaaaaa" }` | That rev, frozen until the pin is edited. |
+
+The string form is shorthand for `{ "attr": ... }`.
+
+Pinning is the cheap answer to materialization cost: under the default,
+every feature branch's first run pays a materialization because its rev
+differs from main's; with `ref` pointing at `main`, all branches share
+main's image and re-materialization happens only when main moves. A
+`rev` pin never re-materializes until the pin itself changes —
+invalidation is a reviewed diff.
+
+The trade is explicit staleness: a branch that edits environment modules
+without moving the pin keeps running the pinned image — deliberately not
+what that branch's tree defines. The escape hatch composes with run
+context: point `ref` at `ctx.branch` (or drop the pin) while iterating
+on an environment, restore the pin before merge. Both the staleness and
+the override are data in the resolved definition — diffable and
+reviewable, never silent.
+
+Pinned sources go through admission: the environment's source rev is
+verified against the same admission policy as the run source before
+materialization. Without this, pinning would be a bypass channel for
+unverified code into builder VMs.
+
+### Environment seeds
+
+Materializing an environment is the builtin chain applied to itself: an
+internal eval → build → push → seed job, run in stock VMs, registering
+the image as a seed of a new stage-only `environment` seed type (joining
+the policy spec's actions-by-seed-type table alongside `gcroot`). The
+seed registry is the server-side tracking:
+
+- The seed's tags carry the materialization key — the environment's
+  source rev (the run's rev by default, or the pinned one) plus the attr
+  — which the scheduler computes **without evaluating anything**, since
+  revs are pinned at run start. Pinning converges many runs onto one
+  key.
+- Registry hit: the artifact path is known; builders substitute from
+  cache and pin it. No evaluation anywhere.
+- Miss: materialize once, register, and every subsequent run and builder
+  hits.
+- Pre-warming is a subscription: a builder garden subscribing to
+  `environment` seeds with a stage-only policy has images pinned locally
+  before a run asks. Staging already means "download and pin a closure";
+  no new machinery.
+
+Merge runs materialize without registering: their seed capability is
+absent, and the synthetic rev is no durable provenance. The image is
+built — and pushed where the run's push capability allows — then used
+for that run only, so iterating on an environment through a PR works; it
+re-materializes whenever a parent moves. Pinned environments behave
+normally in merge runs: their source revs are durable and
+admission-verified.
+
+Cost accounting for pipelines that override stock: with an unpinned
+environment, each new commit — and each branch's first run — pays one
+environment evaluation (module definitions live in the repository, so
+the key must include the rev), in a stock VM, prefetchable off the
+critical path; the build almost always resolves to an existing store
+path and registration dedupes to a no-op. Pinned environments pay only
+when the pin's target moves. Pipelines that never specify `environment`
+pay nothing.
+
+A failed environment is a distinct, attributed failure — "environment
+`integration` failed to build" — that transitively fails the steps
+depending on it, the same way a failed item skips its remaining chain.
+
+### Secrets
+
+Secrets never pass through Nix evaluation or the Nix store — both are
+effectively public. Two categories with different owners:
+
+- **Sower's own credentials** — cache push, seed registration, deploy
+  authority for builtin steps — are never user-configured. The server
+  mints them per step, short-TTL and scoped (the Issuer/STS shape in
+  spec-seed-trust.md).
+- **User secrets** — tokens and keys for external services used by
+  checks and effects — live in a named, org-scoped server-side secret
+  store (a resource, like caches). A step declares what it needs by
+  name; the default is nothing.
+
+Declared secrets are injected by the host at VM start and appear as
+files under `/run/sower/secrets/<name>`. Files, not environment
+variables — env vars leak through `/proc`, child processes, and shell
+tracing. `env` is for non-secret configuration only.
+
+**Access** is rule-based, on the secret resource, evaluated by the
+server against the run context — never by the definition, which in a PR
+run is authored by the party requesting the secret. The rule shape is
+deployment policy's: allow-only, unordered any-match, fields ANDed
+within a rule, omitted field means any. The vocabulary is a **closed**
+set of context dimensions — `refs`, `modes`, `forks`, `signed_by`,
+`triggers`, `pipelines` — so rules stay data.
+
+``` json
+"access": [
+  { "refs": ["main"] },
+  { "refs": ["release/*"], "signed_by": ["key-release"] },
+  { "refs": ["*"], "triggers": ["manual"], "forks": false }
+]
+```
+
+Read: runs of `main` always; runs of `release/*` only when the executing
+commit is signed by the release key; any other branch only for manual,
+non-fork runs. `refs` matches the run's **source** ref. `modes` matters
+because only a `head` run's signature covers the exact tree executing —
+high-stakes secrets pair `signed_by` with `modes: ["head"]`. Ref
+patterns use simple `*` wildcard globbing.
+
+A secret with no rules (or an empty list) gets a documented narrow
+default:
+
+``` json
+[ { "refs": ["<default branch>"], "modes": ["head"], "forks": false } ]
+```
+
+so a fresh secret works for runs of the default branch's own code and
+nowhere dangerous. Any explicit rules replace the default entirely — no
+merging, exactly as deployment policy behaves. There is no rule spelling
+for "deny everyone": a secret nobody may read is equivalent to deleting
+it.
+
+Rules are evaluated at run start (the courtesy — a denied declaration
+fails validation with a clear error) and enforced at injection (the
+boundary — the host never mounts what the rules do not grant).
+
+## Item Payload
+
+Items accrete fields as they flow. All fields are snake_case
+JSON.
+
+| Producer | Fields added |
+|----|----|
+| eval | `name`, `attr`, `drv_path`, `system`, `meta` (incl. `meta.sower.seed`), or `error` |
+| gardens source | `name`, `garden` (sid, name) |
+| static source | as written in the list |
+| resolve | `name`, `garden` (sid, name), `seeds` (pending subscription resolutions) |
+| build | `out_paths` |
+| push | `cache` (url, uploaded) |
+| seed | `seed` (sid, name, seed_type, artifact, tags) |
+| deploy | `deployment` (sid, state, result, seed_results, actions) |
+| check | appends to `checks` (app, attempts, passed) |
+| effect | appends to `effects` (app, exit_code) |
+
+Fields are references and small facts. Logs are addressed by reference
+(deployment sid, run step id), not embedded.
+
+## Memoization
+
+Builtin steps skip when their key matches a previously successful
+execution:
+
+| Step   | Key                                            |
+|--------|------------------------------------------------|
+| eval   | pinned source rev + attr + environment closure |
+| build  | drv_path                             |
+| push   | out_paths + cache url                |
+| seed   | artifact + seed_type + name + tags   |
+| deploy | seed artifacts + garden sid                    |
+
+Keys are declared per kind — fields outside the key (metadata,
+timestamps) never invalidate. The environment joins eval's key because
+the toolchain can change evaluation results; build's key stays
+`drv_path` alone — the derivation fully determines its output. Rev-based
+keys are sound in both source modes: pure evaluation means the rev
+transitively covers every content-addressed external. `check` and
+`effect` are never skipped. Neither is `resolve` — it is a cheap query
+against live registry state. Re-running a pipeline after a failed canary
+re-evaluates nothing, rebuilds nothing, and resumes at the deploy.
+
+## Deploy Semantics and Policy
+
+Pipeline deployments are **targeted** but **subscription-mediated**: at
+dispatch, the server finds a subscription on the target garden whose
+matching rules match the seed being deployed, and the deployment carries
+that subscription — the garden-side policy lookup works exactly as it
+does for every other deployment, evaluated with the `pipeline` trigger.
+A garden with no matching subscription fails the deploy item at
+run-start validation with an attributed error, before anything
+dispatches.
+
+Breadth is a property of matching rules: a garden that should accept
+arbitrary pipeline deploys carries a **catch-all subscription** —
+match-all rules, a policy granting only the `pipeline` trigger, no
+schedule. That is not a workaround; it is the garden explicitly
+declaring what pipelines may put there, in reviewable configuration.
+Pipelines never create or modify subscriptions.
+
+Policy interplay:
+
+- A new policy trigger `pipeline` is added, with audit reason
+  `pipeline_triggered`. Both are additive enum changes.
+- The default policy does **not** include `pipeline` — like `realtime`,
+  it is an explicit opt-in in the matching subscription's policy.
+- `confirm: true` rules hold the deployment pending approval as usual;
+  the deploy step's `timeout` bounds how long the pipeline waits.
+- The never-strand principle is unaffected: pipelines add a way to
+  deploy, never a new way to block existing ones.
+
+Compatibility: gardens below the version that understands the `pipeline`
+trigger must not receive pipeline deployments. The server gates dispatch
+on the garden's reported `version`. This follows the existing contract
+discipline (`@server_pushed_schema_titles`, contract baseline).
+
+## Pipelines and Subscriptions
+
+The rule of thumb: **no cross-system ordering or gating → subscription;
+ordering, gates, or coordinated waves → pipeline.** A pipeline that just
+deploys everywhere on a timer is a subscription reimplemented with more
+moving parts.
+
+The two are different modes, not duplicates:
+
+- A **subscription** is per-garden convergence: pull-based,
+  garden-autonomous, works through disconnects, no cross-garden
+  awareness.
+- A **pipeline** is coordinated propagation: push-based, ordered,
+  run-scoped — it exists for the cross-system sequencing subscriptions
+  cannot express.
+
+For gardens managed by coordinated rollouts, the subscription narrows to
+its declarative core — the matching rules, i.e. desired state. When and
+in what order moves to the pipeline; the garden's policy grants the
+`pipeline` trigger and withholds `scheduled=/=realtime`. Pick **one
+actuation path per garden**: a policy granting both `pipeline` and
+`realtime` lets the garden self-deploy mid-rollout, defeating the
+phases.
+
+A pipeline sequences convergence but is never the only path to it: a
+broken or stuck run blocks nothing, and a garden whose policy also
+grants its own triggers still converges through its subscription. The
+never-strand principle is preserved by construction.
+
+Mixing flavors composes through seed tags. A `seed` step fires the same
+registration events that drive `realtime` subscriptions, so an
+eval-flavored pipeline should register seeds with a pre-release tag that
+fleet subscriptions do not match, deploy its phases targeted, and finish
+by promoting the seed to the release channel (a tag mutation — see
+Future Considerations for a builtin `promote` step). Subscriptions
+matching the promoted channel then take over for the long tail: CI
+pipeline and scheduled rollout pipeline meet at the tag.
+
+## Scheduled Runs
+
+A schedule is a run trigger; the definition contract does not change.
+The cron and the source (repository and branch) live on the server-side
+registered pipeline resource — matching where subscriptions keep their
+`schedule` — not in the flake.
+
+A scheduled pipeline points at a moving source ref. At run start the
+server resolves and pins it; the run's source means that pinned rev for
+the whole run. Memoization then turns the schedule into a polling model:
+an unchanged input no-ops in seconds (eval keyed on the locked rev,
+builds on drv paths, deploys on artifact and garden), while a change
+flows exactly as far as it reaches. Resolve-flavored pipelines get the
+same property from `resolve` emitting only pending changes.
+
+A scheduled run will reach gardens whose policy windows are closed. The
+deployment holds garden-side until policy permits or the deploy step's
+`timeout` expires; aligning the run schedule with wave windows is an
+operator concern, with the timeout as backstop.
+
+## Repository Input
+
+### Triggers
+
+What starts a run is configured on the server-side pipeline resource,
+never in the definition — mode selection decides which tree the
+definition is read from, so it must precede reading it:
+
+| Trigger | Runs on |
+|----|----|
+| manual | The requested ref's head. |
+| schedule | The configured branch's head (see Scheduled Runs). |
+| push | The pushed branch's head, with branch filters (`*` globbing). |
+| pull_request | A synthetic merge of the PR into its target (default), or the PR head. |
+| tag | The tagged commit. |
+
+Forge adapters (webhook integration per forge) may be implemented
+incrementally; the trigger contract and context fields are fixed now so
+adapters slot in without contract changes.
+
+### Run Modes
+
+A run executes in one of two checkout modes:
+
+- `head`: a real branch commit — durable, addressable, signed or not.
+  Every property in this spec holds directly.
+- `merge`: a server-synthesized merge of a source branch into a target,
+  for PR validation ("what would the target become"). The server fetches
+  both heads, records signature verification for **both parents**, and
+  synthesizes the merge itself; a conflict fails the run at admission
+  with a distinct outcome, before anything executes. The merge SHA is
+  ephemeral and reachable from no branch.
+
+Merge mode exists only through the `pull_request` trigger, and the
+target is always the PR's declared base branch — never requester-chosen.
+Manual, scheduled, push, and tag runs are always `head`; there is no way
+to request a synthetic merge by hand.
+
+Merge-mode eval memoization rarely hits (the synthetic rev moves
+whenever either parent moves); drv-level build dedup absorbs most of the
+cost.
+
+### Sources Are Inputs
+
+Builtin steps never fetch repositories at run time. External sources
+enter as pinned inputs of the pipeline source (flake inputs,
+niv/npins-style pins) — a lock bump is a reviewable commit, and the
+run's rev then covers exactly what was used. Inputs are fetched by hash
+(fixed-output derivations are the sanctioned mechanism — the hash makes
+them content-addressed despite touching the network) or substituted from
+a cache; private inputs use scoped read credentials minted like any
+other step credential.
+
+The honest boundary: an `effect` or `check` with `network` set to `full`
+can fetch anything, and no engine can prevent it. Anything fetched at
+run time is outside provenance, memoization, and admission — if it
+affects what gets built or deployed, it must be an input. Runtime
+fetching is for genuinely external interaction, which is what effects
+are for.
+
+## Run Admission
+
+Every run proceeds in a fixed order:
+
+1.  Resolve the source ref(s) and pin the revision — both parents for a
+    merge run.
+2.  Admission: evaluate the pipeline resource's policy → **allow**,
+    **hold**, or **deny** — and compute the run's capability set.
+3.  Evaluate the pipeline attribute (with run context).
+4.  Validate the resulting definition.
+5.  Execute.
+
+Admission runs **before** evaluation: evaluating Nix source is the first
+execution of repository content, and untrusted content should not get
+that far.
+
+The admission policy lives on the server-side pipeline resource, never
+in the flake — a requirement evaluated from the revision it gates can be
+removed by the same commit it should have stopped.
+
+### Signatures
+
+Signature verification always runs; its result is recorded into the run
+context (`ctx.signature`) whether or not the policy requires it.
+Requiring it is a per-pipeline choice:
+
+| Policy | What it provides |
+|----|----|
+| none required | Verification is recorded for policy and definition use; nothing is gated. |
+| any signature | Hygiene only. Any key can sign anything; this attests that signing infrastructure works, not that the author was authorized. |
+| allowlisted keys | A real boundary: trust moves from "whoever can write to the repository" to "whoever holds an enrolled key". Defends against forge and repository-credential compromise. |
+
+A commit signature covers the tree hash, so a verified `head` run's
+signature covers the exact tree executing. A `merge` run can never make
+that statement: only its parents were verified; the executing tree is a
+server-authored combination. Known limits: an authorized signer's merge
+commit blesses whatever it merges; the boundary is only as strong as key
+custody; and signatures do not prevent pointing a run at an old, signed,
+vulnerable revision — downgrade protection needs monotonic source
+pinning (Future Considerations).
+
+One verification, three consumption tiers: an optional hard gate (this
+policy), server-side capability and secret decisions (below), and soft
+definition logic (`ctx.signature`). Security-bearing decisions are
+always the server's, evaluated against the context — never the
+definition's, which in a PR run is authored by the very party being
+judged.
+
+### Hold
+
+`hold` parks the run pending operator approval before anything evaluates
+or executes — for origins the policy distrusts (forks, unsigned commits,
+first-time contributors). This guards builder compute as much as
+secrets. It is the run-level analog of deployment policy's `confirm`.
+
+### Capabilities
+
+Admission computes the run's capability set from trigger, mode, fork
+provenance, signature result, and pipeline policy:
+
+| Capability | `head` run | `merge` run |
+|----|----|----|
+| eval, build, resolve | yes | yes |
+| push | policy-decidable; conservative default for forks and unsigned runs (quarantine cache or none) | same |
+| seed | policy-decidable; default deny for forks and unsigned runs | never — the ephemeral SHA would be provenance pointing at a commit that will cease to exist |
+| deploy | policy-decidable | never — denied outright, not just transitively; validation runs have no business touching gardens |
+| secrets | per-secret access rules (see Secrets) | same rules; `merge` mode matches only rules that allow it |
+
+Enforcement is layered, deliberately redundantly: run-start validation
+rejects definitions exceeding the run's capabilities with a clear error
+(the courtesy); the credential minter refuses to mint authority the run
+does not have, the server refuses server-side steps, and the host mounts
+only granted secrets (the boundary).
+
+## Definition Contract
+
+The JSON produced by evaluating the pipeline attribute. This document —
+not the Nix that generated it — is what the server accepts, validates,
+and stores.
+
+| Field | Type | Required | Description |
+|----|----|----|----|
+| version | int | yes | Contract version. Currently `1`. |
+| name | string | yes | Pipeline name. |
+| phases | phase\[\] | yes | As specified above. |
+| defaults | object | no | Default `vm` and `environment` applied where phases and steps do not override. |
+
+Validation at submission:
+
+1.  Phase names are unique; item names are validated per source kind.
+2.  Every ref resolves to an existing phase (and item form is permitted
+    for the source kind).
+3.  The data-flow graph (refs plus `needs`) is acyclic.
+4.  Field provenance: a step requiring fields (e.g. `build` requires
+    `drv_path`) must be reachable only from producers of those fields.
+    `deploy` must get seed fields from its `seeds` refs or from an item
+    chain that produces them (`resolve`).
+5.  Collection/scalar shape: `items.from` must reference a phase, not a
+    single item; step refs like `deploy.seeds` entries must reference
+    items or single-item phases.
+6.  `effect=/=check` apps and `environment` refs are attrpaths in the
+    pipeline source evaluating to derivations; arbitrary commands are
+    rejected.
+7.  Garden names resolve against registered gardens; deploy targets must
+    hold a subscription matching the deployed seeds.
+8.  Declared `secrets` resolve against the org's secret store and must
+    be admitted by their access rules for this run; `vm.caches` entries
+    and `push.cache` resolve against registered cache resources.
+9.  The definition must not exceed the run's capability set — e.g.
+    `seed` or `deploy` steps in a merge run are rejected.
+
+The contract schemas belong in `sower_client` (OpenApiSpex, registered
+in `sower_client.ex`) and are covered by the contract baseline like
+every other cross-component schema.
+
+## Pipeline Resource
+
+The server-side registered pipeline — the operator-owned half of the
+contract, holding everything that must not live in the repository. The
+definition says what a run does; the resource says what runs, when, and
+with how much trust. Consolidated here; each field's semantics are
+normative in the referenced section.
+
+| Field | Description | Section |
+|----|----|----|
+| source | Repository, branch, source mode (`flake=/=nix`), entrypoint attribute. | Definition Format, Source Modes |
+| triggers | Enabled triggers and their filters (push branches, pull_request). | Repository Input |
+| schedule | Cron for scheduled runs. | Scheduled Runs |
+| admission | Signature policy and hold rules. | Run Admission |
+| capabilities | Policy knobs for fork and unsigned runs (seed, push defaults). | Run Admission |
+
+## Examples
+
+### Release pipeline
+
+A context function: every run evaluates and builds, but only head runs
+of `main` register and roll out. A `pull_request` run of this same
+pipeline is a pure validation run — its definition contains no steps its
+capability set forbids.
+
+``` nix
+sower.pipelines.release = ctx:
+  let releasing = ctx.mode == "head" && ctx.branch == "main";
+  in {
+    version = 1;
+    name = "release";
+    phases = [
+      {
+        name = "eval";
+        steps = [
+          { kind = "eval"; attr = "sowerSeeds"; workers = 4; memory_limit = 2048; }
+        ];
+      }
+      {
+        name = "build";
+        items = { from = "eval"; };
+        concurrency = 8;
+        steps = [
+          { kind = "build"; }
+          { kind = "push"; cache = "central"; }
+        ];
+      }
+    ] ++ lib.optionals releasing [
+      {
+        name = "register";
+        items = { from = "build"; };
+        steps = [ { kind = "seed"; } ];
+      }
+      {
+        name = "canary";
+        needs = [ "register" ];
+        items = { gardens = { names = [ "door" ]; }; };
+        steps = [
+          { kind = "deploy"; seeds = [ "register/web" ]; }
+          { kind = "check"; app = "checks/http";
+            wait = { timeout = "10m"; interval = "15s"; }; }
+        ];
+      }
+      {
+        name = "fleet";
+        needs = [ "canary" ];
+        items = { gardens = { names = [ "gate" "wall" "keep" ]; }; };
+        steps = [
+          { kind = "deploy"; seeds = [ "register/web" ]; }
+          { kind = "check"; app = "checks/http"; }
+        ];
+      }
+    ];
+  };
+```
+
+Builds stream out of eval as attributes complete and push to the
+registered `central` cache. On `main`, registration waits for the full
+build set (`needs` via the `register` barrier), the canary garden must
+report a successful deployment and pass its http check within ten
+minutes, and only then does the fleet follow. On any other branch — and
+in any merge run — the pipeline is eval/build/push only.
+
+### Scheduled deploy-only rollout
+
+No eval, no build: deploy whatever the fleet's subscriptions already
+select, in waves. Run nightly against a fixed definition.
+
+``` nix
+sower.pipelines.nightly-rollout = {
+  version = 1;
+  name = "nightly-rollout";
+  phases = [
+    {
+      name = "resolve";
+      steps = [
+        { kind = "resolve";
+          gardens = { names = [ "door" "gate" "wall" "keep" ]; }; }
+      ];
+    }
+    {
+      name = "canary";
+      items = { from = "resolve"; only = [ "door" ]; };
+      steps = [
+        { kind = "deploy"; }
+        { kind = "check"; app = "checks/http";
+          wait = { timeout = "10m"; interval = "15s"; }; }
+      ];
+    }
+    {
+      name = "rest";
+      needs = [ "canary" ];
+      items = { from = "resolve"; except = [ "door" ]; };
+      steps = [
+        { kind = "deploy"; }
+        { kind = "check"; app = "checks/http"; }
+      ];
+    }
+  ];
+};
+```
+
+Gardens already running their resolved seeds produce no items, so an
+unchanged fleet makes the nightly run a near-instant no-op. The `rest`
+wave deploys the same snapshot the canary validated, even if newer seeds
+were registered mid-run.
+
+### Selective barrier
+
+Deploy as soon as the two seeds that matter are ready, while the rest of
+the set is still building:
+
+``` nix
+{
+  name = "edge";
+  items = { gardens = { names = [ "edge-1" ]; }; };
+  steps = [
+    { kind = "deploy"; seeds = [ "seeds/proxy" "seeds/dns" ]; }
+  ];
+}
+```
+
+The refs to `seeds/proxy` and `seeds/dns` are the only dependencies — no
+whole-phase barrier.
+
+### Gate, effect, wait
+
+A single-item phase (no `items`) runs its chain once:
+
+``` nix
+{
+  name = "publish";
+  needs = [ "seeds" ];
+  steps = [
+    { kind = "check"; app = "checks/release-policy"; }        # gate: one attempt
+    { kind = "effect"; app = "announce"; }
+    { kind = "check"; app = "checks/mirrors-synced";
+      wait = { timeout = "30m"; interval = "1m"; }; }         # wait with deadline
+  ];
+}
+```
+
+### Custom environment and secrets
+
+An integration check with its own guest system and a notification effect
+using a declared secret. The environment is pinned to `main` so feature
+branches share its image instead of materializing their own:
+
+``` nix
+{
+  name = "verify";
+  needs = [ "build" ];
+  steps = [
+    { kind = "check";
+      app = "checks/integration";
+      environment = { attr = "environments/integration"; ref = "main"; };
+      vm = { cpus = 4; memory = 4096; network = "cache-only"; };
+      env = { PGHOST = "/run/postgresql"; }; }
+    { kind = "effect";
+      app = "notify";
+      secrets = [ "statuspage-token" ];
+      vm = { network = "full"; }; }
+  ];
+}
+```
+
+The secret injects only where its access rules admit the run; a PR run
+declaring it without a matching rule fails validation before anything
+executes.
+
+### Generated rollout waves
+
+Phase generation is ordinary Nix:
+
+``` nix
+let
+  wave = prev: gardens: {
+    name = "wave-${builtins.head gardens}";
+    needs = [ prev ];
+    items = { gardens = { names = gardens; }; };
+    steps = [
+      { kind = "deploy"; seeds = [ "seeds/web" ]; }
+      { kind = "check"; app = "checks/http"; }
+    ];
+  };
+in
+# fold waves into the phase list, each needing the previous
+```
+
+## Resolved Decisions
+
+- **The JSON contract is normative; Nix is the blessed front-end.**
+  Other front-ends may exist later; they all produce the same contract.
+- **Phases, not stages.** `stage` is a policy action and stays that way.
+- **Effects and checks are built executables only.** Side effects pinned
+  in closures; no arbitrary argv.
+- **Flakes are the blessed source mode, not a requirement.** Classic Nix
+  is capability-equal via the `sower.nix` entrypoint, with purity
+  enforced; the contract never records the mode. Sower itself is
+  importable without flakes.
+- **Item context via stdin JSON.** No templating language in the
+  definition.
+- **Streaming is the default; barriers are explicit** — either `needs`
+  or a data-flow ref on a whole phase.
+- **Engine-owned operations are builtin kinds** (eval, build, push,
+  seed, deploy) reusing the existing `sower-build` step vocabulary;
+  `effect` is the extension point.
+- **Pipeline deploys are targeted but subscription-mediated.** Dispatch
+  requires a subscription on the garden matching the seed; its policy is
+  evaluated with the opt-in `pipeline` trigger. Catch-all subscriptions
+  are the sanctioned wide-open configuration.
+- **Merge runs come only from `pull_request` triggers.** The target is
+  the PR's declared base; manual, scheduled, push, and tag runs are
+  always `head`.
+- **`resolve` reuses subscriptions.** Deploy-only pipelines resolve
+  existing subscription matching rules; there is no second matching
+  concept.
+- **Resolution is a snapshot.** Later waves deploy what earlier phases
+  validated; newer seeds wait for the next run.
+- **Schedules live on the server-side pipeline resource**, with the
+  moving flake ref re-resolved and pinned at each run start.
+- **The pipeline attribute is an attrset or a function of run context.**
+  Conditionality is Nix logic; the contract has no condition language.
+- **Admission policy lives on the server resource, never in the flake.**
+  A gate evaluated from the revision it gates is no gate.
+- **Executing steps run in microVMs.** The contract carries resources,
+  network policy, and references; software configuration is NixOS
+  modules on a sower base.
+- **Secrets are declared per step and injected as files at VM start.**
+  Never through evaluation, the store, or the run context.
+- **Builtin steps run in the stock image by default.** `environment` is
+  the exception — for checks, effects, and toolchain control.
+- **Environments are assembled only by `sower.lib.mkEnvironment`.** The
+  mandatory base module carries the step runtime, boot optimizations,
+  and a versioned guest-contract marker.
+- **Environments are tracked as stage-only `environment` seeds.**
+  Materialization reuses the builtin chain; pre-warming reuses
+  subscriptions.
+- **Environment sources may be pinned by branch or rev**, defaulting to
+  the run's own rev. Pinned revs pass the same admission verification as
+  the run source.
+- **Triggers, PRs, and merge runs are first-class contract.** Forge
+  adapters may lag; the contract does not.
+- **Signature verification always runs and is recorded in context.**
+  Requiring it is per-pipeline admission policy.
+- **Runs carry server-computed capability sets.** Merge runs are
+  validation-only — no seed, no deploy — on provenance grounds.
+- **Secret access is rule-based over run context**, evaluated
+  server-side, with a narrow non-empty default in deployment policy's
+  style.
+- **External sources are pinned inputs.** Builtin steps never fetch
+  repositories at run time.
+
+## Future Considerations
+
+- Per-forge trigger adapters (github, forgejo) — the trigger contract is
+  fixed; adapters land incrementally. Run-state observation contract
+  lives with the scheduler spec.
+- Quarantine cache design for untrusted runs (builder spec).
+- Garden-advertised endpoints for checks (garden-level config).
+- A builtin `promote` step (seed tag mutation) formalizing the channel
+  handoff between pipelines and subscriptions.
+- Richer `resolve` selection (by subscription, seed type) beyond garden
+  name lists.
+- Garden labels/groups for selection beyond explicit name lists.
+- A required-action field on `deploy` (fail if policy permitted only
+  `stage` when the pipeline expected activation).
+- Checks/effects enriching the item via structured stdout.
+- Partial-tolerant barriers (proceed when ≥N of a collection succeeded).
+- An approval step kind (pipeline-level analog of policy `confirm`).
+- Monotonic source pinning per pipeline (downgrade protection for
+  admitted revisions).
+- Per-pipeline secret allowlists, log masking, and an env-var secret
+  mapping convenience.
+- Host capability flags on `vm` (e.g. nested virtualisation).
+- Narrower environment materialization keys (input hashing below
+  whole-rev granularity) — likely unnecessary now that source pinning
+  exists.
+- Full flake refs as environment sources (org-shared environment
+  repositories).
+- Execution placement: eval/build/push/seed steps run on builders
+  (today: wherever `sower-build` runs; eventually builder gardens per
+  spec-seed-trust.md). Deploy/check coordination belongs to the server.
+  Both are scheduler concerns, out of scope here.
