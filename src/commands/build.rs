@@ -85,7 +85,7 @@ enum EvalType {
 }
 
 pub fn run(args: BuildArgs) -> Result<()> {
-    let bin = std::env::var_os("SOWER_BUILD_CLI").unwrap_or_else(|| "sower-cli".into());
+    let bin = std::env::var_os("SOWER_BUILD_CLI").unwrap_or_else(|| "sower-build".into());
     let err = std::process::Command::new(&bin).args(args.to_argv()).exec();
     Err(anyhow::Error::new(err).context(format!("exec {}", bin.to_string_lossy())))
 }

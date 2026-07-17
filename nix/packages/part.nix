@@ -16,22 +16,22 @@
       };
 
       packages = rec {
-        activator = rust-cli;
+        activator = cli;
 
         cli = pkgs.callPackage ./cli.nix {
-          inherit beamPackages version;
+          inherit craneLib;
         };
 
         garden = pkgs.callPackage ./garden.nix {
           inherit beamPackages version;
         };
 
-        rust-cli = pkgs.callPackage ./rust-cli.nix {
-          inherit craneLib;
+        sower = pkgs.callPackage ./sower.nix {
+          inherit cli sower-build;
         };
 
-        sower = pkgs.callPackage ./sower.nix {
-          inherit cli rust-cli;
+        sower-build = pkgs.callPackage ./sower-build.nix {
+          inherit beamPackages version;
         };
 
         server = pkgs.callPackage ./server.nix {

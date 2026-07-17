@@ -2,23 +2,20 @@
   cli,
   lib,
   makeWrapper,
-  rust-cli,
+  sower-build,
   symlinkJoin,
 }:
 
-# The Rust CLI is the front door; its `build` subcommand execs `sower-cli`
-# from PATH. Composed here instead of wrapping rust-cli directly so the
-# activator package (= rust-cli) keeps a lean closure.
 symlinkJoin {
   pname = "sower";
-  inherit (rust-cli) version;
+  inherit (cli) version;
 
-  paths = [ rust-cli ];
+  paths = [ cli ];
 
   nativeBuildInputs = [ makeWrapper ];
 
   postBuild = ''
-    wrapProgram $out/bin/sower --suffix PATH : ${lib.makeBinPath [ cli ]}
+    wrapProgram $out/bin/sower --suffix PATH : ${lib.makeBinPath [ sower-build ]}
   '';
 
   meta.mainProgram = "sower";

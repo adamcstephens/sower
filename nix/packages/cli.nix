@@ -1,58 +1,55 @@
 {
-  beamPackages,
-  callPackages,
+  craneLib,
+  installShellFiles,
   lib,
-  makeWrapper,
-  version,
 }:
 
-beamPackages.mixRelease {
-  pname = "sower-cli";
-  inherit version;
+let
+  src =
+    with lib.fileset;
+    toSource {
+      root = ../..;
+      fileset = unions [
+        ../../Cargo.toml
+        ../../Cargo.lock
+        ../../build.rs
+        ../../openapi.json
+        ../../src
+        ../../tests
+        # interface-drift guardrail fixture shared with the Elixir CLI
+        ../../apps/sower_cli/priv/build_interface.json
+      ];
+    };
 
-  src = lib.fileset.toSource {
-    root = ../..;
-    fileset = lib.fileset.unions [
-      ../../apps/nix
-      ../../apps/sower_cli
-      ../../apps/sower_client
-      ../../config
-      ../../mix.exs
-      ../../mix.lock
-      ../../VERSION
-    ];
+  commonArgs = {
+    inherit src;
+    pname = "sower";
+    version = (lib.importTOML ../../Cargo.toml).package.version;
+    strictDeps = true;
   };
 
-  mixReleaseName = "cli";
+  cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+in
+craneLib.buildPackage (
+  commonArgs
+  // {
+    inherit cargoArtifacts;
 
-  mixNixDeps = callPackages ./umbrella-deps.nix { inherit beamPackages; };
+    nativeBuildInputs = [
+      installShellFiles
+    ];
 
-  removeCookie = false;
+    postInstall = ''
+      installShellCompletion --cmd sower \
+        --bash <(COMPLETE=bash $out/bin/sower) \
+        --fish <(COMPLETE=fish $out/bin/sower) \
+        --zsh <(COMPLETE=zsh $out/bin/sower)
 
-  nativeBuildInputs = [
-    makeWrapper
-  ];
+      # When invoked via this symlink, the binary detects argv[0] and routes
+      # to the `activator` subcommand.
+      ln --symbolic sower $out/bin/sower-activator
+    '';
 
-  postInstall = ''
-    mv $out/bin/cli $out/bin/sower-cli
-    wrapProgram $out/bin/sower-cli --add-flags "eval 'SowerCli.main(System.argv())'"
-  '';
-
-  doCheck = true;
-  checkPhase = ''
-    runHook preCheck
-
-    export MIX_ENV=test
-    ln -sv $PWD/_build/prod _build/test
-
-    pushd apps/sower_cli
-    mix do deps.loadpaths --no-deps-check + test
-    popd
-
-    export MIX_ENV=prod
-
-    runHook postCheck
-  '';
-
-  meta.mainProgram = "sower-cli";
-}
+    meta.mainProgram = "sower";
+  }
+)

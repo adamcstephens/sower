@@ -18,7 +18,7 @@ let
   activatorPkg = flake.packages.${system}.activator;
   serverPkg = flake.packages.${system}.server;
 
-  # `sower` on PATH is the Rust CLI wrapped with the Elixir `sower-cli` build
+  # `sower` on PATH is the Rust CLI wrapped with the Elixir `sower-build` build
   # engine, so seed/garden commands run natively and `sower build` forwards.
   sowerPkg = flake.packages.${system}.sower;
   rustCli = flake.packages.${system}.rust-cli;
