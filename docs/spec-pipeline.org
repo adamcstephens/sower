@@ -42,6 +42,8 @@ denies.
   =nix run= so side effects are pinned in a flake closure.
 - Builtin steps are memoized on content-addressed keys. Re-running a pipeline
   skips work whose inputs have not changed.
+- Step software is Nix: execution environments are NixOS modules on a
+  sower-provided base. The contract carries only resources and references.
 - Deployment policy is evaluated as usual on every garden. Pipelines
   introduce a new trigger; they do not bypass policy.
 
@@ -69,13 +71,49 @@ The blessed front-end is Nix. A pipeline is a flake output:
 sower.pipelines.<name>
 #+end_example
 
-evaluated with =nix eval --json= to produce the definition contract
-(see Definition Contract below). The JSON contract is normative; the Nix
-front-end is convention. Reuse and generation (e.g. producing N rollout
-phases from a list of garden groups) are ordinary Nix functions.
+evaluated at run start to produce the definition contract (see Definition
+Contract below). The JSON contract is normative; the Nix front-end is
+convention. Reuse and generation (e.g. producing N rollout phases from a
+list of garden groups) are ordinary Nix functions.
 
 The evaluation of the pipeline attribute itself must be cheap. It is separate
 from any =eval= step the pipeline contains.
+
+*** Run Context
+
+The attribute may be a plain attrset or a function of the run context —
+the module-system convention. When it is a function, the server applies the
+context during evaluation:
+
+#+begin_src nix
+sower.pipelines.release = ctx: {
+  version = 1;
+  name = "release";
+  phases =
+    [ evalPhase seedsPhase ]
+    ++ lib.optionals (ctx.branch == "master") [ canaryPhase fleetPhase ];
+};
+#+end_src
+
+Conditional phases and steps are therefore ordinary Nix — there is no
+condition language in the contract. Wildcard branch matching is
+=lib.hasPrefix= or =builtins.match=.
+
+| Field   | Description                                                        |
+|---------+--------------------------------------------------------------------|
+| branch  | Branch the run was resolved from.                                  |
+| rev     | The pinned revision.                                               |
+| trigger | What started the run (manual, schedule).                           |
+| signer  | Verified signer identity, when run admission verified one (see Run Admission). |
+
+The context is an open set — fields will be added. Take =ctx= whole or
+destructure with =...=; exact destructuring breaks when fields appear. The
+context never contains secrets: the evaluated result is stored as the run's
+definition and is not a secret channel.
+
+Each run stores the resolved definition it executed; the registered
+pipeline resource holds only the source (repository, branch) and the
+attribute name.
 
 ** Phases
 
@@ -86,6 +124,8 @@ from any =eval= step the pipeline contains.
 | needs       | ref[]  | no       | []        | Explicit barriers in addition to data-flow edges.    |
 | steps       | step[] | yes      |           | Chain applied to each item, in order.                |
 | concurrency | int    | no       | engine    | Max items in flight in this phase.                   |
+| vm          | object | no       | pipeline default | Default VM resources for this phase's steps (see Execution Environment). |
+| environment | string | no       | pipeline default | Default environment for this phase's steps.   |
 
 For a build phase, =concurrency= is the item-level parallelism that
 =sower-build --build-jobs= expresses today.
@@ -150,10 +190,12 @@ whole-collection ref.
 
 Every step accepts:
 
-| Field   | Type   | Required | Default     | Description                     |
-|---------+--------+----------+-------------+---------------------------------|
-| kind    | string | yes      |             | One of the kinds below.         |
-| timeout | string | no       | kind-specific | Per-attempt execution limit.  |
+| Field       | Type   | Required | Default       | Description                     |
+|-------------+--------+----------+---------------+---------------------------------|
+| kind        | string | yes      |               | One of the kinds below.         |
+| timeout     | string | no       | kind-specific | Per-attempt execution limit.    |
+| vm          | object | no       | phase default | VM resources (see Execution Environment). |
+| environment | string | no       | phase default | Environment module ref (see Execution Environment). |
 
 A step failure fails its item: the rest of the chain is skipped for that
 item, and the item does not flow to consumers. The phase's aggregate result
@@ -265,9 +307,11 @@ or deadline. Appends to =checks= (app, attempts, passed).
 
 | Field | Type    | Required | Default | Description                                    |
 |-------+---------+----------+---------+------------------------------------------------|
-| app   | string  | yes      |         | Installable in the pipeline flake, run via =nix run <flake>#<app>=. |
-| args  | string[] | no      | []      | Extra arguments appended after =--=.           |
-| wait  | object  | no       | none    | ={ "timeout": "10m", "interval": "15s" }= — retry until success or deadline. |
+| app     | string   | yes      |         | Installable in the pipeline flake, run via =nix run <flake>#<app>=. |
+| args    | string[] | no       | []      | Extra arguments appended after =--=.           |
+| wait    | object   | no       | none    | ={ "timeout": "10m", "interval": "15s" }= — retry until success or deadline. |
+| env     | object   | no       | {}      | Static environment variables. Literal strings only — dynamic data arrives via the item on stdin. |
+| secrets | string[] | no       | []      | Named secrets mounted for this invocation (see Secrets). |
 
 *** effect
 
@@ -276,8 +320,10 @@ no retry. Appends to =effects= (app, exit_code).
 
 | Field | Type     | Required | Default | Description                        |
 |-------+----------+----------+---------+------------------------------------|
-| app   | string   | yes      |         | Installable in the pipeline flake. |
-| args  | string[] | no       | []      | Extra arguments after =--=.        |
+| app     | string   | yes      |         | Installable in the pipeline flake. |
+| args    | string[] | no       | []      | Extra arguments after =--=.        |
+| env     | object   | no       | {}      | Static environment variables. Literal strings only. |
+| secrets | string[] | no       | []      | Named secrets mounted for this invocation (see Secrets). |
 
 Effects and checks are restricted to =nix run=: side effects are pinned in
 the same closure discipline as everything else. Arbitrary argv is rejected
@@ -290,6 +336,74 @@ An http check against a canary garden reads the garden's identity from the
 item; nothing is interpolated into arguments by the engine. Stdout and
 stderr are captured as the step log. Builtin steps receive the item
 natively.
+
+** Execution Environment
+
+Steps that execute work — =eval=, =build=, =push=, =seed=, =check=,
+=effect= — each run in their own cloud-hypervisor microVM on a builder.
+Server-side steps (=resolve=, =deploy=) are engine operations and accept no
+=vm= or =environment= config. The contract carries resources and
+references; all software configuration is Nix.
+
+*** vm
+
+| Field   | Type     | Required | Default | Description                                   |
+|---------+----------+----------+---------+-----------------------------------------------|
+| cpus    | int      | no       | engine  | Virtual CPUs.                                 |
+| memory  | int      | no       | engine  | Memory in MiB. Bounds the whole step; step-internal knobs (e.g. eval's =memory_limit=) operate within it. |
+| network | string   | no       | none    | =none=, =cache-only=, or =full=.              |
+| caches  | string[] | no       | []      | Registered cache resources (by name) the VM may substitute from. The server materializes substituter configuration; raw URLs and keys do not appear in the definition. |
+
+Settable on a step, a phase (default for its steps), or the pipeline
+=defaults=. =network= is enforced by the host, not the guest: =none= for
+hermetic work, =cache-only= for substitution, =full= for checks and effects
+that reach out.
+
+*** environment
+
+An installable in the pipeline flake evaluating to a NixOS module (or list
+of modules), merged onto a sower-provided base module that supplies the
+step runtime. Extra packages, services (a per-step database for an
+integration check), container support — all of it is ordinary NixOS
+options:
+
+#+begin_src nix
+sower.environments.integration = { pkgs, ... }: {
+  environment.systemPackages = [ pkgs.postgresql ];
+  services.postgresql = {
+    enable = true;
+    ensureDatabases = [ "checks" ];
+  };
+};
+#+end_src
+
+Everything in the environment is pinned by the pipeline flake's lock — the
+definition cannot introduce moving inputs. The VM is ephemeral: services
+start with the step and die with it, which is the hermetic semantic steps
+already promise.
+
+How the guest reaches the Nix store (shared from the host or hydrated from
+a cache) is a builder concern, out of scope here; the contract is agnostic
+to it.
+
+*** Secrets
+
+Secrets never pass through Nix evaluation or the Nix store — both are
+effectively public. Two categories with different owners:
+
+- *Sower's own credentials* — cache push, seed registration, deploy
+  authority for builtin steps — are never user-configured. The server mints
+  them per step, short-TTL and scoped (the Issuer/STS shape in
+  spec-seed-trust.org).
+- *User secrets* — tokens and keys for external services used by checks and
+  effects — live in a named, org-scoped server-side secret store (a
+  resource, like caches). A step declares what it needs by name; the
+  default is nothing.
+
+Declared secrets are injected by the host at VM start and appear as files
+under =/run/sower/secrets/<name>=. Files, not environment variables — env
+vars leak through =/proc=, child processes, and shell tracing. =env= is for
+non-secret configuration only.
 
 ** Item Payload
 
@@ -317,17 +431,19 @@ Builtin steps skip when their key matches a previously successful execution:
 
 | Step   | Key                                                |
 |--------+----------------------------------------------------|
-| eval   | pinned flake (locked rev) + attr                   |
+| eval   | pinned flake (locked rev) + attr + environment closure |
 | build  | drv_path                                           |
 | push   | out_paths + cache url                              |
 | seed   | artifact + seed_type + name + tags                 |
 | deploy | seed artifacts + garden sid                        |
 
 Keys are declared per kind — fields outside the key (metadata, timestamps)
-never invalidate. =check= and =effect= are never skipped. Neither is
-=resolve= — it is a cheap query against live registry state. Re-running a
-pipeline after a failed canary re-evaluates nothing, rebuilds nothing, and
-resumes at the deploy.
+never invalidate. The environment joins eval's key because the toolchain
+can change evaluation results; build's key stays =drv_path= alone — the
+derivation fully determines its output. =check= and =effect= are never
+skipped. Neither is =resolve= — it is a cheap query against live registry
+state. Re-running a pipeline after a failed canary re-evaluates nothing,
+rebuilds nothing, and resumes at the deploy.
 
 ** Deploy Semantics and Policy
 
@@ -408,6 +524,41 @@ deployment holds garden-side until policy permits or the deploy step's
 =timeout= expires; aligning the run schedule with wave windows is an
 operator concern, with the timeout as backstop.
 
+** Run Admission
+
+Every run proceeds in a fixed order:
+
+1. Resolve the source ref and pin the revision.
+2. Verify the pipeline resource's admission policy against the pinned
+   revision.
+3. Evaluate the pipeline attribute (with run context).
+4. Validate the resulting definition.
+5. Execute.
+
+Admission runs *before* evaluation: evaluating a flake is the first
+execution of repository content, and untrusted content should not get that
+far.
+
+The admission policy lives on the server-side pipeline resource, never in
+the flake — a requirement evaluated from the revision it gates can be
+removed by the same commit it should have stopped. Initially one policy
+kind: commit signature requirements.
+
+| Policy           | What it provides                                       |
+|------------------+--------------------------------------------------------|
+| any signature    | Hygiene only. Any key can sign anything; this attests that signing infrastructure works, not that the author was authorized. |
+| allowlisted keys | A real boundary: trust moves from "whoever can write to the repository" to "whoever holds an enrolled key". Defends against forge and repository-credential compromise. |
+
+A commit signature covers the tree hash, so verifying the pinned revision's
+signature covers the full content of the run. Known limits: an authorized
+signer's merge commit blesses whatever it merges; the boundary is only as
+strong as key custody; and signatures do not prevent pointing a run at an
+old, signed, vulnerable revision — downgrade protection needs monotonic
+source pinning (Future Considerations).
+
+The verified signer identity is passed into the run context (=ctx.signer=)
+so definitions can make soft decisions on it; the hard gate is admission.
+
 ** Definition Contract
 
 The JSON produced by evaluating the pipeline attribute. This document —
@@ -416,9 +567,10 @@ stores.
 
 | Field   | Type    | Required | Description                     |
 |---------+---------+----------+---------------------------------|
-| version | int     | yes      | Contract version. Currently =1=. |
-| name    | string  | yes      | Pipeline name.                  |
-| phases  | phase[] | yes      | As specified above.             |
+| version  | int     | yes      | Contract version. Currently =1=. |
+| name     | string  | yes      | Pipeline name.                  |
+| phases   | phase[] | yes      | As specified above.             |
+| defaults | object  | no       | Default =vm= and =environment= applied where phases and steps do not override. |
 
 Validation at submission:
 
@@ -433,9 +585,11 @@ Validation at submission:
 5. Collection/scalar shape: =items.from= must reference a phase, not a
    single item; step refs like =deploy.seeds= entries must reference items
    or single-item phases.
-6. =effect=/=check= apps are flake installables; arbitrary commands are
-   rejected.
+6. =effect=/=check= apps and =environment= refs are flake installables;
+   arbitrary commands are rejected.
 7. Garden names resolve against registered gardens.
+8. Declared =secrets= resolve against the org's secret store; =vm.caches=
+   entries resolve against registered cache resources.
 
 The contract schemas belong in =sower_client= (OpenApiSpex, registered in
 =sower_client.ex=) and are covered by the contract baseline like every other
@@ -614,6 +768,15 @@ in
   validated; newer seeds wait for the next run.
 - *Schedules live on the server-side pipeline resource*, with the moving
   flake ref re-resolved and pinned at each run start.
+- *The pipeline attribute is an attrset or a function of run context.*
+  Conditionality is Nix logic; the contract has no condition language.
+- *Admission policy lives on the server resource, never in the flake.* A
+  gate evaluated from the revision it gates is no gate.
+- *Executing steps run in microVMs.* The contract carries resources,
+  network policy, and references; software configuration is NixOS modules
+  on a sower base.
+- *Secrets are declared per step and injected as files at VM start.* Never
+  through evaluation, the store, or the run context.
 
 ** Future Considerations
 
@@ -629,6 +792,11 @@ in
 - Checks/effects enriching the item via structured stdout.
 - Partial-tolerant barriers (proceed when ≥N of a collection succeeded).
 - An approval step kind (pipeline-level analog of policy =confirm=).
+- Monotonic source pinning per pipeline (downgrade protection for admitted
+  revisions).
+- Per-pipeline secret allowlists, log masking, and an env-var secret
+  mapping convenience.
+- Host capability flags on =vm= (e.g. nested virtualisation).
 - Execution placement: eval/build/push/seed steps run on builders (today:
   wherever =sower-build= runs; eventually builder gardens per
   spec-seed-trust.org). Deploy/check coordination belongs to the server.
