@@ -345,6 +345,13 @@ Server-side steps (=resolve=, =deploy=) are engine operations and accept no
 =vm= or =environment= config. The contract carries resources and
 references; all software configuration is Nix.
 
+The default guest is the sower *stock image*: prebuilt, shipped with the
+builder, requiring no user-flake evaluation. Builtin steps need the sower
+machinery it provides and default to it; specifying =environment= is the
+exception — chiefly for =check= and =effect=, or to control eval's
+toolchain (a different Nix version changes eval results, which is why the
+environment closure sits in eval's memoization key).
+
 *** vm
 
 | Field   | Type     | Required | Default | Description                                   |
@@ -361,23 +368,39 @@ that reach out.
 
 *** environment
 
-An installable in the pipeline flake evaluating to a NixOS module (or list
-of modules), merged onto a sower-provided base module that supplies the
-step runtime. Extra packages, services (a per-step database for an
-integration check), container support — all of it is ordinary NixOS
-options:
+An installable in the pipeline flake producing a complete guest system,
+assembled with =sower.lib.mkEnvironment= (sower is a flake input to the
+pipeline flake). The user writes ordinary NixOS modules — extra packages,
+services (a per-step database for an integration check), container
+support — and =mkEnvironment= composes them onto the sower base module:
 
 #+begin_src nix
-sower.environments.integration = { pkgs, ... }: {
-  environment.systemPackages = [ pkgs.postgresql ];
-  services.postgresql = {
-    enable = true;
-    ensureDatabases = [ "checks" ];
-  };
+sower.environments.integration = inputs.sower.lib.mkEnvironment {
+  modules = [
+    ({ pkgs, ... }: {
+      environment.systemPackages = [ pkgs.postgresql ];
+      services.postgresql = {
+        enable = true;
+        ensureDatabases = [ "checks" ];
+      };
+    })
+  ];
 };
 #+end_src
 
-Everything in the environment is pinned by the pipeline flake's lock — the
+The base module is mandatory and sower-owned. It supplies the step runtime
+and the boot-time optimizations a hand-rolled NixOS system would not get
+(direct kernel boot, trimmed initrd and services, read-only root), pins
+its invariants with module priorities so user modules cannot break them,
+and stamps the image with a versioned guest-contract marker
+(=/etc/sower/env.json=). The guest runtime talks to the host — item on
+stdin, secrets, logs — so that surface is versioned like every other
+cross-component contract; builders reject images whose marker is missing
+or out of range. There is no supported path to an environment that
+bypasses =mkEnvironment=.
+
+Everything in the environment is pinned by the pipeline flake's lock —
+nixpkgs, the user's modules, and the sower base they compose against; the
 definition cannot introduce moving inputs. The VM is ephemeral: services
 start with the step and die with it, which is the hermetic semantic steps
 already promise.
@@ -385,6 +408,37 @@ already promise.
 How the guest reaches the Nix store (shared from the host or hydrated from
 a cache) is a builder concern, out of scope here; the contract is agnostic
 to it.
+
+*** Environment seeds
+
+Materializing an environment is the builtin chain applied to itself: an
+internal eval → build → push → seed job, run in stock VMs, registering the
+image as a seed of a new stage-only =environment= seed type (joining the
+policy spec's actions-by-seed-type table alongside =gcroot=). The seed
+registry is the server-side tracking:
+
+- The seed's tags carry the materialization key — pinned pipeline flake
+  rev plus environment attr — which the scheduler computes *without
+  evaluating anything*, since the rev is pinned at admission.
+- Registry hit: the artifact path is known; builders substitute from cache
+  and pin it. No evaluation anywhere.
+- Miss: materialize once, register, and every subsequent run and builder
+  hits.
+- Pre-warming is a subscription: a builder garden subscribing to
+  =environment= seeds with a stage-only policy has images pinned locally
+  before a run asks. Staging already means "download and pin a closure";
+  no new machinery.
+
+Cost accounting for pipelines that override stock: each new commit pays
+one environment evaluation (module definitions live in the repository, so
+the key must include the rev), in a stock VM, prefetchable off the
+critical path; the build almost always resolves to an existing store path
+and registration dedupes to a no-op. Pipelines that never specify
+=environment= pay nothing.
+
+A failed environment is a distinct, attributed failure — "environment
+=integration= failed to build" — that transitively fails the steps
+depending on it, the same way a failed item skips its remaining chain.
 
 *** Secrets
 
@@ -777,6 +831,14 @@ in
   on a sower base.
 - *Secrets are declared per step and injected as files at VM start.* Never
   through evaluation, the store, or the run context.
+- *Builtin steps run in the stock image by default.* =environment= is the
+  exception — for checks, effects, and toolchain control.
+- *Environments are assembled only by =sower.lib.mkEnvironment=.* The
+  mandatory base module carries the step runtime, boot optimizations, and
+  a versioned guest-contract marker.
+- *Environments are tracked as stage-only =environment= seeds.*
+  Materialization reuses the builtin chain; pre-warming reuses
+  subscriptions.
 
 ** Future Considerations
 
@@ -797,6 +859,8 @@ in
 - Per-pipeline secret allowlists, log masking, and an env-var secret
   mapping convenience.
 - Host capability flags on =vm= (e.g. nested virtualisation).
+- Narrower environment materialization keys (input hashing below whole-rev
+  granularity, to skip re-evaluation on unrelated commits).
 - Execution placement: eval/build/push/seed steps run on builders (today:
   wherever =sower-build= runs; eventually builder gardens per
   spec-seed-trust.org). Deploy/check coordination belongs to the server.
