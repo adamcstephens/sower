@@ -8,7 +8,6 @@
   testers,
 }:
 let
-  inherit (pkgs) lib;
   system = pkgs.stdenv.hostPlatform.system;
 
   npins = import ./npins;
@@ -21,7 +20,6 @@ let
   # `sower` on PATH is the Rust CLI wrapped with the Elixir `sower-build` build
   # engine, so seed/garden commands run natively and `sower build` forwards.
   sowerPkg = flake.packages.${system}.sower;
-  rustCli = flake.packages.${system}.rust-cli;
 in
 testers.runNixOSTest {
   name = "sower";
@@ -108,7 +106,7 @@ testers.runNixOSTest {
 
               log_level = "debug";
 
-              clients."${system}".path = builtins.toString rustCli;
+              clients."${system}".path = builtins.toString sowerPkg;
             };
           };
           # if server fails to start, fail immediately
