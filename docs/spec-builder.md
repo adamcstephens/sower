@@ -111,8 +111,12 @@ execs one and delivers the other, exactly once, per the item context
 convention (spec-pipeline.md). The pipeline engine, not the builder,
 resolves step kinds to commands: `eval` becomes the stock runtime's
 eval program; a `check` becomes the built app's executable. Arbitrary
-argv is excluded at pipeline validation, not here — the builder
-contract is deliberately mechanism, not policy.
+*commands* are excluded at pipeline validation, not here — a definition
+may only name executables built from the pinned source, while the
+builder contract stays deliberately mechanism, not policy. Commands are
+customized through three channels: static `args`, static `env`, and the
+structured payload on stdin; anything richer is Nix — wrap the program
+and bake the configuration into the derivation.
 
 Events stream back over the garden channel as the execution proceeds:
 
@@ -157,8 +161,16 @@ The guest needs closures (image, command, inputs) and may produce paths
 (builds). The leaning:
 
 - **Ingress: read-only virtiofs share of the host store.** The guest's
-  Nix daemon uses the share as a local substitution source and builds
-  into a guest-private scratch store. Guests can never write the host
+  `/nix/store` is writable — read-only describes the host share beneath
+  it, never the guest's own store. The primary mechanism is a
+  local-overlay store: the share as the read-only lower layer, a guest
+  scratch disk as the writable upper layer, overlayfs presenting the
+  union as `/nix/store`. Input paths appear without copying, and the
+  guest daemon builds into the upper layer with its normal sandbox. The
+  fallback, if the overlay proves troublesome, is the share mounted at
+  a non-store path and configured as a local substituter, the guest
+  daemon copying inputs into a private store on demand. Either way the
+  writable layer dies with the VM; guests can never write the host
   store; `cache-only` network additionally allows the resolved cache
   substituters. The host agent pins (gcroots) the image and declared
   input paths for the execution's duration.
@@ -225,8 +237,9 @@ property of the server-side path, not of the vocabulary.
 Server-side, there is exactly one execution path — through builders.
 The development server therefore needs a local builder: `sower_dev`
 runs one host agent beside the server (requiring KVM), and e2e runs
-builders inside its incus VMs, which requires nested virtualisation on
-the e2e host (Open Questions).
+real cloud-hypervisor builders inside its incus VMs under nested KVM —
+an accepted infrastructure assumption. There is no degraded or
+container-backed builder mode.
 
 ## Phasing
 
@@ -249,14 +262,17 @@ the e2e host (Open Questions).
 - **The execution contract is generic.** Image + command + payload +
   resources + network + secrets → events. Step semantics live in guest
   programs; the host never interprets work.
-- **Commands are store-path executables.** The host execs what
-  dispatch names and templates nothing; restricting what may be named
-  is pipeline validation's job.
+- **Commands are store-path executables with plain args.** The host
+  execs what dispatch names and templates nothing. Excluding arbitrary
+  *commands* is pipeline validation's job; static `args`/`env` and the
+  stdin payload are the customization channels.
 - **Structured output is a runtime channel, not stdout.** Items flow
   as JSONL over a runtime descriptor; application stdout stays log.
 - **Guest store: read-only host share in, NAR export out.** Guests
-  never write the host store; produced paths re-enter host-side under
-  run-scoped gcroots; the cache is the durable layer.
+  build into a writable layer above the read-only host share (leaning
+  local-overlay store) and never write the host store; produced paths
+  re-enter host-side under run-scoped gcroots; the cache is the
+  durable layer.
 - **Storage is not endorsement.** Serving a guest-produced path says
   nothing about activation; that remains the signing layer's decision.
 - **Executions are at-most-once.** Builder failure fails the
@@ -265,13 +281,13 @@ the e2e host (Open Questions).
   repository-derived code never hold signing credentials.
 - **Local mode stays.** `sower-build` runs in-process for dev and
   bootstrap; only the server-side path requires builders.
+- **Cloud-hypervisor is the only execution backend.** No degraded or
+  container-backed builder modes anywhere, tests included: e2e runs
+  real cloud-hypervisor builders under nested KVM. Incus remains e2e
+  scaffolding for gardens, never an execution backend.
 
 ## Open Questions
 
-- **Nested virtualisation in e2e.** Builders inside incus VMs need
-  nested KVM on the e2e host; is that acceptable infrastructure, or
-  does e2e need a degraded builder (single shared VM? container-backed
-  host agent) that keeps the contract but weakens isolation?
 - **Egress naming.** How a command declares which produced paths to
   export — an explicit manifest over the runtime channel, or everything
   the scratch store gained? Leaning: explicit, via the item/event

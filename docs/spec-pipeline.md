@@ -464,8 +464,9 @@ Convention).
 | secrets | string[]   | no       | []      | Named secrets mounted for this invocation (see Secrets). |
 
 Effects and checks are restricted to built executables: side effects are
-pinned in the same closure discipline as everything else. Arbitrary argv
-is rejected at validation.
+pinned in the same closure discipline as everything else. Arbitrary
+commands are rejected at validation; `args` customizes an app, never
+names one.
 
 ## Item Context Convention
 
@@ -1244,7 +1245,7 @@ in
   Other front-ends may exist later; they all produce the same contract.
 - **Phases, not stages.** `stage` is a policy action and stays that way.
 - **Effects and checks are built executables only.** Side effects pinned
-  in closures; no arbitrary argv.
+  in closures; no arbitrary commands.
 - **Flakes are the blessed source mode, not a requirement.** Classic Nix
   is capability-equal via the `sower.nix` entrypoint, with purity
   enforced; the contract never records the mode. Sower itself is
