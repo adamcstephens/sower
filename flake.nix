@@ -77,7 +77,7 @@
                   pkgs.mix2nix
                   pkgs.npins
                   pkgs.nvfetcher
-                  pkgs.postgresql
+                  pkgs.postgresql_17
                   pkgs.process-compose
                   pkgs.s5cmd
                   pkgs.sd-switch
