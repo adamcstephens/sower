@@ -7,6 +7,13 @@ evaluate it, build what the evaluation produces, upload to a binary
 cache, register seeds, and roll seeds out to gardens in phases gated by
 checks.
 
+Gardens are the far end of that path, not an entry requirement.
+Pipelines are equally sower's general CI, with Nix as the first-class
+unit of work: evaluate, build, check, and push arbitrary repositories.
+Many repositories will use pipelines for exactly that and never wire up
+a garden; the deploy-facing steps are one use of the mechanisms, not
+their point.
+
 Pipelines come in two flavors sharing every mechanism: **eval-flavored**
 runs start from source and produce seeds; **resolve-flavored** runs skip
 evaluation entirely and deploy what subscriptions already select (see
@@ -123,7 +130,7 @@ sower.pipelines.release = ctx: {
   name = "release";
   phases =
     [ evalPhase seedsPhase ]
-    ++ lib.optionals (ctx.branch == "master") [ canaryPhase fleetPhase ];
+    ++ lib.optionals (ctx.source_branch == "master") [ canaryPhase fleetPhase ];
 };
 ```
 
@@ -131,17 +138,21 @@ Conditional phases and steps are therefore ordinary Nix — there is no
 condition language in the contract. Wildcard branch matching is
 `lib.hasPrefix` or `builtins.match`.
 
-| Field      | Description                                                                                           |
-| ---------- | ----------------------------------------------------------------------------------------------------- |
-| branch     | Source branch the run was resolved from.                                                              |
-| rev        | The pinned revision the run executes (the synthetic merge, in merge mode).                            |
-| trigger    | What started the run (manual, schedule, push, pull_request, tag).                                     |
-| mode       | `head` or `merge` (see Run Modes).                                                                    |
-| target     | Target branch of a merge run.                                                                         |
-| target_rev | Pinned target head of a merge run.                                                                    |
-| source_rev | Pinned source-branch head of a merge run.                                                             |
-| pr         | Pull request data: number, source repo, whether it is a fork.                                         |
-| signature  | Recorded verification result: verified, key, enrolled — per parent in merge mode (see Run Admission). |
+| Field         | Description                                                                                           |
+| ------------- | ----------------------------------------------------------------------------------------------------- |
+| source_branch | Source branch the run was resolved from.                                                              |
+| rev           | The pinned revision the run executes (the synthetic merge, in merge mode).                            |
+| trigger       | What started the run (manual, schedule, push, pull_request, tag).                                     |
+| mode          | `head` or `merge` (see Run Modes).                                                                    |
+| target_branch | Target branch of a merge run.                                                                         |
+| target_rev    | Pinned target head of a merge run.                                                                    |
+| source_rev    | Pinned source-branch head of a merge run.                                                             |
+| pr            | Pull request data: number, source repo, whether it is a fork.                                         |
+| signature     | Recorded verification result: verified, key, enrolled — per parent in merge mode (see Run Admission). |
+
+The branch fields are `source_branch` and `target_branch`, matching
+`source_rev` and `target_rev`; `head` was rejected as a name for the
+target because it already denotes a run mode.
 
 The context is an open set — fields will be added. Take `ctx` whole or
 destructure with `...`; exact destructuring breaks when fields appear.
@@ -223,6 +234,16 @@ item(s). Depending on a single item does not wait for its siblings —
 "make sure builds x, y and z pass" is three item refs; "make sure all
 builds pass" is a whole-collection ref.
 
+## Server Resources
+
+Registered server resources — caches, secrets, gardens — are referenced
+from definitions by name (`push.cache`, `vm.caches`, `secrets`,
+`gardens.names`). Anywhere a name is accepted, the resource's sid is
+accepted too: names are the readable convention for hand-written
+definitions; sids are stable across renames and suit generated ones.
+Validation resolves both against the same registry, and the resolved
+definition stores the reference as written.
+
 ## Steps
 
 Every step accepts:
@@ -239,6 +260,13 @@ item, and the item does not flow to consumers. The phase's aggregate
 result mirrors deployment results: `success` (all items succeeded),
 `partial`, or `failure`.
 
+Each kind's contract is stated in three parts. **Inputs** are the item
+fields the step consumes — what field-provenance validation checks (see
+Definition Contract). **Outputs** are the fields the step adds to its
+item — or, for the entry-point kinds `eval` and `resolve`, the items it
+emits. **Config** is the fields the step accepts beyond the common ones
+above. The Item Payload table aggregates the outputs.
+
 ### eval
 
 Evaluates an attribute of the run's source and emits one item per
@@ -246,6 +274,26 @@ derivation found, streaming as evaluation proceeds. Maps onto the
 existing `Nix.Eval.Jobs` worker-pool machinery
 (`sower-build --eval-jobs` / `--memory-limit`), including its flake and
 path dual mode.
+
+`workers` is intra-step parallelism: one eval step fans its attribute
+walk over a worker pool and streams items out. It is a different axis
+from the phase-level `concurrency`, which bounds items in flight in a
+phase — an eval phase usually runs on the single implicit item, so
+there is nothing there for `concurrency` to bound. `build` has no
+intra-step knob for the mirror-image reason: one item is one
+derivation, so build parallelism *is* the phase's `concurrency`.
+
+**Inputs:** none. An entry-point kind: it reads the run's pinned
+source, not item fields.
+
+**Outputs:** one emitted item per derivation, carrying `name`, `attr`,
+`drv_path`, `system`, and `meta` (including `meta.sower.seed`, which is
+how eval-time knowledge reaches the `seed` step with no extra
+plumbing). An attribute that fails to evaluate becomes a failed item
+carrying `error` — evaluation continues (keep-going), but the phase
+aggregate cannot be `success`.
+
+**Config:**
 
 | Field        | Type   | Required | Default    | Description                                                                |
 | ------------ | ------ | -------- | ---------- | -------------------------------------------------------------------------- |
@@ -255,41 +303,50 @@ path dual mode.
 | workers      | int    | no       | 8          | Parallel eval workers.                                                     |
 | memory_limit | int    | no       | none       | Per-worker memory ceiling, same semantics as `sower-build --memory-limit`. |
 
-Each emitted item carries `attr`, `drv_path`, `system`, and `meta`
-(including `meta.sower.seed`, which is how eval-time knowledge reaches
-the `seed` step with no extra plumbing). An attribute that fails to
-evaluate becomes a failed item carrying `error` — evaluation continues
-(keep-going), but the phase aggregate cannot be `success`.
-
 ### build
 
 Realizes the item's derivation. One derivation per item; parallelism is
 the phase's `concurrency`. The engine deduplicates identical `drv_path`
-values across items. Adds `out_paths`.
+values across items.
 
-| Field                       | Type | Required | Default | Description |
-| --------------------------- | ---- | -------- | ------- | ----------- |
-| (none beyond common fields) |      |          |         |             |
+**Inputs:** `drv_path`.
+
+**Outputs:** adds `out_paths` — the derivation's output store paths.
+
+**Config:** none beyond the common fields.
 
 ### push
 
 Uploads the item's built paths to a binary cache, referenced as a
-registered cache resource by name — raw URLs and keys never appear in
+registered cache resource — raw URLs and keys never appear in
 definitions, and the capability layer can redirect untrusted runs to a
 quarantine cache without touching them. The resource's URL scheme
 selects the backend as today (`niks3://`, `attic://`, otherwise
-`nix copy`). Adds `cache` (name, uploaded count).
+`nix copy`).
 
-| Field | Type   | Required | Default | Description                                             |
-| ----- | ------ | -------- | ------- | ------------------------------------------------------- |
-| cache | string | yes      |         | Registered cache resource (by name), as in `vm.caches`. |
+**Inputs:** `out_paths`.
+
+**Outputs:** adds `cache` (name, uploaded count).
+
+**Config:**
+
+| Field | Type   | Required | Default | Description                                    |
+| ----- | ------ | -------- | ------- | ---------------------------------------------- |
+| cache | string | yes      |         | Registered cache resource, as in `vm.caches`. |
 
 ### seed
 
 Registers the item as a seed with the server, exactly as the `:seed`
 step of `sower-build` does today (`SowerClient.Seed.create`). Name,
 type, and tags come from the item's `meta.sower.seed` plus the fields
-below. Adds `seed` (sid, name, seed_type, artifact, tags).
+below.
+
+**Inputs:** `out_paths` (the artifact) and `meta.sower.seed` (name,
+type, tags).
+
+**Outputs:** adds `seed` (sid, name, seed_type, artifact, tags).
+
+**Config:**
 
 | Field         | Type    | Required | Default | Description                                                 |
 | ------------- | ------- | -------- | ------- | ----------------------------------------------------------- |
@@ -306,37 +363,48 @@ their resolved seeds produce no item. This is the registry-side twin of
 `eval`: both are entry-point steps producing a collection from a source
 of truth.
 
-| Field   | Type   | Required | Default | Description                                                                                  |
-| ------- | ------ | -------- | ------- | -------------------------------------------------------------------------------------------- |
-| gardens | object | yes      |         | Garden selector, as in Item Sources. All subscriptions of the selected gardens are resolved. |
-
 Resolution is a snapshot: it happens once, at its step's execution, and
 later phases deploy that snapshot even if newer seeds are registered
 mid-run — a coordinated rollout deploys what its earlier phases
 validated. Newer seeds wait for the next run.
 
-Items are named by garden name and carry `garden` plus `seeds` (all
-pending subscription resolutions for that garden).
+**Inputs:** none. An entry-point kind: it queries the seed registry and
+the selected gardens' subscriptions, not item fields.
+
+**Outputs:** one emitted item per garden with a pending change, named
+by garden name, carrying `garden` (sid, name) and `seeds` (all pending
+subscription resolutions for that garden).
+
+**Config:**
+
+| Field   | Type   | Required | Default | Description                                                                                  |
+| ------- | ------ | -------- | ------- | -------------------------------------------------------------------------------------------- |
+| gardens | object | yes      |         | Garden selector, as in Item Sources. All subscriptions of the selected gardens are resolved. |
 
 ### deploy
 
 Creates a targeted deployment of previously registered seeds to the
-item's garden, then waits for the garden's feedback. The item must carry
-a `garden` — from a `gardens` source or a `resolve` producer. Completion
-means the deployment reached a terminal state and the garden reported a
+item's garden, then waits for the garden's feedback. Completion means
+the deployment reached a terminal state and the garden reported a
 result via the existing `SeedDeploymentStatus` / `SeedDeploymentResult`
 / `DeploymentResult` flow — the report is the step's output, not a side
-channel. Adds `deployment` (sid, state, result, per-seed results,
+channel.
+
+**Inputs:** `garden` — from a `gardens` source or a `resolve` producer
+— plus seed fields: from the `seeds` refs when given, otherwise from
+the item's own `seeds` (the resolve-flavored form, where a `resolve`
+step already placed the garden's pending seeds on the item). Validation
+requires one of the two.
+
+**Outputs:** adds `deployment` (sid, state, result, per-seed results,
 achieved actions).
+
+**Config:**
 
 | Field   | Type    | Required | Default      | Description                                                                                                                          |
 | ------- | ------- | -------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
 | seeds   | ref[]   | no       | item's seeds | Items carrying `seed` fields (i.e. produced by a chain containing a `seed` step). One deployment with one seed deployment per entry. |
 | timeout | string  | no       | 30m          | Deadline for the garden to report a terminal result. Covers policy `confirm` holds.                                                  |
-
-When `seeds` is omitted, the seeds come from the item itself — the
-resolve-flavored form, where a `resolve` step already placed the
-garden's pending seeds on the item. Validation requires one of the two.
 
 The deploy item fails unless the deployment result is `success`. Note
 that a garden whose policy permits only `stage` reports success after
@@ -349,14 +417,23 @@ consideration.
 
 Runs the executable of an evaluated derivation and interprets its exit
 code: zero passes, non-zero fails. Without `wait`, a single attempt — a
-gate. With `wait`, retries until success or deadline. Appends to
-`checks` (app, attempts, passed).
+gate. With `wait`, retries until success or deadline; `wait.delay`
+holds the first attempt, for subjects where probing too early would
+pass against the state the step was meant to replace — immediately
+after a deploy, the previous system may still be answering.
+
+**Inputs:** the whole item, as JSON on stdin (see Item Context
+Convention).
+
+**Outputs:** appends to `checks` (app, attempts, passed).
+
+**Config:**
 
 | Field   | Type       | Required | Default | Description                                                                                                                                     |
 | ------- | ---------- | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | app     | string     | yes      |         | Attrpath in the pipeline source evaluating to a derivation with an executable (flake app or `meta.mainProgram`); the engine builds and runs it. |
 | args    | string[]   | no       | []      | Extra arguments appended after `--`.                                                                                                            |
-| wait    | object     | no       | none    | `{ "timeout": "10m", "interval": "15s" }` — retry until success or deadline.                                                                    |
+| wait    | object     | no       | none    | `{ "timeout": "10m", "interval": "15s", "delay": "30s" }` — retry until success or deadline; `delay` (default none) holds the first attempt.    |
 | env     | object     | no       | {}      | Static environment variables. Literal strings only — dynamic data arrives via the item on stdin.                                                |
 | secrets | string[]   | no       | []      | Named secrets mounted for this invocation (see Secrets).                                                                                        |
 
@@ -370,8 +447,14 @@ Considerations).
 ### effect
 
 Runs the executable of an evaluated derivation for its side effect. Same
-invocation convention as `check`; no retry. Appends to `effects` (app,
-exit_code).
+invocation convention as `check`; no retry.
+
+**Inputs:** the whole item, as JSON on stdin (see Item Context
+Convention).
+
+**Outputs:** appends to `effects` (app, exit_code).
+
+**Config:**
 
 | Field   | Type       | Required | Default | Description                                              |
 | ------- | ---------- | -------- | ------- | -------------------------------------------------------- |
@@ -391,6 +474,15 @@ stdin. An http check against a canary garden reads the garden's identity
 from the item; nothing is interpolated into arguments by the engine.
 Stdout and stderr are captured as the step log. Builtin steps receive
 the item natively.
+
+Stdin does not constrain what the app can be, because apps are
+purpose-built entry points, not arbitrary tools: a wrapper that reads
+the item with `jq` and execs the real program — including driving that
+program's own stdin — is a few lines of shell, pinned in the same
+closure as everything else. If stdin proves genuinely awkward,
+delivering the item as a mounted file is the natural extension (Future
+Considerations); the convention that the engine never templates
+arguments stands either way.
 
 ## Execution Environment
 
@@ -489,7 +581,7 @@ invalidation is a reviewed diff.
 The trade is explicit staleness: a branch that edits environment modules
 without moving the pin keeps running the pinned image — deliberately not
 what that branch's tree defines. The escape hatch composes with run
-context: point `ref` at `ctx.branch` (or drop the pin) while iterating
+context: point `ref` at `ctx.source_branch` (or drop the pin) while iterating
 on an environment, restore the pin before merge. Both the staleness and
 the override are data in the resolved definition — diffable and
 reviewable, never silent.
@@ -613,7 +705,7 @@ JSON.
 | static source  | as written in the list                                                             |
 | resolve        | `name`, `garden` (sid, name), `seeds` (pending subscription resolutions)           |
 | build          | `out_paths`                                                                        |
-| push           | `cache` (url, uploaded)                                                            |
+| push           | `cache` (name, uploaded)                                                           |
 | seed           | `seed` (sid, name, seed_type, artifact, tags)                                      |
 | deploy         | `deployment` (sid, state, result, seed_results, actions)                           |
 | check          | appends to `checks` (app, attempts, passed)                                        |
@@ -644,6 +736,31 @@ transitively covers every content-addressed external. `check` and
 `effect` are never skipped. Neither is `resolve` — it is a cheap query
 against live registry state. Re-running a pipeline after a failed canary
 re-evaluates nothing, rebuilds nothing, and resumes at the deploy.
+
+Memoization is what makes item outputs durable: the fields a successful
+builtin execution added to its item are stored with the run, and a key
+hit on a later run replays them instead of executing.
+
+## Rerun and Cancellation
+
+A rerun is a new run of the same pipeline at the same pinned rev — there
+is no partial-rerun primitive. Memoization makes the new run resume
+rather than repeat: builtin steps whose keys match previously successful
+executions replay their stored outputs, while `check`, `effect`, and
+`resolve` execute again by design. "Rerun just the build" is therefore
+not a distinct operation — a rerun after a build failure skips eval by
+key, skips the builds that succeeded, and picks up at the failure.
+
+Cancellation stops the run from dispatching further step executions and
+kills executing VMs; their items end cancelled rather than failed —
+distinguishable in run results. What has already left the engine is not
+recalled: a dispatched deployment proceeds garden-side under the
+garden's own policy and reports its result, which the run records
+before closing. Cancelled runs are terminal; the path forward is a
+rerun, which memoizes past everything that completed. Cancellation
+never touches subscriptions or garden convergence — as with a failed
+run, a stuck or abandoned pipeline blocks nothing (see Pipelines and
+Subscriptions).
 
 ## Deploy Semantics and Policy
 
@@ -939,7 +1056,7 @@ capability set forbids.
 
 ``` nix
 sower.pipelines.release = ctx:
-  let releasing = ctx.mode == "head" && ctx.branch == "main";
+  let releasing = ctx.mode == "head" && ctx.source_branch == "main";
   in {
     version = 1;
     name = "release";
@@ -1184,6 +1301,13 @@ in
   style.
 - **External sources are pinned inputs.** Builtin steps never fetch
   repositories at run time.
+- **Context branch fields are `source_branch` and `target_branch`.**
+  Symmetric with `source_rev`/`target_rev`; `head` stays a run mode,
+  not a field name.
+- **Server resources resolve by name or sid.** Names are the readable
+  convention for hand-written definitions; sids survive renames.
+- **A rerun is a new, memoized run.** No partial-rerun primitive;
+  cancellation recalls nothing already dispatched.
 
 ## Future Considerations
 
@@ -1200,6 +1324,8 @@ in
 - A required-action field on `deploy` (fail if policy permitted only
   `stage` when the pipeline expected activation).
 - Checks/effects enriching the item via structured stdout.
+- Item delivery as a mounted file alongside stdin, for apps where
+  driving stdin is awkward.
 - Partial-tolerant barriers (proceed when ≥N of a collection succeeded).
 - An approval step kind (pipeline-level analog of policy `confirm`).
 - Monotonic source pinning per pipeline (downgrade protection for
