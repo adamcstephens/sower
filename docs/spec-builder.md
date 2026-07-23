@@ -15,8 +15,9 @@ VM.
 
 Known clients:
 
-- **Pipeline steps** — `eval`, `build`, `push`, `seed`, `check`,
-  `effect` (spec-pipeline.md, Execution Environment).
+- **Pipeline steps** — `eval`, `build`, `check`, `effect` as guest
+  executions; `push` as a builder-side engine operation
+  (spec-pipeline.md, Execution Environment).
 - **Environment materialization** — the builtin chain applied to
   environment images (spec-pipeline.md, Environment seeds).
 - **Seed trust** — the sandboxed eval/build half of the ephemeral
@@ -45,11 +46,11 @@ spec-seed-trust.md's.
 - **Isolation is the product.** The VM boundary plus host-enforced
   network policy is what makes untrusted eval, checks, and effects
   safe. There is no non-VM server-side execution path.
-- **Authority never rides with untrusted code.** Credentials are
-  minted per execution, short-TTL and scoped, injected as files by the
-  host. An execution that evaluates repository code never receives
-  signing credentials; signing happens outside the guest, on a clean
-  result.
+- **Authority never rides with untrusted code.** Every sower
+  credential — substitution, push, registration, signing — is held
+  host-side, minted short-TTL and scoped, and exercised on the
+  execution's behalf. Guests receive only the user secrets a step
+  declares, injected as files.
 - **Everything the builder runs is Nix.** Images are seeds; the stock
   image and user environments arrive through the same registry, cache,
   and subscription machinery as every other closure.
@@ -64,8 +65,9 @@ spec-seed-trust.md's.
 | Builder       | A garden with the builder capability: a host agent executing microVMs for the server.         |
 | Execution     | One unit of dispatched work: image + command + payload + resources → event stream + result.   |
 | Image         | A complete guest system closure — the stock image or a `mkEnvironment` output, as a seed.     |
-| Host agent    | The builder-side service: VM lifecycle, network enforcement, secret injection, store egress.  |
+| Host agent    | The builder-side service: VM lifecycle, vsock services, secret injection, the work store.     |
 | Guest runtime | The sower-owned service inside every image that receives the command and mediates I/O.        |
+| Work store    | The host agent's separate Nix store for all execution I/O; the host system store stays clean. |
 | Dispatch      | Server-side assignment of a queued execution to a connected builder with capacity.            |
 
 ## Builder Role
@@ -100,10 +102,10 @@ the contract baseline.
 | command  | object   | yes      | `{ path, args, env }` — a store-path executable inside the image's closure.          |
 | payload  | object   | yes      | JSON delivered to the command on stdin (a pipeline item, for step executions).       |
 | vm       | object   | yes      | `{ cpus, memory }`, resolved by the server from definition defaults.                 |
-| network  | string   | yes      | `none`, `cache-only`, or `full` — enforced by the host.                              |
-| caches   | object[] | no       | Resolved substituter configuration for `cache-only`; server-materialized.            |
-| secrets  | object   | no       | Named secret material to inject as files (see Security). Never logged nor persisted. |
-| paths    | string[] | no       | Store paths the guest must see (inputs beyond the image closure).                    |
+| network  | string   | yes      | `none` (default; no network device) or `full` — NIC presence, host-enforced.         |
+| caches   | object[] | no       | Upstream caches the read proxy fronts for this execution; server-resolved.           |
+| secrets  | object   | no       | Named user-secret material injected as files (see Security). Never logged/persisted.  |
+| paths    | string[] | no       | Work-store roots the read proxy serves this execution (closure allowlist).           |
 | timeout  | string   | yes      | Per-attempt execution deadline.                                                      |
 
 The host never templates or interprets `command` and `payload` — it
@@ -142,13 +144,16 @@ guest-contract marker. The host agent refuses images whose marker is
 missing or out of its supported range — the runtime surface is a
 cross-component contract like any other.
 
-Transport between host agent and guest runtime is a vsock control
-channel. The command's own I/O convention is unchanged from the
-pipeline spec: payload as JSON on stdin, stdout and stderr captured as
-the step log. Programs that emit items (eval; later, checks enriching
-items) write JSON lines to a runtime-provided descriptor, which the
-runtime forwards as `item` events — application stdout stays log, never
-protocol.
+Transport between host agent and guest runtime is vsock, carrying
+three services: the control channel (command delivery, events, exit),
+the read proxy, and the write endpoint (see Nix Store Strategy). The
+guest runtime forwards localhost HTTP to the latter two, so unmodified
+nix inside the guest sees an ordinary substituter and upload target.
+The command's own I/O convention is unchanged from the pipeline spec:
+payload as JSON on stdin, stdout and stderr captured as the step log.
+Programs that emit items (eval; later, checks enriching items) write
+JSON lines to a runtime-provided descriptor, which the runtime forwards
+as `item` events — application stdout stays log, never protocol.
 
 The guest runtime receives the command over vsock after boot, injects
 nothing into its environment beyond `command.env`, and reports exit
@@ -157,43 +162,56 @@ nothing surviving but exported paths and the event stream.
 
 ## Nix Store Strategy
 
-The guest needs closures (image, command, inputs) and may produce paths
-(builds). The leaning:
+The execution layer never touches the builder host's own store. All
+execution I/O flows through the **work store** — a separate Nix store
+at its own root, owned by the host agent — so the host system's closure
+contains exactly what the operator deployed and never a guest-produced
+path. Wiping the work store must never break the builder host.
 
-- **Ingress: read-only virtiofs share of the host store.** The guest's
-  `/nix/store` is writable — read-only describes the host share beneath
-  it, never the guest's own store. The primary mechanism is a
-  local-overlay store: the share as the read-only lower layer, a guest
-  scratch disk as the writable upper layer, overlayfs presenting the
-  union as `/nix/store`. Input paths appear without copying, and the
-  guest daemon builds into the upper layer with its normal sandbox. The
-  fallback, if the overlay proves troublesome, is the share mounted at
-  a non-store path and configured as a local substituter, the guest
-  daemon copying inputs into a private store on demand. Either way the
-  writable layer dies with the VM; guests can never write the host
-  store; `cache-only` network additionally allows the resolved cache
-  substituters. The host agent pins (gcroots) the image and declared
-  input paths for the execution's duration.
-- **Egress: NAR export to the host agent.** Produced paths named by the
-  command are exported over the control channel and imported into the
-  host store under a per-run gcroot. This is what lets a later `push`
-  execution — its own VM, per the one-step-one-VM rule — see what
-  `build` produced: through the read-only share, without any
-  guest-to-guest or guest-to-host-store write path. `push` uploads from
-  the share to the cache with its scoped credential; the cache remains
-  the durable artifact layer.
+- **Ingress: substitution through the read proxy.** Guests have no
+  network device by default. The guest runtime forwards localhost HTTP
+  to host-side vsock services, so unmodified nix inside the guest sees
+  an ordinary substituter: the read proxy serves the execution's
+  declared work-store roots first and its resolved upstream caches on
+  miss, caching fetches in the work store (LRU, size-limited — the
+  ncps shape). Upstream credentials live in the proxy, never in the
+  guest. The guest builds in its own scratch store; inputs are copied
+  in once per miss and are warm for every later guest on that builder.
+- **Egress: `nix copy` to the write endpoint.** A producing program
+  copies the closures it wants to persist to the host agent's write
+  endpoint — plain binary-cache protocol over the same vsock. The
+  agent imports into the work store under run-scoped gcroots and emits
+  the `paths` event. What a program does not copy out does not exist
+  after the VM dies, so egress naming needs no separate mechanism.
+- **Boot images** are read from where they legitimately live: stock and
+  environment images are registered seeds staged through the builder's
+  own subscription — operator-governed, subscription-pinned, in the
+  host store like any staged seed. Ephemeral merge-run images are work
+  products and live in the work store like any other.
+- **Sharing between builders** happens at the cache layer: a builder's
+  work store may be fronted to peers through the same proxy protocol,
+  or several builders may share an upstream caching proxy. Work stores
+  are never shared filesystems — nix local stores are single-writer.
+- **Fixed-output derivations** under the default no-network policy must
+  substitute from the proxy or fail, consistent with sources-are-inputs
+  (spec-pipeline.md, Repository Input). `full` network exists for the
+  checks and effects that genuinely reach out.
 
-Host-store hygiene: imported guest output is stored and served, but
-storage is not endorsement — whether a path may be activated anywhere
-is the signing layer's question (spec-seed-trust.md), not the store's.
-Run-scoped gcroots are released when the run closes; retention beyond
-that belongs to the cache.
+Run gcroots release when the run closes; the LRU governs retention
+beyond that, and the cache remains the durable artifact layer. Storage
+is not endorsement — whether a work-store path may be activated
+anywhere is the signing layer's question (spec-seed-trust.md).
 
 ## Dispatch
 
 The server owns a queue of executions and assigns each to a connected
 builder matching `system` with a free slot and sufficient memory,
 over the garden channel — the same discipline as deployment dispatch.
+Not everything dispatched boots a VM: builder-side engine operations —
+`push`, uploading from the work store with the scheme-dispatched
+backend client (`niks3://`, `attic://`, otherwise `nix copy`) and
+host-held credentials — ride the same queue and channel without a
+guest.
 
 - **Failure:** a builder disconnecting or dying mid-execution fails the
   execution; the server does not transparently re-run it. Retry is the
@@ -207,19 +225,42 @@ over the garden channel — the same discipline as deployment dispatch.
 
 ## Security
 
-- **Network policy is host-enforced** per VM (tap + host firewall):
-  `none` for hermetic work, `cache-only` restricted to the resolved
-  cache endpoints, `full` for checks and effects that reach out.
+- **Network policy is NIC presence.** Guests default to no network
+  device at all — substitution and egress ride vsock, so `none` costs
+  nothing. `full` attaches a device for checks and effects that reach
+  out and currently grants unrestricted egress; an internet-only tier
+  (special-use ranges blackholed, as spindle does) is a future
+  expansion.
 - **Secrets** are injected by the host agent at VM start as files under
   `/run/sower/secrets/<name>` on a tmpfs, and die with the VM. They
   arrive in the dispatch message over the channel's TLS, are never
   written to the builder's disk or logs, and never enter the image or
   any Nix store. Access decisions happened server-side (spec-pipeline.md,
   Secrets); the host mounts only what dispatch delivered.
-- **Sower's own credentials** (cache push, seed registration) are
-  minted per execution, short-TTL and scoped, delivered the same way.
-  The quarantine-cache redirection for untrusted runs happens at
-  minting; the builder is indifferent.
+- **Sower's own credentials never enter guests.** Upstream-cache auth
+  lives in the read proxy; push and registration credentials are
+  minted short-TTL and scoped to the host agent and server, which
+  authenticate on the execution's behalf. The quarantine-cache
+  redirection for untrusted runs happens at minting; the builder is
+  indifferent.
+- **Host-side push is bounded by minting and by the trust model.** A
+  push operation uploads exactly the server-named paths from the work
+  store, with a credential minted for that operation — short-TTL,
+  bound to the one cache resource the run's capability set selected.
+  A compromised guest holds nothing; a compromised builder host can
+  pollute the caches it was directed at, during the window, and
+  nothing more — cache content is transport, never trust. Activation
+  requires the signing layer's verification regardless of what any
+  cache serves.
+- **Backend clients are part of the builder closure.** The upload
+  clients scheme dispatch selects among ship pinned in the builder
+  host's own seed — operator-governed like the rest of the host
+  closure, overridable in the builder's NixOS configuration, and never
+  influenced by a run definition: repository-derived code executes
+  only in guests. The builtin push serves registered cache resources;
+  uploading anywhere else — a public cachix, mirrors, unsupported
+  backends — is an `effect` in a guest with the user's own secret,
+  which is its correct owner.
 - **Signing separation (D5c):** no execution that evaluates or runs
   repository-derived code receives signing credentials. The ephemeral
   signing of spec-seed-trust.md is performed by the host agent (or a
@@ -245,9 +286,11 @@ container-backed builder mode.
 
 1. **Builder role + generic executions.** Capability advertisement,
    dispatch, event stream, stock image with eval and build guest
-   programs, virtiofs ingress and NAR egress. Unblocks sow-221.
-2. **Push, seed, and credential minting.** Scoped short-TTL
-   credentials; quarantine redirection.
+   programs, the work store, and the vsock read/write services.
+   Unblocks sow-221.
+2. **Builder-side push, credential minting.** Backend upload clients
+   on the host agent; scoped short-TTL credentials; quarantine
+   redirection.
 3. **Custom environments.** `sower.lib.mkEnvironment`, environment
    seeds, materialization, pre-warm subscriptions, pinning.
 4. **Secrets and user code.** Secret injection; `check` and `effect`
@@ -268,17 +311,32 @@ container-backed builder mode.
   stdin payload are the customization channels.
 - **Structured output is a runtime channel, not stdout.** Items flow
   as JSONL over a runtime descriptor; application stdout stays log.
-- **Guest store: read-only host share in, NAR export out.** Guests
-  build into a writable layer above the read-only host share (leaning
-  local-overlay store) and never write the host store; produced paths
-  re-enter host-side under run-scoped gcroots; the cache is the
-  durable layer.
+- **The work store is the only store executions touch.** The builder
+  host's system store never holds a guest-produced path; wiping the
+  work store never breaks the host. Sharing between builders happens
+  at the cache layer, never as a shared filesystem.
+- **Ingress and egress are the binary-cache protocol over vsock.**
+  Guests substitute through the read proxy and `nix copy` results to
+  the write endpoint; no NIC is involved, no bespoke NAR protocol
+  exists, and what a program does not copy out does not persist.
+- **Network modes are `none` and `full`.** Substitution needs no
+  network — the proxy provides it — so `cache-only` disappears as a
+  distinct mode; `full` means everything for now, internet-only
+  blackholing later.
+- **push is a builder-side engine operation.** No VM: the host agent
+  uploads from the work store with the backend-specific client and
+  host-held credentials. The builtin serves registered cache resources
+  only; external publication is an `effect` with user credentials.
+- **Backend clients are a pinned, operator-governed set.** They ship
+  in the builder host closure; a run definition can never name a
+  binary the host executes.
 - **Storage is not endorsement.** Serving a guest-produced path says
   nothing about activation; that remains the signing layer's decision.
 - **Executions are at-most-once.** Builder failure fails the
   execution; retry is memoized rerun at the client layer.
-- **No signing authority in guests.** Executions touching
-  repository-derived code never hold signing credentials.
+- **No sower authority in guests at all.** Proxies and host-side
+  operations hold every sower credential — substitution, push,
+  registration, signing; guests receive only declared user secrets.
 - **Local mode stays.** `sower-build` runs in-process for dev and
   bootstrap; only the server-side path requires builders.
 - **Cloud-hypervisor is the only execution backend.** No degraded or
@@ -288,20 +346,18 @@ container-backed builder mode.
 
 ## Open Questions
 
-- **Egress naming.** How a command declares which produced paths to
-  export — an explicit manifest over the runtime channel, or everything
-  the scratch store gained? Leaning: explicit, via the item/event
-  channel.
-- **Secret transport.** Secrets ride the dispatch message today; is a
-  pull-at-start flow (builder fetches sealed material when the VM
+- **Secret transport.** User secrets ride the dispatch message today;
+  is a pull-at-start flow (builder fetches sealed material when the VM
   boots) worth the extra round trip to shrink the window material
   exists outside the host's memory?
 - **Capacity model.** Slots + memory budget vs. real bin-packing on
   cpus/memory; whether eval's memory ceilings need reflecting in
-  advertisement.
-- **Image cache lifecycle on builders.** Pre-warmed and fetched images
-  accumulate; gc policy for images no longer referenced by any
-  subscription or recent execution.
+  advertisement. Spindle's per-image budgets with work-conserving fair
+  allocation are prior art.
+- **Work-store sizing and eviction.** The LRU bound governs cached
+  substitutions; whether run-gcrooted outputs count against it or get
+  their own budget, and what backpressure looks like when a run's
+  outputs alone exceed the store.
 - **vsock details.** Framing and versioning of the control channel;
   whether the guest contract marker also states the vsock protocol
   range or the marker version covers both.

@@ -322,7 +322,11 @@ registered cache resource — raw URLs and keys never appear in
 definitions, and the capability layer can redirect untrusted runs to a
 quarantine cache without touching them. The resource's URL scheme
 selects the backend as today (`niks3://`, `attic://`, otherwise
-`nix copy`).
+`nix copy`). A builder-side engine operation: the upload runs on the
+builder holding the paths, with host-held credentials and backend
+clients pinned in the builder closure; no `vm` or `environment` config
+(spec-builder.md). The builtin serves registered cache resources —
+uploading anywhere else is an `effect` with a user secret.
 
 **Inputs:** `out_paths`.
 
@@ -332,14 +336,15 @@ selects the backend as today (`niks3://`, `attic://`, otherwise
 
 | Field | Type   | Required | Default | Description                                    |
 | ----- | ------ | -------- | ------- | ---------------------------------------------- |
-| cache | string | yes      |         | Registered cache resource, as in `vm.caches`. |
+| cache | string | yes      |         | Registered cache resource, as in `vm.caches`.  |
 
 ### seed
 
 Registers the item as a seed with the server, exactly as the `:seed`
 step of `sower-build` does today (`SowerClient.Seed.create`). Name,
 type, and tags come from the item's `meta.sower.seed` plus the fields
-below.
+below. A server-side engine operation — a registry write needing no VM
+and accepting no `vm` or `environment` config.
 
 **Inputs:** `out_paths` (the artifact) and `meta.sower.seed` (name,
 type, tags).
@@ -487,11 +492,13 @@ arguments stands either way.
 
 ## Execution Environment
 
-Steps that execute work — `eval`, `build`, `push`, `seed`, `check`,
-`effect` — each run in their own cloud-hypervisor microVM on a builder.
-Server-side steps (`resolve`, `deploy`) are engine operations and accept
-no `vm` or `environment` config. The contract carries resources and
-references; all software configuration is Nix.
+Steps that execute work — `eval`, `build`, `check`, `effect` — each
+run in their own cloud-hypervisor microVM on a builder
+(spec-builder.md). `resolve`, `deploy`, and `seed` are server-side
+engine operations; `push` is a builder-side one, uploading from the
+builder's work store with host-held credentials. Engine operations
+accept no `vm` or `environment` config. The contract carries resources
+and references; all software configuration is Nix.
 
 The default guest is the sower **stock image**: prebuilt, shipped with
 the builder, requiring no user-source evaluation. Builtin steps need the
@@ -506,13 +513,13 @@ why the environment closure sits in eval's memoization key).
 | ------- | ---------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | cpus    | int        | no       | engine  | Virtual CPUs.                                                                                                                                                          |
 | memory  | int        | no       | engine  | Memory in MiB. Bounds the whole step; step-internal knobs (e.g. eval's `memory_limit`) operate within it.                                                              |
-| network | string     | no       | none    | `none`, `cache-only`, or `full`.                                                                                                                                       |
+| network | string     | no       | none    | `none` (default) or `full`. Substitution needs no network — it flows through the builder's read proxy (spec-builder.md).                                               |
 | caches  | string[]   | no       | []      | Registered cache resources (by name) the VM may substitute from. The server materializes substituter configuration; raw URLs and keys do not appear in the definition. |
 
 Settable on a step, a phase (default for its steps), or the pipeline
-`defaults`. `network` is enforced by the host, not the guest: `none` for
-hermetic work, `cache-only` for substitution, `full` for checks and
-effects that reach out.
+`defaults`. `network` is enforced by the host, not the guest — under
+`none` the guest has no network device at all, substitution riding
+vsock instead; `full` is for checks and effects that reach out.
 
 ### environment
 
@@ -595,8 +602,9 @@ unverified code into builder VMs.
 ### Environment seeds
 
 Materializing an environment is the builtin chain applied to itself: an
-internal eval → build → push → seed job, run in stock VMs, registering
-the image as a seed of a new stage-only `environment` seed type (joining
+internal eval → build → push → seed job, its guest steps in stock VMs,
+registering the image as a seed of a new stage-only `environment` seed
+type (joining
 the policy spec's actions-by-seed-type table alongside `gcroot`). The
 seed registry is the server-side tracking:
 
@@ -643,7 +651,9 @@ effectively public. Two categories with different owners:
 - **Sower's own credentials** — cache push, seed registration, deploy
   authority for builtin steps — are never user-configured. The server
   mints them per step, short-TTL and scoped (the Issuer/STS shape in
-  spec-seed-trust.md).
+  spec-seed-trust.md), and they stay host-side: builder proxies and
+  engine operations authenticate with them; they never enter a guest
+  (spec-builder.md).
 - **User secrets** — tokens and keys for external services used by
   checks and effects — live in a named, org-scoped server-side secret
   store (a resource, like caches). A step declares what it needs by
@@ -1206,7 +1216,7 @@ branches share its image instead of materializing their own:
     { kind = "check";
       app = "checks/integration";
       environment = { attr = "environments/integration"; ref = "main"; };
-      vm = { cpus = 4; memory = 4096; network = "cache-only"; };
+      vm = { cpus = 4; memory = 4096; };
       env = { PGHOST = "/run/postgresql"; }; }
     { kind = "effect";
       app = "notify";
@@ -1275,9 +1285,11 @@ in
   Conditionality is Nix logic; the contract has no condition language.
 - **Admission policy lives on the server resource, never in the flake.**
   A gate evaluated from the revision it gates is no gate.
-- **Executing steps run in microVMs.** The contract carries resources,
-  network policy, and references; software configuration is NixOS
-  modules on a sower base.
+- **eval, build, check, and effect run in microVMs.** `push` and
+  `seed` join `resolve` and `deploy` as engine operations —
+  builder-side and server-side respectively. The contract carries
+  resources, network policy, and references; software configuration is
+  NixOS modules on a sower base.
 - **Secrets are declared per step and injected as files at VM start.**
   Never through evaluation, the store, or the run context.
 - **Builtin steps run in the stock image by default.** `environment` is
@@ -1339,7 +1351,6 @@ in
   exists.
 - Full flake refs as environment sources (org-shared environment
   repositories).
-- Execution placement: eval/build/push/seed steps run on builders
-  (today: wherever `sower-build` runs; eventually builder gardens per
-  spec-seed-trust.md). Deploy/check coordination belongs to the server.
-  Both are scheduler concerns, out of scope here.
+- Execution placement details: guest steps run on builder gardens
+  (spec-builder.md); deploy coordination belongs to the server.
+  Dispatch and placement are scheduler concerns, out of scope here.
