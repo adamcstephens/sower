@@ -104,7 +104,7 @@ the contract baseline.
 | vm       | object   | yes      | `{ cpus, memory }`, resolved by the server from definition defaults.                 |
 | network  | string   | yes      | `none` (default; no network device) or `full` — NIC presence, host-enforced.         |
 | caches   | object[] | no       | Upstream caches the read proxy fronts for this execution; server-resolved.           |
-| secrets  | object   | no       | Named user-secret material injected as files (see Security). Never logged/persisted.  |
+| secrets  | object   | no       | Named user-secret material injected as files (see Security). Never logged/persisted. |
 | paths    | string[] | no       | Work-store roots the read proxy serves this execution (closure allowlist).           |
 | timeout  | string   | yes      | Per-attempt execution deadline.                                                      |
 
