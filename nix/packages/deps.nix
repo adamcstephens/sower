@@ -1746,10 +1746,11 @@ let
             name = "rexec";
             appConfigPath = ../../config;
 
-            src = builtins.fetchGit {
-              url = "https://codeberg.org/adamcstephens/rexec.git";
+            src = fetchFromGitHub {
+              owner = "adamcstephens";
+              repo = "rexec";
               rev = "eb4760ce8a51c8296b553681ef202ea124d896c6";
-              allRefs = true;
+              hash = "sha256-hsdz7pFoapa8uOLqt8ZMj3Z5Z3T63aAKuNdQ15pvWZM=";
             };
           };
         in
