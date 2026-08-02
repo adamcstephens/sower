@@ -2,6 +2,7 @@
   craneLib,
   installShellFiles,
   lib,
+  extraArgs ? { },
 }:
 
 let
@@ -26,7 +27,8 @@ let
     pname = "sower";
     version = (lib.importTOML ../../Cargo.toml).package.version;
     strictDeps = true;
-  };
+  }
+  // extraArgs;
 
   cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 in

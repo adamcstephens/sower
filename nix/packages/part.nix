@@ -1,4 +1,4 @@
-{ self, ... }:
+{ inputs, self, ... }:
 {
   perSystem =
     {
@@ -20,6 +20,16 @@
 
         cli = pkgs.callPackage ./cli.nix {
           inherit craneLib;
+        };
+
+        cli-static = pkgs.pkgsMusl.callPackage ./cli.nix {
+          craneLib = inputs.crane.mkLib pkgs.pkgsCross.musl64;
+          extraArgs = {
+            CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static";
+            CARGO_BUILD_TARGET = "x86_64-unknown-linux-musl";
+
+            cargoExtraArgs = "--target x86_64-unknown-linux-musl";
+          };
         };
 
         garden = pkgs.callPackage ./garden.nix {
