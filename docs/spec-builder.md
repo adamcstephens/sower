@@ -100,10 +100,9 @@ locally before a run asks.
 
 The host agent is part of the garden application, not a service beside
 it: the same supervision tree, channel, and deployment path that
-already make a garden a garden. Where the work wants another language —
-VM lifecycle, vsock plumbing — it drops to Rust through a NIF or port.
-That is a choice inside the agent, not a component boundary, and it
-changes no contract.
+already make a garden a garden. It prefers native Elixir throughout and
+falls to Rust as needed, through a NIF or port. That is a choice inside
+the agent, not a component boundary, and it changes no contract.
 
 ## Execution Contract
 
@@ -174,10 +173,11 @@ builders advertise the range they accept so the server never dispatches
 an image it would refuse.
 
 Transport between host agent and guest runtime is vsock, carrying
-three services: the control channel (command delivery, events, exit),
-the read proxy, and the write endpoint (see Nix Store Strategy). The
-guest runtime forwards localhost HTTP to the latter two, so unmodified
-nix inside the guest sees an ordinary substituter and upload target.
+three services today: the control channel (command delivery, events,
+exit), the read proxy, and the write endpoint (see Nix Store Strategy).
+The guest runtime forwards localhost HTTP to the latter two, so
+unmodified nix inside the guest sees an ordinary substituter and upload
+target.
 The command's own I/O convention is unchanged from the pipeline spec:
 payload as JSON on stdin, stdout and stderr captured as the step log.
 Programs that emit items (eval; later, checks enriching items) write
@@ -188,6 +188,15 @@ The guest runtime receives the command over vsock after boot, injects
 nothing into its environment beyond `command.env`, and reports exit
 status. VMs are ephemeral: booted per execution, destroyed after,
 nothing surviving but exported paths and the event stream.
+
+That lifecycle is the default, not a constraint. Interactive access to
+a live guest — an SSH or console session a user opens to troubleshoot a
+failing run — is an affordance the isolation model should keep open
+rather than design out. Brokered host-side over vsock as another
+service, it needs no NIC, no in-guest credential, and no change to
+network policy, and the server gates who reaches it. What it does need
+is a guest that outlives its command, so holding a VM open past exit is
+a lifecycle question to leave room for.
 
 ## Nix Store Strategy
 
@@ -360,10 +369,10 @@ container-backed builder mode.
 
 - **Builders are a garden role.** Registration, auth, channel,
   versioning, and self-update are the garden's; no parallel mechanism.
-- **The host agent is part of the garden application.** Elixir, in the
-  garden's own supervision tree and deployment path, dropping to Rust
-  through a NIF or port where the work warrants it — never a second
-  service or a second contract.
+- **The host agent is part of the garden application.** Native Elixir
+  by preference, in the garden's own supervision tree and deployment
+  path, falling to Rust through a NIF or port as needed — never a
+  second service or a second contract.
 - **The execution contract is generic.** Image + command + payload +
   resources + network + secrets → events. Step semantics live in guest
   programs; the host never interprets work.
