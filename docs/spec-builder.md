@@ -51,9 +51,10 @@ spec-seed-trust.md's.
   host-side, minted short-TTL and scoped, and exercised on the
   execution's behalf. Guests receive only the user secrets a step
   declares, injected as files.
-- **Everything the builder runs is Nix.** Images are seeds; the stock
-  image and user environments arrive through the same registry, cache,
-  and subscription machinery as every other closure.
+- **Everything the builder runs is Nix.** Images are closures: the
+  stock image rides in the builder's own deployed closure, and user
+  environments arrive as seeds through the same registry, cache, and
+  subscription machinery as everything else.
 - **Local mode stays.** `sower-build` keeps its in-process eval/build
   for development and bootstrap. It shares the step vocabulary, not the
   builder path; only server-side execution requires builders.
@@ -64,49 +65,66 @@ spec-seed-trust.md's.
 | ------------- | --------------------------------------------------------------------------------------------- |
 | Builder       | A garden with the builder capability: a host agent executing microVMs for the server.         |
 | Execution     | One unit of dispatched work: image + command + payload + resources → event stream + result.   |
-| Image         | A complete guest system closure — the stock image or a `mkEnvironment` output, as a seed.     |
-| Host agent    | The builder-side service: VM lifecycle, vsock services, secret injection, the work store.     |
+| Run           | A client-scoped group of executions: pins to one builder and scopes its work-store gcroots.   |
+| Image         | A complete guest system closure — the stock image, or a `mkEnvironment` output as a seed.     |
+| Host agent    | The builder role of the garden application: VM lifecycle, vsock services, secrets, work store. |
 | Guest runtime | The sower-owned service inside every image that receives the command and mediates I/O.        |
 | Work store    | The host agent's separate Nix store for all execution I/O; the host system store stays clean. |
-| Dispatch      | Server-side assignment of a queued execution to a connected builder with capacity.            |
+| Dispatch      | Server-side assignment of a queued execution to a builder: free once per run, then pinned.    |
 
 ## Builder Role
 
 A builder is a registered garden whose connection advertises the
 builder capability:
 
-| Field    | Description                                                  |
-| -------- | ------------------------------------------------------------ |
-| systems  | Systems it can execute (`x86_64-linux`, `aarch64-linux`, …). |
-| slots    | Maximum concurrent executions.                               |
-| memory   | Total memory budget for guest VMs, in MiB.                   |
-| features | Host capabilities (e.g. `kvm`; nested virtualisation later). |
+| Field    | Description                                                        |
+| -------- | ------------------------------------------------------------------ |
+| systems  | Systems it can execute (`x86_64-linux`, `aarch64-linux`, …).       |
+| slots    | Maximum concurrent executions.                                     |
+| memory   | Total memory budget for guest VMs, in MiB.                         |
+| features | Host capabilities (e.g. `kvm`; nested virtualisation later).       |
+| contract | Guest-contract range it accepts; nothing outside it is dispatched. |
+| stock    | Store path of the stock image in the builder's own closure.        |
 
 The server gates dispatch on the builder's reported version, following
 the existing contract discipline. Builder software is deployed like any
 garden's: as seeds under the builder's own subscriptions and policy.
-Stock images and pinned environments pre-warm the same way — a builder
+The stock image ships inside that closure — every builder holds it from
+the moment it is deployed, with no fetch, no registry lookup, and no
+bootstrap ordering problem. Its store path is therefore the builder's
+fact, not the server's, so the builder advertises it and the server
+names it back in dispatch; stock and environment executions stay one
+message shape. Custom environments arrive the other way: a builder
 subscribes to `environment` seeds with a stage-only policy
-(spec-pipeline.md, Environment seeds), so images are pinned locally
-before a run asks.
+(spec-pipeline.md, Environment seeds), so those images are pinned
+locally before a run asks.
+
+The host agent is part of the garden application, not a service beside
+it: the same supervision tree, channel, and deployment path that
+already make a garden a garden. Where the work wants another language —
+VM lifecycle, vsock plumbing — it drops to Rust through a NIF or port.
+That is a choice inside the agent, not a component boundary, and it
+changes no contract.
 
 ## Execution Contract
 
 The dispatch message. Schemas live in `sower_client` and are covered by
 the contract baseline.
 
-| Field    | Type     | Required | Description                                                                          |
-| -------- | -------- | -------- | ------------------------------------------------------------------------------------ |
-| sid      | string   | yes      | Execution id; idempotency key for redispatch.                                        |
-| image    | string   | yes      | Store path of the guest image closure (a registered seed's artifact).                |
-| command  | object   | yes      | `{ path, args, env }` — a store-path executable inside the image's closure.          |
-| payload  | object   | yes      | JSON delivered to the command on stdin (a pipeline item, for step executions).       |
-| vm       | object   | yes      | `{ cpus, memory }`, resolved by the server from definition defaults.                 |
-| network  | string   | yes      | `none` (default; no network device) or `full` — NIC presence, host-enforced.         |
-| caches   | object[] | no       | Upstream caches the read proxy fronts for this execution; server-resolved.           |
-| secrets  | object   | no       | Named user-secret material injected as files (see Security). Never logged/persisted. |
-| paths    | string[] | no       | Work-store roots the read proxy serves this execution (closure allowlist).           |
-| timeout  | string   | yes      | Per-attempt execution deadline.                                                      |
+| Field   | Type     | Required | Description                                                                          |
+| ------- | -------- | -------- | ------------------------------------------------------------------------------------ |
+| sid     | string   | yes      | Execution id; idempotency key for redispatch.                                        |
+| run_sid | string   | yes      | The run this execution belongs to: gcroot scope, pin key, lifecycle owner.           |
+| system  | string   | yes      | Target system; what dispatch matched the builder on.                                 |
+| image   | string   | yes      | Store path of the guest image closure (advertised stock, or an environment seed).    |
+| command | object   | yes      | `{ path, args, env }` — a store-path executable inside the image's closure.          |
+| payload | object   | yes      | JSON delivered to the command on stdin (a pipeline item, for step executions).       |
+| vm      | object   | yes      | `{ cpus, memory }`, resolved by the server from definition defaults.                 |
+| network | string   | yes      | `none` (default; no network device) or `full` — NIC presence, host-enforced.         |
+| caches  | object[] | no       | Upstream caches the read proxy fronts for this execution; server-resolved.           |
+| secrets | object   | no       | Named user-secret material injected as files (see Security). Never logged/persisted. |
+| paths   | string[] | no       | Work-store roots the read proxy serves this execution (closure allowlist).           |
+| timeout | string   | yes      | Execution deadline.                                                                  |
 
 The host never templates or interprets `command` and `payload` — it
 execs one and delivers the other, exactly once, per the item context
@@ -135,6 +153,14 @@ execution emits an item per derivation as its attribute walk proceeds,
 and the pipeline engine fans them into consuming phases without waiting
 for the walk to finish.
 
+**Engine operations carry a different message** over the same queue and
+channel. `push`, the only one today, takes `sid`, `run_sid`, the
+work-store `paths` to upload, the `cache` resource to upload them to,
+and `timeout`; `image`, `vm`, and `network` have no meaning because
+nothing boots. It reports the same events minus `item`, and consumes
+neither a slot nor the guest memory budget — both describe VMs — so the
+host bounds concurrent uploads on its own.
+
 ## Host–Guest Contract
 
 Every image embeds the sower guest runtime via the mandatory base
@@ -142,7 +168,10 @@ module of `sower.lib.mkEnvironment` (spec-pipeline.md, Execution
 Environment), and stamps `/etc/sower/env.json` with a versioned
 guest-contract marker. The host agent refuses images whose marker is
 missing or out of its supported range — the runtime surface is a
-cross-component contract like any other.
+cross-component contract like any other. One marker versions that whole
+surface, vsock protocol included; there is no second negotiation, and
+builders advertise the range they accept so the server never dispatches
+an image it would refuse.
 
 Transport between host agent and guest runtime is vsock, carrying
 three services: the control channel (command delivery, events, exit),
@@ -180,48 +209,77 @@ path. Wiping the work store must never break the builder host.
 - **Egress: `nix copy` to the write endpoint.** A producing program
   copies the closures it wants to persist to the host agent's write
   endpoint — plain binary-cache protocol over the same vsock. The
-  agent imports into the work store under run-scoped gcroots and emits
-  the `paths` event. What a program does not copy out does not exist
-  after the VM dies, so egress naming needs no separate mechanism.
-- **Boot images** are read from where they legitimately live: stock and
-  environment images are registered seeds staged through the builder's
-  own subscription — operator-governed, subscription-pinned, in the
-  host store like any staged seed. Ephemeral merge-run images are work
-  products and live in the work store like any other.
-- **Sharing between builders** happens at the cache layer: a builder's
-  work store may be fronted to peers through the same proxy protocol,
-  or several builders may share an upstream caching proxy. Work stores
-  are never shared filesystems — nix local stores are single-writer.
+  agent imports into the work store under gcroots scoped to the
+  execution's `run_sid` and emits the `paths` event. What a program
+  does not copy out does not exist after the VM dies, so egress naming
+  needs no separate mechanism.
+- **Boot images** are read from where they legitimately live, in the
+  host store: the stock image as part of the builder's own deployed
+  closure, environment images as registered seeds staged through the
+  builder's own subscription. Both are operator-governed and pinned.
+  Ephemeral merge-run images are work products and live in the work
+  store like any other.
+- **Sharing between builders** happens at the cache layer, never as a
+  shared filesystem — nix local stores are single-writer. Within a run
+  the question does not arise, because the run is pinned to one builder
+  (see Dispatch). Between runs, and for the later cross-system case,
+  the shared layer is the cache the run pushes to, or a caching proxy
+  several builders front.
 - **Fixed-output derivations** under the default no-network policy must
   substitute from the proxy or fail, consistent with sources-are-inputs
   (spec-pipeline.md, Repository Input). `full` network exists for the
   checks and effects that genuinely reach out.
 
-Run gcroots release when the run closes; the LRU governs retention
-beyond that, and the cache remains the durable artifact layer. Storage
-is not endorsement — whether a work-store path may be activated
-anywhere is the signing layer's question (spec-seed-trust.md).
+Run outputs and cached substitutions are separate budgets. Substitutions
+are evictable at any time under the LRU; paths under a live run's gcroot
+are not, because a later execution of that run is entitled to read them.
+The server releases a run's gcroots when the run closes, after which its
+outputs fall to the LRU like anything else and the cache remains the
+durable artifact layer. A builder whose work store is full stops
+accepting new *runs* — executions of runs already pinned to it still
+schedule, since finishing a run is what releases its gcroots. The
+pressure surfaces as scheduling backpressure, never as a failure
+mid-run. Storage is not endorsement — whether a work-store path may be
+activated anywhere is the signing layer's question (spec-seed-trust.md).
 
 ## Dispatch
 
 The server owns a queue of executions and assigns each to a connected
-builder matching `system` with a free slot and sufficient memory,
-over the garden channel — the same discipline as deployment dispatch.
-Not everything dispatched boots a VM: builder-side engine operations —
-`push`, uploading from the work store with the scheme-dispatched
-backend client (`niks3://`, `attic://`, otherwise `nix copy`) and
-host-held credentials — ride the same queue and channel without a
-guest.
+builder matching `system` with a free slot, sufficient memory, and work
+store headroom, over the garden channel — the same discipline as
+deployment dispatch. Not everything dispatched boots a VM: builder-side
+engine operations — `push`, uploading from the work store with the
+scheme-dispatched backend client (`niks3://`, `attic://`, otherwise
+`nix copy`) and host-held credentials — ride the same queue and channel
+without a guest.
 
+- **Runs pin to a builder.** Placement is decided once, for a run's
+  first execution; every later execution carrying that `run_sid` goes
+  to the same builder. Executions consume each other's products — a
+  build reads the eval's derivations, a check reads the build's
+  outputs, a push uploads them — and only the pinned builder's work
+  store holds them. Push has no other option in any design: it uploads
+  paths, so it runs where the paths are.
+- **Pinning is the simple half of a two-step answer.** The general
+  mechanism is a cache round-trip between executions, reusing the
+  machinery push already needs and unlocking runs that span systems. It
+  also pays a copy on every hand-off, so pinning ships first and the
+  cache path arrives where cross-system runs or builder loss make that
+  copy worth paying. Neither changes the contract fields.
+- **Run close** is a server→builder message carrying the `run_sid`. It
+  releases the run's gcroots and frees its pin; nothing else does.
 - **Failure:** a builder disconnecting or dying mid-execution fails the
-  execution; the server does not transparently re-run it. Retry is the
-  client layer's move (a pipeline rerun memoizes past completed work),
-  keeping builder semantics at-most-once and dumb.
+  execution; the server does not transparently re-run it. Losing a
+  builder loses the unpushed work-store products of every run pinned to
+  it, so those runs re-place from scratch on rerun and rebuild whatever
+  was not pushed. Retry is the client layer's move (a pipeline rerun
+  memoizes past completed work), keeping builder semantics at-most-once
+  and dumb.
 - **Cancellation:** kills the VM; the execution reports `cancelled`.
   Already-exported paths and emitted items stand.
-- **Placement policy** beyond system/capacity — labels, tenant pools,
-  affinity — is a future consideration; the contract fields do not
-  change for it.
+- **Placement policy** beyond system, capacity, and the run pin —
+  labels, tenant pools — is a future consideration; the contract fields
+  do not change for it.
 
 ## Security
 
@@ -285,9 +343,9 @@ container-backed builder mode.
 ## Phasing
 
 1. **Builder role + generic executions.** Capability advertisement,
-   dispatch, event stream, stock image with eval and build guest
-   programs, the work store, and the vsock read/write services.
-   Unblocks sow-221.
+   dispatch with run pinning and run close, event stream, stock image
+   with eval and build guest programs, the work store, and the vsock
+   read/write services. Unblocks sow-221.
 2. **Builder-side push, credential minting.** Backend upload clients
    on the host agent; scoped short-TTL credentials; quarantine
    redirection.
@@ -302,19 +360,41 @@ container-backed builder mode.
 
 - **Builders are a garden role.** Registration, auth, channel,
   versioning, and self-update are the garden's; no parallel mechanism.
+- **The host agent is part of the garden application.** Elixir, in the
+  garden's own supervision tree and deployment path, dropping to Rust
+  through a NIF or port where the work warrants it — never a second
+  service or a second contract.
 - **The execution contract is generic.** Image + command + payload +
   resources + network + secrets → events. Step semantics live in guest
   programs; the host never interprets work.
+- **Runs are identified by an sid.** `run_sid` scopes work-store
+  gcroots, keys the builder pin, and is what the server's run-close
+  message releases.
+- **Runs pin to a builder.** A run's first execution picks the builder
+  and every later one follows, `push` included, because only that
+  builder's work store holds what they consume. A cache round-trip
+  between executions is the general mechanism and arrives when
+  cross-system runs or builder loss justify the copy.
 - **Commands are store-path executables with plain args.** The host
   execs what dispatch names and templates nothing. Excluding arbitrary
   *commands* is pipeline validation's job; static `args`/`env` and the
   stdin payload are the customization channels.
 - **Structured output is a runtime channel, not stdout.** Items flow
   as JSONL over a runtime descriptor; application stdout stays log.
+- **One guest-contract marker versions the whole host–guest surface,**
+  vsock protocol included, and builders advertise the range they accept
+  so the server never dispatches an image they would refuse.
 - **The work store is the only store executions touch.** The builder
   host's system store never holds a guest-produced path; wiping the
   work store never breaks the host. Sharing between builders happens
   at the cache layer, never as a shared filesystem.
+- **Run outputs sit outside the LRU.** Eviction governs cached
+  substitutions only; a full work store stops scheduling new runs
+  rather than dropping a live run's products.
+- **The stock image ships in the builder closure.** Every builder holds
+  it the moment it is deployed and advertises its store path, which the
+  server names back in dispatch; only custom environments come through
+  registry, cache, and subscriptions.
 - **Ingress and egress are the binary-cache protocol over vsock.**
   Guests substitute through the read proxy and `nix copy` results to
   the write endpoint; no NIC is involved, no bespoke NAR protocol
@@ -327,6 +407,9 @@ container-backed builder mode.
   uploads from the work store with the backend-specific client and
   host-held credentials. The builtin serves registered cache resources
   only; external publication is an `effect` with user credentials.
+- **push carries its own message shape.** Same queue and channel, but
+  paths and a target cache in place of image, vm, and network; it boots
+  nothing and consumes no slot.
 - **Backend clients are a pinned, operator-governed set.** They ship
   in the builder host closure; a run definition can never name a
   binary the host executes.
@@ -353,11 +436,21 @@ container-backed builder mode.
 - **Capacity model.** Slots + memory budget vs. real bin-packing on
   cpus/memory; whether eval's memory ceilings need reflecting in
   advertisement. Spindle's per-image budgets with work-conserving fair
-  allocation are prior art.
-- **Work-store sizing and eviction.** The LRU bound governs cached
-  substitutions; whether run-gcrooted outputs count against it or get
-  their own budget, and what backpressure looks like when a run's
-  outputs alone exceed the store.
-- **vsock details.** Framing and versioning of the control channel;
-  whether the guest contract marker also states the vsock protocol
-  range or the marker version covers both.
+  allocation are prior art. Pinning sharpens this: a pinned run's later
+  executions queue behind their own builder rather than spilling to a
+  free one, so a mis-sized builder stalls a run instead of a slot.
+- **Event-stream bounds.** An untrusted guest can emit `log` and `item`
+  events without limit, and the spec states no size cap, truncation, or
+  backpressure — a host-protection gap, not hygiene. Relatedly, a
+  builder disconnecting fails the execution, which makes a transient
+  channel blip kill a two-hour build; logs are sequence-numbered, which
+  gestures at resume, but no reconnect window is specified.
+- **Environment image on miss.** Pre-warm subscriptions cover the happy
+  path, and the stock image is always local. When dispatch would name an
+  environment image a builder has not staged, is that a placement
+  constraint (only builders holding it are candidates) or a fetch the
+  execution waits on? Phase 3.
+- **Read proxy implementation.** Adopt ncps or build the equivalent
+  against the work store.
+- **Who performs ephemeral signing.** The host agent or a dedicated
+  non-guest step (see Security); phase 5 picks one.
