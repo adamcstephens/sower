@@ -84,18 +84,17 @@ builder capability:
 | memory   | Total memory budget for guest VMs, in MiB.                         |
 | features | Host capabilities (e.g. `kvm`; nested virtualisation later).       |
 | contract | Guest-contract range it accepts; nothing outside it is dispatched. |
-| stock    | Store path of the stock image in the builder's own closure.        |
 
 The server gates dispatch on the builder's reported version, following
 the existing contract discipline. Builder software is deployed like any
 garden's: as seeds under the builder's own subscriptions and policy.
 The stock image ships inside that closure — every builder holds it from
 the moment it is deployed, with no fetch, no registry lookup, and no
-bootstrap ordering problem. Its store path is therefore the builder's
-fact, not the server's, so the builder advertises it and the server
-names it back in dispatch; stock and environment executions stay one
-message shape. Custom environments arrive the other way: a builder
-subscribes to `environment` seeds with a stage-only policy
+bootstrap ordering problem. It sits at a well-known path the builder's
+own configuration provides at eval and build time, so nobody has to
+carry its store path around: dispatch names it `stock` and the host
+agent resolves the rest. Custom environments arrive the other way: a
+builder subscribes to `environment` seeds with a stage-only policy
 (spec-pipeline.md, Environment seeds), so those images are pinned
 locally before a run asks.
 
@@ -116,7 +115,7 @@ the contract baseline.
 | sid     | string   | yes      | Execution id; idempotency key for redispatch.                                        |
 | run_sid | string   | yes      | The run this execution belongs to: gcroot scope, pin key, lifecycle owner.           |
 | system  | string   | yes      | Target system; what dispatch matched the builder on.                                 |
-| image   | string   | yes      | Store path of the guest image closure (advertised stock, or an environment seed).    |
+| image   | string   | yes      | `stock` for the builder's own image, or an environment seed's store path.            |
 | command | object   | yes      | `{ path, args, env }` — a store-path executable inside the image's closure.          |
 | payload | object   | yes      | JSON delivered to the command on stdin (a pipeline item, for step executions).       |
 | vm      | object   | yes      | `{ cpus, memory }`, resolved by the server from definition defaults.                 |
@@ -157,9 +156,10 @@ for the walk to finish.
 channel. `push`, the only one today, takes `sid`, `run_sid`, the
 work-store `paths` to upload, the `cache` resource to upload them to,
 and `timeout`; `image`, `vm`, and `network` have no meaning because
-nothing boots. It reports the same events minus `item`, and consumes
-neither a slot nor the guest memory budget — both describe VMs — so the
-host bounds concurrent uploads on its own.
+nothing boots. It reports the same events minus `item`, and occupies one
+slot against a fixed minimal memory budget, so capacity accounting stays
+uniform and concurrent uploads are bounded by the same arithmetic as
+everything else.
 
 ## Host–Guest Contract
 
@@ -214,9 +214,9 @@ path. Wiping the work store must never break the builder host.
   does not copy out does not exist after the VM dies, so egress naming
   needs no separate mechanism.
 - **Boot images** are read from where they legitimately live, in the
-  host store: the stock image as part of the builder's own deployed
-  closure, environment images as registered seeds staged through the
-  builder's own subscription. Both are operator-governed and pinned.
+  host store: the stock image at the well-known path in the builder's
+  own deployed closure, environment images as registered seeds staged
+  through its subscription. Both are operator-governed and pinned.
   Ephemeral merge-run images are work products and live in the work
   store like any other.
 - **Sharing between builders** happens at the cache layer, never as a
@@ -391,10 +391,10 @@ container-backed builder mode.
 - **Run outputs sit outside the LRU.** Eviction governs cached
   substitutions only; a full work store stops scheduling new runs
   rather than dropping a live run's products.
-- **The stock image ships in the builder closure.** Every builder holds
-  it the moment it is deployed and advertises its store path, which the
-  server names back in dispatch; only custom environments come through
-  registry, cache, and subscriptions.
+- **The stock image ships in the builder closure,** at a well-known
+  path its own configuration provides at eval and build time. Dispatch
+  names it `stock` and the host resolves it; only custom environments
+  come through registry, cache, and subscriptions.
 - **Ingress and egress are the binary-cache protocol over vsock.**
   Guests substitute through the read proxy and `nix copy` results to
   the write endpoint; no NIC is involved, no bespoke NAR protocol
@@ -408,8 +408,9 @@ container-backed builder mode.
   host-held credentials. The builtin serves registered cache resources
   only; external publication is an `effect` with user credentials.
 - **push carries its own message shape.** Same queue and channel, but
-  paths and a target cache in place of image, vm, and network; it boots
-  nothing and consumes no slot.
+  paths and a target cache in place of image, vm, and network. It boots
+  nothing, and still takes one slot and a fixed minimal budget so
+  capacity is counted one way.
 - **Backend clients are a pinned, operator-governed set.** They ship
   in the builder host closure; a run definition can never name a
   binary the host executes.
