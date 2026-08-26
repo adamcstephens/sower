@@ -1,13 +1,14 @@
 default:
     just -l
 
-bootstrap:
-    @echo "Remove this comment to test" && exit 1
-
-    cp ./dev-client-example.json ./dev-client.json
-    cp ./dev-server-example.json ./dev-server.json
-    # setup AWS and OIDC secrets
-    mix ecto.setup --no-start
+bootstrap: dev-services dev-client
+    [ -f dev-client.json ] || cp ./dev-client-example.json ./dev-client.json
+    [ -f dev-server.json ] || cp ./dev-server-example.json ./dev-server.json
+    mix deps.get
+    mix deps.compile
+    mix ecto.setup
+    mix assets.build
+    -just doctor
 
 check: check-elixir check-rust
 
@@ -43,12 +44,73 @@ clean:
 dev-add-user email:
     mix run apps/sower/priv/repo/seeds-user.exs {{ email }} --no-start
 
+dev-client:
+    nix build --out-link .dev-client .#sower
+
 dev-seed-from-local:
     cargo run --quiet -- seed --name $(hostname -s) --type nixos submit --path $(readlink -f /run/current-system) --tag source=dev --tag test=anotherval
     cargo run --quiet -- seed --name $(hostname -s) --type home-manager submit --path $(readlink -f $HOME/.local/state/nix/profiles/home-manager) --tag source=dev
 
 dev-services:
     process-compose list || process-compose up --detached
+
+doctor:
+    #!/usr/bin/env bash
+    set -uo pipefail
+
+    status=0
+
+    report() {
+      if [ "$1" = ok ]; then
+        echo "  ok       $2"
+      else
+        echo "  MISSING  $2 -- $3"
+        status=1
+      fi
+    }
+
+    check_path() {
+      if [ -e "$1" ]; then report ok "$1"; else report missing "$1" "$2"; fi
+    }
+
+    echo "config:"
+    check_path dev-server.json "just bootstrap"
+    check_path dev-client.json "just bootstrap"
+
+    echo "secrets:"
+    for secret in .dev-cookie .dev-secret-key-base .dev-login-token .dev-cloak-ecto .dev-s3-key-id .dev-s3-secret-key .dev-api-token; do
+      check_path "$secret" "direnv reload"
+    done
+
+    echo "client:"
+    check_path .dev-client "just dev-client"
+
+    echo "dependencies:"
+    check_path deps "mix deps.get"
+    check_path _build "mix deps.compile"
+
+    echo "services:"
+    if pg_isready --quiet; then
+      report ok postgres
+    else
+      report missing postgres "just dev-services"
+    fi
+
+    database="${PGDATABASE:-sower_dev}"
+    if psql --dbname=postgres --list --quiet --tuples-only 2>/dev/null | cut -d'|' -f1 | grep -qw "$database"; then
+      report ok "database $database"
+
+      users=$(psql --dbname="$database" --quiet --tuples-only --no-align --command 'select count(*) from users' 2>/dev/null)
+      if [ "${users:-0}" -gt 0 ]; then
+        report ok "seeded users"
+      else
+        report missing "seeded users" "sign in at /dev/login, then just dev-add-user <email>"
+      fi
+    else
+      report missing "database $database" "mix ecto.setup"
+    fi
+
+    exit $status
 
 get-incus-openapi:
     curl https://converter.swagger.io/api/convert?url=https://raw.githubusercontent.com/lxc/incus/refs/heads/main/doc/rest-api.yaml | jq . > apps/incus_client/priv/incus-rest-api.json
@@ -76,20 +138,12 @@ openapi-output:
     MIX_ENV=test mix deps.get
     MIX_ENV=test mix openapi.spec.json --spec SowerWeb.ApiSpec --pretty=true openapi.json
 
-reset: clean setup
+reset: clean bootstrap
 
 set-version: && openapi-output
     @echo "Current version: $(cat VERSION)"
     @read -p "New version? " new_version; [ -n "$new_version" ] && echo -n $new_version > VERSION
     cargo set-version $(cat VERSION)
-
-setup:
-    mix deps.get
-    mix deps.compile
-    mix ecto.setup
-    mix assets.build
-    # just dev-add-user <email>
-    # just dev-seed-from-local
 
 release: set-version
     mix sower.update_contract_baseline

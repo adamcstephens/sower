@@ -14,7 +14,6 @@ config :sower, Sower.Repo,
 # watchers to your application. For example, we can use it
 # to bundle .js and .css sources.
 config :sower, SowerWeb.Endpoint,
-  http: [ip: {0, 0, 0, 0, 0, 0, 0, 1}, port: 4000],
   check_origin: false,
   code_reloader: true,
   debug_errors: true,

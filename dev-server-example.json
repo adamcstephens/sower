@@ -5,14 +5,13 @@
     "hostname": "localhost",
     "database": "sower_dev",
     "port": 5432,
-    "password_file": "VERSION",
     "encryption_key_file": ".dev-cloak-ecto"
   },
   "listen_port": 7150,
   "listen_address": "::",
   "clients": {
     "x86_64-linux": {
-      "path": "/nix/store/rlajigqccbrazh2cdkgds1qs5404h3l8-sower-0.4.3-dev"
+      "path": ".dev-client"
     }
   },
   "log_level": "debug",
