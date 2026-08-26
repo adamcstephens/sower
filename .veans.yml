@@ -1,0 +1,13 @@
+server: https://project.junco.dev
+project_id: 5
+project_identifier: SOW
+view_id: 20
+buckets:
+    todo: 8
+    in_progress: 9
+    in_review: 39
+    done: 10
+    scrapped: 40
+bot:
+    username: bot-kale-sower
+    user_id: 7
