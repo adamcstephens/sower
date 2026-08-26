@@ -286,13 +286,18 @@ testers.runNixOSTest {
               " --grep='Received request.*type=nixos'"
           )
 
+      def start_user_garden(user):
+          server.succeed(f"loginctl enable-linger {user}")
+          uid = server.succeed(f"id -u {user}").strip()
+          server.wait_for_unit(f"user@{uid}.service")
+          # HM activation ran before the user manager was up, so reload and start manually
+          server.systemctl("daemon-reload", user)
+          server.systemctl("start sower-garden.service", user)
+          server.wait_for_unit("sower-garden.service", user)
+
       with subtest("start home-manager garden"):
           server.wait_for_unit("home-manager-testuser.service")
-          server.succeed("loginctl enable-linger testuser")
-          # HM activation ran before user manager was up, so reload and start manually
-          server.systemctl("daemon-reload", "testuser")
-          server.systemctl("start sower-garden.service", "testuser")
-          server.wait_for_unit("sower-garden.service", "testuser")
+          start_user_garden("testuser")
 
       with subtest("home-manager garden registration"):
           server.wait_until_succeeds(
@@ -369,10 +374,7 @@ testers.runNixOSTest {
           assert_lifecycle(client, "sower-garden.service")
 
       with subtest("home-manager signal-driven lifecycle (distribution off)"):
-          server.succeed("loginctl enable-linger nodist-user")
-          server.systemctl("daemon-reload", "nodist-user")
-          server.systemctl("start sower-garden.service", "nodist-user")
-          server.wait_for_unit("sower-garden.service", "nodist-user")
+          start_user_garden("nodist-user")
           assert_lifecycle(server, "sower-garden.service", "nodist-user")
 
       with subtest("home-manager signal-driven lifecycle (distribution on)"):
