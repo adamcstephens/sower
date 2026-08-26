@@ -43,7 +43,7 @@ defmodule SowerWeb.SowerComponents do
     ~H"""
     <div class="px-4 sm:overflow-visible sm:px-0">
       <table class={["w-full", @show_header && "mt-11"]}>
-        <thead :if={@show_header} class="text-sm text-left leading-6 text-zinc-500 dark:text-zinc-400">
+        <thead :if={@show_header} class="text-sm text-left leading-6 text-content-muted">
           <tr>
             <th
               :for={col <- @col}
@@ -70,14 +70,14 @@ defmodule SowerWeb.SowerComponents do
           id={@id}
           phx-update={match?(%Phoenix.LiveView.LiveStream{}, @rows) && "stream"}
           class={[
-            "relative divide-y divide-zinc-100 dark:divide-zinc-700 text-sm leading-6",
-            @header_border && "border-t border-zinc-200 dark:border-zinc-700"
+            "relative divide-y divide-hairline text-sm leading-6",
+            @header_border && "border-t border-hairline"
           ]}
         >
           <tr
             :for={row <- @rows}
             id={@row_id && @row_id.(row)}
-            class="group hover:bg-zinc-50 dark:hover:bg-zinc-800"
+            class="group hover:bg-surface-hover"
           >
             <td
               :for={{col, i} <- Enum.with_index(@col)}
@@ -89,7 +89,7 @@ defmodule SowerWeb.SowerComponents do
               ]}
             >
               <div class="block py-4 pr-6">
-                <span class="absolute -inset-y-px right-0 -left-4 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800" />
+                <span class="absolute -inset-y-px right-0 -left-4 group-hover:bg-surface-hover" />
                 <span class={["relative", @bold_first && i == 0 && "font-semibold"]}>
                   {render_slot(col, @row_item.(row))}
                 </span>
@@ -100,10 +100,10 @@ defmodule SowerWeb.SowerComponents do
               class={["relative w-14 p-0", @action_hide_classes]}
             >
               <div class="relative whitespace-nowrap py-4 text-right text-sm font-medium">
-                <span class="absolute -inset-y-px -right-4 left-0 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800" />
+                <span class="absolute -inset-y-px -right-4 left-0 group-hover:bg-surface-hover" />
                 <span
                   :for={action <- @action}
-                  class="relative ml-4 font-semibold leading-6 hover:text-zinc-700 dark:hover:text-zinc-300"
+                  class="relative ml-4 font-semibold leading-6 hover:text-content-strong"
                 >
                   {render_slot(action, @row_item.(row))}
                 </span>
@@ -144,7 +144,7 @@ defmodule SowerWeb.SowerComponents do
     ~H"""
     <.link
       patch={@href}
-      class="group inline-flex items-center hover:text-zinc-700 dark:hover:text-zinc-300"
+      class="group inline-flex items-center hover:text-content-strong"
     >
       {@label}<span :if={@indicator} class="ml-1">{@indicator}</span>
     </.link>
@@ -164,11 +164,11 @@ defmodule SowerWeb.SowerComponents do
       page_list_item_attrs={[class: "contents"]}
       page_link_attrs={[
         class:
-          "inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+          "inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium text-content-muted hover:bg-surface-hover transition"
       ]}
       current_page_link_attrs={[
         class:
-          "inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+          "inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium bg-control text-control-fg"
       ]}
       disabled_link_attrs={[
         class: "opacity-40 pointer-events-none"
@@ -176,7 +176,7 @@ defmodule SowerWeb.SowerComponents do
     >
       <:previous attrs={[
         class:
-          "order-1 inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+          "order-1 inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium text-content-muted hover:bg-surface-hover transition"
       ]}>
         <svg class="w-4 h-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
           <path
@@ -189,7 +189,7 @@ defmodule SowerWeb.SowerComponents do
       </:previous>
       <:next attrs={[
         class:
-          "order-3 inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+          "order-3 inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium text-content-muted hover:bg-surface-hover transition"
       ]}>
         Next
         <svg class="w-4 h-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
@@ -201,7 +201,7 @@ defmodule SowerWeb.SowerComponents do
         </svg>
       </:next>
       <:ellipsis>
-        <span class="inline-flex items-center justify-center px-2 py-1.5 text-sm text-zinc-400 dark:text-zinc-500">
+        <span class="inline-flex items-center justify-center px-2 py-1.5 text-sm text-content-subtle">
           &hellip;
         </span>
       </:ellipsis>
@@ -215,8 +215,8 @@ defmodule SowerWeb.SowerComponents do
   def detail_field(assigns) do
     ~H"""
     <div>
-      <p class="text-sm text-zinc-500 dark:text-zinc-400">{@label}</p>
-      <div class="mt-1 text-sm text-zinc-900 dark:text-zinc-200">
+      <p class="text-sm text-content-muted">{@label}</p>
+      <div class="mt-1 text-sm text-content">
         {render_slot(@inner_block)}
       </div>
     </div>
@@ -233,7 +233,7 @@ defmodule SowerWeb.SowerComponents do
     ~H"""
     <section>
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200">{@title}</h2>
+        <h2 class="text-sm font-semibold text-content">{@title}</h2>
         <div :if={@actions != []} class="flex items-center space-x-2">
           {render_slot(@actions)}
         </div>
@@ -243,7 +243,7 @@ defmodule SowerWeb.SowerComponents do
       </div>
       <p
         :if={@items == [] && @empty_message}
-        class="text-sm text-zinc-500 dark:text-zinc-400 italic"
+        class="text-sm text-content-muted italic"
       >
         {@empty_message}
       </p>
@@ -258,7 +258,7 @@ defmodule SowerWeb.SowerComponents do
     ~H"""
     <.link
       navigate={@navigate}
-      class="block rounded-lg border border-zinc-200/50 dark:border-zinc-700/50 p-4 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+      class="block rounded-lg border border-hairline/50 p-4 hover:bg-surface-hover transition"
     >
       {render_slot(@inner_block)}
     </.link>
@@ -282,8 +282,8 @@ defmodule SowerWeb.SowerComponents do
         r="10"
         class={
           if @state,
-            do: "fill-green-500",
-            else: "fill-none stroke-gray-300 stroke-2"
+            do: "fill-ok-mark",
+            else: "fill-none stroke-line-strong stroke-2"
         }
       />
       <line
@@ -292,7 +292,7 @@ defmodule SowerWeb.SowerComponents do
         y1="20"
         x2="20"
         y2="4"
-        class="stroke-gray-300 stroke-2"
+        class="stroke-line-strong stroke-2"
       />
     </svg>
     """
@@ -304,32 +304,32 @@ defmodule SowerWeb.SowerComponents do
     ~H"""
     <%= case @state do %>
       <% :pending -> %>
-        <span class="inline-flex items-center gap-1.5 text-sm text-zinc-500 dark:text-zinc-400">
+        <span class="inline-flex items-center gap-1.5 text-sm text-content-muted">
           <span class="relative flex h-2.5 w-2.5" role="img" aria-label="Pending">
-            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-zinc-400" />
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-content-subtle" />
           </span>
           Pending
         </span>
       <% :downloading -> %>
-        <span class="inline-flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400">
+        <span class="inline-flex items-center gap-1.5 text-sm text-info">
           <span class="relative flex h-2.5 w-2.5" role="img" aria-label="Downloading">
-            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75" />
-            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-info-mark opacity-75" />
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-info-mark" />
           </span>
           Downloading
         </span>
       <% :activating -> %>
-        <span class="inline-flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400">
+        <span class="inline-flex items-center gap-1.5 text-sm text-info">
           <span class="relative flex h-2.5 w-2.5" role="img" aria-label="Activating">
-            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75" />
-            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-info-mark opacity-75" />
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-info-mark" />
           </span>
           Activating
         </span>
       <% :completed -> %>
-        <span class="inline-flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
+        <span class="inline-flex items-center gap-1.5 text-sm text-ok">
           <span class="relative flex h-2.5 w-2.5" role="img" aria-label="Completed">
-            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-ok-mark" />
           </span>
           Completed
         </span>
@@ -345,28 +345,28 @@ defmodule SowerWeb.SowerComponents do
     ~H"""
     <%= cond do %>
       <% @is_current -> %>
-        <span class="inline-flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
+        <span class="inline-flex items-center gap-1.5 text-sm text-ok">
           <span class="relative flex h-2.5 w-2.5" role="img" aria-label="Active">
-            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-ok-mark" />
           </span>
           Active
         </span>
       <% @is_pending -> %>
-        <span class="inline-flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-400">
+        <span class="inline-flex items-center gap-1.5 text-sm text-warn">
           <span class="relative flex h-2.5 w-2.5" role="img" aria-label="Pending">
-            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500" />
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-warn-mark" />
           </span>
           Pending
         </span>
       <% @latest_deployment_result == :success -> %>
-        <span class="inline-flex items-center gap-1.5 text-sm text-zinc-500 dark:text-zinc-400">
+        <span class="inline-flex items-center gap-1.5 text-sm text-content-muted">
           <span class="relative flex h-2.5 w-2.5" role="img" aria-label="Deployed">
-            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-zinc-400" />
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-content-subtle" />
           </span>
           Deployed
         </span>
       <% true -> %>
-        <span class="inline-flex items-center gap-1.5 text-sm text-zinc-400 dark:text-zinc-500">
+        <span class="inline-flex items-center gap-1.5 text-sm text-content-subtle">
           —
         </span>
     <% end %>
@@ -381,26 +381,26 @@ defmodule SowerWeb.SowerComponents do
     ~H"""
     <%= case @state do %>
       <% :created -> %>
-        <span class="inline-flex items-center gap-1.5 text-sm text-zinc-500 dark:text-zinc-400">
+        <span class="inline-flex items-center gap-1.5 text-sm text-content-muted">
           <span class="relative flex h-2.5 w-2.5" role="img" aria-label="Created">
-            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-zinc-400 opacity-75" />
-            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-zinc-400" />
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-content-subtle opacity-75" />
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-content-subtle" />
           </span>
           <span class={@compact && "sr-only"}>Created</span>
         </span>
       <% :dispatched -> %>
-        <span class="inline-flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400">
+        <span class="inline-flex items-center gap-1.5 text-sm text-info">
           <span class="relative flex h-2.5 w-2.5" role="img" aria-label="Dispatched">
-            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75" />
-            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-info-mark opacity-75" />
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-info-mark" />
           </span>
           <span class={@compact && "sr-only"}>Dispatched</span>
         </span>
       <% :acknowledged -> %>
-        <span class="inline-flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400">
+        <span class="inline-flex items-center gap-1.5 text-sm text-info">
           <span class="relative flex h-2.5 w-2.5" role="img" aria-label="Acknowledged">
-            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75" />
-            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-info-mark opacity-75" />
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-info-mark" />
           </span>
           <span class={@compact && "sr-only"}>Acknowledged</span>
         </span>
@@ -413,16 +413,16 @@ defmodule SowerWeb.SowerComponents do
           <span :if={not @compact}>{result_label(@result)}</span>
         </span>
       <% :stale -> %>
-        <span class="inline-flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-400">
+        <span class="inline-flex items-center gap-1.5 text-sm text-warn">
           <span class="relative flex h-2.5 w-2.5" role="img" aria-label="Stale">
-            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500" />
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-warn-mark" />
           </span>
           <span class={@compact && "sr-only"}>Stale</span>
         </span>
       <% :canceled -> %>
-        <span class="inline-flex items-center gap-1.5 text-sm text-zinc-400 dark:text-zinc-500">
+        <span class="inline-flex items-center gap-1.5 text-sm text-content-subtle">
           <span class="relative flex h-2.5 w-2.5" role="img" aria-label="Canceled">
-            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-zinc-400" />
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-content-subtle" />
           </span>
           <span class={@compact && "sr-only"}>Canceled</span>
         </span>
@@ -445,7 +445,7 @@ defmodule SowerWeb.SowerComponents do
         <% @result == :success -> %>
           <path
             d="M5 12l5 5L20 7"
-            class="fill-none stroke-green-500 stroke-2"
+            class="fill-none stroke-ok-mark stroke-2"
             stroke-linecap="round"
             stroke-linejoin="round"
           />
@@ -455,7 +455,7 @@ defmodule SowerWeb.SowerComponents do
             y1="12"
             x2="18"
             y2="12"
-            class="stroke-gray-400 stroke-2"
+            class="stroke-line-strong stroke-2"
             stroke-linecap="round"
           />
         <% true -> %>
@@ -464,7 +464,7 @@ defmodule SowerWeb.SowerComponents do
             y1="6"
             x2="18"
             y2="18"
-            class="stroke-red-500 stroke-2"
+            class="stroke-danger-mark stroke-2"
             stroke-linecap="round"
           />
           <line
@@ -472,7 +472,7 @@ defmodule SowerWeb.SowerComponents do
             y1="6"
             x2="6"
             y2="18"
-            class="stroke-red-500 stroke-2"
+            class="stroke-danger-mark stroke-2"
             stroke-linecap="round"
           />
       <% end %>
@@ -490,9 +490,9 @@ defmodule SowerWeb.SowerComponents do
   defp result_label(nil), do: "No result"
   defp result_label(_), do: "Failed"
 
-  defp result_text_class(:success), do: "text-green-600 dark:text-green-400"
-  defp result_text_class(nil), do: "text-zinc-500 dark:text-zinc-400"
-  defp result_text_class(_), do: "text-red-600 dark:text-red-400"
+  defp result_text_class(:success), do: "text-ok"
+  defp result_text_class(nil), do: "text-content-muted"
+  defp result_text_class(_), do: "text-danger"
 
   attr :datetime, DateTime, default: nil
   attr :user_timezone, :string, required: true
@@ -535,7 +535,7 @@ defmodule SowerWeb.SowerComponents do
       </.button>
       <span
         :if={@deploy_error}
-        class="text-sm text-red-600 dark:text-red-400"
+        class="text-sm text-danger"
       >
         {@deploy_error}
       </span>

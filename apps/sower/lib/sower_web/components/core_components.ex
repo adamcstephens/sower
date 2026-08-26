@@ -52,7 +52,7 @@ defmodule SowerWeb.CoreComponents do
     >
       <div
         id={"#{@id}-bg"}
-        class="bg-white/90 dark:bg-zinc-900/90 fixed inset-0 transition-opacity"
+        class="bg-canvas/90 fixed inset-0 transition-opacity"
         aria-hidden="true"
       />
       <div
@@ -70,7 +70,7 @@ defmodule SowerWeb.CoreComponents do
               phx-window-keydown={JS.exec("data-cancel", to: "##{@id}")}
               phx-key="escape"
               phx-click-away={JS.exec("data-cancel", to: "##{@id}")}
-              class="shadow-zinc-700/10 ring-zinc-700/10 relative hidden rounded-2xl bg-zinc-200 dark:bg-zinc-800 p-14 shadow-lg ring-1 transition"
+              class="ring-line relative hidden rounded-2xl bg-surface p-14 shadow-lg ring-1 transition"
             >
               <div class="absolute top-6 right-5">
                 <.button
@@ -119,8 +119,8 @@ defmodule SowerWeb.CoreComponents do
       role="alert"
       class={[
         "fixed top-2 right-2 w-80 sm:w-96 z-50 rounded-lg p-3 ring-1",
-        @kind == :info && "bg-emerald-50 text-emerald-800 ring-emerald-500 fill-cyan-900",
-        @kind == :error && "bg-rose-50 text-rose-900 shadow-md ring-rose-500 fill-rose-900"
+        @kind == :info && "bg-ok-surface text-ok ring-ok",
+        @kind == :error && "bg-danger-surface text-danger shadow-md ring-danger"
       ]}
       {@rest}
     >
@@ -168,7 +168,7 @@ defmodule SowerWeb.CoreComponents do
   def simple_form(assigns) do
     ~H"""
     <.form :let={f} for={@for} as={@as} {@rest}>
-      <div class="mt-10 space-y-8 bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">
+      <div class="mt-10 space-y-8 bg-surface text-content">
         {render_slot(@inner_block, f)}
         <div :for={action <- @actions} class="mt-2 flex items-center justify-between gap-6">
           {render_slot(action, f)}
@@ -219,15 +219,15 @@ defmodule SowerWeb.CoreComponents do
   end
 
   defp button_variant_class(:primary) do
-    "border border-zinc-600 dark:border-zinc-500 text-zinc-100 bg-zinc-500 dark:text-zinc-200 dark:bg-zinc-600 hover:text-zinc-800 hover:bg-orange-500 dark:hover:text-zinc-800 dark:hover:bg-orange-500 active:text-white/80"
+    "border border-line-strong bg-control text-control-fg hover:bg-accent-solid hover:text-accent-solid-fg active:text-control-fg/80"
   end
 
   defp button_variant_class(:secondary) do
-    "border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+    "border border-line-strong text-content hover:bg-surface-hover"
   end
 
   defp button_variant_class(:danger) do
-    "border border-red-600 dark:border-red-500 text-white bg-red-500 dark:bg-red-500 hover:bg-red-600 dark:hover:bg-red-600 active:text-white/80"
+    "border border-danger-solid bg-danger-solid text-accent-solid-fg hover:bg-danger-solid-hover active:text-accent-solid-fg/80"
   end
 
   defp button_variant_class(:icon), do: ""
@@ -305,7 +305,7 @@ defmodule SowerWeb.CoreComponents do
           name={@name}
           value="true"
           checked={@checked}
-          class="rounded border-zinc-300 dark:border-zinc-700 focus:ring-0"
+          class="rounded border-line-strong focus:ring-0"
           {@rest}
         />
         {@label}
@@ -322,7 +322,7 @@ defmodule SowerWeb.CoreComponents do
       <select
         id={@id}
         name={@name}
-        class="mt-2 block w-full rounded-md border border-gray-300 bg-white shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
+        class="mt-2 block w-full rounded-md border border-line-strong bg-surface text-content shadow-sm focus:border-accent-link focus:ring-0 sm:text-sm"
         multiple={@multiple}
         {@rest}
       >
@@ -342,10 +342,10 @@ defmodule SowerWeb.CoreComponents do
         id={@id}
         name={@name}
         class={[
-          "mt-2 block w-full rounded-lg text-zinc-900 focus:ring-0 sm:text-sm sm:leading-6",
-          "min-h-[6rem] phx-no-feedback:border-zinc-300 phx-no-feedback:focus:border-zinc-400",
-          @errors == [] && "border-zinc-300 focus:border-zinc-400",
-          @errors != [] && "border-rose-400 focus:border-rose-400"
+          "mt-2 block w-full rounded-lg bg-surface text-content focus:ring-0 sm:text-sm sm:leading-6",
+          "min-h-[6rem] phx-no-feedback:border-line-strong phx-no-feedback:focus:border-accent-link",
+          @errors == [] && "border-line-strong focus:border-accent-link",
+          @errors != [] && "border-danger focus:border-danger"
         ]}
         {@rest}
       ><%= Phoenix.HTML.Form.normalize_value("textarea", @value) %></textarea>
@@ -365,10 +365,10 @@ defmodule SowerWeb.CoreComponents do
         id={@id}
         value={Phoenix.HTML.Form.normalize_value(@type, @value)}
         class={[
-          "mt-2 block w-full rounded-lg text-zinc-900 focus:ring-0 sm:text-sm sm:leading-6",
-          "phx-no-feedback:border-zinc-300 phx-no-feedback:focus:border-zinc-400",
-          @errors == [] && "border-zinc-300 focus:border-zinc-400",
-          @errors != [] && "border-rose-400 focus:border-rose-400"
+          "mt-2 block w-full rounded-lg bg-surface text-content focus:ring-0 sm:text-sm sm:leading-6",
+          "phx-no-feedback:border-line-strong phx-no-feedback:focus:border-accent-link",
+          @errors == [] && "border-line-strong focus:border-accent-link",
+          @errors != [] && "border-danger focus:border-danger"
         ]}
         {@rest}
       />
@@ -398,7 +398,7 @@ defmodule SowerWeb.CoreComponents do
 
   def error(assigns) do
     ~H"""
-    <p class="mt-3 flex gap-3 text-sm leading-6 text-rose-600 phx-no-feedback:hidden">
+    <p class="mt-3 flex gap-3 text-sm leading-6 text-danger phx-no-feedback:hidden">
       <.icon name="hero-exclamation-circle-mini" class="mt-0.5 h-5 w-5 flex-none" />
       {render_slot(@inner_block)}
     </p>
@@ -418,10 +418,10 @@ defmodule SowerWeb.CoreComponents do
     ~H"""
     <header class={[@actions != [] && "flex items-center justify-between gap-6", @class]}>
       <div class="min-w-0">
-        <h1 class="text-lg font-semibold leading-8 text-zinc-900 dark:text-zinc-300 ">
+        <h1 class="text-lg font-semibold leading-8 text-content ">
           {render_slot(@inner_block)}
         </h1>
-        <p :if={@subtitle != []} class="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+        <p :if={@subtitle != []} class="mt-2 text-sm leading-6 text-content-muted">
           {render_slot(@subtitle)}
         </p>
       </div>
@@ -464,7 +464,7 @@ defmodule SowerWeb.CoreComponents do
     ~H"""
     <div class="overflow-y-auto px-4 sm:overflow-visible sm:px-0">
       <table class="w-[40rem] mt-11 sm:w-full">
-        <thead class="text-sm text-left leading-6 text-zinc-500 dark:text-zinc-400">
+        <thead class="text-sm text-left leading-6 text-content-muted">
           <tr>
             <th :for={col <- @col} class="p-0 pr-6 pb-4 font-normal">{col[:label]}</th>
             <th class="relative p-0 pb-4"><span class="sr-only">{gettext("Actions")}</span></th>
@@ -473,12 +473,12 @@ defmodule SowerWeb.CoreComponents do
         <tbody
           id={@id}
           phx-update={match?(%Phoenix.LiveView.LiveStream{}, @rows) && "stream"}
-          class="relative divide-y divide-zinc-100 border-t border-zinc-200 text-sm leading-6"
+          class="relative divide-y divide-hairline border-t border-hairline text-sm leading-6"
         >
           <tr
             :for={row <- @rows}
             id={@row_id && @row_id.(row)}
-            class="group hover:bg-zinc-50 dark:hover:bg-zinc-800"
+            class="group hover:bg-surface-hover"
           >
             <td
               :for={{col, i} <- Enum.with_index(@col)}
@@ -486,7 +486,7 @@ defmodule SowerWeb.CoreComponents do
               class={["relative p-0", @row_click && "hover:cursor-pointer"]}
             >
               <div class="block py-4 pr-6">
-                <span class="absolute -inset-y-px right-0 -left-4 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800" />
+                <span class="absolute -inset-y-px right-0 -left-4 group-hover:bg-surface-hover" />
                 <span class={["relative", i == 0 && "font-semibold"]}>
                   {render_slot(col, @row_item.(row))}
                 </span>
@@ -494,10 +494,10 @@ defmodule SowerWeb.CoreComponents do
             </td>
             <td :if={@action != []} class="relative w-14 p-0">
               <div class="relative whitespace-nowrap py-4 text-right text-sm font-medium">
-                <span class="absolute -inset-y-px -right-4 left-0 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800" />
+                <span class="absolute -inset-y-px -right-4 left-0 group-hover:bg-surface-hover" />
                 <span
                   :for={action <- @action}
-                  class="relative ml-4 font-semibold leading-6 hover:text-zinc-700 dark:hover:text-zinc-300"
+                  class="relative ml-4 font-semibold leading-6 hover:text-content-strong"
                 >
                   {render_slot(action, @row_item.(row))}
                 </span>
@@ -527,10 +527,10 @@ defmodule SowerWeb.CoreComponents do
   def list(assigns) do
     ~H"""
     <div class="mt-14">
-      <dl class="-my-4 divide-y divide-zinc-100 dark:divide-zinc-800">
+      <dl class="-my-4 divide-y divide-hairline">
         <div :for={item <- @item} class="flex gap-4 py-4 text-sm leading-6 sm:gap-8">
           <dt class="w-1/4 flex-none">{item.title}</dt>
-          <dd class="text-zinc-700 dark:text-zinc-300">{render_slot(item)}</dd>
+          <dd class="text-content-muted">{render_slot(item)}</dd>
         </div>
       </dl>
     </div>
@@ -552,7 +552,7 @@ defmodule SowerWeb.CoreComponents do
     <div class="mt-16">
       <.link
         navigate={@navigate}
-        class="text-sm font-semibold leading-6 hover:text-zinc-700 dark:hover:text-zinc-300"
+        class="text-sm font-semibold leading-6 hover:text-content-strong"
       >
         <.icon name="hero-arrow-left-solid" class="h-3 w-3" />
         {render_slot(@inner_block)}

@@ -44,7 +44,7 @@ defmodule SowerWeb.Settings.AccessTokenLive.FormComponent do
               name="access_token[permissions][]"
               value={role}
               checked={role in current_permissions(@form)}
-              class="rounded border-zinc-300 dark:border-zinc-700"
+              class="rounded border-line-strong"
             />
             <span>{role}</span>
           </label>

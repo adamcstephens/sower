@@ -40,14 +40,14 @@ defmodule SowerWeb.DeploymentLive.Show do
         <.detail_field label="Garden">
           <.link
             navigate={~p"/gardens/#{@deployment.garden}"}
-            class="hover:text-orange-500 dark:hover:text-orange-400"
+            class="hover:text-accent-link"
           >
             {@deployment.garden.name}
           </.link>
         </.detail_field>
 
         <section>
-          <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4">Subscriptions</h2>
+          <h2 class="text-sm font-semibold text-content mb-4">Subscriptions</h2>
           <.table
             id="subscriptions"
             rows={@deployment.subscriptions}
@@ -64,19 +64,19 @@ defmodule SowerWeb.DeploymentLive.Show do
           </.table>
           <p
             :if={@deployment.subscriptions == []}
-            class="text-sm text-zinc-500 dark:text-zinc-400 italic"
+            class="text-sm text-content-muted italic"
           >
             No subscriptions.
           </p>
         </section>
 
         <section>
-          <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4">Seeds</h2>
+          <h2 class="text-sm font-semibold text-content mb-4">Seeds</h2>
           <div :if={@deployment.seed_deployments != []} class="space-y-4">
             <article
               :for={sd <- @deployment.seed_deployments}
               id={"seed-log-#{sd.seed.sid}"}
-              class="rounded-lg border border-zinc-200/50 dark:border-zinc-700/50 p-4"
+              class="rounded-lg border border-hairline/50 p-4"
             >
               <div
                 class={[
@@ -86,14 +86,14 @@ defmodule SowerWeb.DeploymentLive.Show do
                 phx-click={sd.log && "toggle_seed_log"}
                 phx-value-seed_sid={sd.log && sd.seed.sid}
               >
-                <div class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 flex flex-wrap items-center gap-2 min-w-0">
+                <div class="text-sm font-semibold text-content flex flex-wrap items-center gap-2 min-w-0">
                   <.link
                     navigate={~p"/seeds/#{sd.seed.sid}"}
-                    class="hover:text-orange-500 dark:hover:text-orange-400"
+                    class="hover:text-accent-link"
                   >
                     {sd.seed.seed_type}/{sd.seed.name}
                   </.link>
-                  <span class="text-xs font-normal text-zinc-500 dark:text-zinc-400">
+                  <span class="text-xs font-normal text-content-muted">
                     {sd.seed.artifact}
                   </span>
                 </div>
@@ -121,32 +121,32 @@ defmodule SowerWeb.DeploymentLive.Show do
               <pre
                 :if={sd.log && expanded_seed_log?(@expanded_seed_logs, sd.seed.sid)}
                 id={"seed-log-content-#{sd.seed.sid}"}
-                class="mt-3 p-3 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-800 dark:text-zinc-200 overflow-x-auto whitespace-pre-wrap"
+                class="mt-3 p-3 rounded-md border border-hairline bg-surface-hover text-xs text-content overflow-x-auto whitespace-pre-wrap"
               >{sd.log}</pre>
             </article>
           </div>
           <p
             :if={@deployment.seed_deployments == []}
-            class="text-sm text-zinc-500 dark:text-zinc-400 italic"
+            class="text-sm text-content-muted italic"
           >
             No seeds.
           </p>
         </section>
 
         <section :if={@deployment.events != []}>
-          <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4">Activity</h2>
+          <h2 class="text-sm font-semibold text-content mb-4">Activity</h2>
           <div class="space-y-3 text-sm">
             <div
               :for={event <- Enum.sort_by(@deployment.events, & &1.inserted_at, DateTime)}
               class="grid grid-cols-[auto_auto_auto] gap-x-4 items-center justify-start"
             >
-              <span class="text-zinc-400 dark:text-zinc-500">
+              <span class="text-content-subtle">
                 <.local_datetime datetime={event.inserted_at} user_timezone={@user_timezone} />
               </span>
-              <span class="text-zinc-700 dark:text-zinc-300">
+              <span class="text-content-muted">
                 {event_description(event)}
               </span>
-              <span class="text-zinc-400 dark:text-zinc-500">
+              <span class="text-content-subtle">
                 {event.actor_sid}
               </span>
             </div>

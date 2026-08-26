@@ -10,21 +10,21 @@
 
   <form id="deployment-filter" phx-change="filter" class="mt-6 flex gap-4 items-end">
     <div class="flex-1">
-      <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Garden</label>
+      <label class="block text-sm font-medium text-content-muted">Garden</label>
       <input
         type="text"
         name="garden_name"
         value={filter_value(@meta, :garden_name)}
         placeholder="Search by garden..."
         phx-debounce="300"
-        class="mt-1 block w-full rounded-md border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
+        class="mt-1 block w-full rounded-md border-line-strong bg-surface text-content shadow-sm focus:border-accent-link focus:ring-0 sm:text-sm"
       />
     </div>
     <div>
-      <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300">State</label>
+      <label class="block text-sm font-medium text-content-muted">State</label>
       <select
         name="state"
-        class="mt-1 block w-full rounded-md border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
+        class="mt-1 block w-full rounded-md border-line-strong bg-surface text-content shadow-sm focus:border-accent-link focus:ring-0 sm:text-sm"
       >
         <option value="">All states</option>
         <option :for={s <- state_options()} value={s} selected={filter_value(@meta, :state) == s}>
@@ -33,10 +33,10 @@
       </select>
     </div>
     <div>
-      <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Result</label>
+      <label class="block text-sm font-medium text-content-muted">Result</label>
       <select
         name="result"
-        class="mt-1 block w-full rounded-md border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
+        class="mt-1 block w-full rounded-md border-line-strong bg-surface text-content shadow-sm focus:border-accent-link focus:ring-0 sm:text-sm"
       >
         <option value="">All results</option>
         <option

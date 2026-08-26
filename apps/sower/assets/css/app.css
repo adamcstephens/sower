@@ -2,76 +2,92 @@
 @import "tailwindcss/components";
 @import "tailwindcss/utilities";
 
-/* This file is for your main application CSS */
+@layer base {
+  :root {
+    --color-canvas: 250 250 250;
+    --color-surface: 255 255 255;
+    --color-surface-hover: 244 244 245;
+    --color-surface-active: 228 228 231;
+
+    --color-hairline: 228 228 231;
+    --color-line: 212 212 216;
+    --color-line-strong: 113 113 122;
+
+    --color-content: 24 24 27;
+    --color-content-strong: 9 9 11;
+    --color-content-muted: 82 82 91;
+    --color-content-subtle: 113 113 122;
+
+    --color-accent: 245 158 11;
+    --color-accent-link: 194 65 12;
+    --color-accent-solid: 194 65 12;
+    --color-accent-solid-fg: 255 255 255;
+    --color-control: 82 82 91;
+    --color-control-fg: 250 250 250;
+
+    --color-ok: 21 128 61;
+    --color-ok-mark: 34 197 94;
+    --color-ok-surface: 236 253 245;
+
+    --color-info: 29 78 216;
+    --color-info-mark: 59 130 246;
+    --color-info-surface: 239 246 255;
+
+    --color-warn: 180 83 9;
+    --color-warn-mark: 245 158 11;
+
+    --color-danger: 185 28 28;
+    --color-danger-mark: 239 68 68;
+    --color-danger-surface: 255 241 242;
+    --color-danger-solid: 220 38 38;
+    --color-danger-solid-hover: 153 27 27;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-canvas: 9 9 11;
+      --color-surface: 24 24 27;
+      --color-surface-hover: 39 39 42;
+      --color-surface-active: 39 39 42;
+
+      --color-hairline: 39 39 42;
+      --color-line: 63 63 70;
+      --color-line-strong: 120 120 130;
+
+      --color-content: 228 228 231;
+      --color-content-strong: 250 250 250;
+      --color-content-muted: 161 161 170;
+      --color-content-subtle: 140 140 150;
+
+      --color-accent: 245 158 11;
+      --color-accent-link: 251 146 60;
+      --color-accent-solid: 194 65 12;
+      --color-accent-solid-fg: 255 255 255;
+      --color-control: 82 82 91;
+      --color-control-fg: 244 244 245;
+
+      --color-ok: 74 222 128;
+      --color-ok-mark: 34 197 94;
+      --color-ok-surface: 2 44 34;
+
+      --color-info: 96 165 250;
+      --color-info-mark: 59 130 246;
+      --color-info-surface: 23 37 84;
+
+      --color-warn: 251 191 36;
+      --color-warn-mark: 245 158 11;
+
+      --color-danger: 248 113 113;
+      --color-danger-mark: 239 68 68;
+      --color-danger-surface: 76 5 25;
+      --color-danger-solid: 220 38 38;
+      --color-danger-solid-hover: 153 27 27;
+    }
+  }
+}
+
+/* end tokens */
 
 .mobile-nav-dropdown > summary::-webkit-details-marker {
   display: none;
-}
-
-/* Responsive table: stacked cards on mobile, normal table on sm+ */
-@media (max-width: 639px) {
-  .responsive-table,
-  .responsive-table thead,
-  .responsive-table tbody,
-  .responsive-table tr,
-  .responsive-table td {
-    display: block;
-    width: 100%;
-  }
-
-  .responsive-table {
-    margin-top: 0;
-  }
-
-  .responsive-table thead {
-    display: none;
-  }
-
-  .responsive-table tbody {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    border-top: none !important;
-  }
-
-  .responsive-table tr {
-    display: flex;
-    flex-direction: column;
-    border: 1px solid rgb(228 228 231 / 0.5) !important; /* zinc-200 at 50% */
-    border-radius: 0.5rem;
-    padding: 1rem;
-  }
-
-  :is(.dark .responsive-table tr) {
-    border-color: rgb(63 63 70 / 0.5); /* zinc-700 at 50% */
-  }
-
-  .responsive-table td {
-    padding: 0;
-    position: static;
-  }
-
-  .responsive-table td > div {
-    padding: 0.125rem 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .responsive-table td::before {
-    content: attr(data-label);
-    display: block;
-    font-size: 0.75rem;
-    color: rgb(113 113 122); /* zinc-500 */
-    margin-bottom: 0.125rem;
-  }
-
-  .responsive-table td:first-child::before {
-    display: none;
-  }
-
-  /* Hide the hover background spans on mobile */
-  .responsive-table td span[class*="absolute"] {
-    display: none;
-  }
 }

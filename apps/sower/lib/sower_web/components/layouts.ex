@@ -43,7 +43,7 @@ defmodule SowerWeb.Layouts do
     <div
       id="app-shell"
       data-sidebar={@sidebar_state}
-      class="flex h-dvh bg-zinc-950 text-zinc-200"
+      class="flex h-dvh bg-canvas text-content"
       phx-hook="SetCookie"
     >
       <.sidebar nav_section={@nav_section} nav_items={@nav_items} sidebar_state={@sidebar_state} />
@@ -77,7 +77,7 @@ defmodule SowerWeb.Layouts do
       aria-label="Primary"
       class={[
         "hidden md:flex flex-col flex-shrink-0",
-        "bg-zinc-950 border-r border-zinc-800",
+        "bg-canvas border-r border-hairline",
         "transition-[width] duration-200 ease-out overflow-hidden",
         @sidebar_state == :expanded && "w-[232px]",
         @sidebar_state == :rail && "w-14"
@@ -103,7 +103,7 @@ defmodule SowerWeb.Layouts do
     ~H"""
     <div
       :if={@expanded}
-      class="px-4 pb-2 text-[11px] text-zinc-600 tabular-nums tracking-tight"
+      class="px-4 pb-2 text-[11px] text-content-subtle tabular-nums tracking-tight"
     >
       v{server_version()}
     </div>
@@ -117,12 +117,12 @@ defmodule SowerWeb.Layouts do
   defp sidebar_header(assigns) do
     ~H"""
     <div class={[
-      "h-14 flex items-center gap-2 border-b border-zinc-900 flex-shrink-0",
+      "h-14 flex items-center gap-2 border-b border-hairline flex-shrink-0",
       @expanded && "px-4",
       not @expanded && "justify-center"
     ]}>
       <.glyph />
-      <span :if={@expanded} class="text-sm font-semibold text-zinc-100 tracking-tight">
+      <span :if={@expanded} class="text-sm font-semibold text-content-strong tracking-tight">
         Sower
       </span>
     </div>
@@ -132,8 +132,8 @@ defmodule SowerWeb.Layouts do
   defp glyph(assigns) do
     ~H"""
     <span class="relative inline-flex items-center justify-center size-6" aria-hidden="true">
-      <span class="bg-amber-500 rotate-45 rounded-[2px] size-2.5" />
-      <span class="bg-amber-500/40 absolute bottom-0 left-1/2 -translate-x-1/2 w-[18px] h-px" />
+      <span class="bg-accent rotate-45 rounded-[2px] size-2.5" />
+      <span class="bg-accent/40 absolute bottom-0 left-1/2 -translate-x-1/2 w-[18px] h-px" />
     </span>
     """
   end
@@ -170,7 +170,7 @@ defmodule SowerWeb.Layouts do
     <div :if={not @expanded} class="relative flex justify-center" title={@item.label}>
       <span
         :if={@active}
-        class="absolute left-0 top-1 bottom-1 w-[2px] rounded-r-full bg-amber-500"
+        class="absolute left-0 top-1 bottom-1 w-[2px] rounded-r-full bg-accent"
       />
       <.link
         navigate={nav_path(@item.section)}
@@ -178,8 +178,8 @@ defmodule SowerWeb.Layouts do
         aria-label={@item.label}
         class={[
           "h-9 w-10 inline-flex items-center justify-center rounded-md",
-          @active && "text-zinc-50 bg-zinc-900",
-          not @active && "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/60"
+          @active && "text-content-strong bg-surface-active",
+          not @active && "text-content-muted hover:text-content-strong hover:bg-surface-hover"
         ]}
       >
         <.icon name={@item.icon} class="size-[17px]" />
@@ -191,13 +191,13 @@ defmodule SowerWeb.Layouts do
       aria-current={@active && "page"}
       class={[
         "relative flex items-center gap-3 px-3 py-2 rounded-md text-[13.5px]",
-        @active && "bg-zinc-900 text-zinc-50",
-        not @active && "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60"
+        @active && "bg-surface-active text-content-strong",
+        not @active && "text-content-muted hover:text-content-strong hover:bg-surface-hover"
       ]}
     >
       <span
         :if={@active}
-        class="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r-full bg-amber-500"
+        class="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r-full bg-accent"
       />
       <.icon name={@item.icon} class="size-[15px] opacity-80" />
       <span class="flex-1">{@item.label}</span>
@@ -209,14 +209,14 @@ defmodule SowerWeb.Layouts do
 
   defp sidebar_toggle(assigns) do
     ~H"""
-    <div class="border-t border-zinc-900 py-2 flex justify-center">
+    <div class="border-t border-hairline py-2 flex justify-center">
       <button
         type="button"
         phx-click="toggle_sidebar"
         aria-label={if @expanded, do: "Collapse sidebar", else: "Expand sidebar"}
         class={[
           "h-8 inline-flex items-center justify-center rounded-md",
-          "text-zinc-500 hover:text-zinc-100 hover:bg-zinc-900/60",
+          "text-content-subtle hover:text-content-strong hover:bg-surface-hover",
           @expanded && "w-full mx-3",
           not @expanded && "w-10"
         ]}
@@ -237,7 +237,7 @@ defmodule SowerWeb.Layouts do
 
   defp topbar(assigns) do
     ~H"""
-    <header class="h-14 px-4 sm:px-5 flex items-center gap-3 border-b border-zinc-900 flex-shrink-0">
+    <header class="h-14 px-4 sm:px-5 flex items-center gap-3 border-b border-hairline flex-shrink-0">
       <.mobile_nav nav_section={@nav_section} nav_items={@nav_items} />
 
       <.crumbs crumbs={@crumbs} />
@@ -248,20 +248,20 @@ defmodule SowerWeb.Layouts do
       <button
         type="button"
         aria-label="Search"
-        class="hidden lg:inline-flex items-center gap-2 h-8 w-[300px] px-3 rounded-md border border-zinc-800 bg-zinc-950 text-[12.5px] text-zinc-500 hover:border-zinc-700"
+        class="hidden lg:inline-flex items-center gap-2 h-8 w-[300px] px-3 rounded-md border border-hairline bg-surface text-[12.5px] text-content-subtle hover:border-line"
       >
         <.icon name="hero-magnifying-glass" class="size-3.5" />
         <span>Search gardens, seeds, deploys…</span>
-        <span class="ml-auto font-mono text-[10px] text-zinc-600">⌘K</span>
+        <span class="ml-auto font-mono text-[10px] text-content-subtle">⌘K</span>
       </button>
 
       <button
         type="button"
         aria-label="Notifications"
-        class="relative p-2 rounded-md text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/70"
+        class="relative p-2 rounded-md text-content-muted hover:text-content-strong hover:bg-surface-hover"
       >
         <.icon name="hero-bell" class="size-[17px]" />
-        <span class="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-amber-500" />
+        <span class="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-accent" />
       </button>
       -->
 
@@ -280,15 +280,15 @@ defmodule SowerWeb.Layouts do
     <nav :if={@crumbs != []} aria-label="Breadcrumb" class="min-w-0 flex items-center gap-1.5 text-sm">
       <ol class="flex items-center gap-1.5 min-w-0">
         <li :for={{crumb, idx} <- Enum.with_index(@crumbs)} class="flex items-center gap-1.5 min-w-0">
-          <span :if={idx > 0} class="text-zinc-700" aria-hidden="true">/</span>
+          <span :if={idx > 0} class="text-content-subtle" aria-hidden="true">/</span>
           <.link
             :if={crumb_path(crumb)}
             navigate={crumb_path(crumb)}
-            class="text-zinc-400 hover:text-zinc-200 truncate"
+            class="text-content-muted hover:text-content-strong truncate"
           >
             {crumb_label(crumb)}
           </.link>
-          <span :if={!crumb_path(crumb)} class="text-zinc-100 truncate" aria-current="page">
+          <span :if={!crumb_path(crumb)} class="text-content-strong truncate" aria-current="page">
             {crumb_label(crumb)}
           </span>
         </li>
@@ -307,18 +307,19 @@ defmodule SowerWeb.Layouts do
       class="mobile-nav-dropdown relative md:hidden"
       phx-click-away={JS.remove_attribute("open", to: "#mobile-nav-dropdown")}
     >
-      <summary class="flex list-none cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900">
+      <summary class="flex list-none cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-content hover:bg-surface-hover">
         <.icon name="hero-bars-3" class="size-4" />
         <span class="sr-only">Menu</span>
       </summary>
-      <ul class="absolute left-0 top-full z-50 mt-2 w-56 rounded-lg border border-zinc-800 bg-zinc-950 p-2 shadow-lg">
+      <ul class="absolute left-0 top-full z-50 mt-2 w-56 rounded-lg border border-hairline bg-surface p-2 shadow-lg">
         <li :for={item <- @nav_items}>
           <.link
             navigate={nav_path(item.section)}
             class={[
               "block rounded-md px-3 py-2 text-sm",
-              item.section == @nav_section && "text-zinc-50 bg-zinc-900",
-              item.section != @nav_section && "text-zinc-300 hover:text-zinc-50 hover:bg-zinc-900/60"
+              item.section == @nav_section && "text-content-strong bg-surface-active",
+              item.section != @nav_section &&
+                "text-content-muted hover:text-content-strong hover:bg-surface-hover"
             ]}
           >
             {item.label}
@@ -340,7 +341,7 @@ defmodule SowerWeb.Layouts do
         id="user-menu-button"
         aria-haspopup="menu"
         aria-expanded="false"
-        class="h-8 w-8 rounded-full bg-zinc-800 border border-zinc-700 text-[11px] text-zinc-200 hover:border-zinc-600"
+        class="h-8 w-8 rounded-full bg-surface-active border border-line text-[11px] text-content hover:border-line-strong"
         phx-click={JS.toggle(to: "#user-dropdown")}
         phx-click-away={
           JS.hide(
@@ -357,17 +358,17 @@ defmodule SowerWeb.Layouts do
         id="user-dropdown"
         role="menu"
         aria-labelledby="user-menu-button"
-        class="absolute right-0 mt-2 hidden z-[1000] w-56 rounded-md border border-zinc-800 bg-zinc-950 shadow-lg"
+        class="absolute right-0 mt-2 hidden z-[1000] w-56 rounded-md border border-hairline bg-surface shadow-lg"
       >
-        <div class="px-4 py-3 border-b border-zinc-900">
-          <p class="text-sm text-zinc-100">Hello, {@current_user.name}!</p>
+        <div class="px-4 py-3 border-b border-hairline">
+          <p class="text-sm text-content-strong">Hello, {@current_user.name}!</p>
         </div>
         <ul class="py-1" aria-labelledby="user-menu-button">
           <li>
             <.link
               navigate={~p"/settings/access-tokens"}
               role="menuitem"
-              class="block px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900 hover:text-zinc-50"
+              class="block px-4 py-2 text-sm text-content-muted hover:bg-surface-hover hover:text-content-strong"
             >
               Access Tokens
             </.link>
@@ -376,7 +377,7 @@ defmodule SowerWeb.Layouts do
             <.link
               navigate={~p"/settings"}
               role="menuitem"
-              class="block px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900 hover:text-zinc-50"
+              class="block px-4 py-2 text-sm text-content-muted hover:bg-surface-hover hover:text-content-strong"
             >
               Settings
             </.link>
@@ -385,7 +386,7 @@ defmodule SowerWeb.Layouts do
             <a
               href="#"
               role="menuitem"
-              class="block px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900 hover:text-zinc-50"
+              class="block px-4 py-2 text-sm text-content-muted hover:bg-surface-hover hover:text-content-strong"
             >
               Sign out
             </a>
@@ -409,7 +410,7 @@ defmodule SowerWeb.Layouts do
       id={@id}
       role="alert"
       data-auto-dismiss-ms="5000"
-      class="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-rose-900 shadow-sm transition-opacity duration-300"
+      class="mb-4 rounded-lg border border-danger/40 bg-danger-surface px-4 py-3 text-danger shadow-sm transition-opacity duration-300"
     >
       <p class="text-sm leading-5">{msg}</p>
     </div>
@@ -455,46 +456,6 @@ defmodule SowerWeb.Layouts do
         Attempting to reconnect
         <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
       </.flash>
-    </div>
-    """
-  end
-
-  @doc """
-  Provides dark vs light theme toggle based on themes defined in app.css.
-
-  See <head> in root.html.heex which applies the theme before page load.
-  """
-  def theme_toggle(assigns) do
-    ~H"""
-    <div class="card relative flex flex-row items-center border-2 border-base-300 bg-base-300 rounded-full">
-      <div class="absolute w-1/3 h-full rounded-full border-1 border-base-200 bg-base-100 brightness-200 left-0 [[data-theme=light]_&]:left-1/3 [[data-theme=dark]_&]:left-2/3 transition-[left]" />
-
-      <.button
-        variant={:icon}
-        class="flex p-2 w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="system"
-      >
-        <.icon name="hero-computer-desktop-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </.button>
-
-      <.button
-        variant={:icon}
-        class="flex p-2 w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="light"
-      >
-        <.icon name="hero-sun-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </.button>
-
-      <.button
-        variant={:icon}
-        class="flex p-2 w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="dark"
-      >
-        <.icon name="hero-moon-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </.button>
     </div>
     """
   end

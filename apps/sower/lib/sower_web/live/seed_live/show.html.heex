@@ -17,7 +17,7 @@
     </.detail_field>
 
     <section class="-mx-4 sm:mx-0">
-      <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-200 mb-4 px-4 sm:px-0">
+      <h2 class="text-sm font-semibold text-content mb-4 px-4 sm:px-0">
         Tags
       </h2>
       <.table id="seed-tags" rows={Enum.sort(@seed.tags)} bold_first={false} show_header={false}>
@@ -30,7 +30,7 @@
       </.table>
       <p
         :if={Enum.empty?(@seed.tags)}
-        class="text-sm text-zinc-500 dark:text-zinc-400 italic"
+        class="text-sm text-content-muted italic"
       >
         No tags.
       </p>

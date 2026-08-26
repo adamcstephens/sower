@@ -9,15 +9,15 @@
     <:actions>
       <details class="relative">
         <summary
-          class="flex list-none cursor-pointer items-center rounded-lg p-2 text-zinc-900 hover:bg-zinc-200 dark:text-zinc-200 dark:hover:bg-zinc-700"
+          class="flex list-none cursor-pointer items-center rounded-lg p-2 text-content hover:bg-surface-hover"
           aria-label="Toggle columns"
           title="Columns"
         >
           <.icon name="hero-view-columns" class="h-5 w-5" />
         </summary>
-        <ul class="absolute right-0 top-full z-50 mt-2 w-48 rounded-lg border border-zinc-300 bg-zinc-100 p-2 shadow-lg dark:border-zinc-600 dark:bg-zinc-700">
+        <ul class="absolute right-0 top-full z-50 mt-2 w-48 rounded-lg border border-line bg-surface p-2 shadow-lg">
           <li :for={col <- @columns} :if={not col.lockable}>
-            <label class="flex items-center gap-2 px-2 py-1 text-sm cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-600 rounded">
+            <label class="flex items-center gap-2 px-2 py-1 text-sm cursor-pointer hover:bg-surface-hover rounded">
               <input
                 type="checkbox"
                 checked={col.key in @visible_cols}

@@ -33,11 +33,11 @@ defmodule SowerWeb.Forge.ConnectionLive.FormComponent do
         <div>
           <.label>Redirect URL</.label>
           <div class="mt-1 flex items-center gap-2">
-            <code class="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900">
+            <code class="block w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm text-content">
               {@redirect_url}
             </code>
           </div>
-          <p class="mt-1 text-sm text-zinc-500">
+          <p class="mt-1 text-sm text-content-muted">
             Use this as the redirect URI when creating the OAuth application on your forge.
           </p>
         </div>

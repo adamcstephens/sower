@@ -11,21 +11,21 @@
 
   <form id="seed-filter" phx-change="filter" class="mt-6 flex gap-4 items-end">
     <div class="flex-1">
-      <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Name</label>
+      <label class="block text-sm font-medium text-content-muted">Name</label>
       <input
         type="text"
         name="name"
         value={filter_value(@meta, :name)}
         placeholder="Search by name..."
         phx-debounce="300"
-        class="mt-1 block w-full rounded-md border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
+        class="mt-1 block w-full rounded-md border-line-strong bg-surface text-content shadow-sm focus:border-accent-link focus:ring-0 sm:text-sm"
       />
     </div>
     <div>
-      <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Type</label>
+      <label class="block text-sm font-medium text-content-muted">Type</label>
       <select
         name="seed_type"
-        class="mt-1 block w-full rounded-md border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 shadow-sm focus:border-zinc-400 focus:ring-0 sm:text-sm"
+        class="mt-1 block w-full rounded-md border-line-strong bg-surface text-content shadow-sm focus:border-accent-link focus:ring-0 sm:text-sm"
       >
         <option value="">All types</option>
         <option :for={t <- seed_types()} value={t} selected={filter_value(@meta, :seed_type) == t}>

@@ -73,10 +73,10 @@ defmodule SowerWeb.LayoutsTest do
 
         # active item has aria-current=page and the amber bar
         assert html =~ ~s(aria-current="page")
-        assert html =~ "bg-amber-500"
+        assert html =~ "bg-accent"
 
         active_pattern =
-          ~r/aria-current="page"[^>]*>\s*<span[^>]*bg-amber-500[^>]*>.*?#{unquote(label)}/s
+          ~r/aria-current="page"[^>]*>\s*<span[^>]*bg-accent[^>]*>.*?#{unquote(label)}/s
 
         assert Regex.match?(active_pattern, html),
                "Expected #{unquote(label)} to be the active item"

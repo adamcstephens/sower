@@ -41,7 +41,7 @@ defmodule SowerWeb.Settings.AccessTokenLive.Show do
   def flash_token(assigns) do
     ~H"""
     <%= if @flash["token"] do %>
-      <div class="box-border bg-blue-700 m-6 p-4 rounded">
+      <div class="box-border bg-info-surface border border-info/40 text-info m-6 p-4 rounded">
         <div>Copy this token now! It will not be stored nor shown again.</div>
         <div class="pt-6 text-balance break-all">{@flash["token"]}</div>
       </div>
