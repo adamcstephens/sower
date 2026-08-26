@@ -130,6 +130,7 @@ defmodule SowerWeb.Router do
     scope "/dev", SowerWeb do
       pipe_through :browser
       get "/login", DevLoginController, :login
+      post "/login", DevLoginController, :create
     end
   end
 

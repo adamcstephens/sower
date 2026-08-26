@@ -266,7 +266,7 @@ defmodule SowerWeb.Layouts do
       -->
 
       <.user_menu :if={@current_user} current_user={@current_user} />
-      <.link :if={!@current_user} navigate={~p"/auth/oidcc"}>
+      <.link :if={!@current_user} navigate={SowerWeb.UserAuth.login_path()}>
         <.button variant={:secondary}>Sign In</.button>
       </.link>
     </header>

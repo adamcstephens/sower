@@ -1,10 +1,5 @@
 {
   "public_url": "http://localhost:7150",
-  "auth": {
-    "oidc_base_url": "https://oidc.server/oauth2/openid/sower-dev",
-    "oidc_client_id": "sower-dev",
-    "oidc_client_secret_file": ".dev-oidc-secret"
-  },
   "database": {
     "username": "postgres",
     "hostname": "localhost",

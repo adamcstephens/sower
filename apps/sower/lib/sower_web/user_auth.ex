@@ -15,6 +15,27 @@ defmodule SowerWeb.UserAuth do
   @remember_me_cookie "_sower_web_user_remember_me"
   @remember_me_options [sign: true, max_age: @max_age, same_site: "Lax"]
 
+  @login_path_doc """
+  Where an unauthenticated user is sent to log in.
+
+  Falls back to the dev login when no OIDC provider is configured, so a
+  development server can run without an identity provider.
+  """
+
+  if Mix.env() in [:dev, :test] do
+    @doc @login_path_doc
+    def login_path do
+      if Application.get_env(:ueberauth, Ueberauth) == nil do
+        ~p"/dev/login"
+      else
+        ~p"/auth/oidcc"
+      end
+    end
+  else
+    @doc @login_path_doc
+    def login_path, do: ~p"/auth/oidcc"
+  end
+
   @doc """
   Logs the user in.
 
@@ -165,7 +186,7 @@ defmodule SowerWeb.UserAuth do
     else
       socket =
         socket
-        |> Phoenix.LiveView.redirect(to: ~p"/auth/oidcc")
+        |> Phoenix.LiveView.redirect(to: login_path())
 
       {:halt, socket}
     end
@@ -255,7 +276,7 @@ defmodule SowerWeb.UserAuth do
     else
       conn
       |> maybe_store_return_to()
-      |> redirect(to: ~p"/auth/oidcc")
+      |> redirect(to: login_path())
       |> halt()
     end
   end
