@@ -22,7 +22,9 @@ defmodule Sower.Orchestration.Garden do
       order_directions: [:asc]
     },
     adapter_opts: [
-      join_fields: [deploy_result: [binding: :latest_deployment, field: :result]]
+      join_fields: [
+        deploy_result: [binding: :latest_deployment, field: :result, ecto_type: Ecto.Enum]
+      ]
     ]
   }
 
