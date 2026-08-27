@@ -182,6 +182,7 @@ update-elixir:
     mix deps.update --all
     mix deps.get
     mix hex.outdated
+    mix hex.audit
     pushd apps/sower; MIX_ENV=test mix boruta.gen.migration; popd
     just mix-clean
     just mix-nix-lock
