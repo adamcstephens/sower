@@ -30,7 +30,7 @@ defmodule Nix.MixProject do
       {:cuid2_ex, "~> 0.2"},
       {:jason, "~> 1.0"},
       {:rexec, git: "https://github.com/adamcstephens/rexec.git", branch: "main"},
-      {:typedstruct, "~> 0.5.4"}
+      {:typedstruct, "~> 0.5", runtime: false}
     ]
   end
 end

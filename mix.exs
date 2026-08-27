@@ -46,8 +46,10 @@ defmodule SowerUmbrella.MixProject do
       {:dialyxir, "~> 1.0", only: [:dev]},
       {:deps_nix, "~> 3.0", only: [:dev]},
       {:igniter, "~> 0.8", only: [:dev, :test], override: true},
-      {:typedstruct,
-       git: "https://github.com/adamcstephens/typedstruct.git", branch: "hardcode", override: true}
+      {:typedstruct, "0.5.4",
+       git: "https://github.com/saleyn/typedstruct.git",
+       ref: "343c6435a7ef06dd2662e950d33cb957f81bf68d",
+       override: true}
     ]
   end
 end

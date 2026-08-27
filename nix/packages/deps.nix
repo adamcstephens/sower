@@ -2085,10 +2085,10 @@ let
             appConfigPath = ../../config;
 
             src = fetchFromGitHub {
-              owner = "adamcstephens";
+              owner = "saleyn";
               repo = "typedstruct";
-              rev = "fde3afb4d9d5a1973161feba6ff4fd178708bf53";
-              hash = "sha256-aPvIjLK6sFmR9fdJbusiEtwFqPyZjpS1N51IEksi5xc=";
+              rev = "343c6435a7ef06dd2662e950d33cb957f81bf68d";
+              hash = "sha256-4EK/f1oH3lxzPBK0taBWpOxk50S7Z+p/l+Uypc+nd6k=";
             };
           };
         in
