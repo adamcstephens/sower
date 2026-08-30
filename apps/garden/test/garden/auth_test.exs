@@ -47,20 +47,66 @@ defmodule Garden.AuthTest do
 
       logs =
         capture_log(fn ->
-          assert {:error, {:server_rejected, 401}} =
+          assert {:error, {:server_rejected, 401, :unclassified}} =
                    Auth.request_token(@client_id, pem, post_fun)
         end)
 
       assert logs =~ "rejected by server"
     end
 
-    test "classifies 400 invalid_client as server rejection", %{private_key_pem: pem} do
+    test "classifies an unclassified 400 as a rejection without a reason",
+         %{private_key_pem: pem} do
       post_fun = fn _url, _opts ->
         {:ok, %{status: 400, body: %{"error" => "invalid_client"}}}
       end
 
       capture_log(fn ->
-        assert {:error, {:server_rejected, 400}} =
+        assert {:error, {:server_rejected, 400, :unclassified}} =
+                 Auth.request_token(@client_id, pem, post_fun)
+      end)
+    end
+
+    test "surfaces the server error_reason for unknown clients", %{private_key_pem: pem} do
+      post_fun = fn _url, _opts ->
+        {:ok,
+         %{
+           status: 400,
+           body: %{"error" => "invalid_client", "error_reason" => "unknown_client"}
+         }}
+      end
+
+      capture_log(fn ->
+        assert {:error, {:server_rejected, 400, :unknown_client}} =
+                 Auth.request_token(@client_id, pem, post_fun)
+      end)
+    end
+
+    test "surfaces the server error_reason for expired assertions", %{private_key_pem: pem} do
+      post_fun = fn _url, _opts ->
+        {:ok,
+         %{
+           status: 400,
+           body: %{"error" => "invalid_client", "error_reason" => "assertion_expired"}
+         }}
+      end
+
+      capture_log(fn ->
+        assert {:error, {:server_rejected, 400, :assertion_expired}} =
+                 Auth.request_token(@client_id, pem, post_fun)
+      end)
+    end
+
+    test "surfaces the server error_reason for signature mismatches", %{private_key_pem: pem} do
+      post_fun = fn _url, _opts ->
+        {:ok,
+         %{
+           status: 400,
+           body: %{"error" => "invalid_client", "error_reason" => "invalid_signature"}
+         }}
+      end
+
+      capture_log(fn ->
+        assert {:error, {:server_rejected, 400, :invalid_signature}} =
                  Auth.request_token(@client_id, pem, post_fun)
       end)
     end

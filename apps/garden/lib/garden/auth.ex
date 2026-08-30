@@ -3,7 +3,7 @@ defmodule Garden.Auth do
 
   @jws_alg "RS512"
   @key_size 4096
-  @assertion_ttl_seconds 30
+  @assertion_ttl_seconds 300
 
   def generate_keypair do
     jwk = JOSE.JWK.generate_key({:rsa, @key_size})
@@ -72,13 +72,16 @@ defmodule Garden.Auth do
          }}
 
       {:ok, %{status: status, body: body}} when status >= 400 and status < 500 ->
+        reason = rejection_reason(body)
+
         Logger.warning(
           msg: "Token request rejected by server",
           status: to_string(status),
+          reason: to_string(reason),
           error: inspect(body)
         )
 
-        {:error, {:server_rejected, status}}
+        {:error, {:server_rejected, status, reason}}
 
       {:ok, %{status: status, body: body}} ->
         Logger.warning(
@@ -98,4 +101,9 @@ defmodule Garden.Auth do
         {:error, {:request_error, error}}
     end
   end
+
+  defp rejection_reason(%{"error_reason" => "unknown_client"}), do: :unknown_client
+  defp rejection_reason(%{"error_reason" => "assertion_expired"}), do: :assertion_expired
+  defp rejection_reason(%{"error_reason" => "invalid_signature"}), do: :invalid_signature
+  defp rejection_reason(_body), do: :unclassified
 end

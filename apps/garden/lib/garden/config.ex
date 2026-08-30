@@ -87,7 +87,12 @@ defmodule Garden.Config do
         )
 
       Application.put_env(Garden.Socket, :uri, uri)
-      Application.put_env(Garden.Socket, :reconnect_after_msec, [200, 500, 1_000, 2_000])
+
+      Application.put_env(
+        Garden.Socket,
+        :reconnect_after_msec,
+        Garden.Socket.Lifecycle.default_backoff()
+      )
     end
 
     # Expand state_directory path

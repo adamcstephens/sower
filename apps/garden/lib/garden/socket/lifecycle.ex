@@ -26,6 +26,23 @@ defmodule Garden.Socket.Lifecycle do
     end
   end
 
+  @default_backoff [200, 500, 1_000, 2_000, 5_000, 15_000, 30_000, 60_000, 120_000, 300_000]
+
+  def default_backoff, do: @default_backoff
+
+  def reconnect_delay(counter, backoff_times \\ @default_backoff) do
+    Enum.at(backoff_times, counter, List.last(backoff_times))
+  end
+
+  @doc """
+  Decide what to do after the server rejected the garden's existing credentials.
+
+  Only a client the server does not recognise justifies minting a new garden
+  identity; every other rejection is transient from the garden's point of view.
+  """
+  def rejection_action({:server_rejected, _status, :unknown_client}), do: :reregister
+  def rejection_action(_reason), do: :retry
+
   def build_deployment_request(sid, force?) do
     payload = %{subscription_sids: [sid]}
 

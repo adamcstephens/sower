@@ -14,6 +14,7 @@ defmodule Garden.Storage do
   end
 
   @cooldown_seconds 60
+  @max_attempts 3
 
   # client
 
@@ -35,6 +36,19 @@ defmodule Garden.Storage do
 
   def check_cooldown(key) do
     GenServer.call(__MODULE__, {:check_cooldown, key})
+  end
+
+  @doc """
+  Like `check_cooldown/1`, but also caps the total number of attempts.
+
+  Returns `:ok` when the attempt may proceed, `{:cooldown, elapsed}` while the
+  window is still open, and `:exhausted` once the cap has been reached.
+  """
+  def check_attempt(key, opts \\ []) do
+    cooldown_seconds = Keyword.get(opts, :cooldown_seconds, @cooldown_seconds)
+    max_attempts = Keyword.get(opts, :max_attempts, @max_attempts)
+
+    GenServer.call(__MODULE__, {:check_attempt, key, cooldown_seconds, max_attempts})
   end
 
   # server
@@ -74,7 +88,7 @@ defmodule Garden.Storage do
       Logger.debug(msg: "Persisted migrated storage", file: file)
     end
 
-    {:ok, %{file: file, data: data, cooldowns: %{}}}
+    {:ok, %{file: file, data: data, cooldowns: %{}, attempts: %{}}}
   end
 
   @impl GenServer
@@ -103,6 +117,28 @@ defmodule Garden.Storage do
 
       _ ->
         {:reply, :ok, put_in(state.cooldowns[key], now)}
+    end
+  end
+
+  @impl GenServer
+  def handle_call({:check_attempt, key, cooldown_seconds, max_attempts}, _from, state) do
+    now = System.monotonic_time(:second)
+    last = Map.get(state.cooldowns, key)
+
+    cond do
+      Map.get(state.attempts, key, 0) >= max_attempts ->
+        {:reply, :exhausted, state}
+
+      is_integer(last) and now - last < cooldown_seconds ->
+        {:reply, {:cooldown, now - last}, state}
+
+      true ->
+        state =
+          state
+          |> put_in([:cooldowns, key], now)
+          |> update_in([:attempts, key], &((&1 || 0) + 1))
+
+        {:reply, :ok, state}
     end
   end
 

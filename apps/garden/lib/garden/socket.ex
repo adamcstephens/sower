@@ -201,9 +201,9 @@ defmodule Garden.Socket do
     counter = Map.get(socket.assigns, :reconnect_counter, 0)
 
     backoff_times =
-      Application.get_env(__MODULE__, :reconnect_after_msec, [200, 500, 1_000, 2_000])
+      Application.get_env(__MODULE__, :reconnect_after_msec, Lifecycle.default_backoff())
 
-    delay = Enum.at(backoff_times, counter, List.last(backoff_times))
+    delay = Lifecycle.reconnect_delay(counter, backoff_times)
 
     Logger.info(msg: "Scheduling reconnect", delay_ms: delay, attempt: counter + 1)
     Process.send_after(self(), :attempt_reconnect, delay)
@@ -284,19 +284,20 @@ defmodule Garden.Socket do
       {:ok, _} = ok ->
         ok
 
-      {:error, {:reauthentication_failed, {:server_rejected, status}}} ->
-        Logger.warning(
-          msg: "Server rejected credentials, clearing and re-registering",
-          garden_sid: storage.garden_sid,
-          status: to_string(status)
-        )
+      {:error, {:reauthentication_failed, reason}} = err ->
+        case Lifecycle.rejection_action(reason) do
+          :reregister ->
+            reregister(storage, reason)
 
-        storage =
-          storage
-          |> Map.delete(:garden_sid)
-          |> Map.delete(:oauth_credentials)
+          :retry ->
+            Logger.warning(
+              msg: "Server rejected credentials, retrying existing registration",
+              garden_sid: storage.garden_sid,
+              reason: inspect(reason)
+            )
 
-        try_http_registration(storage)
+            err
+        end
 
       {:error, reason} = err ->
         Logger.warning(
@@ -306,6 +307,36 @@ defmodule Garden.Socket do
         )
 
         err
+    end
+  end
+
+  defp reregister(storage, reason) do
+    case Storage.check_attempt(:reregistration) do
+      :ok ->
+        Logger.warning(
+          msg: "Server does not know this client, clearing and re-registering",
+          garden_sid: storage.garden_sid,
+          reason: inspect(reason)
+        )
+
+        try_http_registration(%{storage | garden_sid: nil, oauth_credentials: nil})
+
+      {:cooldown, elapsed} ->
+        Logger.warning(
+          msg: "Re-registration suppressed by cooldown",
+          garden_sid: storage.garden_sid,
+          seconds_since_last: to_string(elapsed)
+        )
+
+        {:error, {:reregistration_suppressed, :cooldown}}
+
+      :exhausted ->
+        Logger.error(
+          msg: "Re-registration retry cap reached, keeping existing registration",
+          garden_sid: storage.garden_sid
+        )
+
+        {:error, {:reregistration_suppressed, :exhausted}}
     end
   end
 

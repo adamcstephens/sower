@@ -293,3 +293,50 @@ defmodule Garden.Socket.LifecycleTest do
     end
   end
 end
+
+defmodule Garden.Socket.Lifecycle.CredentialRejectionTest do
+  use ExUnit.Case, async: true
+
+  alias Garden.Socket.Lifecycle
+
+  describe "rejection_action/1" do
+    test "re-registers only when the server does not know the client" do
+      assert :reregister = Lifecycle.rejection_action({:server_rejected, 400, :unknown_client})
+    end
+
+    test "retries the existing registration on a bare 400" do
+      assert :retry = Lifecycle.rejection_action({:server_rejected, 400, :unclassified})
+    end
+
+    test "retries the existing registration on an expired assertion" do
+      assert :retry = Lifecycle.rejection_action({:server_rejected, 400, :assertion_expired})
+    end
+
+    test "retries the existing registration on a signature mismatch" do
+      assert :retry = Lifecycle.rejection_action({:server_rejected, 401, :invalid_signature})
+    end
+
+    test "retries on server errors and transport failures" do
+      assert :retry = Lifecycle.rejection_action({:server_error, 503})
+      assert :retry = Lifecycle.rejection_action({:transport_error, :closed})
+    end
+  end
+
+  describe "reconnect_delay/2" do
+    test "walks the backoff curve and holds at the ceiling" do
+      backoff = [200, 1_000, 5_000]
+
+      assert 200 = Lifecycle.reconnect_delay(0, backoff)
+      assert 1_000 = Lifecycle.reconnect_delay(1, backoff)
+      assert 5_000 = Lifecycle.reconnect_delay(2, backoff)
+      assert 5_000 = Lifecycle.reconnect_delay(99, backoff)
+    end
+
+    test "the default curve climbs into the minutes" do
+      backoff = Lifecycle.default_backoff()
+
+      assert Enum.sort(backoff) == backoff
+      assert List.last(backoff) >= 300_000
+    end
+  end
+end

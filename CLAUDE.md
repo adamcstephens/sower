@@ -19,7 +19,7 @@ If more than one of the rules conflict, ask before implementing.
   - and importantly, `just check-e2e`
 - code committed with all ticket changes included
   - Ticket ID in the body
-  - Co-Authored-By line always included
+  - Assisted-By line always included (never Co-Authored-By)
 - *important* After committing, stop and get user approval for completion.
 - ticket marked complete once approved
 
