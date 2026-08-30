@@ -35,9 +35,41 @@ defmodule Garden.Socket do
     end
   end
 
+  @doc """
+  Discard this garden's identity and enroll a new one.
+
+  The only path that mints a new garden identity. The garden never does this to
+  itself: a server that no longer knows this client leaves it retrying its
+  existing registration until an operator runs this.
+  """
+  def reregister do
+    case GenServer.whereis(__MODULE__) do
+      nil -> {:error, :not_running}
+      _pid -> GenServer.call(__MODULE__, :reregister, 30_000)
+    end
+  end
+
   @impl Slipstream
   def handle_call(:active_deployments, _from, socket) do
     {:reply, socket.assigns.active_deployments, socket}
+  end
+
+  def handle_call(:reregister, _from, socket) do
+    storage = Storage.read()
+
+    Logger.warning(msg: "Operator requested re-registration", garden_sid: storage.garden_sid)
+
+    cleared = %{storage | garden_sid: nil, oauth_credentials: nil, credentials_rejected_at: nil}
+
+    case try_http_registration(cleared) do
+      {:ok, _token} ->
+        send(self(), :attempt_reconnect)
+        {:reply, {:ok, Storage.read().garden_sid}, socket}
+
+      {:error, reason} = err ->
+        Logger.error(msg: "Operator re-registration failed", reason: inspect(reason))
+        {:reply, err, socket}
+    end
   end
 
   def handle_call(message, from, socket), do: super(message, from, socket)
@@ -261,7 +293,7 @@ defmodule Garden.Socket do
       }
       when is_binary(token) and is_binary(private_key_pem) ->
         if token_expired?(issued_at, expires_in) do
-          try_reauthenticate_or_reregister(storage)
+          try_reauthenticate_or_await_operator(storage)
         else
           Logger.debug(msg: "Using stored Boruta access token")
           {:ok, "boruta:#{token}"}
@@ -272,22 +304,22 @@ defmodule Garden.Socket do
         private_key_pem: private_key_pem
       }
       when is_binary(client_id) and is_binary(private_key_pem) ->
-        try_reauthenticate_or_reregister(storage)
+        try_reauthenticate_or_await_operator(storage)
 
       _ ->
         try_http_registration(storage)
     end
   end
 
-  defp try_reauthenticate_or_reregister(storage) do
+  defp try_reauthenticate_or_await_operator(storage) do
     case try_reauthenticate(storage) do
       {:ok, _} = ok ->
         ok
 
       {:error, {:reauthentication_failed, reason}} = err ->
         case Lifecycle.rejection_action(reason) do
-          :reregister ->
-            reregister(storage, reason)
+          :await_operator ->
+            await_operator(storage, reason)
 
           :retry ->
             Logger.warning(
@@ -310,34 +342,18 @@ defmodule Garden.Socket do
     end
   end
 
-  defp reregister(storage, reason) do
-    case Storage.check_attempt(:reregistration) do
-      :ok ->
-        Logger.warning(
-          msg: "Server does not know this client, clearing and re-registering",
-          garden_sid: storage.garden_sid,
-          reason: inspect(reason)
-        )
+  defp await_operator(storage, reason) do
+    if is_nil(storage.credentials_rejected_at) do
+      Logger.error(
+        msg: "Server does not know this client, awaiting operator re-registration",
+        garden_sid: storage.garden_sid,
+        reason: inspect(reason)
+      )
 
-        try_http_registration(%{storage | garden_sid: nil, oauth_credentials: nil})
-
-      {:cooldown, elapsed} ->
-        Logger.warning(
-          msg: "Re-registration suppressed by cooldown",
-          garden_sid: storage.garden_sid,
-          seconds_since_last: to_string(elapsed)
-        )
-
-        {:error, {:reregistration_suppressed, :cooldown}}
-
-      :exhausted ->
-        Logger.error(
-          msg: "Re-registration retry cap reached, keeping existing registration",
-          garden_sid: storage.garden_sid
-        )
-
-        {:error, {:reregistration_suppressed, :exhausted}}
+      Storage.put(:credentials_rejected_at, DateTime.utc_now() |> DateTime.to_iso8601())
     end
+
+    {:error, {:credentials_rejected, :awaiting_operator}}
   end
 
   defp token_expired?(issued_at, expires_in)
@@ -364,7 +380,9 @@ defmodule Garden.Socket do
             token_issued_at: System.system_time(:second)
           })
 
-        storage |> Map.put(:oauth_credentials, updated_creds) |> Storage.write()
+        %{storage | oauth_credentials: updated_creds, credentials_rejected_at: nil}
+        |> Storage.write()
+
         Logger.debug(msg: "Reauthenticated via JWT assertion")
         {:ok, "boruta:#{token_response.access_token}"}
 
@@ -391,7 +409,7 @@ defmodule Garden.Socket do
         Logger.info(msg: "Registered via HTTP", garden_sid: garden_sid, client_id: client_id)
 
         oauth_creds = %{client_id: client_id}
-        storage = Map.merge(storage, %{garden_sid: garden_sid, oauth_credentials: oauth_creds})
+        storage = %{storage | garden_sid: garden_sid, oauth_credentials: oauth_creds}
 
         case Garden.Auth.request_token(client_id, storage.private_key_pem) do
           {:ok, token_response} ->
@@ -402,7 +420,9 @@ defmodule Garden.Socket do
                 token_issued_at: System.system_time(:second)
               })
 
-            storage |> Map.put(:oauth_credentials, updated_creds) |> Storage.write()
+            %{storage | oauth_credentials: updated_creds, credentials_rejected_at: nil}
+            |> Storage.write()
+
             {:ok, "boruta:#{token_response.access_token}"}
 
           {:error, reason} ->

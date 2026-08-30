@@ -263,8 +263,12 @@ defmodule Garden.AdminSocket do
     %{"v" => 1, "id" => id, "kind" => "complete", "exit_code" => exit_code}
   end
 
-  defp status_map(%Admin.StatusReport{version: version, active_deployments: active}) do
-    %{"version" => version, "active_deployments" => active}
+  defp status_map(%Admin.StatusReport{} = status) do
+    %{
+      "version" => status.version,
+      "active_deployments" => status.active_deployments,
+      "credentials_rejected_at" => status.credentials_rejected_at
+    }
   end
 
   defp write_frame(client, frame) do

@@ -37,10 +37,11 @@ defmodule Garden.Socket.Lifecycle do
   @doc """
   Decide what to do after the server rejected the garden's existing credentials.
 
-  Only a client the server does not recognise justifies minting a new garden
-  identity; every other rejection is transient from the garden's point of view.
+  A client the server does not recognise is the only rejection re-registration
+  could repair, and that is an operator action; every other rejection is
+  transient from the garden's point of view.
   """
-  def rejection_action({:server_rejected, _status, :unknown_client}), do: :reregister
+  def rejection_action({:server_rejected, _status, :unknown_client}), do: :await_operator
   def rejection_action(_reason), do: :retry
 
   def build_deployment_request(sid, force?) do

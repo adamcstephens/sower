@@ -66,7 +66,13 @@ defmodule Garden.AdminSocketTest do
     end
 
     test "encodes a status report on the ok frame" do
-      report = Admin.StatusReport.cast!(%{version: "9.9.9", active_deployments: ["dep-1"]})
+      report =
+        Admin.StatusReport.cast!(%{
+          version: "9.9.9",
+          active_deployments: ["dep-1"],
+          credentials_rejected_at: "2026-08-29T00:00:00Z"
+        })
+
       path = start_socket(fn _ -> {:status, report} end)
 
       assert [ok, complete] = request(path, %{"id" => "req-3", "kind" => "status"})
@@ -75,10 +81,29 @@ defmodule Garden.AdminSocketTest do
                "v" => 1,
                "id" => "req-3",
                "kind" => "ok",
-               "status" => %{"version" => "9.9.9", "active_deployments" => ["dep-1"]}
+               "status" => %{
+                 "version" => "9.9.9",
+                 "active_deployments" => ["dep-1"],
+                 "credentials_rejected_at" => "2026-08-29T00:00:00Z"
+               }
              }
 
       assert complete["kind"] == "complete"
+      assert complete["exit_code"] == 0
+    end
+
+    test "dispatches a reregister request" do
+      path = start_socket(fn %Admin.Reregister{} -> {:ok, "re-registered as grdn_new"} end)
+
+      assert [ok, complete] = request(path, %{"id" => "req-5", "kind" => "reregister"})
+
+      assert ok == %{
+               "v" => 1,
+               "id" => "req-5",
+               "kind" => "ok",
+               "data" => "re-registered as grdn_new"
+             }
+
       assert complete["exit_code"] == 0
     end
 

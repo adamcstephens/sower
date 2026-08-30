@@ -300,8 +300,9 @@ defmodule Garden.Socket.Lifecycle.CredentialRejectionTest do
   alias Garden.Socket.Lifecycle
 
   describe "rejection_action/1" do
-    test "re-registers only when the server does not know the client" do
-      assert :reregister = Lifecycle.rejection_action({:server_rejected, 400, :unknown_client})
+    test "awaits the operator on an unknown client" do
+      assert :await_operator =
+               Lifecycle.rejection_action({:server_rejected, 400, :unknown_client})
     end
 
     test "retries the existing registration on a bare 400" do

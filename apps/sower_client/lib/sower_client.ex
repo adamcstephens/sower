@@ -25,6 +25,7 @@ defmodule SowerClient do
     |> OpenApiSpex.add_schemas([
       SowerClient.Admin.Deploy,
       SowerClient.Admin.Reload,
+      SowerClient.Admin.Reregister,
       SowerClient.Admin.Status,
       SowerClient.Admin.StatusReport,
       SowerClient.Admin.Reply,

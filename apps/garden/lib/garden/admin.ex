@@ -9,6 +9,7 @@ defmodule Garden.Admin do
 
   alias SowerClient.Admin.Deploy
   alias SowerClient.Admin.Reload
+  alias SowerClient.Admin.Reregister
   alias SowerClient.Admin.Status
   alias SowerClient.Admin.StatusReport
 
@@ -21,6 +22,7 @@ defmodule Garden.Admin do
   """
   def handle(%Deploy{} = command), do: deploy_command(command)
   def handle(%Reload{}), do: reload()
+  def handle(%Reregister{}), do: reregister()
   def handle(%Status{}), do: status()
 
   @doc """
@@ -32,13 +34,35 @@ defmodule Garden.Admin do
   end
 
   @doc """
-  Report the running garden version and any inflight deployments.
+  Discard the garden identity and enroll a new one, the operator recovery path.
+  """
+  def reregister do
+    case Garden.Socket.reregister() do
+      {:ok, garden_sid} ->
+        {:ok, "re-registered as #{garden_sid}"}
+
+      {:error, :not_running} ->
+        {:error, "garden socket is not running"}
+
+      {:error, reason} ->
+        {:error, "re-registration failed: #{inspect(reason)}"}
+    end
+  end
+
+  @doc """
+  Report the running garden version, any inflight deployments, and whether the
+  garden is waiting on an operator to re-register it.
   """
   def status do
     version = to_string(Application.spec(:garden, :vsn))
     active = Garden.Socket.active_deployments() |> Map.keys()
 
-    {:status, StatusReport.cast!(%{version: version, active_deployments: active})}
+    {:status,
+     StatusReport.cast!(%{
+       version: version,
+       active_deployments: active,
+       credentials_rejected_at: Garden.Storage.read().credentials_rejected_at
+     })}
   end
 
   defp deploy_command(%Deploy{sid: sid, force: force}) when is_binary(sid) do

@@ -18,11 +18,13 @@ defmodule SowerClient.Admin do
 
   alias SowerClient.Admin.Deploy
   alias SowerClient.Admin.Reload
+  alias SowerClient.Admin.Reregister
   alias SowerClient.Admin.Status
 
   @kinds %{
     deploy: Deploy,
     reload: Reload,
+    reregister: Reregister,
     status: Status
   }
 

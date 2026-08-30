@@ -22,6 +22,7 @@ pub const MAX_LINE_BYTES: usize = 65_536;
 
 const KIND_DEPLOY: &str = "deploy";
 const KIND_RELOAD: &str = "reload";
+const KIND_REREGISTER: &str = "reregister";
 const KIND_STATUS: &str = "status";
 
 /// Request envelope sent CLI -> garden.
@@ -74,6 +75,16 @@ pub fn reload_request(id: &str) -> Result<String> {
     })
 }
 
+/// Encode a `reregister` request to a single JSON line.
+pub fn reregister_request(id: &str) -> Result<String> {
+    encode(&Envelope::<()> {
+        v: PROTOCOL_VERSION,
+        id,
+        kind: KIND_REREGISTER,
+        payload: None,
+    })
+}
+
 /// Encode a `status` request to a single JSON line.
 pub fn status_request(id: &str) -> Result<String> {
     encode(&Envelope::<()> {
@@ -119,6 +130,10 @@ pub struct StatusReport {
     pub version: String,
     #[serde(default)]
     pub active_deployments: Vec<String>,
+    /// Set when the server rejected this garden's credentials and it is waiting
+    /// on an operator to re-register it.
+    #[serde(default)]
+    pub credentials_rejected_at: Option<String>,
 }
 
 /// Parse a single newline-stripped JSON line into a reply frame.

@@ -89,6 +89,13 @@ fn write_status<O: Write>(status: &StatusReport, out: &mut O) -> Result<()> {
             status.active_deployments.join(", ")
         )?;
     }
+    match &status.credentials_rejected_at {
+        Some(at) => writeln!(
+            out,
+            "credentials: rejected at {at}, awaiting operator re-registration (sower garden reregister)"
+        )?,
+        None => writeln!(out, "credentials: ok")?,
+    }
     Ok(())
 }
 
@@ -184,7 +191,10 @@ mod tests {
                      {\"id\":\"1\",\"kind\":\"complete\",\"exit_code\":0}\n";
         let (code, out, _err) = stream(input);
         assert_eq!(code, 0);
-        assert_eq!(out, "version: 1.2.3\nactive deployments: a, b\n");
+        assert_eq!(
+            out,
+            "version: 1.2.3\nactive deployments: a, b\ncredentials: ok\n"
+        );
     }
 
     #[test]
@@ -192,7 +202,19 @@ mod tests {
         let input = "{\"id\":\"1\",\"kind\":\"ok\",\"status\":{\"version\":\"1.2.3\"}}\n\
                      {\"id\":\"1\",\"kind\":\"complete\",\"exit_code\":0}\n";
         let (_code, out, _err) = stream(input);
-        assert_eq!(out, "version: 1.2.3\nactive deployments: none\n");
+        assert_eq!(
+            out,
+            "version: 1.2.3\nactive deployments: none\ncredentials: ok\n"
+        );
+    }
+
+    #[test]
+    fn status_frame_reports_rejected_credentials() {
+        let input = "{\"id\":\"1\",\"kind\":\"ok\",\"status\":{\"version\":\"1.2.3\",\"credentials_rejected_at\":\"2026-08-29T00:00:00Z\"}}\n\
+                     {\"id\":\"1\",\"kind\":\"complete\",\"exit_code\":0}\n";
+        let (_code, out, _err) = stream(input);
+        assert!(out.contains("credentials: rejected at 2026-08-29T00:00:00Z"));
+        assert!(out.contains("awaiting operator re-registration"));
     }
 
     #[test]

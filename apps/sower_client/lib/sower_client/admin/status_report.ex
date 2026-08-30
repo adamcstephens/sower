@@ -18,6 +18,12 @@ defmodule SowerClient.Admin.StatusReport do
         items: %Schema{type: :string},
         default: [],
         description: "Sids of deployments currently inflight"
+      },
+      credentials_rejected_at: %Schema{
+        type: :string,
+        nullable: true,
+        description:
+          "When set, the server rejected this garden's credentials at this time and it is awaiting operator re-registration"
       }
     },
     required: [:version]

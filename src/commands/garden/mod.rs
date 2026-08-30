@@ -44,6 +44,9 @@ enum GardenCommand {
     Reload,
     /// Report the running garden version and any inflight deployments.
     Status,
+    /// Discard this garden's identity and enroll a new one. The recovery path
+    /// for a garden the server no longer knows.
+    Reregister,
 }
 
 #[derive(Debug, Args)]
@@ -93,6 +96,7 @@ fn build_request_line(id: &str, command: &GardenCommand) -> Result<String> {
         }
         GardenCommand::Reload => protocol::reload_request(id),
         GardenCommand::Status => protocol::status_request(id),
+        GardenCommand::Reregister => protocol::reregister_request(id),
     }
 }
 
@@ -107,6 +111,13 @@ mod tests {
 
     fn json(line: &str) -> Value {
         serde_json::from_str(line).unwrap()
+    }
+
+    #[test]
+    fn reregister_builds_reregister_kind() {
+        let v = json(&build_request_line("1", &GardenCommand::Reregister).unwrap());
+        assert_eq!(v["kind"], "reregister");
+        assert!(v.get("payload").is_none());
     }
 
     #[test]
