@@ -12,13 +12,25 @@ defmodule SowerWeb.OAuth.TokenController do
       {:ok, token_response} ->
         json(conn, token_response)
 
+      {:error, :unknown_client} ->
+        invalid_client(conn, "unknown_client", "Client is not registered")
+
+      {:error, {:assertion_expired, _skew}} ->
+        invalid_client(
+          conn,
+          "assertion_expired",
+          "Client assertion is expired; check the clock and retry"
+        )
+
+      {:error, :invalid_signature} ->
+        invalid_client(
+          conn,
+          "invalid_signature",
+          "Client assertion signature does not match the registered key"
+        )
+
       {:error, _} ->
-        conn
-        |> put_status(:bad_request)
-        |> json(%{
-          error: "invalid_client",
-          error_description: "Client assertion is invalid"
-        })
+        invalid_client(conn, "invalid_assertion", "Client assertion is invalid")
     end
   end
 
@@ -28,6 +40,16 @@ defmodule SowerWeb.OAuth.TokenController do
     |> json(%{
       error: "unsupported_grant_type",
       error_description: "Only client_credentials grant with JWT client assertion is supported"
+    })
+  end
+
+  defp invalid_client(conn, reason, description) do
+    conn
+    |> put_status(:bad_request)
+    |> json(%{
+      error: "invalid_client",
+      error_reason: reason,
+      error_description: description
     })
   end
 end
