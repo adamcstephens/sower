@@ -45,7 +45,7 @@ defmodule Sower.MixProject do
       {:lazy_html, ">= 0.1.0", only: :test},
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.2"},
-      {:joken, "~> 2.6.1"},
+      {:joken, "~> 2.7.0"},
       {:libcluster_consul, "~> 1.3"},
       {:live_debugger, "~> 1.0", only: :dev},
       {:mime, "~> 2.0.6"},
