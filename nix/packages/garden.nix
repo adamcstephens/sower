@@ -24,7 +24,7 @@ beamPackages.mixRelease {
     ];
   };
 
-  nativeBuildInputs = [ tzdata ];
+  env.TZDIR = "${tzdata}/share/zoneinfo";
 
   mixReleaseName = "garden";
 

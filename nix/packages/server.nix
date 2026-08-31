@@ -34,7 +34,6 @@ beamPackages.mixRelease rec {
 
   nativeBuildInputs = [
     sowerServicesHook
-    tzdata
   ];
 
   sowerServices = sowerLib.generateUnitFiles {
@@ -67,6 +66,7 @@ beamPackages.mixRelease rec {
   doCheck = true;
   env = {
     PGDATABASE = "sower_test";
+    TZDIR = "${tzdata}/share/zoneinfo";
     # prevent mix from trying to download binaries
     ESBUILD_PATH = lib.getExe esbuild;
     TAILWIND_PATH = lib.getExe tailwindcss;

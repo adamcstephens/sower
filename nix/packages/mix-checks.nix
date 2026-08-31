@@ -26,7 +26,7 @@ beamPackages.mixRelease {
   mixReleaseName = "server";
   mixEnv = "test";
 
-  nativeBuildInputs = [ tzdata ];
+  env.TZDIR = "${tzdata}/share/zoneinfo";
 
   mixNixDeps = callPackages ./umbrella-deps.nix { inherit beamPackages; };
 
