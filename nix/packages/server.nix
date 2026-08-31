@@ -2,6 +2,7 @@
   lib,
   pkgs,
 
+  bashNonInteractive,
   beamPackages,
   callPackages,
   esbuild,
@@ -31,6 +32,9 @@ beamPackages.mixRelease rec {
   };
 
   mixReleaseName = "server";
+
+  # https://github.com/NixOS/nixpkgs/pull/558236
+  buildInputs = [ bashNonInteractive ];
 
   nativeBuildInputs = [
     sowerServicesHook

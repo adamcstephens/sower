@@ -1,4 +1,5 @@
 {
+  bashNonInteractive,
   beamPackages,
   callPackages,
   getent,
@@ -25,6 +26,9 @@ beamPackages.mixRelease {
   };
 
   env.TZDIR = "${tzdata}/share/zoneinfo";
+
+  # https://github.com/NixOS/nixpkgs/pull/558236
+  buildInputs = [ bashNonInteractive ];
 
   mixReleaseName = "garden";
 

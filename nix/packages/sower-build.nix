@@ -1,4 +1,5 @@
 {
+  bashNonInteractive,
   beamPackages,
   callPackages,
   lib,
@@ -28,6 +29,9 @@ beamPackages.mixRelease {
   mixNixDeps = callPackages ./umbrella-deps.nix { inherit beamPackages; };
 
   removeCookie = false;
+
+  # https://github.com/NixOS/nixpkgs/pull/558236
+  buildInputs = [ bashNonInteractive ];
 
   nativeBuildInputs = [
     makeWrapper
