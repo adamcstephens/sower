@@ -147,6 +147,13 @@ defmodule Sower.Orchestration.Deployment do
 
   def get_deployment_sid(sid), do: Repo.get_by(__MODULE__, sid: sid)
 
+  def get_deployment_detail(sid) do
+    case get_deployment_sid(sid) do
+      nil -> nil
+      deployment -> Repo.preload(deployment, [:garden, seed_deployments: :seed])
+    end
+  end
+
   def create_deployment(attrs \\ %{}) do
     result =
       %__MODULE__{
@@ -423,6 +430,93 @@ defmodule Sower.Orchestration.Deployment do
     end
   end
 
+  @doc """
+  Deploy a seed straight at a garden, bypassing subscription matching.
+
+  Authorized by the garden's own policy under the `direct` trigger, or by an
+  explicit break-glass override carrying a reason. A subscription matching the
+  seed's name and type is linked when one exists, for history and dedupe only.
+  """
+  def deploy_direct(%Garden{} = garden, %Seed{} = seed, opts \\ []) do
+    case authorize_direct(garden, seed, opts) do
+      {:ok, action, event_reason} ->
+        subscription = match_direct_subscription(garden, seed)
+
+        seed_deploys = [
+          %SowerClient.Orchestration.SeedDeployment{
+            seed: seed,
+            subscription_sid: get_in(subscription.sid),
+            action: to_string(action)
+          }
+        ]
+
+        opts =
+          opts
+          |> Keyword.put(:event_reason, event_reason)
+          |> Keyword.put(:note, Keyword.get(opts, :reason))
+
+        request_id = SowerClient.Sid.generate("req")
+
+        case dispatch_seed_deploys(
+               request_id,
+               garden.id,
+               seed_deploys,
+               List.wrap(subscription),
+               opts
+             ) do
+          {:ok, deployment} ->
+            SowerWeb.Endpoint.broadcast(
+              "garden:#{garden.sid}",
+              "deployment",
+              Map.from_struct(deployment)
+            )
+
+            {:ok, deployment}
+
+          {:error, _} = error ->
+            error
+        end
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  defp authorize_direct(%Garden{} = garden, %Seed{} = seed, opts) do
+    alias SowerClient.Orchestration.Subscription.Policy
+
+    if Keyword.get(opts, :override, false) do
+      case {Keyword.get(opts, :action), Keyword.get(opts, :reason)} do
+        {nil, _} -> {:error, :override_action_required}
+        {_, nil} -> {:error, :override_reason_required}
+        {action, _} -> {:ok, action, :direct_override}
+      end
+    else
+      case Policy.evaluate(
+             garden.policy,
+             :direct,
+             DateTime.utc_now(),
+             seed.seed_type,
+             garden.timezone
+           ) do
+        {:allow, action} -> {:ok, action, :direct_triggered}
+        {:confirm, _action} -> {:error, :confirmation_required}
+        :deny -> {:error, :policy_denied}
+      end
+    end
+  end
+
+  defp match_direct_subscription(%Garden{} = garden, %Seed{} = seed) do
+    from(s in Subscription,
+      where:
+        s.garden_id == ^garden.id and s.seed_name == ^seed.name and
+          s.seed_type == ^seed.seed_type,
+      order_by: [asc: s.inserted_at],
+      limit: 1
+    )
+    |> Repo.one()
+  end
+
   def request_deployment(%SowerClient.Orchestration.DeploymentRequest{} = request) do
     with {:ok, subs} <- validate_request_subscriptions(request.subscription_sids) do
       do_deployment(request.request_id, subs, force: request.force)
@@ -633,11 +727,6 @@ defmodule Sower.Orchestration.Deployment do
   end
 
   defp do_deployment(request_id, subscriptions, opts) do
-    force? = Keyword.get(opts, :force, false)
-    actor_sid = Keyword.get(opts, :actor_sid)
-    event_reason = Keyword.get(opts, :event_reason)
-    garden_id = hd(subscriptions).garden_id
-
     seed_deploys =
       subscriptions
       |> Enum.reduce([], fn sub, acc ->
@@ -655,6 +744,21 @@ defmodule Sower.Orchestration.Deployment do
             ]
         end
       end)
+
+    dispatch_seed_deploys(
+      request_id,
+      hd(subscriptions).garden_id,
+      seed_deploys,
+      subscriptions,
+      opts
+    )
+  end
+
+  defp dispatch_seed_deploys(request_id, garden_id, seed_deploys, subscriptions, opts) do
+    force? = Keyword.get(opts, :force, false)
+    actor_sid = Keyword.get(opts, :actor_sid)
+    event_reason = Keyword.get(opts, :event_reason)
+    note = Keyword.get(opts, :note)
 
     seeds = Enum.map(seed_deploys, & &1.seed)
 
@@ -712,7 +816,7 @@ defmodule Sower.Orchestration.Deployment do
                }) do
             {:ok, deploy} ->
               if actor_sid && event_reason do
-                DeploymentEvent.record_event(deploy, :created, event_reason, actor_sid)
+                DeploymentEvent.record_event(deploy, :created, event_reason, actor_sid, note)
               end
 
               subscription_ids = Enum.map(subscriptions, & &1.id)

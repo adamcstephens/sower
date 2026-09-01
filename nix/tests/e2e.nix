@@ -75,6 +75,13 @@ testers.runNixOSTest {
               settings = {
                 access_token_file = "/run/sower/test_token";
                 endpoint = "http://localhost:4000";
+                name = "server";
+                policy = {
+                  direct = {
+                    actions = [ "activate" ];
+                    triggers = [ "direct" ];
+                  };
+                };
                 subscriptions = {
                   server = {
                     seed_name = "server";
@@ -280,6 +287,38 @@ testers.runNixOSTest {
               timeout=15,
           )
 
+      def api(method, path, body=None):
+          auth = '-H "Authorization: Bearer $(cat /run/sower/test_token)"'
+          data = " -H 'Content-Type: application/json' -d '" + body + "'" if body else ""
+          url = "'http://localhost:4000/api/v1" + path + "'"
+          return "curl -sf -X " + method + " " + auth + data + " " + url
+
+      def api_field(method, path, field, body=None):
+          extract = "python3 -c 'import json,sys; print(json.load(sys.stdin)[\"" + field + "\"])'"
+          return server.succeed(api(method, path, body) + " | " + extract).strip()
+
+      with subtest("direct deployment over the API"):
+          seed_sid = api_field("GET", "/seeds/latest?name=server&seed_type=nixos", "sid")
+
+          body = '{"garden": "server", "seed": "' + seed_sid + '", "force": true}'
+          deployment_sid = api_field("POST", "/deployments", "sid", body)
+
+          check = (
+              "python3 -c 'import json,sys; d = json.load(sys.stdin);"
+              " sys.exit(0 if d[\"result\"] == \"success\" else 1)'"
+          )
+          server.wait_until_succeeds(
+              api("GET", "/deployments/" + deployment_sid) + " | " + check,
+              timeout=60,
+          )
+
+      with subtest("break-glass override requires a reason"):
+          body = (
+              '{"garden": "server", "seed": "' + seed_sid + '",'
+              ' "override": true, "action": "activate"}'
+          )
+          server.fail(api("POST", "/deployments", body))
+
       with subtest("activator handled nixos request"):
           server.succeed(
               "journalctl --no-pager -u 'sower-activator@*'"
@@ -306,6 +345,10 @@ testers.runNixOSTest {
               " --grep=Joined.channel.topic'",
               timeout=15,
           )
+
+      with subtest("direct deployment is denied by a garden with no policy"):
+          body = '{"garden": "testuser@server", "seed": "' + seed_sid + '", "force": true}'
+          server.fail(api("POST", "/deployments", body))
 
       with subtest("home-manager garden deployment"):
           hm_generation = server.succeed(

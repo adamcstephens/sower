@@ -654,4 +654,44 @@ defmodule SowerClient.Orchestration.Subscription.PolicyTest do
       assert :activate = Policy.highest_permitted_action([], @now, "nixos")
     end
   end
+
+  describe "direct trigger" do
+    test "allows direct when a rule permits it" do
+      rules = [%{actions: ["activate"], triggers: ["direct"]}]
+      assert {:allow, :activate} = Policy.evaluate(rules, :direct, @now, "nixos")
+    end
+
+    test "denies direct when rules omit the trigger" do
+      rules = [%{actions: ["activate"], triggers: ["manual", "scheduled"]}]
+      assert :deny = Policy.evaluate(rules, :direct, @now, "nixos")
+    end
+
+    test "denies direct under the default policy" do
+      assert :deny = Policy.evaluate(nil, :direct, @now, "nixos")
+      assert :deny = Policy.evaluate([], :direct, @now, "nixos")
+    end
+
+    test "honours the window on a direct rule" do
+      rules = [
+        %{
+          actions: ["activate"],
+          triggers: ["direct"],
+          window: %{days: ["wed"], time_start: "09:00", time_end: "17:00"}
+        }
+      ]
+
+      assert {:allow, :activate} = Policy.evaluate(rules, :direct, @now, "nixos")
+
+      outside = DateTime.from_naive!(~N[2026-04-15 20:00:00], "Etc/UTC")
+      assert :deny = Policy.evaluate(rules, :direct, outside, "nixos")
+    end
+
+    test "maps direct audit reasons to the direct trigger" do
+      assert :direct = Policy.trigger_for_reason(:direct_triggered)
+    end
+
+    test "direct is part of the trigger vocabulary" do
+      assert "direct" in Policy.triggers()
+    end
+  end
 end

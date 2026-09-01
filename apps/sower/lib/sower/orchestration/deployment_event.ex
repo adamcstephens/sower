@@ -19,22 +19,25 @@ defmodule Sower.Orchestration.DeploymentEvent do
         :user_retry,
         :poll_on_connect,
         :superseded,
-        :stale
+        :stale,
+        :direct_triggered,
+        :direct_override
       ]
 
     field :actor_sid, :string
+    field :note, :string
 
     timestamps(updated_at: false)
   end
 
   def changeset(deployment_event, attrs) do
     deployment_event
-    |> cast(attrs, [:deployment_id, :org_id, :event, :reason, :actor_sid])
+    |> cast(attrs, [:deployment_id, :org_id, :event, :reason, :actor_sid, :note])
     |> validate_required([:deployment_id, :org_id, :event, :reason, :actor_sid])
     |> foreign_key_constraint(:deployment_id)
   end
 
-  def record_event(%Deployment{} = deployment, event, reason, actor_sid) do
+  def record_event(%Deployment{} = deployment, event, reason, actor_sid, note \\ nil) do
     %__MODULE__{
       org_id: Repo.get_org_id()
     }
@@ -42,7 +45,8 @@ defmodule Sower.Orchestration.DeploymentEvent do
       deployment_id: deployment.id,
       event: event,
       reason: reason,
-      actor_sid: actor_sid
+      actor_sid: actor_sid,
+      note: note
     })
     |> Repo.insert()
   end

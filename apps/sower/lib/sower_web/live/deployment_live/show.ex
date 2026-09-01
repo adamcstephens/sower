@@ -149,6 +149,9 @@ defmodule SowerWeb.DeploymentLive.Show do
               <span class="text-content-subtle">
                 {event.actor_sid}
               </span>
+              <span :if={event.note} class="col-span-3 text-content-muted italic">
+                {event.note}
+              </span>
             </div>
           </div>
         </section>
@@ -277,6 +280,12 @@ defmodule SowerWeb.DeploymentLive.Show do
   defp event_description(%{event: :created, reason: :poll_on_connect}), do: "Deployed on connect"
   defp event_description(%{event: :canceled, reason: :superseded}), do: "Canceled — superseded"
   defp event_description(%{event: :canceled, reason: :stale}), do: "Canceled — stale"
+
+  defp event_description(%{event: :created, reason: :direct_triggered}),
+    do: "Deployed directly"
+
+  defp event_description(%{event: :created, reason: :direct_override}),
+    do: "Deployed directly — policy overridden"
 
   defp refresh_deployment(socket, sid) do
     case Orchestration.get_deployment_sid(sid) do

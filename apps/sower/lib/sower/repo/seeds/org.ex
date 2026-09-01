@@ -48,6 +48,15 @@ defmodule Sower.Repo.Seeds.Org do
             },
             %{
               "role" => "garden:register"
+            },
+            %{
+              "role" => "deployment:read"
+            },
+            %{
+              "role" => "deployment:write"
+            },
+            %{
+              "role" => "deployment:override"
             }
           ],
           "user_id" => user.id,

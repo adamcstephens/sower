@@ -34,6 +34,9 @@ defmodule Sower.Orchestration.Garden do
     field :org_id, Ecto.UUID
     field :oauth_client_id, :string
     field :version, :string
+    field :timezone, :string
+
+    embeds_many :policy, Sower.Orchestration.Subscription.PolicyRule, on_replace: :delete
 
     has_many :subscriptions, Sower.Orchestration.Subscription
     has_many :deployments, Sower.Orchestration.Deployment
@@ -47,7 +50,8 @@ defmodule Sower.Orchestration.Garden do
   @doc false
   def changeset(garden, attrs) do
     garden
-    |> cast(attrs, [:name, :org_id, :oauth_client_id, :version])
+    |> cast(attrs, [:name, :org_id, :oauth_client_id, :version, :timezone])
+    |> cast_embed(:policy, with: &Sower.Orchestration.Subscription.PolicyRule.changeset/2)
     |> validate_required([:name])
   end
 
@@ -98,6 +102,25 @@ defmodule Sower.Orchestration.Garden do
 
   def get_garden_sid(sid), do: Repo.get_by(__MODULE__, sid: sid)
 
+  @doc """
+  Resolve a garden from an operator-supplied identifier: either a `grdn_` sid
+  or a name. Names are not unique, so an ambiguous name is an error.
+  """
+  def resolve("grdn_" <> _ = sid) do
+    case get_garden_sid(sid) do
+      nil -> {:error, :garden_not_found}
+      garden -> {:ok, garden}
+    end
+  end
+
+  def resolve(name) when is_binary(name) do
+    case Repo.all(from(g in __MODULE__, where: g.name == ^name, limit: 2)) do
+      [] -> {:error, :garden_not_found}
+      [garden] -> {:ok, garden}
+      _ -> {:error, :ambiguous_garden}
+    end
+  end
+
   def get_by_oauth_client_id(client_id),
     do: Repo.get_by(__MODULE__, [oauth_client_id: client_id], skip_org_id: true)
 
@@ -132,7 +155,13 @@ defmodule Sower.Orchestration.Garden do
         %__MODULE__{} = garden,
         %SowerClient.Orchestration.GardenReport{} = report
       ) do
-    case update_garden(garden, %{version: report.version}) do
+    attrs = %{
+      version: report.version,
+      timezone: report.timezone,
+      policy: policy_to_list(report.policy)
+    }
+
+    case update_garden(garden, attrs) do
       {:ok, updated} = result ->
         GardenPubSub.broadcast_garden_change(updated, :updated)
         result
@@ -140,6 +169,12 @@ defmodule Sower.Orchestration.Garden do
       other ->
         other
     end
+  end
+
+  defp policy_to_list(nil), do: []
+
+  defp policy_to_list(policy) when is_map(policy) do
+    Enum.map(policy, fn {name, rule} -> Map.put(rule, :name, name) end)
   end
 
   defp delete_existing_client(%__MODULE__{oauth_client_id: nil}), do: :ok

@@ -81,6 +81,8 @@ defmodule Garden.Deployer do
     report_seed_status_fun =
       Keyword.get(opts, :report_seed_status_fun, &report_seed_status/3)
 
+    garden_config_fun = Keyword.get(opts, :garden_config_fun, &Garden.Config.get/0)
+
     async_stream_fun.(deployment.seed_deployments, fn %{seed: seed} = seed_deploy ->
       Logger.debug(
         msg: "Realizing seed",
@@ -97,14 +99,7 @@ defmodule Garden.Deployer do
     |> async_stream_fun.(fn
       {:ok, {downloading_line, {:ok, %SeedDeployment{seed: seed} = seed_deploy, download_output}}} ->
         subscription = find_subscription_fun.(seed_deploy.subscription_sid) || %Subscription{}
-
-        action =
-          Policy.highest_permitted_action(
-            subscription.policy,
-            DateTime.utc_now(),
-            subscription.seed_type,
-            subscription.timezone
-          )
+        action = resolve_action(seed_deploy, subscription, garden_config_fun)
 
         mode = action_to_mode(action, seed.seed_type)
 
@@ -254,6 +249,37 @@ defmodule Garden.Deployer do
       # 5 minutes
       timeout: 5 * 60_000
     )
+  end
+
+  # The server proposes an action for deployments it authorized itself (direct
+  # pushes); the garden clamps it to what its own policy permits right now.
+  defp resolve_action(
+         %SeedDeployment{action: nil} = _seed_deploy,
+         %Subscription{} = subscription,
+         _config_fun
+       ) do
+    Policy.highest_permitted_action(
+      subscription.policy,
+      DateTime.utc_now(),
+      subscription.seed_type,
+      subscription.timezone
+    )
+  end
+
+  defp resolve_action(%SeedDeployment{} = seed_deploy, %Subscription{}, config_fun) do
+    config = config_fun.()
+
+    permitted =
+      Policy.highest_permitted_action(
+        config.policy,
+        DateTime.utc_now(),
+        seed_deploy.seed.seed_type,
+        config.timezone
+      )
+
+    # An unclamped nil would fall through to the "switch" default; a wire action
+    # the local policy will not honour right now must stage instead.
+    Policy.clamp_action(seed_deploy.action, permitted) || :stage
   end
 
   defp find_subscription(sid) do

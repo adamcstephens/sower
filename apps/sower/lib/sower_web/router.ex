@@ -124,6 +124,9 @@ defmodule SowerWeb.Router do
     get "/seeds/latest", SeedController, :latest
     get "/seeds/:sid", SeedController, :get
     post "/seeds", SeedController, :create
+
+    get "/deployments/:sid", DeploymentController, :get
+    post "/deployments", DeploymentController, :create
   end
 
   if Mix.env() in [:dev, :test] do

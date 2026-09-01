@@ -324,6 +324,38 @@ defmodule SowerClient.ConfigTest do
       assert Map.has_key?(sub.policy, "weekend_reboot")
       assert sub.policy["weekday_activate"].actions == ["activate"]
     end
+
+    test "casts garden-level policy and timezone" do
+      tmp_dir = System.tmp_dir!()
+      config_file = Path.join(tmp_dir, "garden_policy_config_#{:rand.uniform(1000)}.json")
+
+      config_data = %{
+        "endpoint" => "https://my.sower.dev",
+        "timezone" => "America/Denver",
+        "policy" => %{
+          "direct_push" => %{
+            "actions" => ["activate"],
+            "triggers" => ["direct"]
+          }
+        }
+      }
+
+      File.write!(config_file, Jason.encode!(config_data))
+      on_exit(fn -> File.rm(config_file) end)
+
+      config = Config.load(config_path: config_file)
+
+      assert config.timezone == "America/Denver"
+      assert config.policy["direct_push"].actions == ["activate"]
+      assert config.policy["direct_push"].triggers == ["direct"]
+    end
+
+    test "defaults garden policy to empty, which denies direct deploys" do
+      config = Config.load(skip_config_file: true)
+
+      assert config.policy == %{}
+      assert is_nil(config.timezone)
+    end
   end
 
   # Helper to temporarily set environment variables

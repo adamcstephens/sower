@@ -2,6 +2,168 @@
   "components": {
     "responses": {},
     "schemas": {
+      "DeploymentInfo": {
+        "properties": {
+          "deployed_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "garden_sid": {
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "result": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "seeds": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DeploymentSeedInfo"
+            },
+            "type": "array",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "sid": {
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "skipped": {
+            "default": false,
+            "description": "The request matched an existing deployment and no new one was created",
+            "type": "boolean",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "state": {
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          }
+        },
+        "required": [
+          "sid",
+          "garden_sid",
+          "state"
+        ],
+        "title": "DeploymentInfo",
+        "type": "object",
+        "x-struct": "Elixir.SowerClient.Orchestration.DeploymentInfo",
+        "x-validate": null
+      },
+      "DeploymentSeedInfo": {
+        "properties": {
+          "log": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "name": {
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "result": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "seed_sid": {
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "seed_type": {
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "state": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          }
+        },
+        "required": [
+          "seed_sid",
+          "name",
+          "seed_type"
+        ],
+        "title": "DeploymentSeedInfo",
+        "type": "object",
+        "x-struct": "Elixir.SowerClient.Orchestration.DeploymentInfo.SeedInfo",
+        "x-validate": null
+      },
+      "DirectDeployment": {
+        "properties": {
+          "action": {
+            "description": "Requested action. Required when overriding policy.",
+            "enum": [
+              "stage",
+              "activate",
+              "restart"
+            ],
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "force": {
+            "default": false,
+            "description": "Deploy even when an identical closure was already deployed",
+            "type": "boolean",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "garden": {
+            "description": "Garden sid (grdn_…) or garden name",
+            "example": "grdn_2f8b1c",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "override": {
+            "default": false,
+            "description": "Break glass: bypass the garden's policy. Requires action and reason.",
+            "type": "boolean",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "reason": {
+            "description": "Why policy is being bypassed. Recorded in the audit trail.",
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "seed": {
+            "description": "Seed sid to deploy",
+            "example": "seed_9a3d21",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          }
+        },
+        "required": [
+          "garden",
+          "seed"
+        ],
+        "title": "DirectDeployment",
+        "type": "object",
+        "x-struct": "Elixir.SowerClient.Orchestration.DirectDeployment",
+        "x-validate": null
+      },
       "GardenRegistration": {
         "description": "HTTP registration request for a new garden",
         "properties": {
@@ -241,7 +403,7 @@
   },
   "info": {
     "title": "sower",
-    "version": "0.10.0-rc0"
+    "version": "0.11.0-dev"
   },
   "openapi": "3.0.0",
   "paths": {
@@ -283,6 +445,205 @@
           }
         },
         "summary": "Verify access token",
+        "tags": []
+      }
+    },
+    "/api/v1/deployments": {
+      "post": {
+        "callbacks": {},
+        "operationId": "NewDeployment",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DirectDeployment"
+              }
+            }
+          },
+          "description": "Direct deployment params",
+          "required": false
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentInfo"
+                }
+              }
+            },
+            "description": "Deployment response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Denied by policy"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Garden or seed not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Ambiguous garden name"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Invalid request"
+          }
+        },
+        "summary": "Deploy a seed directly at a garden",
+        "tags": []
+      }
+    },
+    "/api/v1/deployments/{sid}": {
+      "get": {
+        "callbacks": {},
+        "operationId": "GetDeployment",
+        "parameters": [
+          {
+            "description": "Deployment SID",
+            "example": "dply_example4ser3adju75d",
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentInfo"
+                }
+              }
+            },
+            "description": "Deployment response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Deployment not found"
+          }
+        },
+        "summary": "Get a deployment",
         "tags": []
       }
     },

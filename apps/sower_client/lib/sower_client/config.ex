@@ -54,12 +54,25 @@ defmodule SowerClient.Config do
         type: :string,
         description: "Directory where state files are written (garden-only)"
       },
+      policy: %Schema{
+        type: :object,
+        additionalProperties: SowerClient.Orchestration.Subscription.Policy,
+        default: %{},
+        description:
+          "Garden-level deployment policy rules keyed by rule name (garden-only). Governs closures pushed directly at this host.",
+        nullable: true
+      },
       subscriptions: %Schema{
         type: :array,
         items: SowerClient.Orchestration.Subscription,
         default: [],
         description:
           "Subscriptions (garden-only). Configured as a map (name -> config), converted to list during loading."
+      },
+      timezone: %Schema{
+        type: :string,
+        description: "IANA timezone used when evaluating garden policy windows (garden-only)",
+        nullable: true
       }
     },
     required: []

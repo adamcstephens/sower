@@ -28,7 +28,49 @@
           <dt class="font-medium">Version:</dt>
           <dd>{@garden.version || "unknown"}</dd>
         </div>
+        <div :if={@garden.timezone} class="flex gap-2">
+          <dt class="font-medium">Timezone:</dt>
+          <dd>{@garden.timezone}</dd>
+        </div>
       </dl>
+    </section>
+
+    <section>
+      <h2 class="text-sm font-semibold text-content mb-4">Policy</h2>
+      <div class="space-y-3">
+        <div
+          :for={rule <- @garden.policy}
+          class="rounded-lg border border-hairline p-3 text-sm"
+        >
+          <div class="flex flex-wrap items-center gap-1.5 mb-1.5">
+            <span :if={rule.name} class="text-xs font-medium text-content">{rule.name}</span>
+            <span
+              :for={action <- rule.actions}
+              class="inline-flex items-center rounded-md bg-info-surface px-2 py-0.5 text-xs font-medium text-info"
+            >
+              {action}
+            </span>
+          </div>
+          <div class="text-content-muted text-xs space-y-0.5">
+            <p :if={rule.triggers}>
+              Triggers: {Enum.join(rule.triggers, ", ")}
+            </p>
+            <p :if={!rule.triggers}>
+              Triggers: any
+            </p>
+            <p :if={rule.window}>
+              Window: {Enum.join(rule.window.days || ["any day"], ", ")}
+              {rule.window.time_start}–{rule.window.time_end}
+            </p>
+            <p :if={rule.confirm} class="text-warn">
+              Requires confirmation
+            </p>
+          </div>
+        </div>
+      </div>
+      <p :if={@garden.policy == []} class="text-sm text-content-muted italic">
+        No policy declared. Direct deployments are denied.
+      </p>
     </section>
 
     <section>

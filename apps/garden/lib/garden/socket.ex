@@ -108,7 +108,13 @@ defmodule Garden.Socket do
 
   @impl Slipstream
   def handle_cast(:report_garden, socket) do
-    report = GardenReport.cast!(%{version: to_string(Application.spec(:garden, :vsn))})
+    config = Garden.Config.get()
+
+    report = %GardenReport{
+      version: to_string(Application.spec(:garden, :vsn)),
+      policy: config.policy || %{},
+      timezone: config.timezone || Scheduler.get_timezone()
+    }
 
     Logger.debug(msg: "Reporting garden facts", version: report.version)
 

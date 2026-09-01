@@ -28,7 +28,10 @@ defmodule Sower.Accounts.AccessToken do
           :"seed:read",
           :"seed:write",
           :"nix-cache:read",
-          :"garden:register"
+          :"garden:register",
+          :"deployment:read",
+          :"deployment:write",
+          :"deployment:override"
         ]
     end
 

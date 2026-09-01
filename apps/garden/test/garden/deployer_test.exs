@@ -420,6 +420,90 @@ defmodule Garden.DeployerTest do
     end
   end
 
+  describe "server-proposed action" do
+    test "honours a wire action the local garden policy permits" do
+      deployment = %Deployment{
+        sid: "dep_wire_restart",
+        seed_deployments: [%{seed_deploy_with_identity("seed_w1") | action: "restart"}]
+      }
+
+      logged_lines =
+        capture_seed_result_lines(deployment,
+          garden_config_fun: fn ->
+            %SowerClient.Config{
+              policy: %{"direct" => %{actions: ["restart"], triggers: ["direct"]}}
+            }
+          end
+        )
+
+      assert Enum.any?(logged_lines, &(&1 =~ "[garden]" and &1 =~ "boot"))
+    end
+
+    test "clamps a wire action the local garden policy will not honour" do
+      deployment = %Deployment{
+        sid: "dep_wire_clamped",
+        seed_deployments: [%{seed_deploy_with_identity("seed_w2") | action: "restart"}]
+      }
+
+      logged_lines =
+        capture_seed_result_lines(deployment,
+          garden_config_fun: fn ->
+            %SowerClient.Config{
+              policy: %{"direct" => %{actions: ["activate"], triggers: ["direct"]}}
+            }
+          end
+        )
+
+      assert Enum.any?(logged_lines, &(&1 =~ "[garden]" and &1 =~ "switch"))
+      refute Enum.any?(logged_lines, &(&1 =~ "boot"))
+    end
+
+    test "stages when the local garden policy permits nothing right now" do
+      deployment = %Deployment{
+        sid: "dep_wire_staged",
+        seed_deployments: [%{seed_deploy_with_identity("seed_w3") | action: "restart"}]
+      }
+
+      logged_lines =
+        capture_seed_result_lines(deployment,
+          garden_config_fun: fn ->
+            %SowerClient.Config{
+              policy: %{
+                "closed" => %{
+                  actions: ["activate"],
+                  triggers: ["direct"],
+                  window: %{days: [], time_start: "00:00", time_end: "23:59"}
+                }
+              }
+            }
+          end
+        )
+
+      assert Enum.any?(logged_lines, &(&1 =~ "[garden]" and &1 =~ "activation not permitted"))
+    end
+
+    test "ignores the garden policy when no wire action is carried" do
+      deployment = %Deployment{
+        sid: "dep_wire_absent",
+        seed_deployments: [seed_deploy_with_identity("seed_w4")]
+      }
+
+      logged_lines =
+        capture_seed_result_lines(deployment,
+          find_subscription_fun: fn _ ->
+            %Subscription{seed_type: "nixos", policy: [%{actions: ["restart"]}]}
+          end,
+          garden_config_fun: fn ->
+            %SowerClient.Config{
+              policy: %{"direct" => %{actions: ["stage"], triggers: ["direct"]}}
+            }
+          end
+        )
+
+      assert Enum.any?(logged_lines, &(&1 =~ "[garden]" and &1 =~ "boot"))
+    end
+  end
+
   defp capture_seed_result_lines(%Deployment{} = deployment, opts \\ []) do
     test_pid = self()
 
@@ -436,6 +520,7 @@ defmodule Garden.DeployerTest do
             {:ok, ["activation output"]}
           end),
         report_seed_status_fun: fn _, _, _ -> :ok end,
+        garden_config_fun: Keyword.get(opts, :garden_config_fun, fn -> %SowerClient.Config{} end),
         report_seed_result_fun: fn _deployment, _seed, _result, output_lines ->
           send(test_pid, {:seed_result_lines, output_lines})
         end

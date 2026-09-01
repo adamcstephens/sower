@@ -73,4 +73,34 @@ defmodule Sower.Authorization.Permissions do
     permit
     |> create(Sower.Orchestration.Garden, org_id: org_id)
   end
+
+  defp check_role_perm(
+         %Permit.Permissions{} = permit,
+         %Sower.Accounts.AccessToken.Permission{role: :"deployment:read"},
+         org_id
+       ) do
+    permit
+    |> read(Sower.Orchestration.Deployment, org_id: org_id)
+  end
+
+  defp check_role_perm(
+         %Permit.Permissions{} = permit,
+         %Sower.Accounts.AccessToken.Permission{role: :"deployment:write"},
+         org_id
+       ) do
+    permit
+    |> create(Sower.Orchestration.Deployment, org_id: org_id)
+    |> read(Sower.Orchestration.Deployment, org_id: org_id)
+    |> update(Sower.Orchestration.Deployment, org_id: org_id)
+    |> delete(Sower.Orchestration.Deployment, org_id: org_id)
+  end
+
+  defp check_role_perm(
+         %Permit.Permissions{} = permit,
+         %Sower.Accounts.AccessToken.Permission{role: :"deployment:override"},
+         org_id
+       ) do
+    permit
+    |> override(Sower.Orchestration.Deployment, org_id: org_id)
+  end
 end

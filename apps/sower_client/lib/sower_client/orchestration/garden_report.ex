@@ -13,6 +13,19 @@ defmodule SowerClient.Orchestration.GardenReport do
       version: %Schema{
         type: :string,
         description: "Software version the garden is running"
+      },
+      policy: %Schema{
+        type: :object,
+        additionalProperties: SowerClient.Orchestration.Subscription.Policy,
+        default: %{},
+        description:
+          "Garden-level deployment policy rules keyed by rule name, as declared in the garden's own config",
+        nullable: true
+      },
+      timezone: %Schema{
+        type: :string,
+        description: "IANA timezone used when evaluating garden policy windows",
+        nullable: true
       }
     },
     required: [:version]

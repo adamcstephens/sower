@@ -5,7 +5,8 @@ defmodule Sower.Authorization.Actions do
   def grouping_schema do
     crud_grouping()
     |> Map.merge(%{
-      submit: []
+      submit: [],
+      override: []
     })
   end
 end

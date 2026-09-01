@@ -6,7 +6,7 @@ defmodule SowerClient.Orchestration.Subscription.Policy do
   alias SowerClient.Orchestration.Subscription.Window
 
   @actions ["stage", "activate", "restart"]
-  @triggers ["manual", "scheduled", "realtime", "poll_on_connect"]
+  @triggers ["manual", "scheduled", "realtime", "poll_on_connect", "direct"]
 
   @actions_by_seed_type %{
     "nixos" => ["stage", "activate", "restart"],
@@ -114,6 +114,24 @@ defmodule SowerClient.Orchestration.Subscription.Policy do
   end
 
   @doc """
+  Clamp a proposed action to a locally permitted one, keeping whichever is less
+  disruptive. Returns `nil` when either side permits nothing.
+  """
+  def clamp_action(nil, _permitted), do: nil
+  def clamp_action(_proposed, nil), do: nil
+
+  def clamp_action(proposed, permitted) do
+    proposed_rank = Enum.find_index(@disruption_hierarchy, &(&1 == to_string(proposed)))
+    permitted_rank = Enum.find_index(@disruption_hierarchy, &(&1 == to_string(permitted)))
+
+    if proposed_rank && permitted_rank do
+      @disruption_hierarchy
+      |> Enum.at(max(proposed_rank, permitted_rank))
+      |> String.to_existing_atom()
+    end
+  end
+
+  @doc """
   Map an audit reason to a policy trigger.
   """
   def trigger_for_reason(:user_triggered), do: :manual
@@ -121,6 +139,7 @@ defmodule SowerClient.Orchestration.Subscription.Policy do
   def trigger_for_reason(:schedule_triggered), do: :scheduled
   def trigger_for_reason(:realtime_triggered), do: :realtime
   def trigger_for_reason(:poll_on_connect), do: :poll_on_connect
+  def trigger_for_reason(:direct_triggered), do: :direct
 
   @doc """
   Returns true if any policy rule includes the realtime trigger.
