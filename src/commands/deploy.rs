@@ -28,9 +28,10 @@ pub struct DeployArgs {
     #[command(flatten)]
     connection: ConnectionArgs,
 
-    /// Garden to deploy to: sid (grdn_…) or name.
+    /// Garden to deploy to: sid (grdn_…) or name. Defaults to a single-segment
+    /// flake attribute, so `.#myhost` deploys to the garden named `myhost`.
     #[arg(long = "to")]
-    to: String,
+    to: Option<String>,
 
     /// Deploy an already-registered seed. No nix is run.
     #[arg(long, conflicts_with_all = ["flake", "path", "copy_to", "tags"])]
@@ -97,6 +98,7 @@ impl DeployAction {
 
 pub fn run(args: DeployArgs) -> Result<()> {
     validate(&args)?;
+    let garden = resolve_garden(&args)?;
 
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -104,9 +106,9 @@ pub fn run(args: DeployArgs) -> Result<()> {
         .context("build tokio runtime")?;
 
     rt.block_on(async move {
-        let client = args.connection.client()?;
+        let client = args.connection.authenticated_client()?;
         let seed_sid = resolve_seed(&client, &args).await?;
-        deploy(&client, &args, &seed_sid).await
+        deploy(&client, &args, &garden, &seed_sid).await
     })
 }
 
@@ -169,11 +171,27 @@ async fn resolve_seed(client: &Client, args: &DeployArgs) -> Result<String> {
     Ok(sid)
 }
 
-async fn deploy(client: &Client, args: &DeployArgs, seed_sid: &str) -> Result<()> {
+/// The garden a bare `.#myhost` implies. Anything more qualified than a single
+/// attribute names a nix output, not a host, so it infers nothing.
+fn resolve_garden(args: &DeployArgs) -> Result<String> {
+    if let Some(to) = &args.to {
+        return Ok(to.clone());
+    }
+
+    args.flake
+        .as_deref()
+        .and_then(|reference| reference.split_once('#'))
+        .map(|(_, attr)| attr)
+        .filter(|attr| !attr.is_empty() && !attr.contains('.'))
+        .map(str::to_owned)
+        .ok_or_else(|| anyhow!("missing --to: no garden to deploy to"))
+}
+
+async fn deploy(client: &Client, args: &DeployArgs, garden: &str, seed_sid: &str) -> Result<()> {
     let body = types::DirectDeployment {
         action: args.action.map(DeployAction::into_api),
         force: args.force,
-        garden: args.to.clone(),
+        garden: garden.to_owned(),
         override_: args.override_policy,
         reason: args.reason.clone(),
         seed: seed_sid.to_owned(),
@@ -331,6 +349,34 @@ mod tests {
             .map_err(|e| anyhow!(e.to_string()))?;
         validate(&cli.args)?;
         Ok(cli.args)
+    }
+
+    #[test]
+    fn a_bare_flake_attr_names_the_garden() {
+        let args = parse(&[".#myhost"]).unwrap();
+        assert_eq!(resolve_garden(&args).unwrap(), "myhost");
+    }
+
+    #[test]
+    fn to_overrides_the_flake_attr() {
+        let args = parse(&[".#myhost", "--to", "grdn_1"]).unwrap();
+        assert_eq!(resolve_garden(&args).unwrap(), "grdn_1");
+    }
+
+    #[test]
+    fn a_dotted_flake_attr_infers_no_garden() {
+        let args = parse(&[".#nixosConfigurations.myhost.config.system.build.toplevel"]).unwrap();
+        let err = resolve_garden(&args).unwrap_err();
+        assert!(err.to_string().contains("missing --to"), "{err}");
+    }
+
+    #[test]
+    fn path_and_seed_sources_require_to() {
+        let args = parse(&["--path", "/nix/store/x"]).unwrap();
+        assert!(resolve_garden(&args).is_err());
+
+        let args = parse(&["--seed", "seed_1"]).unwrap();
+        assert!(resolve_garden(&args).is_err());
     }
 
     #[test]
