@@ -277,7 +277,7 @@ testers.runNixOSTest {
           # Resolve the admin socket from the garden's client.json
           # (admin_socket). The CLI bounds its own reply wait.
           server.wait_until_succeeds(
-              "sower garden deploy --type nixos"
+              "sower garden trigger --type nixos"
               " --config-file /etc/sower/client.json",
               timeout=30,
           )
@@ -297,20 +297,23 @@ testers.runNixOSTest {
           extract = "python3 -c 'import json,sys; print(json.load(sys.stdin)[\"" + field + "\"])'"
           return server.succeed(api(method, path, body) + " | " + extract).strip()
 
-      with subtest("direct deployment over the API"):
+      deploy = "sower deploy --config-file /etc/sower/client.json --to server"
+
+      with subtest("direct deployment of a registered seed"):
           seed_sid = api_field("GET", "/seeds/latest?name=server&seed_type=nixos", "sid")
+          server.succeed(f"RUST_LOG=debug {deploy} --seed {seed_sid} --force")
 
-          body = '{"garden": "server", "seed": "' + seed_sid + '", "force": true}'
-          deployment_sid = api_field("POST", "/deployments", "sid", body)
+      with subtest("direct deployment of a store path"):
+          server.succeed(f"RUST_LOG=debug {deploy} --path {server_profile} --force")
 
-          check = (
-              "python3 -c 'import json,sys; d = json.load(sys.stdin);"
-              " sys.exit(0 if d[\"result\"] == \"success\" else 1)'"
-          )
-          server.wait_until_succeeds(
-              api("GET", "/deployments/" + deployment_sid) + " | " + check,
-              timeout=60,
-          )
+      with subtest("deploy --no-wait prints a deployment sid"):
+          sid = server.succeed(
+              f"{deploy} --seed {seed_sid} --force --no-wait"
+          ).strip()
+          assert sid.startswith("dply_"), f"unexpected deployment sid {sid}"
+
+      with subtest("deploy rejects an override with no reason"):
+          server.fail(f"{deploy} --seed {seed_sid} --override --action activate")
 
       with subtest("break-glass override requires a reason"):
           body = (
@@ -363,7 +366,7 @@ testers.runNixOSTest {
           # root connects to it explicitly (authorized as uid 0).
           hm_uid = server.succeed("id -u testuser").strip()
           server.wait_until_succeeds(
-              f"sower garden deploy --type home-manager"
+              f"sower garden trigger --type home-manager"
               f" --socket /run/user/{hm_uid}/sower-garden/admin.sock",
               timeout=30,
           )

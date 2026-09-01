@@ -21,6 +21,9 @@ enum Command {
     /// Build derivations from a Nix attribute or flake (forwards to the Elixir build CLI).
     Build(commands::build::BuildArgs),
 
+    /// Build, register and deploy one configuration onto one host.
+    Deploy(commands::deploy::DeployArgs),
+
     /// Manage seeds against a Sower server.
     Seed(commands::seed::SeedArgs),
 
@@ -67,6 +70,10 @@ fn run(command: Command) -> Result<()> {
     match command {
         Command::Activator(args) => commands::activator::run(args),
         Command::Build(args) => commands::build::run(args),
+        Command::Deploy(args) => {
+            init_default_tracing();
+            commands::deploy::run(args)
+        }
         Command::Seed(args) => {
             init_default_tracing();
             commands::seed::run(args)

@@ -53,7 +53,7 @@ pub async fn run(ctx: &Ctx, args: Args) -> Result<()> {
     Ok(())
 }
 
-fn parse_tags(raw: &[String]) -> Result<Vec<types::SeedTag>> {
+pub fn parse_tags(raw: &[String]) -> Result<Vec<types::SeedTag>> {
     raw.iter()
         .map(|s| {
             s.split_once('=')

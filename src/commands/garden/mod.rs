@@ -38,8 +38,9 @@ pub struct GardenArgs {
 
 #[derive(Debug, Subcommand)]
 enum GardenCommand {
-    /// Enqueue a deployment, scoped by seed type or subscription sid.
-    Deploy(DeployArgs),
+    /// Nudge the local garden to deploy what the server already has for it,
+    /// scoped by seed type or subscription sid.
+    Trigger(TriggerArgs),
     /// Request a reload (the same path as a SIGHUP).
     Reload,
     /// Report the running garden version and any inflight deployments.
@@ -50,7 +51,7 @@ enum GardenCommand {
 }
 
 #[derive(Debug, Args)]
-struct DeployArgs {
+struct TriggerArgs {
     /// Scope the deployment to a seed type.
     #[arg(long = "type")]
     seed_type: Option<SeedType>,
@@ -83,15 +84,15 @@ pub fn run(args: GardenArgs) -> Result<()> {
 
 fn build_request_line(id: &str, command: &GardenCommand) -> Result<String> {
     match command {
-        GardenCommand::Deploy(deploy) => {
-            if deploy.seed_type.is_none() && deploy.sid.is_none() {
-                bail!("deploy requires --type or --sid");
+        GardenCommand::Trigger(trigger) => {
+            if trigger.seed_type.is_none() && trigger.sid.is_none() {
+                bail!("trigger requires --type or --sid");
             }
             protocol::deploy_request(
                 id,
-                deploy.seed_type.map(SeedType::as_str),
-                deploy.sid.as_deref(),
-                deploy.force,
+                trigger.seed_type.map(SeedType::as_str),
+                trigger.sid.as_deref(),
+                trigger.force,
             )
         }
         GardenCommand::Reload => protocol::reload_request(id),
@@ -121,8 +122,8 @@ mod tests {
     }
 
     #[test]
-    fn deploy_without_type_or_sid_is_rejected() {
-        let cmd = GardenCommand::Deploy(DeployArgs {
+    fn trigger_without_type_or_sid_is_rejected() {
+        let cmd = GardenCommand::Trigger(TriggerArgs {
             seed_type: None,
             sid: None,
             force: false,
@@ -131,8 +132,8 @@ mod tests {
     }
 
     #[test]
-    fn deploy_by_type_builds_deploy_kind() {
-        let cmd = GardenCommand::Deploy(DeployArgs {
+    fn trigger_by_type_builds_deploy_kind() {
+        let cmd = GardenCommand::Trigger(TriggerArgs {
             seed_type: Some(SeedType::Nixos),
             sid: None,
             force: false,
@@ -143,8 +144,8 @@ mod tests {
     }
 
     #[test]
-    fn deploy_by_sid_builds_deploy_kind() {
-        let cmd = GardenCommand::Deploy(DeployArgs {
+    fn trigger_by_sid_builds_deploy_kind() {
+        let cmd = GardenCommand::Trigger(TriggerArgs {
             seed_type: None,
             sid: Some("abc".to_string()),
             force: true,
