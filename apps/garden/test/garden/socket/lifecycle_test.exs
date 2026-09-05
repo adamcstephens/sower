@@ -271,11 +271,17 @@ defmodule Garden.Socket.LifecycleTest do
   end
 
   describe "should_reload?/2" do
-    test "returns true when no active deployments and pending reload" do
-      assert Lifecycle.should_reload?(%{}, true)
+    test "takes a pending reload when no deployments are active" do
+      take_pending_reload = fn ->
+        send(self(), :reload_taken)
+        true
+      end
+
+      assert Lifecycle.should_reload?(%{}, take_pending_reload)
+      assert_received :reload_taken
     end
 
-    test "returns false when active deployments exist" do
+    test "does not consume a pending reload while a deployment is active" do
       active = %{
         "deploy_1" => %Deployment{
           sid: "deploy_1",
@@ -285,11 +291,17 @@ defmodule Garden.Socket.LifecycleTest do
         }
       }
 
-      refute Lifecycle.should_reload?(active, true)
+      take_pending_reload = fn ->
+        send(self(), :reload_taken)
+        true
+      end
+
+      refute Lifecycle.should_reload?(active, take_pending_reload)
+      refute_received :reload_taken
     end
 
-    test "returns false when no pending reload" do
-      refute Lifecycle.should_reload?(%{}, false)
+    test "returns false when no reload is pending" do
+      refute Lifecycle.should_reload?(%{}, fn -> false end)
     end
   end
 end

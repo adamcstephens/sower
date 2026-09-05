@@ -15,6 +15,13 @@ let
   simple-service = flake.packages.${system}.tests-simple-service;
   gardenPkg = flake.packages.${system}.garden;
   activatorPkg = flake.packages.${system}.activator;
+  delayedActivatorPkg = pkgs.writeShellApplication {
+    name = "sower";
+    text = ''
+      ${pkgs.lib.getExe' pkgs.coreutils "sleep"} 2
+      exec ${pkgs.lib.getExe activatorPkg} "$@"
+    '';
+  };
   serverPkg = flake.packages.${system}.server;
 
   # `sower` on PATH is the Rust CLI wrapped with the Elixir `sower-build` build
@@ -63,7 +70,7 @@ testers.runNixOSTest {
           };
 
           services.sower = {
-            activator.package = activatorPkg;
+            activator.package = delayedActivatorPkg;
 
             garden = {
               enable = true;
@@ -302,6 +309,47 @@ testers.runNixOSTest {
       with subtest("direct deployment of a registered seed"):
           seed_sid = api_field("GET", "/seeds/latest?name=server&seed_type=nixos", "sid")
           server.succeed(f"RUST_LOG=debug {deploy} --seed {seed_sid} --force")
+
+      with subtest("garden restart waits for the deployment that requested it"):
+          pid_before = server.succeed(
+              "systemctl show -p MainPID --value sower-garden.service"
+          ).strip()
+          before = server.succeed("date -u +%s").strip()
+          sower = server.succeed("command -v sower").strip()
+          server.succeed(
+              f"systemd-run --unit=sower-deferred-reload-test"
+              f" {sower} deploy --config-file /etc/sower/client.json"
+              f" --to server --seed {seed_sid} --force"
+          )
+          server.wait_until_succeeds(
+              f"journalctl --no-pager -u sower-garden.service"
+              f" --since=@{before} --grep='Activating seed'",
+              timeout=15,
+          )
+          server.systemctl("reload sower-garden.service")
+          server.wait_until_succeeds(
+              f"journalctl --no-pager -u sower-garden.service"
+              f" --since=@{before} --grep='Received SIGHUP'",
+              timeout=10,
+          )
+          assert (
+              server.succeed(
+                  "systemctl show -p MainPID --value sower-garden.service"
+              ).strip()
+              == pid_before
+          ), "garden restarted before its active deployment completed"
+          server.wait_until_succeeds(
+              f"[ \"$(systemctl show -p MainPID --value sower-garden.service)\""
+              f" != \"{pid_before}\" ]"
+              " && [ \"$(systemctl is-active sower-garden.service)\" = active ]",
+              timeout=30,
+          )
+          assert (
+              server.succeed(
+                  "systemctl show -p Result --value sower-deferred-reload-test.service"
+              ).strip()
+              == "success"
+          )
 
       with subtest("direct deployment of a store path"):
           server.succeed(f"RUST_LOG=debug {deploy} --path {server_profile} --force")

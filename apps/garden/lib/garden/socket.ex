@@ -678,7 +678,7 @@ defmodule Garden.Socket do
   end
 
   def handle_info(:check_pending_reload, socket) do
-    if Lifecycle.should_reload?(socket.assigns.active_deployments, Garden.take_pending_reload()) do
+    if Lifecycle.should_reload?(socket.assigns.active_deployments, &Garden.take_pending_reload/0) do
       reload_garden_service()
     end
 
