@@ -1,5 +1,6 @@
 defmodule Sower.Orchestration.Seed do
   use Sower.Schema
+  use Flop.Schema
 
   import Ecto.Changeset
   import Ecto.Query, only: [from: 2]
@@ -22,8 +23,7 @@ defmodule Sower.Orchestration.Seed do
 
   @derive {Phoenix.Param, key: :sid}
 
-  @derive {
-    Flop.Schema,
+  @flop_options [
     filterable: [:name, :seed_type],
     sortable: [:name, :seed_type, :updated_at],
     default_limit: 20,
@@ -31,7 +31,7 @@ defmodule Sower.Orchestration.Seed do
       order_by: [:updated_at],
       order_directions: [:desc]
     }
-  }
+  ]
 
   @seed_types SowerClient.Seed.seed_types()
 

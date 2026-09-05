@@ -1,5 +1,6 @@
 defmodule Sower.Orchestration.Deployment do
   use Sower.Schema
+  use Flop.Schema
   import Ecto.Changeset
   import Ecto.Query, warn: false
 
@@ -16,8 +17,7 @@ defmodule Sower.Orchestration.Deployment do
   @derive {Jason.Encoder, only: [:sid]}
   @derive {Phoenix.Param, key: :sid}
 
-  @derive {
-    Flop.Schema,
+  @flop_options [
     filterable: [:state, :result, :garden_name],
     sortable: [:state, :result, :deployed_at, :inserted_at],
     default_limit: 20,
@@ -30,7 +30,7 @@ defmodule Sower.Orchestration.Deployment do
         garden_name: [binding: :garden, field: :name, ecto_type: :string]
       ]
     ]
-  }
+  ]
 
   schema "deployments" do
     field :sid, SowerClient.Sid, autogenerate: true

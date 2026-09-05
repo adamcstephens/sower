@@ -141,10 +141,10 @@ defmodule SowerWeb.GardenLive.IndexTest do
       garden_fixture(%{name: "a", version: "2.0"})
       garden_fixture(%{name: "b", version: "1.0"})
 
-      {:ok, view, html} =
+      {:ok, view, _html} =
         live(conn, ~p"/gardens?cols=name,version&order_by[]=version&order_directions[]=asc")
 
-      assert html =~ "2.0"
+      assert has_element?(view, "th", "Version")
 
       view
       |> element("input[phx-value-col=\"version\"]")
@@ -152,7 +152,7 @@ defmodule SowerWeb.GardenLive.IndexTest do
 
       hidden_path = assert_patch(view)
       assert hidden_path =~ "order_by"
-      refute render(view) =~ "2.0"
+      refute has_element?(view, "th", "Version")
 
       view
       |> element("input[phx-value-col=\"version\"]")
@@ -160,7 +160,7 @@ defmodule SowerWeb.GardenLive.IndexTest do
 
       shown_path = assert_patch(view)
       assert shown_path =~ "order_by"
-      assert render(view) =~ "2.0"
+      assert has_element?(view, "th", "Version")
     end
   end
 end
