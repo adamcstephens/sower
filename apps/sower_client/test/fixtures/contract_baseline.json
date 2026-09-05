@@ -81,6 +81,10 @@
   },
   "SeedDeployment": {
     "properties": {
+      "action": {
+        "nullable": true,
+        "type": "string"
+      },
       "seed": {
         "ref": "Seed",
         "type": "object"

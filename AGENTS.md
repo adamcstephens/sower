@@ -13,12 +13,11 @@ If more than one of the rules conflict, ask before implementing.
 ## Definition of done
 - formatting done, `just format`
 - tests pass, `just check-elixir`, `just check-rust`, or `just check-e2e`
+- update patch version, e.g. 0.12.0 -> 0.12.1)
 - code committed with all ticket changes included
   - Prefer no or very short commit body
   - Ticket ID in the body
   - Assisted-By line always included
-- *important* After committing, stop and get user approval for completion.
-- ticket marked complete once approved
 
 ## Code conventions
 

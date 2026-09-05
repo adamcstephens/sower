@@ -140,12 +140,11 @@ openapi-output:
 
 reset: clean bootstrap
 
-set-version: && openapi-output
-    @echo "Current version: $(cat VERSION)"
-    @read -p "New version? " new_version; [ -n "$new_version" ] && echo -n $new_version > VERSION
-    cargo set-version $(cat VERSION)
+set-version VERSION: && openapi-output
+    echo -n {{ VERSION }} > VERSION
+    cargo set-version {{ VERSION }}
 
-release: set-version
+release: release-version
     mix sower.update_contract_baseline
     jj commit -m "release: version $(cat VERSION)"
 
@@ -155,6 +154,10 @@ release-push:
     git tag -a -m v$(cat VERSION) v$(cat VERSION)
     git push --tags
     just release
+
+release-version:
+    @echo "Current version: $(cat VERSION)"
+    @read -p "New version? " new_version; [ -n "$new_version" ] && just set-version $new_version
 
 start: dev-services start-all
 
