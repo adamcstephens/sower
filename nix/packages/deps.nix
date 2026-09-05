@@ -11,6 +11,7 @@
   rustlerPrecompiledOverrides ? { },
   stdenv,
   pkg-config,
+  sqlite,
   vips,
   writeText,
 }:
@@ -959,7 +960,7 @@ let
             name = "lazy_html";
             appConfigPath = ../../config;
 
-            nativeBuildInputs = [
+            buildInputs = [
               lexbor
             ];
 
