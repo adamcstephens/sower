@@ -34,6 +34,14 @@ Good luck, everyone's counting on you.
 - Activator used by the Garden for running limited, specific actions as root, over a systemd initiated socket.
 - CLI for submitting seeds including a full code to submitted builder.
 
+### Table columns
+
+The garden index's Columns menu remembers visibility in localStorage for the current
+browser profile and server origin. Choices are independent per table, not tied to an
+account, and not synchronized between browsers. New columns use their default visibility;
+existing column choices are preserved. Clearing the site's browser storage resets
+the choices. Hidden columns remain loaded and rendered.
+
 ### Gardens
 
 Gardens are an always on client, which have full control over what the seeds from the server can or will do.

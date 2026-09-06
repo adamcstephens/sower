@@ -15,14 +15,19 @@
         >
           <.icon name="hero-view-columns" class="h-5 w-5" />
         </summary>
-        <ul class="absolute right-0 top-full z-50 mt-2 w-48 rounded-lg border border-line bg-surface p-2 shadow-lg">
+        <ul
+          id="garden-column-controls"
+          phx-update="ignore"
+          class="absolute right-0 top-full z-50 mt-2 w-48 rounded-lg border border-line bg-surface p-2 shadow-lg"
+        >
           <li :for={col <- @columns} :if={not col.lockable}>
             <label class="flex items-center gap-2 px-2 py-1 text-sm cursor-pointer hover:bg-surface-hover rounded">
               <input
                 type="checkbox"
-                checked={col.key in @visible_cols}
-                phx-click="toggle_col"
-                phx-value-col={col.key}
+                checked={col.default}
+                data-column-control="gardens"
+                data-column={col.key}
+                data-column-default={to_string(col.default)}
               />
               {col.label}
             </label>
@@ -37,20 +42,27 @@
     rows={@gardens}
     row_click={fn garden -> JS.navigate(~p"/gardens/#{garden}") end}
     meta={@meta}
-    path={@cols_path}
+    path={~p"/gardens"}
     action_hide_on={:sm}
   >
-    <:col :let={garden} :if={:name in @visible_cols} label="Name" field={:name}>
-      {garden.name}
-    </:col>
-    <:col :let={garden} :if={:online in @visible_cols} label="Online">
-      <.online state={garden.sid in Map.keys(@garden_presence)} />
-    </:col>
-    <:col :let={garden} :if={:deploy in @visible_cols} label="Deploy" field={:deploy_result}>
-      <.result result={garden.latest_deployment && garden.latest_deployment.result} />
-    </:col>
-    <:col :let={garden} :if={:version in @visible_cols} label="Version" field={:version}>
-      {garden.version || "—"}
+    <:col
+      :let={garden}
+      :for={col <- @columns}
+      label={col.label}
+      field={col.sort_field}
+      key={col.key}
+      default_visible={col.default}
+    >
+      <%= case col.key do %>
+        <% :name -> %>
+          {garden.name}
+        <% :online -> %>
+          <.online state={garden.sid in Map.keys(@garden_presence)} />
+        <% :deploy -> %>
+          <.result result={garden.latest_deployment && garden.latest_deployment.result} />
+        <% :version -> %>
+          {garden.version || "—"}
+      <% end %>
     </:col>
     <:action :let={garden}>
       <div class="sr-only">
@@ -59,7 +71,7 @@
     </:action>
   </.table>
 
-  <.pagination meta={@meta} path={@cols_path} />
+  <.pagination meta={@meta} path={~p"/gardens"} />
 
   <.modal
     :if={@live_action in [:new, :edit]}

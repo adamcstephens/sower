@@ -11,6 +11,9 @@ defmodule SowerWeb.SowerComponents do
 
   For sortable columns, set `field={:field_name}` on the `:col` slot and provide `meta` and `path`
   on the table. Columns without `field` render plain labels as before.
+
+  Optional `key` values identify browser-selectable columns within the table's `id`.
+  Set `default_visible={false}` for columns hidden until selected.
   """
   attr :id, :string, required: true
   attr :rows, :list, required: true
@@ -24,6 +27,8 @@ defmodule SowerWeb.SowerComponents do
     attr :label, :string
     attr :hide_on, :atom
     attr :field, :atom
+    attr :key, :atom
+    attr :default_visible, :boolean
   end
 
   attr :action_hide_on, :atom, default: nil
@@ -42,11 +47,13 @@ defmodule SowerWeb.SowerComponents do
 
     ~H"""
     <div class="px-4 sm:overflow-visible sm:px-0">
-      <table class={["w-full", @show_header && "mt-11"]}>
+      <table data-column-table={@id} class={["w-full", @show_header && "mt-11"]}>
         <thead :if={@show_header} class="text-sm text-left leading-6 text-content-muted">
           <tr>
             <th
               :for={col <- @col}
+              data-column={col[:key]}
+              data-column-default={to_string(Map.get(col, :default_visible, true))}
               class={[
                 "p-0 pr-6 pb-4 font-normal",
                 hide_on_classes(col[:hide_on])
@@ -81,6 +88,8 @@ defmodule SowerWeb.SowerComponents do
           >
             <td
               :for={{col, i} <- Enum.with_index(@col)}
+              data-column={col[:key]}
+              data-column-default={to_string(Map.get(col, :default_visible, true))}
               phx-click={@row_click && @row_click.(row)}
               class={[
                 "relative p-0",

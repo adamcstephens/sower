@@ -2,6 +2,10 @@
 @import "tailwindcss/components";
 @import "tailwindcss/utilities";
 
+[data-column-table] [data-column-default="false"] {
+  display: none;
+}
+
 @layer base {
   :root {
     --color-canvas: 250 250 250;

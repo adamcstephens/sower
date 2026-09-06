@@ -10,6 +10,58 @@
       {assigns[:page_title] || "Sower"}
     </.live_title>
     <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
+    <script>
+      (() => {
+        const storagePrefix = "sower:table-columns:";
+        const overrides = Object.fromEntries(
+          Object.entries(localStorage)
+            .filter(([key]) => key.startsWith(storagePrefix))
+            .map(([key, value]) => [key.slice(storagePrefix.length), JSON.parse(value)])
+        );
+        const style = document.createElement("style");
+        document.head.appendChild(style);
+
+        const renderRules = () => {
+          style.textContent = Object.entries(overrides).flatMap(([table, columns]) =>
+            Object.entries(columns).map(([column, visible]) =>
+              `[data-column-table="${CSS.escape(table)}"] [data-column="${CSS.escape(column)}"] {
+                display: ${visible ? "table-cell" : "none"};
+              }`
+            )
+          ).join("\n");
+        };
+
+        const syncControl = (control) => {
+          const {columnControl: table, column, columnDefault} = control.dataset;
+          control.checked = overrides[table]?.[column] ?? (columnDefault === "true");
+        };
+
+        const syncControls = (node) => {
+          if (node.nodeType !== Node.ELEMENT_NODE) return;
+          if (node.matches("input[data-column-control]")) syncControl(node);
+          node.querySelectorAll("input[data-column-control]").forEach(syncControl);
+        };
+
+        renderRules();
+
+        new MutationObserver((records) => {
+          for (const record of records) {
+            record.addedNodes.forEach(syncControls);
+          }
+        }).observe(document.documentElement, {childList: true, subtree: true});
+
+        document.addEventListener("change", (event) => {
+          const control = event.target;
+          if (!control.matches("input[data-column-control]")) return;
+          const {columnControl: table, column} = control.dataset;
+          overrides[table] ||= {};
+          overrides[table][column] = control.checked;
+          renderRules();
+          document.querySelectorAll("input[data-column-control]").forEach(syncControl);
+          localStorage.setItem(storagePrefix + table, JSON.stringify(overrides[table]));
+        });
+      })();
+    </script>
     <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
     </script>
   </head>
