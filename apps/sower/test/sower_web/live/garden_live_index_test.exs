@@ -16,6 +16,22 @@ defmodule SowerWeb.GardenLive.IndexTest do
       assert has_element?(live, "th a", "Deploy")
     end
 
+    test "filters Gardens by name", %{conn: conn, user: user} do
+      Sower.Repo.put_org_id(user.org_id)
+      garden_fixture(%{name: "alpha-garden"})
+      garden_fixture(%{name: "beta-garden"})
+
+      {:ok, live, _html} = live(conn, ~p"/gardens")
+
+      html =
+        live
+        |> form("#garden-filter", %{name: "alpha"})
+        |> render_change()
+
+      assert html =~ "alpha-garden"
+      refute html =~ "beta-garden"
+    end
+
     test "sorting by Deploy orders by latest deployment result", %{conn: conn, user: user} do
       Sower.Repo.put_org_id(user.org_id)
 

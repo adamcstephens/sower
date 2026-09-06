@@ -64,6 +64,15 @@ defmodule SowerWeb.GardenLive.Index do
     |> assign(:garden, nil)
   end
 
+  defp filter_value(%Flop.Meta{flop: %Flop{filters: filters}}, field) do
+    case Enum.find(filters, &(&1.field == field)) do
+      %Flop.Filter{value: value} -> value
+      nil -> nil
+    end
+  end
+
+  defp filter_value(_meta, _field), do: nil
+
   @impl Phoenix.LiveView
   def handle_info({SowerWeb.GardenLive.FormComponent, {:saved, _garden}}, socket) do
     case Orchestration.list_gardens_flop(socket.assigns.meta.flop) do
@@ -109,5 +118,20 @@ defmodule SowerWeb.GardenLive.Index do
       {:error, meta} ->
         {:noreply, assign(socket, gardens: [], meta: meta)}
     end
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("filter", params, socket) do
+    filters =
+      case params["name"] do
+        nil -> []
+        "" -> []
+        name -> [%Flop.Filter{field: :name, op: :ilike_and, value: name}]
+      end
+
+    flop = %Flop{filters: filters}
+    path = Flop.Phoenix.build_path(~p"/gardens", flop)
+
+    {:noreply, push_patch(socket, to: path)}
   end
 end

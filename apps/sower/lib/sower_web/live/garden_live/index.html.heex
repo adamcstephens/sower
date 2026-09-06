@@ -37,6 +37,18 @@
     </:actions>
   </.header>
 
+  <form id="garden-filter" phx-change="filter" class="mt-6">
+    <label class="block text-sm font-medium text-content-muted">Name</label>
+    <input
+      type="text"
+      name="name"
+      value={filter_value(@meta, :name)}
+      placeholder="Search by name..."
+      phx-debounce="300"
+      class="mt-1 block w-full rounded-md border-line-strong bg-surface text-content shadow-sm focus:border-accent-link focus:ring-0 sm:text-sm"
+    />
+  </form>
+
   <.table
     id="gardens"
     rows={@gardens}

@@ -14,7 +14,7 @@ defmodule Sower.Orchestration.Garden do
   @derive {Phoenix.Param, key: :sid}
 
   @flop_options [
-    filterable: [],
+    filterable: [:name],
     sortable: [:name, :inserted_at, :version, :deploy_result],
     default_limit: 20,
     default_order: %{
