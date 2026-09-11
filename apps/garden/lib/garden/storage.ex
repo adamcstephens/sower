@@ -64,7 +64,21 @@ defmodule Garden.Storage do
     Logger.debug(msg: "Reading storage", file: file)
     {:ok, bin} = File.read(file)
 
-    raw = :erlang.binary_to_term(bin)
+    raw =
+      try do
+        :erlang.binary_to_term(bin)
+      rescue
+        error in ArgumentError ->
+          Logger.warning(
+            msg: "Resetting corrupt storage to defaults",
+            file: file,
+            error: Exception.message(error)
+          )
+
+          data = default()
+          File.write!(file, :erlang.term_to_binary(data))
+          data
+      end
 
     data =
       raw
