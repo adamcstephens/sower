@@ -8,7 +8,8 @@ defmodule SowerClient do
     "SeedDeployment",
     "Seed",
     "SeedTag",
-    "PresignedUploadReply"
+    "PresignedUploadReply",
+    "PendingDeployment"
   ]
 
   def server_pushed_schema_titles, do: @server_pushed_schema_titles
@@ -39,6 +40,8 @@ defmodule SowerClient do
       SowerClient.Orchestration.Deployment,
       SowerClient.Orchestration.DeploymentResult,
       SowerClient.Orchestration.DeploymentRequest,
+      SowerClient.Orchestration.PendingDeployment,
+      SowerClient.Orchestration.PendingDeploymentsRequest,
       SowerClient.Orchestration.DeploymentStatus,
       SowerClient.Orchestration.DeploymentInfo,
       SowerClient.Orchestration.DeploymentInfo.SeedInfo,

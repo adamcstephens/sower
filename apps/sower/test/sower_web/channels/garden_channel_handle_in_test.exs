@@ -10,6 +10,53 @@ defmodule SowerWeb.GardenChannelHandleInTest do
     end
   end
 
+  describe "deployments:pending" do
+    test "returns seed links for the authenticated garden without deploying" do
+      %{socket: socket, garden: garden} = connect_and_join_garden()
+      seed = seed_fixture()
+
+      subscription_fixture(%{
+        garden_id: garden.id,
+        seed_name: seed.name,
+        seed_type: seed.seed_type
+      })
+
+      other_garden = garden_fixture(%{sid: SowerClient.Sid.generate("grdn")})
+      other_seed = seed_fixture()
+
+      subscription_fixture(%{
+        garden_id: other_garden.id,
+        seed_name: other_seed.name,
+        seed_type: other_seed.seed_type
+      })
+
+      ref = push(socket, "deployments:pending", %{})
+      assert_reply ref, :ok, %{pending_deployments: [pending]}, 1_000
+      assert pending.seed_sid == seed.sid
+      assert pending.seed_url == SowerWeb.Endpoint.url() <> "/seeds/#{seed.sid}"
+      refute_push "deployment", _
+      assert Sower.Repo.aggregate(Sower.Orchestration.Deployment, :count) == 0
+    end
+
+    @tag :capture_log
+    test "rejects pending requests on the lobby channel" do
+      user = user_fixture()
+      Sower.Repo.put_org_id(user.org_id)
+      %{boruta_token: token} = create_garden_with_oauth()
+
+      {:ok, socket} =
+        connect(SowerWeb.GardenSocket, %{},
+          connect_info: %{x_headers: [{"x-auth-token", "boruta:#{token}"}]}
+        )
+
+      {:ok, _reply, socket} =
+        subscribe_and_join(socket, SowerWeb.GardenChannel, "garden:lobby", %{})
+
+      ref = push(socket, "deployments:pending", %{})
+      assert_reply ref, :error, :unauthorized, 1_000
+    end
+  end
+
   describe "deployment:request" do
     test "returns request_id for valid deployment request" do
       %{socket: socket, garden: garden} = connect_and_join_garden()

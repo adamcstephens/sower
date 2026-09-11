@@ -19,6 +19,12 @@ defmodule SowerClient.Admin.StatusReport do
         default: [],
         description: "Sids of deployments currently inflight"
       },
+      pending_deployments: %Schema{
+        type: :array,
+        items: SowerClient.Orchestration.PendingDeployment,
+        nullable: true,
+        description: "Pending seeds, or null when the server could not be checked"
+      },
       credentials_rejected_at: %Schema{
         type: :string,
         nullable: true,

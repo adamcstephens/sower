@@ -16,6 +16,7 @@ defmodule Garden.AdminTest do
       assert report.version == to_string(Application.spec(:garden, :vsn))
       assert report.active_deployments == []
       assert report.credentials_rejected_at == nil
+      assert report.pending_deployments == nil
     end
 
     test "status surfaces a persisted credential rejection" do

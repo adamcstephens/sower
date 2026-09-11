@@ -70,6 +70,9 @@ defmodule Garden.AdminSocketTest do
         Admin.StatusReport.cast!(%{
           version: "9.9.9",
           active_deployments: ["dep-1"],
+          pending_deployments: [
+            %{seed_sid: "seed_pending", seed_url: "https://sower.example/seeds/seed_pending"}
+          ],
           credentials_rejected_at: "2026-08-29T00:00:00Z"
         })
 
@@ -84,6 +87,12 @@ defmodule Garden.AdminSocketTest do
                "status" => %{
                  "version" => "9.9.9",
                  "active_deployments" => ["dep-1"],
+                 "pending_deployments" => [
+                   %{
+                     "seed_sid" => "seed_pending",
+                     "seed_url" => "https://sower.example/seeds/seed_pending"
+                   }
+                 ],
                  "credentials_rejected_at" => "2026-08-29T00:00:00Z"
                }
              }

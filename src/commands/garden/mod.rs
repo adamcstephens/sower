@@ -43,7 +43,7 @@ enum GardenCommand {
     Trigger(TriggerArgs),
     /// Request a reload (the same path as a SIGHUP).
     Reload,
-    /// Report the running garden version and any inflight deployments.
+    /// Report the garden version, active deployments, and linked pending seeds.
     Status,
     /// Discard this garden's identity and enroll a new one. The recovery path
     /// for a garden the server no longer knows.

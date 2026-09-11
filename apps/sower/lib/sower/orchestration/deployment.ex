@@ -384,6 +384,21 @@ defmodule Sower.Orchestration.Deployment do
     Seed.list_matching(subscription.seed_name, subscription.seed_type, tags, limit: limit)
   end
 
+  @doc """
+  Returns the newest matching seeds not skipped by a normal subscription deployment.
+  This only reads deployment state; it does not create, dispatch, or cancel deployments.
+  """
+  def pending_seeds(%Garden{} = garden) do
+    garden
+    |> Subscription.list_subscriptions_for_garden()
+    |> Enum.map(&match_seed/1)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq_by(& &1.id)
+    |> Enum.filter(fn seed ->
+      find_duplicate_deployment(garden.id, compute_content_hash([seed]), false) == :proceed
+    end)
+  end
+
   # Deployment request handling
 
   def deploy_subscription(%Subscription{} = sub, opts \\ []) do

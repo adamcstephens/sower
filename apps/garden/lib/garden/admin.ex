@@ -50,8 +50,8 @@ defmodule Garden.Admin do
   end
 
   @doc """
-  Report the running garden version, any inflight deployments, and whether the
-  garden is waiting on an operator to re-register it.
+  Report the running garden version, inflight and pending deployments, and whether
+  the garden is waiting on an operator to re-register it.
   """
   def status do
     version = to_string(Application.spec(:garden, :vsn))
@@ -61,6 +61,7 @@ defmodule Garden.Admin do
      StatusReport.cast!(%{
        version: version,
        active_deployments: active,
+       pending_deployments: Garden.Socket.pending_deployments(),
        credentials_rejected_at: Garden.Storage.read().credentials_rejected_at
      })}
   end

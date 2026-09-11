@@ -89,6 +89,24 @@ fn write_status<O: Write>(status: &StatusReport, out: &mut O) -> Result<()> {
             status.active_deployments.join(", ")
         )?;
     }
+    match status.pending_deployments.as_deref() {
+        None => writeln!(out, "pending deployments: unknown")?,
+        Some([]) => writeln!(out, "pending deployments: none")?,
+        Some(pending) => {
+            write!(out, "pending deployments: ")?;
+            for (index, deployment) in pending.iter().enumerate() {
+                if index > 0 {
+                    write!(out, ", ")?;
+                }
+                write!(
+                    out,
+                    "\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\",
+                    deployment.seed_url, deployment.seed_sid
+                )?;
+            }
+            writeln!(out)?;
+        }
+    }
     match &status.credentials_rejected_at {
         Some(at) => writeln!(
             out,
@@ -186,26 +204,58 @@ mod tests {
     }
 
     #[test]
-    fn status_frame_is_formatted() {
-        let input = "{\"id\":\"1\",\"kind\":\"ok\",\"status\":{\"version\":\"1.2.3\",\"active_deployments\":[\"a\",\"b\"]}}\n\
-                     {\"id\":\"1\",\"kind\":\"complete\",\"exit_code\":0}\n";
-        let (code, out, _err) = stream(input);
+    fn status_links_each_pending_seed_with_osc8() {
+        let input = concat!(
+            r#"{"kind":"ok","status":{"version":"1.2.3","pending_deployments":["#,
+            r#"{"seed_sid":"seed-a","seed_url":"https://sower.example/seeds/seed-a"},"#,
+            r#"{"seed_sid":"seed-b","seed_url":"https://sower.example/seeds/seed-b"}]}}"#,
+            "\n{\"kind\":\"complete\",\"exit_code\":0}\n"
+        );
+        let (code, out, err) = stream(input);
         assert_eq!(code, 0);
+        assert!(err.is_empty());
+        let pending = out
+            .lines()
+            .find(|line| line.starts_with("pending deployments: "))
+            .unwrap();
         assert_eq!(
-            out,
-            "version: 1.2.3\nactive deployments: a, b\ncredentials: ok\n"
+            pending.as_bytes(),
+            concat!(
+                "pending deployments: ",
+                "\x1b]8;;https://sower.example/seeds/seed-a\x1b\\seed-a\x1b]8;;\x1b\\",
+                ", ",
+                "\x1b]8;;https://sower.example/seeds/seed-b\x1b\\seed-b\x1b]8;;\x1b\\"
+            )
+            .as_bytes()
         );
     }
 
     #[test]
-    fn status_frame_with_no_active_deployments() {
-        let input = "{\"id\":\"1\",\"kind\":\"ok\",\"status\":{\"version\":\"1.2.3\"}}\n\
-                     {\"id\":\"1\",\"kind\":\"complete\",\"exit_code\":0}\n";
-        let (_code, out, _err) = stream(input);
-        assert_eq!(
-            out,
-            "version: 1.2.3\nactive deployments: none\ncredentials: ok\n"
-        );
+    fn status_distinguishes_no_pending_seeds_from_unavailable_status() {
+        for (status, expected) in [
+            (r#"{"version":"1.2.3"}"#, "pending deployments: unknown"),
+            (
+                r#"{"version":"1.2.3","pending_deployments":null}"#,
+                "pending deployments: unknown",
+            ),
+            (
+                r#"{"version":"1.2.3","pending_deployments":[]}"#,
+                "pending deployments: none",
+            ),
+        ] {
+            let input = format!(
+                "{{\"kind\":\"ok\",\"status\":{status}}}\n\
+                 {{\"kind\":\"complete\",\"exit_code\":0}}\n"
+            );
+            let (code, out, err) = stream(&input);
+            assert_eq!(code, 0);
+            assert!(err.is_empty());
+            let pending = out
+                .lines()
+                .find(|line| line.starts_with("pending deployments: "))
+                .unwrap();
+            assert_eq!(pending, expected);
+        }
     }
 
     #[test]

@@ -47,10 +47,23 @@ defmodule SowerWeb.GardenChannelTest do
   end
 
   describe "join/3" do
-    test "joins and assigns garden" do
-      %{socket: socket, garden: garden} = connect_and_join_garden()
+    test "advertises pending deployments when joining the authenticated garden" do
+      user = user_fixture()
+      Sower.Repo.put_org_id(user.org_id)
+      %{garden: garden, boruta_token: token} = create_garden_with_oauth()
 
-      assert socket.assigns.garden.id == garden.id
+      {:ok, socket} =
+        connect(SowerWeb.GardenSocket, %{},
+          connect_info: %{x_headers: [{"x-auth-token", "boruta:#{token}"}]}
+        )
+
+      assert {:ok, %{pending_deployments: true}, _socket} =
+               subscribe_and_join(
+                 socket,
+                 SowerWeb.GardenChannel,
+                 "garden:#{garden.sid}",
+                 %{}
+               )
     end
 
     test "rejects join when garden does not exist" do

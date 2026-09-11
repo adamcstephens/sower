@@ -14,6 +14,7 @@ end
 
 defmodule SowerWeb.GardenChannel do
   use Phoenix.Channel
+  use SowerWeb, :verified_routes
 
   alias Sower.Orchestration
   alias SowerWeb.Presence
@@ -68,7 +69,7 @@ defmodule SowerWeb.GardenChannel do
       {:ok, garden} ->
         send(self(), :track_presence)
         send(self(), :reconcile_deployments)
-        {:ok, %{conn_sid: conn_sid}, assign(socket, :garden, garden)}
+        {:ok, %{conn_sid: conn_sid, pending_deployments: true}, assign(socket, :garden, garden)}
 
       :error ->
         {:error, %{reason: "unauthorized"}}
@@ -107,6 +108,26 @@ defmodule SowerWeb.GardenChannel do
 
       {:error, error} ->
         {:error, error}
+    end
+  end)
+
+  handle_schema(SowerClient.Orchestration.PendingDeploymentsRequest, fn _req, socket ->
+    case socket.assigns do
+      %{garden: %Orchestration.Garden{} = garden} ->
+        pending_deployments =
+          garden
+          |> Orchestration.Deployment.pending_seeds()
+          |> Enum.map(fn seed ->
+            %SowerClient.Orchestration.PendingDeployment{
+              seed_sid: seed.sid,
+              seed_url: url(~p"/seeds/#{seed.sid}")
+            }
+          end)
+
+        {:ok, %{pending_deployments: pending_deployments}}
+
+      _ ->
+        {:error, :unauthorized}
     end
   end)
 

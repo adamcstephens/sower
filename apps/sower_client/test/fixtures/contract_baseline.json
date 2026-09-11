@@ -32,6 +32,20 @@
       "client_id"
     ]
   },
+  "PendingDeployment": {
+    "properties": {
+      "seed_sid": {
+        "type": "string"
+      },
+      "seed_url": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "seed_sid",
+      "seed_url"
+    ]
+  },
   "PresignedUploadReply": {
     "properties": {
       "headers": {

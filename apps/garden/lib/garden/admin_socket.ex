@@ -267,6 +267,7 @@ defmodule Garden.AdminSocket do
     %{
       "version" => status.version,
       "active_deployments" => status.active_deployments,
+      "pending_deployments" => status.pending_deployments,
       "credentials_rejected_at" => status.credentials_rejected_at
     }
   end

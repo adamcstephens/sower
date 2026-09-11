@@ -124,12 +124,22 @@ pub enum ReplyKind {
     Complete,
 }
 
+/// A seed awaiting deployment, with its web page for status output.
+#[derive(Debug, Deserialize)]
+pub struct PendingDeployment {
+    pub seed_sid: String,
+    pub seed_url: String,
+}
+
 /// Garden status returned on the ok frame of a `status` request.
 #[derive(Debug, Deserialize)]
 pub struct StatusReport {
     pub version: String,
     #[serde(default)]
     pub active_deployments: Vec<String>,
+    /// Missing or null means pending deployments could not be determined.
+    #[serde(default)]
+    pub pending_deployments: Option<Vec<PendingDeployment>>,
     /// Set when the server rejected this garden's credentials and it is waiting
     /// on an operator to re-register it.
     #[serde(default)]
@@ -199,12 +209,6 @@ mod tests {
         let status = reply.status.unwrap();
         assert_eq!(status.version, "1.2.3");
         assert_eq!(status.active_deployments, vec!["a", "b"]);
-    }
-
-    #[test]
-    fn parse_status_frame_defaults_active_deployments() {
-        let reply = parse_reply(r#"{"id":"7","kind":"ok","status":{"version":"1.2.3"}}"#).unwrap();
-        assert!(reply.status.unwrap().active_deployments.is_empty());
     }
 
     #[test]

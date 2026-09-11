@@ -35,6 +35,20 @@ defmodule Garden.Socket do
     end
   end
 
+  def pending_deployments do
+    case GenServer.whereis(__MODULE__) do
+      nil ->
+        nil
+
+      _pid ->
+        try do
+          GenServer.call(__MODULE__, :pending_deployments, 2_000)
+        catch
+          :exit, _ -> nil
+        end
+    end
+  end
+
   @doc """
   Discard this garden's identity and enroll a new one.
 
@@ -52,6 +66,21 @@ defmodule Garden.Socket do
   @impl Slipstream
   def handle_call(:active_deployments, _from, socket) do
     {:reply, socket.assigns.active_deployments, socket}
+  end
+
+  def handle_call(:pending_deployments, _from, socket) do
+    pending =
+      if Map.get(socket.assigns, :pending_deployments_supported, false) do
+        with {:ok, ref} <-
+               push_message(socket, %SowerClient.Orchestration.PendingDeploymentsRequest{}),
+             {:ok, %{"pending_deployments" => pending}} <- await_reply(ref, 1_000) do
+          pending
+        else
+          {:error, _reason} -> nil
+        end
+      end
+
+    {:reply, pending, socket}
   end
 
   def handle_call(:reregister, _from, socket) do
@@ -478,14 +507,19 @@ defmodule Garden.Socket do
   end
 
   @impl Slipstream
-  def handle_join("garden:" <> _sid = topic, %{"conn_sid" => conn_sid}, socket) do
+  def handle_join("garden:" <> _sid = topic, %{"conn_sid" => conn_sid} = reply, socket) do
     Logger.info(msg: "Joined channel topic", topic: topic, conn_sid: conn_sid)
 
     cast(:sync_subscriptions)
     cast(:report_seeds)
     cast(:report_garden)
 
-    {:ok, assign(socket, :conn_sid, conn_sid)}
+    socket =
+      socket
+      |> assign(:conn_sid, conn_sid)
+      |> assign(:pending_deployments_supported, Map.get(reply, "pending_deployments", false))
+
+    {:ok, socket}
   end
 
   @impl Slipstream
