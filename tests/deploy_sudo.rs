@@ -12,6 +12,7 @@ static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);
 struct Fixture {
     root: PathBuf,
     artifact: PathBuf,
+    env_binary: PathBuf,
 }
 
 impl Fixture {
@@ -27,7 +28,15 @@ impl Fixture {
         ));
         fs::create_dir(&root).unwrap();
         let artifact = root.join("artifact with spaces");
-        let fixture = Self { root, artifact };
+        let env_binary = std::env::split_paths(&std::env::var_os("PATH").unwrap())
+            .map(|path| path.join("env"))
+            .find(|path| path.is_file())
+            .expect("env executable on PATH");
+        let fixture = Self {
+            root,
+            artifact,
+            env_binary,
+        };
         fs::create_dir(fixture.root.join("bin")).unwrap();
         fs::create_dir(&fixture.artifact).unwrap();
         fs::write(fixture.artifact.join("nixos-version"), "26.05").unwrap();
@@ -59,8 +68,11 @@ while [ "$#" -gt 0 ]; do
 done
 [ "$#" -gt 1 ] || exit 82
 shift
-# OpenSSH joins remote command arguments and lets the remote shell parse them.
-exec sh -c "$*"
+command=$*
+case "$command" in
+    '/usr/bin/env '*) command="env ${command#'/usr/bin/env '}" ;;
+esac
+exec sh -c "$command"
 "#,
         );
         fixture.executable(
@@ -76,6 +88,10 @@ while [ "$#" -gt 0 ]; do
         *) break ;;
     esac
 done
+if [ "$1" = '/usr/bin/env' ]; then
+    shift
+    exec env "$@"
+fi
 exec "$@"
 "#,
         );
@@ -85,7 +101,9 @@ exec "$@"
 set -eu
 IFS= read -r request
 printf '%s\n' "$request" >> "$SOWER_TEST_ROOT/requests"
-cat "$SOWER_TEST_ROOT/response"
+while IFS= read -r line; do
+    printf '%s\n' "$line"
+done < "$SOWER_TEST_ROOT/response"
 exit 0
 "#,
         );
@@ -98,6 +116,11 @@ exit 0
 
     fn executable(&self, name: &str, script: &str) {
         let path = self.root.join("bin").join(name);
+        let script = format!(
+            "#!{} {}",
+            self.env_binary.display(),
+            script.strip_prefix("#!/usr/bin/env ").unwrap(),
+        );
         fs::write(&path, script).unwrap();
         fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
     }
