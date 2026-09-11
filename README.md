@@ -31,8 +31,25 @@ Good luck, everyone's counting on you.
 
 - Server including Phoenix LiveView web interface.
 - Always-on end-system daemon (Garden) with bi-directional communication to the Server over real-time WebSocket connection.
-- Activator used by the Garden for running limited, specific actions as root, over a systemd initiated socket.
-- CLI for submitting seeds including a full code to submitted builder.
+- Activator used by the Garden for running limited, specific actions as root, over a systemd initiated socket; also accepts one-shot activation requests over stdio.
+- CLI for building and submitting seeds, garden-managed deployment, and explicit sudo recovery deployment.
+
+To deploy without a working garden or activator socket, use
+`sower deploy .#worker3 --copy-to ssh://worker3 --sudo`. The CLI copies the closure,
+then runs the target's existing `sower activator` as root over SSH. Sudo prompts
+are passed through to your terminal. If `sower` is absent, the target downloads
+the server-provided static binary from
+`https://<endpoint>/client/bin/<target-system>` using the configured endpoint
+(`--endpoint`, `SOWER_ENDPOINT`, or client config). Binary fallback supports
+`x86_64-linux` and `aarch64-linux` and requires HTTPS and `curl` on the target.
+SSH activation requires Bash and sudo on the target.
+
+`--sudo` supports NixOS (`switch`) and home-manager activation as root, requires
+an `ssh://` or `ssh-ng://` copy destination, and does not use server authentication,
+garden policy, or deployment reporting. It cannot be combined with server-only
+options such as `--seed`, `--to`, `--action`, or `--override`. Activation success
+does not confirm garden health or resolve an already-pending server deployment.
+Without `--sudo`, `--copy-to` remains transfer-only and the garden performs activation.
 
 ### Gardens
 

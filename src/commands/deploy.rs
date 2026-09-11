@@ -2,9 +2,8 @@
 //!
 //! The primitive is `--seed <sid>`, which is pure control plane: register
 //! nothing, build nothing, just ask the server to deploy a seed at a garden.
-//! A flake reference or `--path` are conveniences that build and/or register a
-//! seed first. The CLI never evaluates policy and never decides an outcome —
-//! the server gates and the garden reports.
+//! A flake reference or `--path` builds and/or registers a seed first.
+//! `--sudo` instead copies and activates over SSH without server orchestration.
 
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args, ValueEnum};
@@ -14,8 +13,12 @@ use std::process::Command;
 use std::time::Duration;
 
 use crate::api::{Client, types};
+use crate::commands::activator::protocol::Request;
 use crate::commands::client::ConnectionArgs;
 use crate::commands::seed::{SeedType, parse_tags};
+
+#[path = "deploy/sudo.rs"]
+mod sudo;
 
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
 
@@ -45,6 +48,18 @@ pub struct DeployArgs {
     /// e.g. `ssh://root@host` or `s3://bucket`.
     #[arg(long = "copy-to")]
     copy_to: Option<String>,
+
+    /// Activate as root over SSH with interactive sudo instead of using the garden.
+    /// Requires --copy-to ssh://[user@]host; no server deployment is created.
+    #[arg(
+        long,
+        requires = "copy_to",
+        conflicts_with_all = [
+            "seed", "to", "name", "tags", "action", "force",
+            "override_policy", "reason", "no_wait"
+        ]
+    )]
+    sudo: bool,
 
     /// Seed name. Defaults to the flake attribute or the store path's hostname.
     #[arg(long, short = 'n')]
@@ -98,6 +113,9 @@ impl DeployAction {
 
 pub fn run(args: DeployArgs) -> Result<()> {
     validate(&args)?;
+    if args.sudo {
+        return deploy_sudo(&args);
+    }
     let garden = resolve_garden(&args)?;
 
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -119,14 +137,39 @@ fn validate(args: &DeployArgs) -> Result<()> {
     if args.override_policy && (args.reason.is_none() || args.action.is_none()) {
         bail!("--override requires both --action and --reason");
     }
+    if args.sudo {
+        sudo::validate_target(args.copy_to.as_deref().expect("required by clap"))?;
+        if !matches!(args.seed_type, SeedType::Nixos | SeedType::HomeManager) {
+            bail!("--sudo supports nixos and home-manager activation");
+        }
+    }
     Ok(())
 }
 
-async fn resolve_seed(client: &Client, args: &DeployArgs) -> Result<String> {
-    if let Some(sid) = &args.seed {
-        return Ok(sid.clone());
-    }
+fn deploy_sudo(args: &DeployArgs) -> Result<()> {
+    let endpoint = args.connection.endpoint()?;
+    let (artifact, _) = prepare_artifact(args)?;
+    let request = Request {
+        id: "sudo-deploy".to_owned(),
+        kind: args.seed_type.as_str().to_owned(),
+        path: artifact,
+        mode: "switch".to_owned(),
+        reason: String::new(),
+        seeds: Vec::new(),
+    };
+    tracing::warn!("Sudo deployment bypasses garden policy and server reporting");
+    sudo::run(
+        args.copy_to.as_deref().expect("required by clap"),
+        &serde_json::to_string(&request)?,
+        endpoint.as_deref(),
+    )?;
+    tracing::info!(
+        "Activation succeeded; garden health and pending server deployments are unchanged"
+    );
+    Ok(())
+}
 
+fn prepare_artifact(args: &DeployArgs) -> Result<(String, Option<String>)> {
     let (artifact, inferred_name) = match (&args.path, &args.flake) {
         (Some(path), _) => (store_path(path)?, None),
         (None, Some(flake)) => {
@@ -142,6 +185,15 @@ async fn resolve_seed(client: &Client, args: &DeployArgs) -> Result<String> {
     if let Some(target) = &args.copy_to {
         nix_copy(&artifact, target)?;
     }
+    Ok((artifact, inferred_name))
+}
+
+async fn resolve_seed(client: &Client, args: &DeployArgs) -> Result<String> {
+    if let Some(sid) = &args.seed {
+        return Ok(sid.clone());
+    }
+
+    let (artifact, inferred_name) = prepare_artifact(args)?;
 
     let name = args
         .name
@@ -349,6 +401,13 @@ mod tests {
             .map_err(|e| anyhow!(e.to_string()))?;
         validate(&cli.args)?;
         Ok(cli.args)
+    }
+
+    #[test]
+    fn sudo_deployment_uses_an_explicit_ssh_store_target() {
+        assert!(parse(&[".#worker3", "--copy-to", "ssh://worker3", "--sudo"]).is_ok());
+        assert!(parse(&[".#worker3", "--sudo"]).is_err());
+        assert!(parse(&[".#worker3", "--copy-to", "s3://bucket", "--sudo"]).is_err());
     }
 
     #[test]

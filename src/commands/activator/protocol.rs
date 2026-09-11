@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Request {
     pub id: String,
     #[serde(rename = "type")]
@@ -15,13 +15,13 @@ pub struct Request {
     pub seeds: Vec<SeedRef>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct SeedRef {
     pub name: String,
     pub path: String,
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ResponseType {
     Output,
@@ -29,7 +29,7 @@ pub enum ResponseType {
     Complete,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Response {
     pub id: String,
     #[serde(rename = "type")]

@@ -13,7 +13,7 @@ mod activate;
 mod handler;
 mod log_tee;
 mod peercred;
-mod protocol;
+pub(crate) mod protocol;
 mod services;
 mod time;
 

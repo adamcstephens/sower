@@ -37,6 +37,11 @@ pub struct ConnectionArgs {
 }
 
 impl ConnectionArgs {
+    pub fn endpoint(&self) -> Result<Option<String>> {
+        let file_cfg = config::load(&self.config_file)?;
+        Ok(self.endpoint.clone().or(file_cfg.endpoint))
+    }
+
     /// Merge the config files under the CLI flags, then build an API client.
     pub fn client(&self) -> Result<api::Client> {
         self.build_client(false)
