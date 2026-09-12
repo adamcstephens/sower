@@ -10,8 +10,11 @@ anyhow = "1"
 chrono = { version = "0.4", default-features = false, features = ["serde"] }
 console = "0.16"
 futures = "0.3"
-progenitor-client = "0.14"
-reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
+progenitor-client = "0.15"
+reqwest = { version = "0.13", default-features = false, features = [
+  "json",
+  "rustls",
+] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 rustix = { version = "1.1.4", features = ["fs", "net", "process"] }
@@ -22,7 +25,7 @@ tracing-subscriber = { version = "0.3.23", features = ["fmt", "env-filter"] }
 time = { version = "0.3.47", features = ["formatting"] }
 
 [build-dependencies]
-progenitor = "0.14"
-prettyplease = "0.2"
-syn = "2"
+progenitor = "0.15"
+prettyplease = "0.3"
+syn = "3.0"
 serde_json = "1"
