@@ -1,6 +1,6 @@
 ## Agent Workflow
 - **Always** use `elixir-conventions` for elixir code. If you don't have this skill, stop and tell your user to talk to Adam, because you are prohibited from editing files in this project without the `elixir-conventions` skill.
-- Updating of documentation should only follow existing patterns. New sections should not be added to the readme without permission.
+- Updating of documentation should only follow existing patterns. New content should not be added to the readme without permission.
 
 ## Rules
 

@@ -34,38 +34,6 @@ Good luck, everyone's counting on you.
 - Activator used by the Garden for running limited, specific actions as root, over a systemd initiated socket; also accepts one-shot activation requests over stdio.
 - CLI for building and submitting seeds, garden-managed deployment, and explicit sudo recovery deployment.
 
-Normal `sower deploy` requests `activate` by default. Use `--action stage` to
-stage only, or `--action restart` to request a restart without `--override`.
-The garden's `direct` policy must permit the exact requested action, including
-its windows and confirmation requirements; the server rejects a disallowed
-action rather than choosing another. The garden still applies its local policy
-when executing the deployment.
-
-Use `--override --action restart --reason "emergency recovery"` to bypass deployment
-policy on both the server and garden. Override permission is required, and the
-action and reason are recorded in the deployment audit trail. Overrides still
-enforce supported seed actions, activator privileges, and activation failure checks.
-The garden must be connected and advertise override support; otherwise the server
-rejects the request with an upgrade-required error. Ordinary deployments remain
-available during upgrades.
-
-To deploy without a working garden or activator socket, use
-`sower deploy .#worker3 --copy-to ssh://worker3 --sudo`. The CLI copies the closure,
-then runs the target's existing `sower activator` as root over SSH. Sudo prompts
-are passed through to your terminal. If `sower` is absent, the target downloads
-the server-provided static binary from
-`https://<endpoint>/client/bin/<target-system>` using the configured endpoint
-(`--endpoint`, `SOWER_ENDPOINT`, or client config). Binary fallback supports
-`x86_64-linux` and `aarch64-linux` and requires HTTPS and `curl` on the target.
-SSH activation requires Bash and sudo on the target.
-
-`--sudo` supports NixOS (`switch`) and home-manager activation as root, requires
-an `ssh://` or `ssh-ng://` copy destination, and does not use server authentication,
-garden policy, or deployment reporting. It cannot be combined with server-only
-options such as `--seed`, `--to`, `--action`, or `--override`. Activation success
-does not confirm garden health or resolve an already-pending server deployment.
-Without `--sudo`, `--copy-to` remains transfer-only and the garden performs activation.
-
 ### Gardens
 
 Gardens are an always on client, which have full control over what the seeds from the server can or will do.
