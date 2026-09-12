@@ -867,7 +867,7 @@ let
 
       igniter =
         let
-          version = "0.8.3";
+          version = "0.8.4";
           drv = buildMix {
             inherit version;
             name = "igniter";
@@ -876,7 +876,7 @@ let
             src = fetchHex {
               inherit version;
               pkg = "igniter";
-              sha256 = "afc5e3848d885e680da5c3b65e5e7717555a08cd12305190ff2be76427af39ff";
+              sha256 = "a9b1cbec996ccb100b4f7d8130129b2dd3f18eb4224ac9a0e907e428ca90dbd7";
             };
 
             beamDeps = [
