@@ -61,11 +61,27 @@ defmodule SowerClient.Orchestration.Subscription.Policy do
   Returns `{:allow, action}`, `{:confirm, action}`, or `:deny`.
   """
   def evaluate(rules, trigger, now, seed_type, timezone \\ "Etc/UTC") do
+    evaluate_actions(rules, @disruption_hierarchy, trigger, now, seed_type, timezone)
+  end
+
+  @doc """
+  Evaluate only the requested action against the trigger, time and seed type.
+
+  Unlike `evaluate/5`, this never selects a different action. Confirmation is
+  required only when a matching rule for the requested action requires it.
+
+  Returns `{:allow, action}`, `{:confirm, action}`, or `:deny`.
+  """
+  def evaluate_action(rules, action, trigger, now, seed_type, timezone \\ "Etc/UTC") do
+    evaluate_actions(rules, [to_string(action)], trigger, now, seed_type, timezone)
+  end
+
+  defp evaluate_actions(rules, actions, trigger, now, seed_type, timezone) do
     rules = rules |> normalize_rules() |> effective_rules()
     supported_actions = Map.get(@actions_by_seed_type, seed_type, [])
     warn_unsupported_actions(rules, supported_actions, seed_type)
 
-    @disruption_hierarchy
+    actions
     |> Enum.filter(&(&1 in supported_actions))
     |> Enum.find_value(:deny, fn action ->
       matching_rules =

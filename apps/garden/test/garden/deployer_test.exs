@@ -2,7 +2,6 @@ defmodule Garden.DeployerTest do
   use ExUnit.Case, async: true
 
   import ExUnit.CaptureLog
-  require Logger
 
   alias Garden.Deployer
   alias SowerClient.Orchestration.Deployment
@@ -502,6 +501,175 @@ defmodule Garden.DeployerTest do
 
       assert Enum.any?(logged_lines, &(&1 =~ "[garden]" and &1 =~ "boot"))
     end
+  end
+
+  describe "direct deployment reboot" do
+    test "restarts after boot activation when the subscription forbids restart or is absent" do
+      for subscription <- [
+            %Subscription{seed_type: "nixos", policy: [%{actions: ["activate"]}]},
+            nil
+          ] do
+        assert run_reboot_deployment("restart", ["restart"], subscription) == :success
+        assert_received {:activated, "boot"}
+        assert_received {:rebooted, [reason: "direct_restart"]}
+      end
+    end
+
+    test "explicit restart reboots even when system profile links have not changed" do
+      assert run_reboot_deployment("restart", ["restart"], nil,
+               read_link_fun: fn _ -> {:ok, "/nix/store/current-system"} end
+             ) == :success
+
+      assert_received {:activated, "boot"}
+      assert_received {:rebooted, [reason: "direct_restart"]}
+    end
+
+    test "activate never inherits restart permission from a subscription" do
+      subscription = %Subscription{seed_type: "nixos", policy: [%{actions: ["restart"]}]}
+
+      assert run_reboot_deployment("activate", ["restart"], subscription) == :success
+      assert_received {:activated, "switch"}
+      refute_received {:rebooted, _}
+    end
+
+    test "locally clamped restart cannot reboot through subscription permissions" do
+      subscription = %Subscription{seed_type: "nixos", policy: [%{actions: ["restart"]}]}
+
+      assert run_reboot_deployment("restart", ["activate"], subscription) == :success
+      assert_received {:activated, "switch"}
+      refute_received {:rebooted, _}
+
+      assert run_reboot_deployment("restart", ["stage"], subscription) == :success
+      refute_received {:activated, _}
+      refute_received {:rebooted, _}
+    end
+
+    test "a closed local policy window prevents activation and reboot" do
+      subscription = %Subscription{seed_type: "nixos", policy: [%{actions: ["restart"]}]}
+
+      assert run_reboot_deployment("restart", ["restart"], subscription,
+               garden_config_fun: fn ->
+                 %SowerClient.Config{
+                   policy: %{
+                     "closed" => %{
+                       actions: ["restart"],
+                       window: %{days: [], time_start: "00:00", time_end: "23:59"}
+                     }
+                   }
+                 }
+               end
+             ) == :success
+
+      refute_received {:activated, _}
+      refute_received {:rebooted, _}
+    end
+
+    test "uses the action executed before local policy changes during activation" do
+      policy = start_supervised!({Agent, fn -> ["restart"] end})
+      test_pid = self()
+
+      assert run_reboot_deployment("restart", ["restart"], nil,
+               garden_config_fun: fn ->
+                 %SowerClient.Config{
+                   policy: %{"direct" => %{actions: Agent.get(policy, & &1)}}
+                 }
+               end,
+               activate_seed_fun: fn _seed, mode ->
+                 send(test_pid, {:activated, mode})
+                 Agent.update(policy, fn _ -> ["activate"] end)
+                 {:ok, ["activated"]}
+               end
+             ) == :success
+
+      assert_received {:activated, "boot"}
+      assert_received {:rebooted, [reason: "direct_restart"]}
+    end
+
+    test "failed direct activation or realization skips reboot" do
+      assert run_reboot_deployment("restart", ["restart"], nil,
+               activate_seed_fun: fn _, _ -> {:error, 1, ["failed activation"]} end
+             ) == :failure
+
+      refute_received {:rebooted, _}
+
+      assert run_reboot_deployment("restart", ["restart"], nil,
+               realize_seed_fun: fn sd ->
+                 {:error, :failed_to_realize, sd, ["failed download"]}
+               end
+             ) == :failure
+
+      refute_received {:activated, _}
+      refute_received {:rebooted, _}
+    end
+
+    test "nil action preserves subscription reboot policy and system change detection" do
+      subscription = %Subscription{seed_type: "nixos", policy: [%{actions: ["restart"]}]}
+
+      assert run_reboot_deployment(nil, ["stage"], subscription) == :success
+      assert_received {:activated, "boot"}
+      assert_received {:rebooted, [reason: "system_changed"]}
+
+      assert run_reboot_deployment(nil, ["restart"], subscription,
+               read_link_fun: fn _ -> {:ok, "/nix/store/current-system"} end
+             ) == :success
+
+      assert_received {:activated, "boot"}
+      refute_received {:rebooted, _}
+
+      subscription = %Subscription{seed_type: "nixos", policy: [%{actions: ["activate"]}]}
+      assert run_reboot_deployment(nil, ["restart"], subscription) == :success
+      assert_received {:activated, "switch"}
+      refute_received {:rebooted, _}
+    end
+  end
+
+  defp run_reboot_deployment(action, garden_actions, subscription, opts \\ []) do
+    deployment = %Deployment{
+      sid: "dep_direct_reboot",
+      seed_deployments: [%{seed_deploy_with_identity("seed_direct_reboot") | action: action}]
+    }
+
+    test_pid = self()
+    find_subscription_fun = fn _ -> subscription end
+
+    garden_config_fun =
+      Keyword.get(opts, :garden_config_fun, fn ->
+        %SowerClient.Config{
+          policy: %{"direct" => %{actions: garden_actions, triggers: ["direct"]}}
+        }
+      end)
+
+    Deployer.run_with_opts(deployment,
+      upgrade_opts: [
+        async_stream_fun: fn enumerable, func ->
+          Enum.map(enumerable, fn item -> {:ok, func.(item)} end)
+        end,
+        realize_seed_fun: Keyword.get(opts, :realize_seed_fun, fn sd -> {:ok, sd, []} end),
+        find_subscription_fun: find_subscription_fun,
+        garden_config_fun: garden_config_fun,
+        activate_seed_fun:
+          Keyword.get(opts, :activate_seed_fun, fn _seed, mode ->
+            send(test_pid, {:activated, mode})
+            {:ok, ["activated"]}
+          end),
+        report_seed_status_fun: fn _, _, _ -> :ok end,
+        report_seed_result_fun: fn _, _, _, _ -> :ok end
+      ],
+      reboot_opts: [
+        find_subscription_fun: find_subscription_fun,
+        garden_config_fun: garden_config_fun,
+        read_link_fun:
+          Keyword.get(opts, :read_link_fun, fn
+            "/nix/var/nix/profiles/system" -> {:ok, "/nix/store/new-system"}
+            _ -> {:ok, "/nix/store/current-system"}
+          end),
+        reboot_fun: fn reboot_opts ->
+          send(test_pid, {:rebooted, reboot_opts})
+          {:ok, ["rebooting"]}
+        end,
+        activation_enabled_fun: fn -> true end
+      ]
+    )
   end
 
   defp capture_seed_result_lines(%Deployment{} = deployment, opts \\ []) do

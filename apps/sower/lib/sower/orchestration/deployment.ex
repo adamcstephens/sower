@@ -448,9 +448,10 @@ defmodule Sower.Orchestration.Deployment do
   @doc """
   Deploy a seed straight at a garden, bypassing subscription matching.
 
-  Authorized by the garden's own policy under the `direct` trigger, or by an
-  explicit break-glass override carrying a reason. A subscription matching the
-  seed's name and type is linked when one exists, for history and dedupe only.
+  The requested action defaults to `activate` and is authorized by the garden's
+  own policy under the `direct` trigger, or by an explicit break-glass override
+  carrying an action and reason. A subscription matching the seed's name and
+  type is linked when one exists, for history and dedupe only.
   """
   def deploy_direct(%Garden{} = garden, %Seed{} = seed, opts \\ []) do
     case authorize_direct(garden, seed, opts) do
@@ -507,8 +508,11 @@ defmodule Sower.Orchestration.Deployment do
         {action, _} -> {:ok, action, :direct_override}
       end
     else
-      case Policy.evaluate(
+      action = Keyword.get(opts, :action) || "activate"
+
+      case Policy.evaluate_action(
              garden.policy,
+             action,
              :direct,
              DateTime.utc_now(),
              seed.seed_type,

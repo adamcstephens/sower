@@ -73,7 +73,10 @@ pub struct DeployArgs {
     #[arg(long = "tag")]
     tags: Vec<String>,
 
-    /// Requested action. Required when overriding policy.
+    /// Requested action: stage, activate (default), or restart.
+    /// The garden's direct policy must permit it; restart does not require --override.
+    /// Policy windows and confirmation requirements still apply.
+    /// Required explicitly when overriding policy.
     #[arg(long)]
     action: Option<DeployAction>,
 

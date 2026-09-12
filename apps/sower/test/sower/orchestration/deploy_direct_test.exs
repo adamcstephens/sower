@@ -54,6 +54,118 @@ defmodule Sower.Orchestration.DeployDirectTest do
       assert is_nil(event.note)
     end
 
+    test "defaults to activate when all direct actions are permitted", %{
+      garden: garden,
+      seed: seed
+    } do
+      garden =
+        with_policy(garden, [
+          %{name: "direct", actions: ["stage", "activate", "restart"], triggers: ["direct"]}
+        ])
+
+      assert {:ok, dispatched} = Deployment.deploy_direct(garden, seed)
+      assert [%{action: "activate"}] = dispatched.seed_deployments
+    end
+
+    test "honors explicit stage without upgrading it", %{garden: garden, seed: seed} do
+      garden =
+        with_policy(garden, [
+          %{name: "direct", actions: ["stage", "activate", "restart"], triggers: ["direct"]}
+        ])
+
+      assert {:ok, dispatched} = Deployment.deploy_direct(garden, seed, action: "stage")
+      assert [%{action: "stage"}] = dispatched.seed_deployments
+    end
+
+    test "honors explicit restart without override", %{garden: garden, seed: seed} do
+      garden =
+        with_policy(garden, [
+          %{name: "direct", actions: ["activate", "restart"], triggers: ["direct"]}
+        ])
+
+      assert {:ok, dispatched} =
+               Deployment.deploy_direct(garden, seed, action: "restart", actor_sid: "tok_1")
+
+      assert [%{action: "restart"}] = dispatched.seed_deployments
+
+      deployment = Deployment.get_deployment_sid!(dispatched.sid)
+      assert [%{reason: :direct_triggered}] = events(deployment)
+    end
+
+    test "rejects a disallowed restart instead of downgrading to activate", %{
+      garden: garden,
+      seed: seed
+    } do
+      garden = with_policy(garden, @direct_policy)
+
+      assert {:error, :policy_denied} =
+               Deployment.deploy_direct(garden, seed, action: "restart")
+    end
+
+    test "rejects default activate when only restart is permitted", %{garden: garden, seed: seed} do
+      garden =
+        with_policy(garden, [
+          %{name: "direct", actions: ["restart"], triggers: ["direct"]}
+        ])
+
+      assert {:error, :policy_denied} = Deployment.deploy_direct(garden, seed, action: nil)
+    end
+
+    test "ignores confirmation required for a different action", %{garden: garden, seed: seed} do
+      garden =
+        with_policy(garden, [
+          %{name: "activate", actions: ["activate"], triggers: ["direct"]},
+          %{name: "restart", actions: ["restart"], triggers: ["direct"], confirm: true}
+        ])
+
+      assert {:ok, dispatched} = Deployment.deploy_direct(garden, seed, action: "activate")
+      assert [%{action: "activate"}] = dispatched.seed_deployments
+    end
+
+    test "requires requested action confirmation even when another action is allowed", %{
+      garden: garden,
+      seed: seed
+    } do
+      garden =
+        with_policy(garden, [
+          %{name: "activate", actions: ["activate"], triggers: ["direct"], confirm: true},
+          %{name: "restart", actions: ["restart"], triggers: ["direct"]}
+        ])
+
+      assert {:error, :confirmation_required} =
+               Deployment.deploy_direct(garden, seed, action: "activate")
+    end
+
+    test "rejects restart outside its window even when activate is allowed", %{
+      garden: garden,
+      seed: seed
+    } do
+      garden =
+        with_policy(garden, [
+          %{name: "activate", actions: ["activate"], triggers: ["direct"]},
+          %{
+            name: "restart",
+            actions: ["restart"],
+            triggers: ["direct"],
+            window: %{days: [], time_start: "00:00", time_end: "23:59"}
+          }
+        ])
+
+      assert {:error, :policy_denied} =
+               Deployment.deploy_direct(garden, seed, action: "restart")
+    end
+
+    test "rejects restart allowed only under a different trigger", %{garden: garden, seed: seed} do
+      garden =
+        with_policy(garden, [
+          %{name: "activate", actions: ["activate"], triggers: ["direct"]},
+          %{name: "restart", actions: ["restart"], triggers: ["manual"]}
+        ])
+
+      assert {:error, :policy_denied} =
+               Deployment.deploy_direct(garden, seed, action: "restart")
+    end
+
     test "denies outside the policy window", %{garden: garden, seed: seed} do
       # A window that never contains "now" on the day it is evaluated is hard to
       # express, so pin the days to the one that isn't today.

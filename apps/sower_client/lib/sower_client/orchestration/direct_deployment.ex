@@ -21,7 +21,11 @@ defmodule SowerClient.Orchestration.DirectDeployment do
       action: %Schema{
         type: :string,
         enum: SowerClient.Orchestration.Subscription.Policy.actions(),
-        description: "Requested action. Required when overriding policy.",
+        description:
+          "Requested action: stage, activate, or restart. Defaults to activate unless overriding. " <>
+            "The exact action must be permitted by the garden's direct policy, including windows " <>
+            "and confirmation requirements; restart does not require override. " <>
+            "Required explicitly when overriding policy.",
         nullable: true
       },
       force: %Schema{

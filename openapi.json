@@ -108,7 +108,7 @@
       "DirectDeployment": {
         "properties": {
           "action": {
-            "description": "Requested action. Required when overriding policy.",
+            "description": "Requested action: stage, activate, or restart. Defaults to activate unless overriding. The exact action must be permitted by the garden's direct policy, including windows and confirmation requirements; restart does not require override. Required explicitly when overriding policy.",
             "enum": [
               "stage",
               "activate",
@@ -403,7 +403,7 @@
   },
   "info": {
     "title": "sower",
-    "version": "0.12.5"
+    "version": "0.12.7"
   },
   "openapi": "3.0.0",
   "paths": {

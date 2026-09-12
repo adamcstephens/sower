@@ -34,6 +34,13 @@ Good luck, everyone's counting on you.
 - Activator used by the Garden for running limited, specific actions as root, over a systemd initiated socket; also accepts one-shot activation requests over stdio.
 - CLI for building and submitting seeds, garden-managed deployment, and explicit sudo recovery deployment.
 
+Normal `sower deploy` requests `activate` by default. Use `--action stage` to
+stage only, or `--action restart` to request a restart without `--override`.
+The garden's `direct` policy must permit the exact requested action, including
+its windows and confirmation requirements; the server rejects a disallowed
+action rather than choosing another. The garden still applies its local policy
+when executing the deployment.
+
 To deploy without a working garden or activator socket, use
 `sower deploy .#worker3 --copy-to ssh://worker3 --sudo`. The CLI copies the closure,
 then runs the target's existing `sower activator` as root over SSH. Sudo prompts

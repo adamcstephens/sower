@@ -124,6 +124,49 @@ defmodule SowerWeb.Api.DeploymentControllerTest do
       assert %{"error" => "policy_denied"} = json_response(conn, 403)
     end
 
+    test "403 when requested restart is not allowed instead of deploying activate", %{
+      conn: conn,
+      user: user,
+      garden: garden,
+      seed: seed
+    } do
+      allow_direct(garden)
+
+      conn =
+        conn
+        |> authed(user, ["deployment:write"])
+        |> post(~p"/api/v1/deployments", %{
+          "garden" => garden.sid,
+          "seed" => seed.sid,
+          "action" => "restart"
+        })
+
+      assert %{"error" => "policy_denied"} = json_response(conn, 403)
+    end
+
+    test "permits explicit restart with deployment:write and no override scope", %{
+      conn: conn,
+      user: user,
+      garden: garden,
+      seed: seed
+    } do
+      {:ok, _garden} =
+        Garden.update_garden(garden, %{
+          policy: [%{name: "direct", actions: ["restart"], triggers: ["direct"]}]
+        })
+
+      conn =
+        conn
+        |> authed(user, ["deployment:write"])
+        |> post(~p"/api/v1/deployments", %{
+          "garden" => garden.sid,
+          "seed" => seed.sid,
+          "action" => "restart"
+        })
+
+      assert %{"sid" => _} = json_response(conn, 201)
+    end
+
     test "401 without deployment:write", %{conn: conn, user: user, garden: garden, seed: seed} do
       allow_direct(garden)
 
