@@ -623,10 +623,108 @@ defmodule Garden.DeployerTest do
     end
   end
 
+  describe "authorized direct override" do
+    test "restart bypasses a closed local policy and reboots after boot activation" do
+      assert run_reboot_deployment("restart", ["stage"], nil,
+               override: true,
+               garden_config_fun: fn ->
+                 %SowerClient.Config{
+                   policy: %{
+                     "closed" => %{
+                       actions: ["restart"],
+                       window: %{days: [], time_start: "00:00", time_end: "23:59"}
+                     }
+                   }
+                 }
+               end,
+               read_link_fun: fn _ -> {:ok, "/nix/store/current-system"} end
+             ) == :success
+
+      assert_received {:activated, "boot"}
+      assert_received {:rebooted, [reason: "direct_restart"]}
+    end
+
+    test "activate bypasses local denial without inheriting subscription restart" do
+      subscription = %Subscription{seed_type: "nixos", policy: [%{actions: ["restart"]}]}
+
+      assert run_reboot_deployment("activate", ["stage"], subscription, override: true) ==
+               :success
+
+      assert_received {:activated, "switch"}
+      refute_received {:rebooted, _}
+    end
+
+    test "false override continues to clamp ordinary direct actions" do
+      assert run_reboot_deployment("restart", ["activate"], nil, override: false) == :success
+      assert_received {:activated, "switch"}
+      refute_received {:rebooted, _}
+
+      assert run_reboot_deployment("activate", ["stage"], nil, override: false) == :success
+      refute_received {:activated, _}
+      refute_received {:rebooted, _}
+    end
+
+    test "nil action retains subscription policy and conditional reboot despite override" do
+      subscription = %Subscription{seed_type: "nixos", policy: [%{actions: ["restart"]}]}
+
+      assert run_reboot_deployment(nil, ["stage"], subscription, override: true) == :success
+      assert_received {:activated, "boot"}
+      assert_received {:rebooted, [reason: "system_changed"]}
+
+      assert run_reboot_deployment(nil, ["stage"], subscription,
+               override: true,
+               read_link_fun: fn _ -> {:ok, "/nix/store/current-system"} end
+             ) == :success
+
+      assert_received {:activated, "boot"}
+      refute_received {:rebooted, _}
+
+      subscription = %Subscription{seed_type: "nixos", policy: [%{actions: ["stage"]}]}
+
+      assert run_reboot_deployment(nil, ["restart"], subscription, override: true) == :success
+      refute_received {:activated, _}
+      refute_received {:rebooted, _}
+    end
+
+    test "activation failure prevents an override restart from rebooting" do
+      test_pid = self()
+
+      assert run_reboot_deployment("restart", ["stage"], nil,
+               override: true,
+               activate_seed_fun: fn _seed, mode ->
+                 send(test_pid, {:activated, mode})
+                 {:error, 1, ["activation denied"]}
+               end
+             ) == :failure
+
+      assert_received {:activated, "boot"}
+      refute_received {:rebooted, _}
+    end
+
+    test "override cannot execute an action unsupported by the seed type" do
+      assert run_reboot_deployment("restart", ["stage"], nil,
+               override: true,
+               seed_type: "home-manager"
+             ) == :failure
+
+      refute_received {:activated, _}
+      refute_received {:rebooted, _}
+    end
+  end
+
   defp run_reboot_deployment(action, garden_actions, subscription, opts \\ []) do
     deployment = %Deployment{
       sid: "dep_direct_reboot",
-      seed_deployments: [%{seed_deploy_with_identity("seed_direct_reboot") | action: action}]
+      seed_deployments: [
+        %{
+          seed_deploy_with_identity(
+            "seed_direct_reboot",
+            Keyword.get(opts, :seed_type, "nixos")
+          )
+          | action: action,
+            override: Keyword.get(opts, :override, false)
+        }
+      ]
     }
 
     test_pid = self()

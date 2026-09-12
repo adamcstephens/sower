@@ -1611,7 +1611,7 @@ dependencies = [
 
 [[package]]
 name = "sower"
-version = "0.12.7"
+version = "0.12.8"
 dependencies = [
  "anyhow",
  "chrono",

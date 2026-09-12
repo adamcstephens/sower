@@ -23,7 +23,8 @@ defmodule SowerWeb.Api.DeploymentController do
     request_body: {"Direct deployment params", "application/json", DirectDeployment},
     responses: %{
       created: {"Deployment response", "application/json", DeploymentInfo},
-      conflict: {"Ambiguous garden name", "application/json", @error_schema},
+      conflict:
+        {"Ambiguous garden name or garden upgrade required", "application/json", @error_schema},
       forbidden: {"Denied by policy", "application/json", @error_schema},
       not_found: {"Garden or seed not found", "application/json", @error_schema},
       unprocessable_entity: {"Invalid request", "application/json", @error_schema},
@@ -112,6 +113,15 @@ defmodule SowerWeb.Api.DeploymentController do
     conn |> put_status(409) |> render(:error, error: "garden name is ambiguous, use the sid")
   end
 
+  defp render_error(conn, :garden_upgrade_required) do
+    conn
+    |> put_status(409)
+    |> render(:error,
+      error:
+        "garden upgrade required for direct override; upgrade and reconnect all garden connections"
+    )
+  end
+
   defp render_error(conn, reason) when reason in [:garden_not_found, :seed_not_found] do
     conn |> put_status(404) |> render(:error, error: to_string(reason))
   end
@@ -122,7 +132,7 @@ defmodule SowerWeb.Api.DeploymentController do
   end
 
   defp render_error(conn, reason)
-       when reason in [:override_action_required, :override_reason_required] do
+       when reason in [:override_action_required, :override_reason_required, :unsupported_action] do
     conn |> put_status(422) |> render(:error, error: to_string(reason))
   end
 

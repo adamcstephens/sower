@@ -108,7 +108,7 @@
       "DirectDeployment": {
         "properties": {
           "action": {
-            "description": "Requested action: stage, activate, or restart. Defaults to activate unless overriding. The exact action must be permitted by the garden's direct policy, including windows and confirmation requirements; restart does not require override. Required explicitly when overriding policy.",
+            "description": "Requested action: stage, activate, or restart. Defaults to activate unless overriding. Without override, the exact action must be permitted by the garden's direct policy, including windows and confirmation requirements; restart does not require override. Required explicitly when overriding policy.",
             "enum": [
               "stage",
               "activate",
@@ -135,7 +135,7 @@
           },
           "override": {
             "default": false,
-            "description": "Break glass: bypass the garden's policy. Requires action and reason.",
+            "description": "Break glass: bypass deployment policy on both server and garden. Requires override permission, action, reason, and a connected garden advertising override support. Unsupported gardens are rejected with an upgrade-required error. Seed/action support and activator privileges still apply.",
             "type": "boolean",
             "x-struct": null,
             "x-validate": null
@@ -403,7 +403,7 @@
   },
   "info": {
     "title": "sower",
-    "version": "0.12.7"
+    "version": "0.12.8"
   },
   "openapi": "3.0.0",
   "paths": {
@@ -549,7 +549,7 @@
                 }
               }
             },
-            "description": "Ambiguous garden name"
+            "description": "Ambiguous garden name or garden upgrade required"
           },
           "422": {
             "content": {

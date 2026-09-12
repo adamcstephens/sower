@@ -23,8 +23,8 @@ defmodule SowerClient.Orchestration.DirectDeployment do
         enum: SowerClient.Orchestration.Subscription.Policy.actions(),
         description:
           "Requested action: stage, activate, or restart. Defaults to activate unless overriding. " <>
-            "The exact action must be permitted by the garden's direct policy, including windows " <>
-            "and confirmation requirements; restart does not require override. " <>
+            "Without override, the exact action must be permitted by the garden's direct policy, " <>
+            "including windows and confirmation requirements; restart does not require override. " <>
             "Required explicitly when overriding policy.",
         nullable: true
       },
@@ -35,7 +35,10 @@ defmodule SowerClient.Orchestration.DirectDeployment do
       },
       override: %Schema{
         type: :boolean,
-        description: "Break glass: bypass the garden's policy. Requires action and reason.",
+        description:
+          "Break glass: bypass deployment policy on both server and garden. Requires override permission, " <>
+            "action, reason, and a connected garden advertising override support. Unsupported gardens " <>
+            "are rejected with an upgrade-required error. Seed/action support and activator privileges still apply.",
         default: false
       },
       reason: %Schema{

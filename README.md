@@ -41,6 +41,14 @@ its windows and confirmation requirements; the server rejects a disallowed
 action rather than choosing another. The garden still applies its local policy
 when executing the deployment.
 
+Use `--override --action restart --reason "emergency recovery"` to bypass deployment
+policy on both the server and garden. Override permission is required, and the
+action and reason are recorded in the deployment audit trail. Overrides still
+enforce supported seed actions, activator privileges, and activation failure checks.
+The garden must be connected and advertise override support; otherwise the server
+rejects the request with an upgrade-required error. Ordinary deployments remain
+available during upgrades.
+
 To deploy without a working garden or activator socket, use
 `sower deploy .#worker3 --copy-to ssh://worker3 --sudo`. The CLI copies the closure,
 then runs the target's existing `sower activator` as root over SSH. Sudo prompts

@@ -118,101 +118,122 @@ defmodule Garden.Deployer do
     |> async_stream_fun.(fn
       {:ok, {downloading_line, {:ok, %SeedDeployment{seed: seed} = seed_deploy, download_output}}} ->
         subscription = find_subscription_fun.(seed_deploy.subscription_sid) || %Subscription{}
-        action = resolve_action(seed_deploy, subscription, garden_config_fun)
-
-        mode = action_to_mode(action, seed.seed_type)
 
         preamble =
           [downloading_line | download_output] ++
             [decision_line("realized #{seed.name} (#{seed.seed_type})")]
 
-        result =
-          if mode == nil do
-            Logger.info(
-              msg: "Stage only — skipping activation",
-              name: seed.name,
-              seed_sid: seed.sid,
-              deployment_sid: deployment.sid
-            )
+        with action when is_atom(action) <-
+               resolve_action(seed_deploy, subscription, garden_config_fun) do
+          mode = action_to_mode(action, seed.seed_type)
 
-            preamble =
+          result =
+            if mode == nil do
+              Logger.info(
+                msg: "Stage only — skipping activation",
+                name: seed.name,
+                seed_sid: seed.sid,
+                deployment_sid: deployment.sid
+              )
+
+              preamble =
+                preamble ++
+                  [
+                    decision_line(
+                      "staged #{seed.name} (#{seed.seed_type}), activation not permitted"
+                    )
+                  ]
+
+              report_seed_status_fun.(deployment, seed, :completed)
+              report_seed_result_fun.(deployment, seed, :success, preamble)
+              {:ok, ["staged"]}
+            else
+              preamble =
+                preamble ++
+                  [
+                    decision_line(
+                      "activating #{seed.name} (#{seed.seed_type}) with mode: #{mode}"
+                    )
+                  ]
+
+              Logger.info(
+                msg: "Activating seed",
+                name: seed.name,
+                seed_sid: seed.sid,
+                seed_type: seed.seed_type,
+                artifact: seed.artifact,
+                deployment_sid: deployment.sid,
+                mode: mode
+              )
+
+              report_seed_status_fun.(deployment, seed, :activating)
+              result = activate_seed_fun.(seed, mode)
+
+              case result do
+                {:ok, output} ->
+                  Logger.info(
+                    msg: "Completed activation",
+                    deployment_sid: deployment.sid,
+                    seed_sid: seed.sid
+                  )
+
+                  report_seed_status_fun.(deployment, seed, :completed)
+                  report_seed_result_fun.(deployment, seed, :success, preamble ++ output)
+
+                {:error, _code, output} ->
+                  Logger.error(
+                    msg: "Error during activation",
+                    deployment_sid: deployment.sid,
+                    seed_sid: seed.sid
+                  )
+
+                  report_seed_result_fun.(deployment, seed, :failure, preamble ++ output)
+
+                {:error, reason} when reason in [:activator_unavailable, :cmd_not_found] ->
+                  Logger.error(
+                    msg: "Missing activator during deployment activation",
+                    deployment_sid: deployment.sid,
+                    seed_sid: seed.sid,
+                    reason: inspect(reason)
+                  )
+
+                  report_seed_result_fun.(
+                    deployment,
+                    seed,
+                    :failure,
+                    preamble ++
+                      [
+                        "FATAL: missing activator executable sower-activator; deployment cannot continue"
+                      ]
+                  )
+
+                {:error, _reason} ->
+                  :ok
+              end
+
+              result
+            end
+
+          direct_action =
+            if seed_deploy.action != nil and seed.seed_type in @rebootable_seed_types, do: action
+
+          {:resolved_action, result, direct_action}
+        else
+          {:error, :unsupported_action} = error ->
+            report_seed_result_fun.(
+              deployment,
+              seed,
+              :failure,
               preamble ++
                 [
                   decision_line(
-                    "staged #{seed.name} (#{seed.seed_type}), activation not permitted"
+                    "action #{seed_deploy.action} is not supported for #{seed.seed_type}"
                   )
                 ]
-
-            report_seed_status_fun.(deployment, seed, :completed)
-            report_seed_result_fun.(deployment, seed, :success, preamble)
-            {:ok, ["staged"]}
-          else
-            preamble =
-              preamble ++
-                [decision_line("activating #{seed.name} (#{seed.seed_type}) with mode: #{mode}")]
-
-            Logger.info(
-              msg: "Activating seed",
-              name: seed.name,
-              seed_sid: seed.sid,
-              seed_type: seed.seed_type,
-              artifact: seed.artifact,
-              deployment_sid: deployment.sid,
-              mode: mode
             )
 
-            report_seed_status_fun.(deployment, seed, :activating)
-            result = activate_seed_fun.(seed, mode)
-
-            case result do
-              {:ok, output} ->
-                Logger.info(
-                  msg: "Completed activation",
-                  deployment_sid: deployment.sid,
-                  seed_sid: seed.sid
-                )
-
-                report_seed_status_fun.(deployment, seed, :completed)
-                report_seed_result_fun.(deployment, seed, :success, preamble ++ output)
-
-              {:error, _code, output} ->
-                Logger.error(
-                  msg: "Error during activation",
-                  deployment_sid: deployment.sid,
-                  seed_sid: seed.sid
-                )
-
-                report_seed_result_fun.(deployment, seed, :failure, preamble ++ output)
-
-              {:error, reason} when reason in [:activator_unavailable, :cmd_not_found] ->
-                Logger.error(
-                  msg: "Missing activator during deployment activation",
-                  deployment_sid: deployment.sid,
-                  seed_sid: seed.sid,
-                  reason: inspect(reason)
-                )
-
-                report_seed_result_fun.(
-                  deployment,
-                  seed,
-                  :failure,
-                  preamble ++
-                    [
-                      "FATAL: missing activator executable sower-activator; deployment cannot continue"
-                    ]
-                )
-
-              {:error, _reason} ->
-                :ok
-            end
-
-            result
-          end
-
-        direct_action =
-          if seed_deploy.action != nil and seed.seed_type in @rebootable_seed_types, do: action
-
-        {:resolved_action, result, direct_action}
+            error
+        end
 
       {:ok,
        {downloading_line,
@@ -280,8 +301,8 @@ defmodule Garden.Deployer do
     )
   end
 
-  # The server proposes an action for deployments it authorized itself (direct
-  # pushes); the garden clamps it to what its own policy permits right now.
+  # Nil actions retain subscription policy. Direct actions are locally clamped
+  # unless the server authorized an override of deployment policy.
   defp resolve_action(
          %SeedDeployment{action: nil} = _seed_deploy,
          %Subscription{} = subscription,
@@ -293,6 +314,21 @@ defmodule Garden.Deployer do
       subscription.seed_type,
       subscription.timezone
     )
+  end
+
+  defp resolve_action(
+         %SeedDeployment{override: true} = seed_deploy,
+         %Subscription{},
+         _config_fun
+       ) do
+    action = to_string(seed_deploy.action)
+    supported_actions = Map.get(Policy.actions_by_seed_type(), seed_deploy.seed.seed_type, [])
+
+    if action in supported_actions do
+      String.to_existing_atom(action)
+    else
+      {:error, :unsupported_action}
+    end
   end
 
   defp resolve_action(%SeedDeployment{} = seed_deploy, %Subscription{}, config_fun) do

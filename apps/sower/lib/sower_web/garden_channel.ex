@@ -67,9 +67,15 @@ defmodule SowerWeb.GardenChannel do
 
     case authorize_private_join(topic_sid, params, access_token) do
       {:ok, garden} ->
+        socket =
+          assign(socket,
+            garden: garden,
+            direct_override: Map.get(params, "direct_override") == true
+          )
+
         send(self(), :track_presence)
         send(self(), :reconcile_deployments)
-        {:ok, %{conn_sid: conn_sid, pending_deployments: true}, assign(socket, :garden, garden)}
+        {:ok, %{conn_sid: conn_sid, pending_deployments: true}, socket}
 
       :error ->
         {:error, %{reason: "unauthorized"}}
@@ -177,7 +183,8 @@ defmodule SowerWeb.GardenChannel do
 
     {:ok, _} =
       Presence.track(self(), "garden:presence", socket.assigns.garden.sid, %{
-        online_at: DateTime.utc_now()
+        online_at: DateTime.utc_now(),
+        direct_override: socket.assigns.direct_override
       })
 
     {:noreply, socket}

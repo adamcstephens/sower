@@ -501,7 +501,7 @@ defmodule Garden.Socket do
       |> assign(:conn_sid, conn_sid)
       |> assign(:garden_sid, garden_sid)
       |> maybe_schedule_existing_reauth(storage.oauth_credentials)
-      |> join("garden:#{garden_sid}", %{})
+      |> join("garden:#{garden_sid}", %{direct_override: true})
 
     {:ok, socket}
   end

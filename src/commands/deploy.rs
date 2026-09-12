@@ -74,8 +74,8 @@ pub struct DeployArgs {
     tags: Vec<String>,
 
     /// Requested action: stage, activate (default), or restart.
-    /// The garden's direct policy must permit it; restart does not require --override.
-    /// Policy windows and confirmation requirements still apply.
+    /// Without --override, the garden's direct policy must permit it.
+    /// Restart does not require --override; policy windows and confirmation still apply.
     /// Required explicitly when overriding policy.
     #[arg(long)]
     action: Option<DeployAction>,
@@ -84,7 +84,9 @@ pub struct DeployArgs {
     #[arg(long)]
     force: bool,
 
-    /// Break glass: bypass the garden's policy. Requires --action and --reason.
+    /// Break glass: bypass deployment policy on both server and garden.
+    /// Requires override permission, --action, --reason, and a connected garden
+    /// advertising override support. Older gardens must be upgraded first.
     #[arg(long = "override")]
     override_policy: bool,
 

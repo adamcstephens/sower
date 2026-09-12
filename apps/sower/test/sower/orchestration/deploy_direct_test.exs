@@ -2,6 +2,7 @@ defmodule Sower.Orchestration.DeployDirectTest do
   use Sower.DataCase, async: true
 
   alias Sower.Orchestration.{Deployment, DeploymentEvent, Garden}
+  alias SowerWeb.Presence
 
   import Ecto.Query
   import Sower.AccountsFixtures
@@ -13,8 +14,9 @@ defmodule Sower.Orchestration.DeployDirectTest do
   setup do
     org = organization_fixture()
     Sower.Repo.put_org_id(org.org_id)
-    garden = garden_fixture(%{org_id: org.org_id})
+    garden = garden_fixture(%{org_id: org.org_id, sid: SowerClient.Sid.generate("grdn")})
     seed = seed_fixture(%{org_id: org.org_id, name: "direct-host", seed_type: "nixos"})
+    SowerWeb.Endpoint.subscribe("garden:#{garden.sid}")
 
     %{org: org, garden: garden, seed: seed}
   end
@@ -28,9 +30,16 @@ defmodule Sower.Orchestration.DeployDirectTest do
     Repo.all(from(e in DeploymentEvent, where: e.deployment_id == ^deployment.id))
   end
 
+  defp assert_no_dispatch do
+    assert Repo.aggregate(Deployment, :count) == 0
+    assert Repo.aggregate(DeploymentEvent, :count) == 0
+    refute_receive %Phoenix.Socket.Broadcast{event: "deployment"}
+  end
+
   describe "policy path" do
     test "denies when the garden declares no policy", %{garden: garden, seed: seed} do
       assert {:error, :policy_denied} = Deployment.deploy_direct(garden, seed)
+      assert_no_dispatch()
     end
 
     test "denies when the garden policy omits the direct trigger", %{garden: garden, seed: seed} do
@@ -45,7 +54,7 @@ defmodule Sower.Orchestration.DeployDirectTest do
 
       assert {:ok, dispatched} = Deployment.deploy_direct(garden, seed, actor_sid: "tok_1")
       refute dispatched.skipped
-      assert [%{seed: ^seed, action: "activate"}] = dispatched.seed_deployments
+      assert [%{seed: ^seed, action: "activate", override: false}] = dispatched.seed_deployments
 
       deployment = Deployment.get_deployment_sid!(dispatched.sid)
       assert [event] = events(deployment)
@@ -197,6 +206,14 @@ defmodule Sower.Orchestration.DeployDirectTest do
 
   describe "override path" do
     test "bypasses policy with an action and a reason", %{garden: garden, seed: seed} do
+      {:ok, _ref} =
+        Presence.track(self(), "garden:presence", garden.sid, %{direct_override: true})
+
+      other_connection = start_supervised!({Task, fn -> Process.sleep(:infinity) end})
+
+      {:ok, _ref} =
+        Presence.track(other_connection, "garden:presence", garden.sid, %{direct_override: true})
+
       assert {:ok, dispatched} =
                Deployment.deploy_direct(garden, seed,
                  override: true,
@@ -205,22 +222,178 @@ defmodule Sower.Orchestration.DeployDirectTest do
                  actor_sid: "tok_2"
                )
 
-      assert [%{action: "restart"}] = dispatched.seed_deployments
+      assert [%{action: "restart", override: true}] = dispatched.seed_deployments
+
+      assert_receive %Phoenix.Socket.Broadcast{
+        event: "deployment",
+        payload: %{seed_deployments: [%{action: "restart", override: true}]}
+      }
 
       deployment = Deployment.get_deployment_sid!(dispatched.sid)
       assert [event] = events(deployment)
       assert event.reason == :direct_override
+      assert event.actor_sid == "tok_2"
       assert event.note == "prod incident 42"
     end
 
     test "requires an action", %{garden: garden, seed: seed} do
       assert {:error, :override_action_required} =
                Deployment.deploy_direct(garden, seed, override: true, reason: "why not")
+
+      assert_no_dispatch()
     end
 
     test "requires a reason", %{garden: garden, seed: seed} do
       assert {:error, :override_reason_required} =
                Deployment.deploy_direct(garden, seed, override: true, action: "activate")
+
+      assert_no_dispatch()
+    end
+
+    test "requires a live capable garden before creating or broadcasting", %{
+      garden: garden,
+      seed: seed
+    } do
+      assert {:error, :garden_upgrade_required} =
+               Deployment.deploy_direct(garden, seed,
+                 override: true,
+                 action: "restart",
+                 reason: "break glass",
+                 actor_sid: "tok_2"
+               )
+
+      assert_no_dispatch()
+    end
+
+    for {connection, metadata} <- [
+          {"nonadvertising", %{}},
+          {"legacy", %{direct_override: false}},
+          {"invalid capability", %{direct_override: "true"}}
+        ] do
+      test "rejects overrides on a #{connection} connection but permits ordinary deployment", %{
+        garden: garden,
+        seed: seed
+      } do
+        {:ok, _ref} =
+          Presence.track(
+            self(),
+            "garden:presence",
+            garden.sid,
+            unquote(Macro.escape(metadata))
+          )
+
+        garden = with_policy(garden, @direct_policy)
+
+        assert {:error, :garden_upgrade_required} =
+                 Deployment.deploy_direct(garden, seed,
+                   override: true,
+                   action: "activate",
+                   reason: "break glass",
+                   actor_sid: "tok_2"
+                 )
+
+        assert_no_dispatch()
+        assert {:ok, dispatched} = Deployment.deploy_direct(garden, seed)
+        assert [%{action: "activate", override: false}] = dispatched.seed_deployments
+      end
+    end
+
+    test "rejects mixed capable and legacy connections", %{garden: garden, seed: seed} do
+      {:ok, _ref} =
+        Presence.track(self(), "garden:presence", garden.sid, %{direct_override: true})
+
+      legacy_connection = start_supervised!({Task, fn -> Process.sleep(:infinity) end})
+      {:ok, _ref} = Presence.track(legacy_connection, "garden:presence", garden.sid, %{})
+
+      assert {:error, :garden_upgrade_required} =
+               Deployment.deploy_direct(garden, seed,
+                 override: true,
+                 action: "restart",
+                 reason: "break glass",
+                 actor_sid: "tok_2"
+               )
+
+      assert_no_dispatch()
+    end
+
+    for override? <- [false, true] do
+      test "rejects unsupported seed actions with override=#{override?}", %{garden: garden} do
+        seed = seed_fixture(%{seed_type: "home-manager"})
+
+        garden =
+          with_policy(garden, [
+            %{name: "direct", actions: ["restart"], triggers: ["direct"]}
+          ])
+
+        {:ok, _ref} =
+          Presence.track(self(), "garden:presence", garden.sid, %{direct_override: true})
+
+        assert {:error, :unsupported_action} =
+                 Deployment.deploy_direct(garden, seed,
+                   override: unquote(override?),
+                   action: "restart",
+                   reason: "break glass",
+                   actor_sid: "tok_2"
+                 )
+
+        assert_no_dispatch()
+      end
+    end
+  end
+
+  describe "reconnect replay" do
+    test "defers an override until support returns and preserves its authorized action", %{
+      garden: garden,
+      seed: seed
+    } do
+      {:ok, _ref} =
+        Presence.track(self(), "garden:presence", garden.sid, %{direct_override: true})
+
+      assert {:ok, dispatched} =
+               Deployment.deploy_direct(garden, seed,
+                 override: true,
+                 action: "restart",
+                 reason: "recovery",
+                 actor_sid: "tok_2"
+               )
+
+      sid = dispatched.sid
+      assert_receive %Phoenix.Socket.Broadcast{event: "deployment", payload: %{sid: ^sid}}
+
+      {:ok, _ref} =
+        Presence.update(self(), "garden:presence", garden.sid, %{direct_override: false})
+
+      assert {:ok, %{replayed: []}} = Deployment.reconcile_deployments_on_connect(garden)
+      refute_receive %Phoenix.Socket.Broadcast{event: "deployment"}
+
+      {:ok, _ref} =
+        Presence.update(self(), "garden:presence", garden.sid, %{direct_override: true})
+
+      assert {:ok, %{replayed: [%{sid: ^sid}]}} =
+               Deployment.reconcile_deployments_on_connect(garden)
+
+      assert_receive %Phoenix.Socket.Broadcast{
+        event: "deployment",
+        payload: %{sid: ^sid, seed_deployments: [%{action: "restart", override: true}]}
+      }
+    end
+
+    test "ordinary direct replay preserves its action without requiring override support", %{
+      garden: garden,
+      seed: seed
+    } do
+      garden = with_policy(garden, @direct_policy)
+      assert {:ok, dispatched} = Deployment.deploy_direct(garden, seed)
+      sid = dispatched.sid
+      assert_receive %Phoenix.Socket.Broadcast{event: "deployment", payload: %{sid: ^sid}}
+
+      assert {:ok, %{replayed: [%{sid: ^sid}]}} =
+               Deployment.reconcile_deployments_on_connect(garden)
+
+      assert_receive %Phoenix.Socket.Broadcast{
+        event: "deployment",
+        payload: %{sid: ^sid, seed_deployments: [%{action: "activate", override: false}]}
+      }
     end
   end
 

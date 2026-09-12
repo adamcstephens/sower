@@ -56,6 +56,8 @@ defmodule Sower.Orchestration.Deployment do
     field :last_dispatched_at, :utc_datetime_usec
     field :content_hash, :string
     field :retry_ordinal, :integer
+    field :direct_action, :string
+    field :direct_override, :boolean, default: false
 
     timestamps()
   end
@@ -71,7 +73,9 @@ defmodule Sower.Orchestration.Deployment do
       :garden_id,
       :content_hash,
       :parent_deployment_id,
-      :retry_ordinal
+      :retry_ordinal,
+      :direct_action,
+      :direct_override
     ])
     |> put_assoc(:seeds, Map.get(attrs, :seeds, deployment.seeds))
     |> put_assoc(:subscriptions, Map.get(attrs, :subscriptions, deployment.subscriptions))
@@ -300,6 +304,27 @@ defmodule Sower.Orchestration.Deployment do
       DeploymentEvent.record_event(deployment, :canceled, :superseded, garden.sid)
     end)
 
+    to_replay =
+      Enum.filter(to_replay, fn deployment ->
+        if deployment.direct_override do
+          case authorize_direct_override(garden, deployment.direct_action) do
+            {:ok, _, :direct_override} ->
+              true
+
+            {:error, :garden_upgrade_required} ->
+              Logger.warning(
+                msg: "Deferring override replay until garden supports overrides",
+                garden_sid: garden.sid,
+                deployment_sid: deployment.sid
+              )
+
+              false
+          end
+        else
+          true
+        end
+      end)
+
     # 3. Replay valid unresolved deployments
     mark_deployments_dispatched(to_replay, now)
 
@@ -450,8 +475,10 @@ defmodule Sower.Orchestration.Deployment do
 
   The requested action defaults to `activate` and is authorized by the garden's
   own policy under the `direct` trigger, or by an explicit break-glass override
-  carrying an action and reason. A subscription matching the seed's name and
-  type is linked when one exists, for history and dedupe only.
+  carrying an action and reason. Overrides require every live garden connection
+  to advertise support, and never bypass seed/action compatibility. A subscription
+  matching the seed's name and type is linked when one exists, for history and
+  dedupe only.
   """
   def deploy_direct(%Garden{} = garden, %Seed{} = seed, opts \\ []) do
     case authorize_direct(garden, seed, opts) do
@@ -462,7 +489,8 @@ defmodule Sower.Orchestration.Deployment do
           %SowerClient.Orchestration.SeedDeployment{
             seed: seed,
             subscription_sid: get_in(subscription.sid),
-            action: to_string(action)
+            action: to_string(action),
+            override: event_reason == :direct_override
           }
         ]
 
@@ -470,6 +498,8 @@ defmodule Sower.Orchestration.Deployment do
           opts
           |> Keyword.put(:event_reason, event_reason)
           |> Keyword.put(:note, Keyword.get(opts, :reason))
+          |> Keyword.put(:direct_action, to_string(action))
+          |> Keyword.put(:direct_override, event_reason == :direct_override)
 
         request_id = SowerClient.Sid.generate("req")
 
@@ -501,27 +531,51 @@ defmodule Sower.Orchestration.Deployment do
   defp authorize_direct(%Garden{} = garden, %Seed{} = seed, opts) do
     alias SowerClient.Orchestration.Subscription.Policy
 
-    if Keyword.get(opts, :override, false) do
-      case {Keyword.get(opts, :action), Keyword.get(opts, :reason)} do
-        {nil, _} -> {:error, :override_action_required}
-        {_, nil} -> {:error, :override_reason_required}
-        {action, _} -> {:ok, action, :direct_override}
-      end
-    else
-      action = Keyword.get(opts, :action) || "activate"
+    override? = Keyword.get(opts, :override, false)
+    requested_action = Keyword.get(opts, :action)
+    action = requested_action || "activate"
+    supported_actions = Map.get(Policy.actions_by_seed_type(), seed.seed_type, [])
 
-      case Policy.evaluate_action(
-             garden.policy,
-             action,
-             :direct,
-             DateTime.utc_now(),
-             seed.seed_type,
-             garden.timezone
-           ) do
-        {:allow, action} -> {:ok, action, :direct_triggered}
-        {:confirm, _action} -> {:error, :confirmation_required}
-        :deny -> {:error, :policy_denied}
-      end
+    cond do
+      override? and is_nil(requested_action) ->
+        {:error, :override_action_required}
+
+      override? and is_nil(Keyword.get(opts, :reason)) ->
+        {:error, :override_reason_required}
+
+      to_string(action) not in supported_actions ->
+        {:error, :unsupported_action}
+
+      override? ->
+        authorize_direct_override(garden, action)
+
+      true ->
+        case Policy.evaluate_action(
+               garden.policy,
+               action,
+               :direct,
+               DateTime.utc_now(),
+               seed.seed_type,
+               garden.timezone
+             ) do
+          {:allow, action} -> {:ok, action, :direct_triggered}
+          {:confirm, _action} -> {:error, :confirmation_required}
+          :deny -> {:error, :policy_denied}
+        end
+    end
+  end
+
+  defp authorize_direct_override(%Garden{} = garden, action) do
+    case SowerWeb.Presence.get_by_key("garden:presence", garden.sid) do
+      %{metas: [_ | _] = metas} ->
+        if Enum.all?(metas, &match?(%{direct_override: true}, &1)) do
+          {:ok, action, :direct_override}
+        else
+          {:error, :garden_upgrade_required}
+        end
+
+      _ ->
+        {:error, :garden_upgrade_required}
     end
   end
 
@@ -830,6 +884,8 @@ defmodule Sower.Orchestration.Deployment do
                  content_hash: content_hash,
                  last_dispatched_at: DateTime.utc_now(),
                  state: :dispatched,
+                 direct_action: Keyword.get(opts, :direct_action),
+                 direct_override: Keyword.get(opts, :direct_override, false),
                  seeds: seeds,
                  subscriptions: subscriptions
                }) do
@@ -900,15 +956,15 @@ defmodule Sower.Orchestration.Deployment do
     %SowerClient.Orchestration.Deployment{
       request_id: request_id,
       sid: deployment.sid,
-      seed_deployments: build_seed_deployments(deployment.seeds, deployment.subscriptions),
+      seed_deployments: build_seed_deployments(deployment),
       skipped: false
     }
   end
 
-  defp build_seed_deployments(seeds, subscriptions) do
-    Enum.map(seeds, fn seed ->
+  defp build_seed_deployments(%__MODULE__{} = deployment) do
+    Enum.map(deployment.seeds, fn seed ->
       subscription_sid =
-        subscriptions
+        deployment.subscriptions
         |> Enum.find(fn sub ->
           sub.seed_name == seed.name and sub.seed_type == seed.seed_type
         end)
@@ -919,7 +975,9 @@ defmodule Sower.Orchestration.Deployment do
 
       %SowerClient.Orchestration.SeedDeployment{
         seed: seed,
-        subscription_sid: subscription_sid
+        subscription_sid: subscription_sid,
+        action: deployment.direct_action,
+        override: deployment.direct_override
       }
     end)
   end

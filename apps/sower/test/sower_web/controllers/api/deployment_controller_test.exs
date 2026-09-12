@@ -1,7 +1,9 @@
 defmodule SowerWeb.Api.DeploymentControllerTest do
   use SowerWeb.ConnCase, async: true
 
-  alias Sower.Orchestration.Garden
+  alias Sower.Orchestration.{Deployment, DeploymentEvent, Garden}
+  alias Sower.Repo
+  alias SowerWeb.Presence
 
   import Sower.OrchestrationFixtures
   import Sower.SeedFixtures
@@ -12,8 +14,15 @@ defmodule SowerWeb.Api.DeploymentControllerTest do
     user = Sower.AccountsFixtures.user_fixture()
     Sower.Repo.put_org_id(user.org_id)
 
-    garden = garden_fixture(%{org_id: user.org_id, name: "api-garden"})
+    garden =
+      garden_fixture(%{
+        org_id: user.org_id,
+        name: "api-garden",
+        sid: SowerClient.Sid.generate("grdn")
+      })
+
     seed = seed_fixture(%{org_id: user.org_id, name: "api-host", seed_type: "nixos"})
+    SowerWeb.Endpoint.subscribe("garden:#{garden.sid}")
 
     %{
       conn: put_req_header(conn, "content-type", "application/json"),
@@ -42,6 +51,12 @@ defmodule SowerWeb.Api.DeploymentControllerTest do
   defp allow_direct(%Garden{} = garden) do
     {:ok, garden} = Garden.update_garden(garden, %{policy: @direct_policy})
     garden
+  end
+
+  defp assert_no_dispatch do
+    assert Repo.aggregate(Deployment, :count) == 0
+    assert Repo.aggregate(DeploymentEvent, :count) == 0
+    refute_receive %Phoenix.Socket.Broadcast{event: "deployment"}
   end
 
   describe "POST /api/v1/deployments" do
@@ -122,6 +137,7 @@ defmodule SowerWeb.Api.DeploymentControllerTest do
         |> post(~p"/api/v1/deployments", %{"garden" => garden.sid, "seed" => seed.sid})
 
       assert %{"error" => "policy_denied"} = json_response(conn, 403)
+      assert_no_dispatch()
     end
 
     test "403 when requested restart is not allowed instead of deploying activate", %{
@@ -176,6 +192,7 @@ defmodule SowerWeb.Api.DeploymentControllerTest do
         |> post(~p"/api/v1/deployments", %{"garden" => garden.sid, "seed" => seed.sid})
 
       assert json_response(conn, 401)
+      assert_no_dispatch()
     end
 
     test "401 overriding without deployment:override", %{
@@ -184,6 +201,9 @@ defmodule SowerWeb.Api.DeploymentControllerTest do
       garden: garden,
       seed: seed
     } do
+      {:ok, _ref} =
+        Presence.track(self(), "garden:presence", garden.sid, %{direct_override: true})
+
       conn =
         conn
         |> authed(user, ["deployment:write"])
@@ -196,6 +216,7 @@ defmodule SowerWeb.Api.DeploymentControllerTest do
         })
 
       assert json_response(conn, 401)
+      assert_no_dispatch()
     end
 
     test "overrides policy with the override scope", %{
@@ -204,6 +225,9 @@ defmodule SowerWeb.Api.DeploymentControllerTest do
       garden: garden,
       seed: seed
     } do
+      {:ok, _ref} =
+        Presence.track(self(), "garden:presence", garden.sid, %{direct_override: true})
+
       conn =
         conn
         |> authed(user, ["deployment:write", "deployment:override"])
@@ -216,6 +240,13 @@ defmodule SowerWeb.Api.DeploymentControllerTest do
         })
 
       assert %{"sid" => _} = json_response(conn, 201)
+
+      assert_receive %Phoenix.Socket.Broadcast{
+        event: "deployment",
+        payload: %{seed_deployments: [%{action: "restart", override: true}]}
+      }
+
+      assert [%{reason: :direct_override, note: "break glass"}] = Repo.all(DeploymentEvent)
     end
 
     test "422 when overriding without a reason", %{
@@ -235,6 +266,7 @@ defmodule SowerWeb.Api.DeploymentControllerTest do
         })
 
       assert %{"error" => "override_reason_required"} = json_response(conn, 422)
+      assert_no_dispatch()
     end
 
     test "422 when overriding without an action", %{
@@ -254,6 +286,79 @@ defmodule SowerWeb.Api.DeploymentControllerTest do
         })
 
       assert %{"error" => "override_action_required"} = json_response(conn, 422)
+      assert_no_dispatch()
+    end
+
+    test "401 when override scope is granted without write scope", %{
+      conn: conn,
+      user: user,
+      garden: garden,
+      seed: seed
+    } do
+      {:ok, _ref} =
+        Presence.track(self(), "garden:presence", garden.sid, %{direct_override: true})
+
+      conn =
+        conn
+        |> authed(user, ["deployment:override"])
+        |> post(~p"/api/v1/deployments", %{
+          "garden" => garden.sid,
+          "seed" => seed.sid,
+          "override" => true,
+          "action" => "restart",
+          "reason" => "break glass"
+        })
+
+      assert json_response(conn, 401)
+      assert_no_dispatch()
+    end
+
+    test "409 rejects an override to a legacy garden without dispatching", %{
+      conn: conn,
+      user: user,
+      garden: garden,
+      seed: seed
+    } do
+      {:ok, _ref} = Presence.track(self(), "garden:presence", garden.sid, %{})
+
+      conn =
+        conn
+        |> authed(user, ["deployment:write", "deployment:override"])
+        |> post(~p"/api/v1/deployments", %{
+          "garden" => garden.sid,
+          "seed" => seed.sid,
+          "override" => true,
+          "action" => "restart",
+          "reason" => "break glass"
+        })
+
+      assert %{"error" => _error} = json_response(conn, 409)
+      assert_no_dispatch()
+    end
+
+    test "422 rejects an override action unsupported by the seed type", %{
+      conn: conn,
+      user: user,
+      garden: garden
+    } do
+      seed = seed_fixture(%{seed_type: "service"})
+
+      {:ok, _ref} =
+        Presence.track(self(), "garden:presence", garden.sid, %{direct_override: true})
+
+      conn =
+        conn
+        |> authed(user, ["deployment:write", "deployment:override"])
+        |> post(~p"/api/v1/deployments", %{
+          "garden" => garden.sid,
+          "seed" => seed.sid,
+          "override" => true,
+          "action" => "restart",
+          "reason" => "break glass"
+        })
+
+      assert %{"error" => "unsupported_action"} = json_response(conn, 422)
+      assert_no_dispatch()
     end
   end
 
