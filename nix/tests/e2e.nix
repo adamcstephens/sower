@@ -63,7 +63,10 @@ testers.runNixOSTest {
           networking.firewall.allowedTCPPorts = [ 4000 ];
 
           nix.settings = {
-            experimental-features = "flakes nix-command";
+            experimental-features = [
+              "flakes"
+              "nix-command"
+            ];
             substituters = lib.mkForce [ ];
             hashed-mirrors = null;
             connect-timeout = 1;
