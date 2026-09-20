@@ -3,6 +3,9 @@
     nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.zst";
     flake-parts.url = "github:hercules-ci/flake-parts";
     crane.url = "github:ipetkov/crane";
+
+    circus.url = "github:manic-systems/circus?ref=main";
+    circus.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
@@ -54,6 +57,8 @@
 
               default = pkgs.mkShell {
                 packages = [
+                  inputs.circus.packages.${pkgs.stdenv.hostPlatform.system}.circus-cli
+                  inputs.circus.packages.${pkgs.stdenv.hostPlatform.system}.circus-server
                   # elixir
                   beamPackages.erlang
                   beamPackages.elixir

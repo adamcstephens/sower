@@ -78,7 +78,7 @@ doctor:
     check_path dev-client.json "just bootstrap"
 
     echo "secrets:"
-    for secret in .dev-cookie .dev-secret-key-base .dev-login-token .dev-cloak-ecto .dev-s3-key-id .dev-s3-secret-key .dev-api-token; do
+    for secret in .dev-cookie .dev-secret-key-base .dev-login-token .dev-cloak-ecto .dev-s3-key-id .dev-s3-secret-key .dev-api-token .dev-circus-api-key; do
       check_path "$secret" "direnv reload"
     done
 

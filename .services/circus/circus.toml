@@ -1,0 +1,11 @@
+[database]
+url = "postgresql://postgres@127.0.0.1/circus_dev"
+
+[server]
+host = "127.0.0.1"
+port = 3000
+
+[[declarative.api_keys]]
+name = "sower-development"
+key_file = ".dev-circus-api-key"
+role = "admin"
