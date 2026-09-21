@@ -9,7 +9,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args, ValueEnum};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use crate::api::{Client, types};
@@ -364,23 +364,44 @@ fn store_path(path: &Path) -> Result<String> {
 
 fn nix_build(installable: &str) -> Result<String> {
     tracing::info!(installable, "Building");
-    let out = Command::new("nix")
-        .args(["build", "--no-link", "--print-out-paths", installable])
+    let build_args = ["build", "--no-link", "--print-out-paths"];
+    let (program, out) = match Command::new("nom")
+        .args(build_args)
+        .arg(installable)
+        .stderr(Stdio::inherit())
         .output()
-        .context("spawn nix build")?;
+    {
+        Ok(out) => ("nom", out),
+        Err(error)
+            if matches!(
+                error.kind(),
+                std::io::ErrorKind::NotFound | std::io::ErrorKind::PermissionDenied
+            ) =>
+        {
+            let out = Command::new("nix")
+                .args(build_args)
+                .arg("--print-build-logs")
+                .arg(installable)
+                .stderr(Stdio::inherit())
+                .output()
+                .context("spawn nix build")?;
+            ("nix", out)
+        }
+        Err(error) => return Err(error).context("spawn nom build"),
+    };
 
     if !out.status.success() {
-        std::io::Write::write_all(&mut std::io::stderr(), &out.stderr).ok();
-        bail!("nix build failed with status {}", out.status);
+        bail!("{program} build failed with status {}", out.status);
     }
 
-    let stdout = String::from_utf8(out.stdout).context("nix build output is not UTF-8")?;
+    let stdout = String::from_utf8(out.stdout)
+        .with_context(|| format!("{program} build output is not UTF-8"))?;
     stdout
         .lines()
         .last()
         .map(str::to_owned)
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| anyhow!("nix build printed no store path for {installable}"))
+        .ok_or_else(|| anyhow!("{program} build printed no store path for {installable}"))
 }
 
 fn nix_copy(artifact: &str, target: &str) -> Result<()> {
