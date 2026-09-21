@@ -1,4 +1,5 @@
 {
+  cacert,
   craneLib,
   installShellFiles,
   lib,
@@ -40,6 +41,8 @@ craneLib.buildPackage (
     nativeBuildInputs = [
       installShellFiles
     ];
+
+    nativeCheckInputs = [ cacert ];
 
     postInstall = ''
       installShellCompletion --cmd sower \

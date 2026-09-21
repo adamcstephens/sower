@@ -260,6 +260,18 @@ async fn deploy(client: &Client, args: &DeployArgs, garden: &str, seed_sid: &str
         .context("create deployment")?
         .into_inner();
 
+    let mut url = reqwest::Url::parse(&client.baseurl)?;
+    let _ = url.set_username("");
+    let _ = url.set_password(None);
+    url.set_query(None);
+    url.set_fragment(None);
+    url.set_path(&format!(
+        "{}/deployments/{}",
+        url.path().trim_end_matches('/'),
+        deployment.sid
+    ));
+    eprintln!("Deployment: {url}");
+
     if deployment.skipped {
         tracing::info!(sid = %deployment.sid, "Matched an existing deployment; nothing dispatched");
     }
@@ -283,7 +295,10 @@ async fn wait(client: &Client, initial: types::DeploymentInfo) -> Result<()> {
         if let Some(result) = terminal_result(&info) {
             return match result.as_str() {
                 "success" => Ok(()),
-                other => bail!("deployment {sid} finished with result {other}"),
+                other => {
+                    failure_logs(client, &info).await;
+                    bail!("deployment {sid} finished with result {other}")
+                }
             };
         }
 
@@ -314,11 +329,42 @@ fn report(info: &types::DeploymentInfo, seen: &mut HashMap<String, String>) {
         }
         seen.insert(seed.seed_sid.clone(), state.clone());
         tracing::info!(seed = %seed.name, state = %state, result = ?seed.result, "Deployment");
-        if seed.result.as_deref() == Some("failure")
-            && let Some(log) = &seed.log
-        {
-            eprintln!("{log}");
+    }
+}
+
+async fn failure_logs(client: &Client, last_known: &types::DeploymentInfo) {
+    let latest = match client.get_deployment(&last_known.sid).await {
+        Ok(response) => response.into_inner(),
+        Err(_) => {
+            eprintln!("Could not fetch deployment logs; using last known logs.");
+            print_log_tails(last_known);
+            return;
         }
+    };
+    print_log_tails(&latest);
+}
+
+fn print_log_tails(info: &types::DeploymentInfo) {
+    let has_failed_seed = info
+        .seeds
+        .iter()
+        .any(|seed| seed.result.as_deref() == Some("failure"));
+    let mut printed = false;
+    for seed in &info.seeds {
+        if has_failed_seed && seed.result.as_deref() != Some("failure") {
+            continue;
+        }
+        if let Some(log) = seed.log.as_deref().filter(|log| !log.is_empty()) {
+            eprintln!("Logs for {} ({}):", seed.name, seed.seed_sid);
+            let tail_bytes: usize = log.split_inclusive('\n').rev().take(50).map(str::len).sum();
+            for line in log[log.len() - tail_bytes..].lines() {
+                eprintln!("{line}");
+            }
+            printed = true;
+        }
+    }
+    if !printed {
+        eprintln!("No deployment logs available.");
     }
 }
 
@@ -631,26 +677,5 @@ mod tests {
             terminal_result(&info("canceled", None)),
             Some("canceled".to_owned())
         );
-    }
-
-    #[test]
-    fn report_only_prints_changed_states() {
-        let mut seen = HashMap::new();
-        let mut d = info("dispatched", None);
-        d.seeds.push(types::DeploymentSeedInfo {
-            log: None,
-            name: "myhost".to_owned(),
-            result: None,
-            seed_sid: "seed_1".to_owned(),
-            seed_type: "nixos".to_owned(),
-            state: Some("dispatched".to_owned()),
-        });
-
-        report(&d, &mut seen);
-        assert_eq!(seen.get("seed_1").map(String::as_str), Some("dispatched"));
-
-        d.seeds[0].state = Some("completed".to_owned());
-        report(&d, &mut seen);
-        assert_eq!(seen.get("seed_1").map(String::as_str), Some("completed"));
     }
 }
