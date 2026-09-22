@@ -22,7 +22,7 @@
           inherit craneLib;
         };
 
-        cli-static = pkgs.pkgsMusl.callPackage ./cli.nix {
+        cli-static = pkgs.callPackage ./cli.nix {
           craneLib = inputs.crane.mkLib pkgs.pkgsCross.musl64;
           extraArgs = {
             CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static";

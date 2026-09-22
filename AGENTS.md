@@ -15,7 +15,7 @@ If more than one of the rules conflict, ask before implementing.
 - formatting done, `just format`
 - tests pass, `just check-elixir`, `just check-rust`, or `just check-e2e`
 - relevant nix package is built. e.g. `.#garden` for the garden, `.#sower` for the cli.
-- update patch version, e.g. 0.12.0 -> 0.12.1)
+- when user facing, or significant changes, update patch version, e.g. 0.12.0 -> 0.12.1)
 - code committed with all ticket changes included
   - Prefer no or very short commit body
   - Ticket ID in the body
