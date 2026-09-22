@@ -74,7 +74,6 @@
                   # dev tools
                   pkgs.entr
                   pkgs.just
-                  pkgs.mix2nix
                   pkgs.npins
                   pkgs.nvfetcher
                   pkgs.postgresql_17
