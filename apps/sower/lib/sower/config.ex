@@ -54,6 +54,14 @@ defmodule Sower.Config do
           }
         }
       },
+      circus: %Schema{
+        type: :object,
+        required: [:url, :api_key_file],
+        properties: %{
+          url: %Schema{type: :string, format: :uri},
+          api_key_file: %Schema{type: :string}
+        }
+      },
       s3: %Schema{
         type: :object,
         properties: %{
@@ -226,6 +234,17 @@ defmodule Sower.Config do
     Logger.debug(json_config)
 
     json_config |> Enum.map(fn {k, v} -> put_config(k, v) end)
+
+    if circus = Keyword.get(json_config, :circus) do
+      case read_credential(Keyword.fetch!(circus, :api_key_file)) do
+        {:ok, api_key} ->
+          put_config(CircusClient, url: Keyword.fetch!(circus, :url), api_key: api_key)
+
+        {:error, err} ->
+          Logger.warning(msg: "Failed to load Circus API key", error: inspect(err))
+          Kernel.exit(1)
+      end
+    end
 
     # load some non-app namespaced configs
     %URI{scheme: scheme, host: host, port: port} = URI.parse(public_url)

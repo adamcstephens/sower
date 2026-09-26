@@ -14,6 +14,10 @@
       "path": ".dev-client"
     }
   },
+  "circus": {
+    "url": "http://127.0.0.1:3000",
+    "api_key_file": ".dev-circus-api-key"
+  },
   "log_level": "debug",
   "secret_key_base_file": ".dev-secret-key-base",
   "s3": {
