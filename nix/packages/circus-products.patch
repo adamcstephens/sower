@@ -1,0 +1,50 @@
+--- a/crates/queue-runner/src/worker.rs
++++ b/crates/queue-runner/src/worker.rs
+@@ -1256,7 +1256,7 @@
+               sha256_hash,
+               file_size,
+               content_type: None,
+-              is_directory: true,
++              is_directory: tokio::fs::metadata(output_path).await?.is_dir(),
+             })
+             .await?;
+ 
+--- a/crates/queue-runner/src/runner_loop.rs
++++ b/crates/queue-runner/src/runner_loop.rs
+@@ -379,6 +379,36 @@
+                 } else {
+                   let output_paths =
+                     completed_build_output_paths(&pool, &existing).await;
++                  match repo::build_products::list_for_build(&pool, existing.id)
++                    .await
++                  {
++                    Ok(products) => {
++                      for product in products {
++                        if !output_paths.contains(&product.path) {
++                          continue;
++                        }
++                        if let Err(e) = repo::build_products::create(
++                          &pool,
++                          circus_common::CreateBuildProduct {
++                            build_id: build.id,
++                            name: product.name,
++                            path: product.path,
++                            sha256_hash: product.sha256_hash,
++                            file_size: product.file_size,
++                            content_type: product.content_type,
++                            is_directory: product.is_directory,
++                          },
++                        )
++                        .await
++                        {
++                          tracing::warn!(build_id = %build.id, "Failed to register reused product: {e}");
++                        }
++                      }
++                    },
++                    Err(e) => {
++                      tracing::warn!(build_id = %build.id, "Failed to list reused products: {e}");
++                    },
++                  }
+                   spawn_succeeded_output_closure_publication(
+                     &mut closure_publications,
+                     &pool,
