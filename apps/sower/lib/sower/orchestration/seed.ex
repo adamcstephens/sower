@@ -13,6 +13,7 @@ defmodule Sower.Orchestration.Seed do
     Seed,
     SeedDeployment,
     SeedTag,
+    SeedPublication,
     Subscription,
     SubscriptionDeployment
   }
@@ -62,6 +63,23 @@ defmodule Sower.Orchestration.Seed do
 
     timestamps()
   end
+
+  @doc """
+  Publishes a seed from a trusted integration. The caller supplies `source` with
+  `:instance`, `:project`, `:job`, `:branch`, `:evaluation`, `:build`, `:revision`,
+  and `:order`. `:order` is a monotonically increasing, globally comparable
+  evaluation order (for example, evaluation creation time in microseconds),
+  never callback arrival time or a commit hash. One evaluation/build may publish
+  multiple seed names/types. The organization is taken from the repository
+  context; descriptor tags cannot set `git_branch` or `git_rev`.
+
+  Replays return the original seed without updating recency or scheduling work.
+  An older accepted publication remains recorded for provenance, but cannot
+  displace the newest publication of its branch stream.
+  """
+  def publish(source, attrs), do: Sower.Orchestration.SeedPublisher.publish(source, attrs)
+
+  def publication_changeset(seed, attrs), do: changeset(seed, attrs)
 
   def create(attrs, opts \\ []) do
     replacements =
@@ -343,16 +361,18 @@ defmodule Sower.Orchestration.Seed do
   def list_matching(name, seed_type, tags, opts) when is_list(tags) do
     limit = Keyword.get(opts, :limit, 1)
 
-    base_query =
+    {provenance, ordinary} =
+      Enum.split_with(tags, &(&1.key in ["git_branch", "git_rev"]))
+
+    base =
       from(s in Seed,
-        where: s.name == ^name and s.seed_type == ^seed_type,
-        order_by: [desc: s.updated_at, desc: s.id],
-        limit: ^limit
+        as: :seed,
+        where: s.name == ^name and s.seed_type == ^seed_type
       )
       |> filter_sid(Keyword.get(opts, :sid))
 
-    query =
-      Enum.reduce(tags, base_query, fn %{key: key, value: value}, query ->
+    ordinary_query =
+      Enum.reduce(ordinary, base, fn %{key: key, value: value}, query ->
         from(s in query,
           where:
             exists(
@@ -364,10 +384,82 @@ defmodule Sower.Orchestration.Seed do
         )
       end)
 
-    query = from(s in query, as: :seed)
+    query =
+      case provenance do
+        [] ->
+          from(s in ordinary_query, order_by: [desc: s.updated_at, desc: s.id], limit: ^limit)
 
-    Repo.all(query)
-    |> Repo.preload([:tags])
+        _ ->
+          branch =
+            Enum.find_value(provenance, fn tag -> if tag.key == "git_branch", do: tag.value end)
+
+          revision =
+            Enum.find_value(provenance, fn tag -> if tag.key == "git_rev", do: tag.value end)
+
+          publications =
+            from(p in SeedPublication,
+              where: p.seed_id == parent_as(:seed).id,
+              select: %{source_order: max(p.source_order)}
+            )
+
+          publications =
+            if branch, do: from(p in publications, where: p.branch == ^branch), else: publications
+
+          publications =
+            if revision,
+              do: from(p in publications, where: p.revision == ^revision),
+              else: publications
+
+          publications =
+            Enum.reduce(ordinary, publications, fn %{key: key, value: value}, query ->
+              from(p in query,
+                where:
+                  fragment(
+                    "EXISTS (SELECT 1 FROM jsonb_array_elements(?->'pairs') AS pair WHERE pair->>0 = ? AND pair->>1 = ?)",
+                    p.tags,
+                    ^key,
+                    ^value
+                  )
+              )
+            end)
+
+          local_tags =
+            Enum.reduce(provenance, ordinary_query, fn %{key: key, value: value}, query ->
+              from(s in query,
+                where:
+                  exists(
+                    from(st in SeedTag,
+                      where: st.seed_id == parent_as(:seed).id,
+                      where: st.key == ^key and st.value == ^value
+                    )
+                  )
+              )
+            end)
+
+          local_ids =
+            from(s in local_tags,
+              where:
+                not exists(from(p in SeedPublication, where: p.seed_id == parent_as(:seed).id)),
+              select: s.id
+            )
+
+          from(s in base,
+            left_lateral_join: publication in subquery(publications),
+            on: true,
+            where: not is_nil(publication.source_order) or s.id in subquery(local_ids),
+            order_by: [
+              desc:
+                coalesce(
+                  publication.source_order,
+                  fragment("extract(epoch from ?) * 1000000", s.updated_at)
+                ),
+              desc: s.id
+            ],
+            limit: ^limit
+          )
+      end
+
+    Repo.all(query) |> Repo.preload(:tags)
   end
 
   defp filter_sid(query, nil), do: query

@@ -139,6 +139,244 @@ defmodule Sower.SeedTest do
     end
   end
 
+  describe "publish/2" do
+    test "an exact replay returns the existing publication without changing the latest seed" do
+      name = unique_seed_name()
+      source = publication_source()
+      attrs = valid_seed_attributes(%{name: name, tags: [%{key: "env", value: "prod"}]})
+
+      newer_source =
+        publication_source(%{
+          order: 2,
+          revision: "newer-sha",
+          evaluation: "eval-2",
+          build: "build-2"
+        })
+
+      newer_attrs = valid_seed_attributes(%{name: name, tags: [%{key: "env", value: "prod"}]})
+
+      assert {:ok, %Seed{id: id}} = Seed.publish(source, attrs)
+      assert {:ok, %Seed{id: newer_id}} = Seed.publish(newer_source, newer_attrs)
+      assert {:ok, %Seed{id: ^id}} = Seed.publish(source, attrs)
+
+      assert %Seed{id: ^id} =
+               Seed.latest(name, "nixos", [
+                 %{key: "env", value: "prod"},
+                 %{key: "git_branch", value: "main"},
+                 %{key: "git_rev", value: source.revision}
+               ])
+
+      assert %Seed{id: ^newer_id} =
+               Seed.latest(name, "nixos", [
+                 %{key: "env", value: "prod"},
+                 %{key: "git_branch", value: "main"}
+               ])
+    end
+
+    test "a conflicting replay cannot change the accepted publication" do
+      name = unique_seed_name()
+      attrs = valid_seed_attributes(%{name: name})
+      source = publication_source()
+
+      assert {:ok, %Seed{id: id}} = Seed.publish(source, attrs)
+
+      assert {:error, :conflicting_publication} =
+               Seed.publish(%{source | revision: "different"}, attrs)
+
+      assert %Seed{id: ^id} =
+               Seed.latest(name, "nixos", [%{key: "git_branch", value: "main"}])
+    end
+
+    test "replay and stale delivery enqueue no additional realtime work" do
+      name = unique_seed_name()
+      attrs = valid_seed_attributes(%{name: name})
+      newer = publication_source(%{order: 10, evaluation: "eval-10", build: "build-10"})
+      older = publication_source(%{order: 9, evaluation: "eval-9", build: "build-9"})
+
+      assert {:ok, %Seed{}} = Seed.publish(newer, attrs)
+      assert Repo.aggregate(Oban.Job, :count, :id) == 1
+
+      assert {:ok, %Seed{}} = Seed.publish(newer, attrs)
+      assert Repo.aggregate(Oban.Job, :count, :id) == 1
+
+      assert {:ok, %Seed{}} = Seed.publish(older, valid_seed_attributes(%{name: name}))
+      assert Repo.aggregate(Oban.Job, :count, :id) == 1
+    end
+
+    test "descriptor tags must belong to the matching publication" do
+      name = unique_seed_name()
+      attrs = valid_seed_attributes(%{name: name, tags: [%{key: "env", value: "staging"}]})
+      feature = publication_source(%{branch: "feature/reuse", revision: "feature-sha"})
+
+      main =
+        publication_source(%{
+          order: 2,
+          evaluation: "eval-2",
+          build: "build-2",
+          revision: "main-sha"
+        })
+
+      assert {:ok, %Seed{}} = Seed.publish(feature, attrs)
+
+      assert {:ok, %Seed{}} =
+               Seed.publish(main, %{attrs | tags: [%{key: "env", value: "prod"}]})
+
+      refute Seed.latest(name, "nixos", [
+               %{key: "git_branch", value: "main"},
+               %{key: "env", value: "staging"}
+             ])
+
+      assert %Seed{} =
+               Seed.latest(name, "nixos", [
+                 %{key: "git_branch", value: "main"},
+                 %{key: "env", value: "prod"}
+               ])
+    end
+
+    test "descriptor organization cannot override the trusted repository tenant", %{
+      organization: org
+    } do
+      attrs =
+        valid_seed_attributes(%{
+          name: unique_seed_name(),
+          org_id: Ecto.UUID.generate()
+        })
+
+      assert {:ok, %Seed{org_id: org_id}} = Seed.publish(publication_source(), attrs)
+      assert org_id == org.org_id
+    end
+
+    test "an older main publication cannot replace the latest main result" do
+      name = unique_seed_name()
+      latest_attrs = valid_seed_attributes(%{name: name})
+      old_attrs = valid_seed_attributes(%{name: name})
+
+      latest_source =
+        publication_source(%{
+          order: 10,
+          revision: "newer",
+          evaluation: "eval-10",
+          build: "build-10"
+        })
+
+      old_source =
+        publication_source(%{order: 9, revision: "older", evaluation: "eval-9", build: "build-9"})
+
+      main = [%{key: "git_branch", value: "main"}]
+
+      assert {:ok, %Seed{id: latest_id}} = Seed.publish(latest_source, latest_attrs)
+      assert {:ok, %Seed{}} = Seed.publish(old_source, old_attrs)
+
+      assert %Seed{id: ^latest_id, artifact: latest_artifact} =
+               Seed.latest(name, "nixos", main)
+
+      assert latest_artifact == latest_attrs.artifact
+    end
+
+    test "a main build can reuse an artifact first published on a feature branch" do
+      name = unique_seed_name()
+      attrs = valid_seed_attributes(%{name: name})
+      feature = publication_source(%{branch: "feature/reuse", revision: "feature-sha"})
+
+      main =
+        publication_source(%{
+          branch: "main",
+          revision: "main-sha",
+          order: 2,
+          evaluation: "eval-2",
+          build: "build-2"
+        })
+
+      assert {:ok, %Seed{artifact: artifact}} = Seed.publish(feature, attrs)
+      assert {:ok, %Seed{id: main_id}} = Seed.publish(main, attrs)
+
+      assert %Seed{id: ^main_id, artifact: ^artifact} =
+               Seed.latest(name, "nixos", [
+                 %{key: "git_branch", value: "main"},
+                 %{key: "git_rev", value: "main-sha"}
+               ])
+    end
+
+    test "reusing an older main artifact on another branch does not promote it on main" do
+      name = unique_seed_name()
+      old_attrs = valid_seed_attributes(%{name: name})
+      new_attrs = valid_seed_attributes(%{name: name})
+
+      old_main = publication_source()
+      new_main = publication_source(%{order: 2, evaluation: "eval-2", build: "build-2"})
+
+      feature =
+        publication_source(%{
+          branch: "feature/reuse",
+          order: 3,
+          evaluation: "eval-3",
+          build: "build-3"
+        })
+
+      assert {:ok, %Seed{id: old_id}} = Seed.publish(old_main, old_attrs)
+      assert {:ok, %Seed{id: new_id}} = Seed.publish(new_main, new_attrs)
+      assert {:ok, %Seed{id: ^old_id}} = Seed.publish(feature, old_attrs)
+
+      assert %Seed{id: ^new_id} =
+               Seed.latest(name, "nixos", [%{key: "git_branch", value: "main"}])
+    end
+
+    test "branch and revision must belong to the same publication" do
+      name = unique_seed_name()
+      attrs = valid_seed_attributes(%{name: name})
+      feature = publication_source(%{branch: "feature/reuse", revision: "feature-sha"})
+
+      main =
+        publication_source(%{
+          branch: "main",
+          revision: "main-sha",
+          order: 2,
+          evaluation: "eval-2",
+          build: "build-2"
+        })
+
+      assert {:ok, %Seed{}} = Seed.publish(feature, attrs)
+      assert {:ok, %Seed{}} = Seed.publish(main, attrs)
+
+      refute Seed.latest(name, "nixos", [
+               %{key: "git_branch", value: "main"},
+               %{key: "git_rev", value: "feature-sha"}
+             ])
+
+      refute Seed.latest(name, "nixos", [
+               %{key: "git_branch", value: "feature/reuse"},
+               %{key: "git_rev", value: "main-sha"}
+             ])
+    end
+
+    test "a pull request branch cannot be selected as main or forge main provenance" do
+      name = unique_seed_name()
+      source = publication_source(%{branch: "feature/pr-42", revision: "pr-sha"})
+
+      attrs =
+        valid_seed_attributes(%{
+          name: name,
+          tags: [
+            %{key: "git_branch", value: "main"},
+            %{key: "git_rev", value: "main-sha"}
+          ]
+        })
+
+      assert {:error, :invalid_tags} = Seed.publish(source, attrs)
+      refute Seed.latest(name, "nixos", [%{key: "git_branch", value: "main"}])
+
+      assert {:ok, %Seed{id: id}} = Seed.publish(source, %{attrs | tags: []})
+
+      refute Seed.latest(name, "nixos", [%{key: "git_branch", value: "main"}])
+
+      assert %Seed{id: ^id} =
+               Seed.latest(name, "nixos", [
+                 %{key: "git_branch", value: "feature/pr-42"},
+                 %{key: "git_rev", value: "pr-sha"}
+               ])
+    end
+  end
+
   describe "list_flop/1" do
     test "returns seeds with default ordering" do
       seed_a = seed_fixture(%{name: "alpha"})
@@ -383,6 +621,22 @@ defmodule Sower.SeedTest do
       assert {:ok, seed} = Seed.find_or_register(garden, generation, profile)
       assert seed.seed_type == "home-manager"
     end
+  end
+
+  defp publication_source(attrs \\ %{}) do
+    Map.merge(
+      %{
+        instance: "ci.example",
+        project: "sower",
+        job: "build",
+        branch: "main",
+        evaluation: "eval-1",
+        build: "build-1",
+        order: 1,
+        revision: "initial-sha"
+      },
+      attrs
+    )
   end
 
   defp unique_hash do
