@@ -56,10 +56,12 @@ defmodule Sower.Config do
       },
       circus: %Schema{
         type: :object,
-        required: [:url, :api_key_file],
+        required: [:url, :api_key_file, :webhook_secret_file, :projects],
         properties: %{
           url: %Schema{type: :string, format: :uri},
-          api_key_file: %Schema{type: :string}
+          api_key_file: %Schema{type: :string},
+          webhook_secret_file: %Schema{type: :string},
+          projects: %Schema{type: :object, additionalProperties: %Schema{type: :string}}
         }
       },
       s3: %Schema{
@@ -236,12 +238,24 @@ defmodule Sower.Config do
     json_config |> Enum.map(fn {k, v} -> put_config(k, v) end)
 
     if circus = Keyword.get(json_config, :circus) do
-      case read_credential(Keyword.fetch!(circus, :api_key_file)) do
-        {:ok, api_key} ->
-          put_config(CircusClient, url: Keyword.fetch!(circus, :url), api_key: api_key)
+      with {:ok, api_key} <- read_credential(Keyword.fetch!(circus, :api_key_file)),
+           {:ok, webhook_secret} <-
+             read_credential(Keyword.fetch!(circus, :webhook_secret_file)) do
+        url = Keyword.fetch!(circus, :url)
 
+        put_config(CircusClient,
+          url: url,
+          api_key: api_key,
+          instance: url,
+          webhook_secret: webhook_secret,
+          projects:
+            Map.new(Keyword.fetch!(circus, :projects), fn {project, org_id} ->
+              {to_string(project), org_id}
+            end)
+        )
+      else
         {:error, err} ->
-          Logger.warning(msg: "Failed to load Circus API key", error: inspect(err))
+          Logger.warning(msg: "Failed to load Circus credentials", error: inspect(err))
           Kernel.exit(1)
       end
     end

@@ -27,6 +27,10 @@ defmodule SowerWeb.Router do
     plug SowerWeb.Plugs.Webhook
   end
 
+  pipeline :circus_webhook do
+    plug :accepts, ["json"]
+  end
+
   scope "/", SowerWeb do
     pipe_through :browser
 
@@ -100,6 +104,11 @@ defmodule SowerWeb.Router do
   scope "/forges", SowerWeb.Forge do
     pipe_through [:forge_webhook]
     post "/:forge_sid/repos/:repo_sid/webhook", WebhookController, :post
+  end
+
+  scope "/circus", SowerWeb do
+    pipe_through :circus_webhook
+    post "/webhook", CircusWebhookController, :post
   end
 
   scope "/api" do

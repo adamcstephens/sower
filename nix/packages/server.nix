@@ -25,6 +25,7 @@ beamPackages.mixRelease rec {
       ../../apps/sower
       ../../apps/sower_client
       ../../config
+      ../../nix/seed-manifest.schema.json
       ../../mix.exs
       ../../mix.lock
       ../../VERSION

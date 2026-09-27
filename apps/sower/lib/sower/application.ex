@@ -32,7 +32,14 @@ defmodule Sower.Application do
   @oban_testing if Mix.env() == :test, do: :manual, else: :disabled
 
   defp oban_config do
-    [repo: Sower.Repo, queues: [default: 10], testing: @oban_testing]
+    plugins =
+      if Application.get_env(:sower, CircusClient) do
+        [{Oban.Plugins.Cron, crontab: [{"* * * * *", Sower.Workers.CircusReconcile}]}]
+      else
+        []
+      end
+
+    [repo: Sower.Repo, queues: [default: 10], plugins: plugins, testing: @oban_testing]
   end
 
   # Tell Phoenix to update the endpoint configuration
