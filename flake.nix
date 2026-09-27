@@ -59,6 +59,8 @@
                 packages = [
                   inputs.circus.packages.${pkgs.stdenv.hostPlatform.system}.circus-cli
                   inputs.circus.packages.${pkgs.stdenv.hostPlatform.system}.circus-server
+                  inputs.circus.packages.${pkgs.stdenv.hostPlatform.system}.circus-evaluator
+                  inputs.circus.packages.${pkgs.stdenv.hostPlatform.system}.circus-queue-runner
                   # elixir
                   beamPackages.erlang
                   beamPackages.elixir

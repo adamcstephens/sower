@@ -4,8 +4,25 @@ url = "postgresql://postgres@127.0.0.1/circus_dev"
 [server]
 host = "127.0.0.1"
 port = 3000
+allowed_url_schemes = ["https", "git", "ssh", "file"]
+webhook_secret_encryption_key_file = ".dev-circus-webhook-encryption-key"
 
 [[declarative.api_keys]]
 name = "sower-development"
 key_file = ".dev-circus-api-key"
 role = "admin"
+
+[evaluator]
+poll_interval = 5
+restrict_eval = false
+
+[queue_runner]
+workers = 1
+
+[signing]
+enabled = true
+key_file = ".dev-circus-signing-key"
+
+[cache]
+enabled = true
+cache_url = "http://127.0.0.1:3000/nix-cache/"

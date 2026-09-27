@@ -53,3 +53,15 @@ processes:
       timeout_seconds: 5
       success_threshold: 1
       failure_threshold: 20
+
+  circus-evaluator:
+    command: circus-evaluator --config .services/circus/circus.toml
+    depends_on:
+      circus-init:
+        condition: process_completed_successfully
+
+  circus-queue-runner:
+    command: circus-queue-runner --config .services/circus/circus.toml
+    depends_on:
+      circus-init:
+        condition: process_completed_successfully
