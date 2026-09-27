@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Sower seed manifest",
+  "type": "object",
+  "required": ["version", "name", "seed_type", "artifact", "tags"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {"type": "integer", "const": 1},
+    "name": {"type": "string", "minLength": 1},
+    "seed_type": {"type": "string", "enum": ["nixos", "home-manager", "nix-darwin", "service"]},
+    "artifact": {
+      "type": "string",
+      "pattern": "^/nix/store/[0-9abcdfghijklmnpqrsvwxyz]{32}-[^/]+$"
+    },
+    "tags": {"type": "object", "additionalProperties": {"type": "string"}}
+  }
+}
