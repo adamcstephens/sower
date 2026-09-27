@@ -21,6 +21,9 @@
           inherit (self'.packages) sowerServicesHook;
           sowerLib = self.lib;
         };
+        tests-seed-manifest = pkgs.callPackage ./seed-manifest.nix {
+          sowerLib = self.lib;
+        };
       };
     };
 }

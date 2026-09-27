@@ -51,6 +51,7 @@
         };
 
         sowerServicesHook = pkgs.callPackage ./services-hook.nix { };
+        seed-manifest-validator = pkgs.callPackage ./seed-manifest-validator.nix { };
       };
     };
 }

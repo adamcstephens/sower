@@ -7,6 +7,37 @@
   ],
 }:
 rec {
+  mkSeedManifest =
+    {
+      pkgs,
+      name,
+      type,
+      target,
+      tags ? { },
+    }:
+    let
+      manifest = pkgs.writeText "seed-manifest-input.json" (
+        builtins.toJSON {
+          version = 1;
+          inherit name tags;
+          seed_type = type;
+          artifact = "${target}";
+        }
+      );
+      validator = pkgs.callPackage ./packages/seed-manifest-validator.nix { };
+    in
+    pkgs.stdenv.mkDerivation {
+      name = "seed-manifest-${name}.json";
+      dontUnpack = true;
+      nativeBuildInputs = [ validator ];
+      installPhase = ''
+        runHook preInstall
+        cp "${manifest}" "$out"
+        validate-seed-manifest "${./seed-manifest.schema.json}" "$out"
+        runHook postInstall
+      '';
+    };
+
   mkSeed =
     {
       name,
@@ -33,6 +64,32 @@ rec {
           nixos_version = nixosConfig.config.system.nixos.version;
         };
       } (nixosConfig.config.sower.seed.meta or { });
+    });
+  mkSeedNixosManifest =
+    name: nixosConfig:
+    lib.nameValuePair "manifest/nixos/${name}" (mkSeedManifest {
+      pkgs = nixosConfig.pkgs;
+      inherit name;
+      target = nixosConfig.config.system.build.toplevel;
+      type = "nixos";
+      tags = lib.recursiveUpdate {
+        inherit (nixosConfig.pkgs.stdenv.hostPlatform) system;
+        nixos_version = nixosConfig.config.system.nixos.version;
+      } (nixosConfig.config.sower.seed.meta.tags or { });
+    });
+
+  mkSeedHomeManagerManifest =
+    name: homeConfig:
+    lib.nameValuePair "manifest/home/${name}" (mkSeedManifest {
+      pkgs = homeConfig.pkgs;
+      inherit name;
+      target = homeConfig.activationPackage;
+      type = "home-manager";
+      tags = {
+        inherit (homeConfig.pkgs.stdenv.hostPlatform) system;
+        inherit (homeConfig.config.home) username homeDirectory;
+        inherit (homeConfig.config.home.version) release;
+      };
     });
 
   mkSeedHomeManager =
@@ -82,6 +139,26 @@ rec {
         name = system;
         value = home system;
       }) supportedSystems
+    );
+
+  genNixosManifestPackages =
+    nixosConfigurations:
+    lib.genAttrs supportedSystems (
+      system:
+      lib.pipe nixosConfigurations [
+        (lib.filterAttrs (_: config: config.pkgs.stdenv.hostPlatform.system == system))
+        (lib.mapAttrs' mkSeedNixosManifest)
+      ]
+    );
+
+  genHomeManagerManifestPackages =
+    homeConfigurations:
+    lib.genAttrs supportedSystems (
+      system:
+      lib.pipe homeConfigurations [
+        (lib.filterAttrs (_: config: config.pkgs.stdenv.hostPlatform.system == system))
+        (lib.mapAttrs' mkSeedHomeManagerManifest)
+      ]
     );
 
   prefixFlakeSystemOutputs =
