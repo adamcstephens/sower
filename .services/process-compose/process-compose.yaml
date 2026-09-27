@@ -26,6 +26,27 @@ processes:
       success_threshold: 1
       failure_threshold: 20
 
+  seaweedfs:
+    command: |
+      set -eu
+      umask 077
+      mkdir -p .services/seaweedfs/data
+      printf '{"identities":[{"name":"sower-development","credentials":[{"accessKey":"%s","secretKey":"%s"}],"actions":["Admin","Read","List","Tagging","Write"]}]}\n' \
+        "$(cut --characters 1-20 .dev-s3-key-id)" "$(cat .dev-s3-secret-key)" \
+        > .services/seaweedfs/data/s3.json
+      cd .services/seaweedfs/data
+      exec weed server --dir=. --ip=127.0.0.1 --ip.bind=127.0.0.1 \
+        --volume.port=18080 --master.telemetry=false \
+        --s3 --s3.port=9000 --s3.config=s3.json
+    readiness_probe:
+      exec:
+        command: curl --silent --output /dev/null http://127.0.0.1:9000/
+      initial_delay_seconds: 2
+      period_seconds: 2
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 20
+
   circus-init:
     command: |
       set -eu
@@ -36,12 +57,22 @@ processes:
       ) \gexec
       SQL
       circusctl migrate up postgresql://postgres@127.0.0.1/circus_dev
+      export AWS_ACCESS_KEY_ID="$(cut --characters 1-20 .dev-s3-key-id)"
+      export AWS_SECRET_ACCESS_KEY="$(cat .dev-s3-secret-key)"
+      export AWS_REGION=us-east-1
+      s5cmd --endpoint-url http://127.0.0.1:9000 ls s3://circus-cache/ >/dev/null 2>&1 ||
+        s5cmd --endpoint-url http://127.0.0.1:9000 mb s3://circus-cache
     depends_on:
       postgres:
         condition: process_healthy
+      seaweedfs:
+        condition: process_healthy
 
   circus:
-    command: circus-server --config .services/circus/circus.toml
+    command: |
+      set -eu
+      export CIRCUS_CACHE_UPLOAD__S3__ACCESS_KEY_ID="$(cut --characters 1-20 .dev-s3-key-id)"
+      exec circus-server --config .services/circus/circus.toml
     depends_on:
       circus-init:
         condition: process_completed_successfully
@@ -61,7 +92,32 @@ processes:
         condition: process_completed_successfully
 
   circus-queue-runner:
-    command: circus-queue-runner --config .services/circus/circus.toml
+    command: |
+      set -eu
+      mkdir -p .services/circus/data/logs
+      agent_token="$(sha256sum .dev-circus-api-key | cut --delimiter ' ' --fields 1)"
+      export CIRCUS_QUEUE_RUNNER__RPC__AUTH_TOKENS="[\"$(printf %s "$agent_token" | sha256sum | cut --delimiter ' ' --fields 1)\"]"
+      export CIRCUS_QUEUE_RUNNER__RPC__CACHE_PUBLIC_KEY="$(nix key convert-secret-to-public < .dev-circus-signing-key)"
+      export CIRCUS_CACHE_UPLOAD__S3__ACCESS_KEY_ID="$(cut --characters 1-20 .dev-s3-key-id)"
+      exec circus-queue-runner --config .services/circus/circus.toml
     depends_on:
       circus-init:
         condition: process_completed_successfully
+
+  circus-agent:
+    command: |
+      set -eu
+      export CIRCUS_AGENT_TOKEN="$(sha256sum .dev-circus-api-key | cut --delimiter ' ' --fields 1)"
+      export CIRCUS_AGENT_DATA_DIR="$PWD/.services/circus/data/nix"
+      mkdir -p "$CIRCUS_AGENT_DATA_DIR/etc/nix"
+      printf 'build-users-group =\nexperimental-features = nix-command flakes\nssl-cert-file = %s\n' \
+        "$(readlink -f /etc/ssl/certs/ca-certificates.crt)" > "$CIRCUS_AGENT_DATA_DIR/etc/nix/nix.conf"
+      export CIRCUS_AGENT_NIX="$(readlink -f "$(command -v nix)")"
+      # The sandbox mounts this private store at /nix; seed its Nix closure first.
+      nix copy --no-check-sigs --to "local?root=$PWD/.services/circus/data" \
+        "$(dirname "$(dirname "$CIRCUS_AGENT_NIX")")" \
+        "$(nix path-info /etc/ssl/certs/ca-certificates.crt)"
+      exec circus-agent --config .services/circus/circus.toml --system "$(nix config show system)"
+    depends_on:
+      circus-queue-runner:
+        condition: process_started

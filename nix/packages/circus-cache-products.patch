@@ -1,0 +1,53 @@
+--- a/crates/server/src/routes/builds.rs
++++ b/crates/server/src/routes/builds.rs
+@@ -200,6 +200,6 @@ async fn download_build_product(
+   Path((build_id, product_id)): Path<(Uuid, Uuid)>,
+ ) -> Result<Response, ApiError> {
+   // Verify build exists
+-  let _build = circus_common::repo::builds::get(&state.pool, build_id).await?;
++  let build = circus_common::repo::builds::get(&state.pool, build_id).await?;
+ 
+   let product =
+@@ -263,12 +263,36 @@ async fn download_build_product(
+     Ok(response)
+   } else {
+-    // Serve file directly
+-    let file = tokio::fs::File::open(&product.path)
+-      .await
+-      .map_err(|e| ApiError(circus_common::CiError::Io(e)))?;
+-
+-    let stream = tokio_util::io::ReaderStream::new(file);
+-    let body = Body::from_stream(stream);
++    let body = if tokio::fs::try_exists(&product.path).await.map_err(|e| ApiError(circus_common::CiError::Io(e)))? {
++      let file = tokio::fs::File::open(&product.path)
++        .await
++        .map_err(|e| ApiError(circus_common::CiError::Io(e)))?;
++      Body::from_stream(tokio_util::io::ReaderStream::new(file))
++    } else {
++      let evaluation = circus_common::repo::evaluations::get(&state.pool, build.evaluation_id).await?;
++      let jobset = circus_common::repo::jobsets::get(&state.pool, evaluation.jobset_id).await?;
++      let project = circus_common::repo::projects::get(&state.pool, jobset.project_id).await?;
++      let cache_url = circus_config::project_cache_url(
++        state.config.cache.cache_url.as_deref(),
++        &project.name,
++        project.cache_url.as_deref(),
++      ).ok_or_else(|| ApiError(circus_common::CiError::Build("No binary cache configured for product".into())))?;
++      let row = circus_common::repo::narinfo_cache::get(&state.pool, &product.path).await?;
++      let trusted_key = state.cache_public_key.as_ref()
++        .ok_or_else(|| ApiError(circus_common::CiError::Build("No cache signing key configured".into())))?
++        .to_string();
++      if row.project_id != Some(project.id) || !row.url.starts_with("nar/") || row.url.contains("?hash=") {
++        return Err(ApiError(circus_common::CiError::Build("Product was not uploaded to the binary cache".into())));
++      }
++      let output = tokio::process::Command::new("nix")
++        .args(["store", "cat", "--refresh", "--store", &cache_url, "--option", "trusted-public-keys", &trusted_key, &product.path])
++        .output()
++        .await
++        .map_err(|e| ApiError(circus_common::CiError::Io(e)))?;
++      if !output.status.success() {
++        return Err(ApiError(circus_common::CiError::Build("Failed to retrieve cached product".into())));
++      }
++      Body::from(output.stdout)
++    };
+ 
+     let disposition =

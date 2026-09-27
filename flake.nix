@@ -41,11 +41,25 @@
             );
 
             craneLib = inputs.crane.mkLib pkgs;
+            circusPackages = inputs.circus.packages.${pkgs.stdenv.hostPlatform.system};
             circusQueueRunner =
-              (inputs.circus.packages.${pkgs.stdenv.hostPlatform.system}.circus-queue-runner).overrideAttrs
-                (old: {
-                  patches = (old.patches or [ ]) ++ [ ./nix/packages/circus-products.patch ];
-                });
+              circusPackages.circus-queue-runner.overrideAttrs (old: {
+                patches = (old.patches or [ ]) ++ [
+                  ./nix/packages/circus-products.patch
+                  ./nix/packages/circus-agent-products.patch
+                ];
+              });
+            circusAgent =
+              circusPackages.circus-agent.overrideAttrs (old: {
+                patches = (old.patches or [ ]) ++ [
+                  ./nix/packages/circus-products.patch
+                  ./nix/packages/circus-agent-products.patch
+                ];
+              });
+            circusServer =
+              circusPackages.circus-server.overrideAttrs (old: {
+                patches = (old.patches or [ ]) ++ [ ./nix/packages/circus-cache-products.patch ];
+              });
           in
           {
             _module.args = {
@@ -63,7 +77,8 @@
               default = pkgs.mkShell {
                 packages = [
                   inputs.circus.packages.${pkgs.stdenv.hostPlatform.system}.circus-cli
-                  inputs.circus.packages.${pkgs.stdenv.hostPlatform.system}.circus-server
+                  circusAgent
+                  circusServer
                   inputs.circus.packages.${pkgs.stdenv.hostPlatform.system}.circus-evaluator
                   circusQueueRunner
                   # elixir
@@ -84,6 +99,7 @@
                   pkgs.nushell
 
                   # dev tools
+                  pkgs.curl
                   pkgs.entr
                   pkgs.just
                   pkgs.npins
@@ -91,6 +107,7 @@
                   pkgs.postgresql_17
                   pkgs.process-compose
                   pkgs.s5cmd
+                  pkgs.seaweedfs
                   pkgs.sd-switch
                 ]
                 ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [

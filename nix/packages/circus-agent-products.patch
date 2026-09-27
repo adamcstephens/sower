@@ -1,0 +1,432 @@
+--- a/crates/proto/schema/circus.capnp
++++ b/crates/proto/schema/circus.capnp
+@@ -198,6 +198,8 @@
+   narHash     @2 :Text;   # sha256:... or sri-style
+   narSize     @3 :UInt64;
+   closureSize @4 :UInt64;
++  isDirectory @5 :Bool;     # actual output type on the agent
++  fileSize    @6 :UInt64;   # raw file length, not NAR size
+ }
+ 
+ struct PresignedNarRequest {
+--- a/crates/agent/src/sandbox.rs
++++ b/crates/agent/src/sandbox.rs
+@@ -279,6 +279,31 @@
+   match unsafe { fork() }? {
+     ForkResult::Parent { child } => parent_handshake(child, pipes),
+     ForkResult::Child => child_enter_and_exec(cmd, pipes, &paths),
++  }
++}
++
++/// Return the host-visible output path for metadata reads. Rootless Nix has
++/// a private `/nix/store` mapped from the agent's data directory.
++pub(crate) fn store_path_on_host(
++  rootless: bool,
++  store_path: &str,
++) -> color_eyre::Result<PathBuf> {
++  if !rootless {
++    return Ok(PathBuf::from(store_path));
++  }
++  let path = std::path::Path::new(store_path);
++  if path.parent() != Some(std::path::Path::new("/nix/store")) {
++    return Err(color_eyre::eyre::eyre!("invalid output store path: {store_path}"));
++  }
++  #[cfg(target_os = "linux")]
++  {
++    return Ok(data_dir()?.join("store").join(path.file_name().ok_or_else(|| {
++      color_eyre::eyre::eyre!("output store path has no filename")
++    })?));
++  }
++  #[cfg(not(target_os = "linux"))]
++  {
++    Err(color_eyre::eyre::eyre!("rootless agent mode requires Linux"))
+   }
+ }
+ 
+--- a/crates/agent/src/session.rs
++++ b/crates/agent/src/session.rs
+@@ -657,10 +657,38 @@
+         )
+         .await;
+ 
+-        // Presigned upload (best-effort, mirrors Hydra). Only run when
+-        // the build succeeded and the runner asked for it. Failures land
+-        // in error_message but do not flip the BuildOutcome: the build
+-        // bytes are correct on this host even if the push failed.
++        // Cache-only builds have no runner output sink: capture the actual
++        // type/length from this agent's store before publishing the result.
++        let mut output_metadata = Vec::new();
++        if presign_compression.is_some()
++          && let Ok(ref mut local) = outcome
++          && matches!(local.outcome, circus_proto::BuildOutcome::Success)
++        {
++          if local.outputs.is_empty() {
++            local.error_message.push_str("build reported no output paths");
++            local.outcome = circus_proto::BuildOutcome::UploadFailure;
++            local.exit_code = 1;
++          } else {
++            for output in &local.outputs {
++              let metadata = crate::sandbox::store_path_on_host(
++                inner_for_task.rootless, &output.path,
++              )
++              .and_then(|path| std::fs::metadata(path).map_err(Into::into));
++              match metadata {
++                Ok(metadata) => output_metadata.push((metadata.is_dir(), metadata.len())),
++                Err(e) => {
++                  let _ = write!(local.error_message, "output {} metadata: {e}", output.path);
++                  local.outcome = circus_proto::BuildOutcome::UploadFailure;
++                  local.exit_code = 1;
++                  break;
++                },
++              }
++            }
++          }
++        }
++
++        // The agent can only report cache-only success after every output
++        // has been verified and persisted by notifyUploadComplete.
+         if let (Some(compression), Ok(ref mut local)) =
+           (presign_compression, outcome.as_mut())
+           && matches!(local.outcome, circus_proto::BuildOutcome::Success)
+@@ -687,7 +715,7 @@
+                   local.error_message.push('\n');
+                 }
+                 local.error_message.push_str(msg.trim_end());
+-                if fail_build_on_upload_error {
++                if fail_build_on_upload_error || output.is_none() {
+                   local.outcome = circus_proto::BuildOutcome::UploadFailure;
+                   local.exit_code = 1;
+                 }
+@@ -706,7 +734,7 @@
+                 local.error_message.push('\n');
+               }
+               let _ = write!(local.error_message, "upload: {e}");
+-              if fail_build_on_upload_error {
++              if fail_build_on_upload_error || output.is_none() {
+                 local.outcome = circus_proto::BuildOutcome::UploadFailure;
+                 local.exit_code = 1;
+               }
+@@ -754,7 +782,7 @@
+           Err(e) => tracing::error!(%build_id, "build run errored: {e}"),
+         }
+ 
+-        if let Err(e) = report_result(&result, outcome).await {
++        if let Err(e) = report_result(&result, outcome, &output_metadata).await {
+           tracing::warn!(%build_id, "result sink failed: {e}");
+         }
+         JOB_COUNTER.fetch_sub(1, Ordering::Relaxed);
+@@ -816,6 +844,7 @@
+ async fn report_result(
+   sink: &result_sink::Client,
+   outcome: color_eyre::Result<build::LocalResult>,
++  output_metadata: &[(bool, u64)],
+ ) -> Result<(), capnp::Error> {
+   #![expect(
+     clippy::future_not_send,
+@@ -835,6 +864,10 @@
+         let mut slot = outs.reborrow().get(i as u32);
+         slot.set_name(o.name.as_str());
+         slot.set_path(o.path.as_str());
++        if let Some(&(is_directory, file_size)) = output_metadata.get(i) {
++          slot.set_is_directory(is_directory);
++          slot.set_file_size(file_size);
++        }
+       }
+     },
+     Err(e) => {
+--- a/crates/queue-runner/src/rpc/pool.rs
++++ b/crates/queue-runner/src/rpc/pool.rs
+@@ -59,10 +59,19 @@
+   pub fail_build_on_upload_error: bool,
+ }
+ 
++/// Metadata supplied by the agent for an output absent from the runner store.
++#[derive(Debug, Clone)]
++pub struct AgentOutput {
++  pub path:         String,
++  pub is_directory: bool,
++  pub file_size:    u64,
++}
++
+ #[derive(Debug)]
+ pub enum DispatchResult {
+   Succeeded {
+     error_message: Option<String>,
++    outputs:       Vec<AgentOutput>,
+   },
+   Failed(String),
+   TimedOut,
+--- a/crates/queue-runner/src/rpc/result_sink.rs
++++ b/crates/queue-runner/src/rpc/result_sink.rs
+@@ -13,6 +13,8 @@
+ use tokio::sync::oneshot;
+ use uuid::Uuid;
+ 
++use super::pool::AgentOutput;
++
+ /// One result sink per dispatch. Holds the `PgPool`, the build id, the
+ /// originating agent (so per-agent counters stay in sync), and a
+ /// completion notify the dispatch task awaits.
+@@ -27,7 +29,10 @@
+ 
+ #[derive(Debug, Clone)]
+ pub enum BuildOutcomeKind {
+-  Success { error_message: Option<String> },
++  Success {
++    error_message: Option<String>,
++    outputs:       Vec<AgentOutput>,
++  },
+   Failure { error_message: Option<String> },
+   TimedOut,
+   Aborted,
+@@ -61,8 +66,16 @@
+       let outcome = r.get_outcome().unwrap_or(BuildOutcome::BuildFailure);
+       let kind = match outcome {
+         BuildOutcome::Success => {
++          let outputs = r.get_outputs()?.iter().map(|output| {
++            Ok(AgentOutput {
++              path: output.get_path()?.to_str()?.to_owned(),
++              is_directory: output.get_is_directory(),
++              file_size: output.get_file_size(),
++            })
++          }).collect::<Result<Vec<_>, capnp::Error>>()?;
+           BuildOutcomeKind::Success {
+             error_message: result_error_message(r),
++            outputs,
+           }
+         },
+         BuildOutcome::TimedOut => BuildOutcomeKind::TimedOut,
+--- a/crates/queue-runner/src/rpc/server.rs
++++ b/crates/queue-runner/src/rpc/server.rs
+@@ -1171,8 +1171,8 @@
+   }
+ 
+   let out = match done_rx.await {
+-    Ok(BuildOutcomeKind::Success { error_message }) => {
+-      DispatchResult::Succeeded { error_message }
++    Ok(BuildOutcomeKind::Success { error_message, outputs }) => {
++      DispatchResult::Succeeded { error_message, outputs }
+     },
+     Ok(BuildOutcomeKind::TimedOut) => DispatchResult::TimedOut,
+     Ok(BuildOutcomeKind::Aborted) => DispatchResult::Aborted,
+--- a/crates/queue-runner/src/dispatch.rs
++++ b/crates/queue-runner/src/dispatch.rs
+@@ -447,7 +447,7 @@
+   }
+   tracing::info!(build_id = %build.id, agent = %snap.name, "dispatched to agent");
+ 
+-  let result = |success, exit_code, stderr: String, output_paths| {
++  let result = |success, exit_code, stderr: String, output_paths, agent_outputs| {
+     BuildResult {
+       success,
+       exit_code: Some(exit_code),
+@@ -455,25 +455,53 @@
+       stderr,
+       output_paths,
+       cache_upload_handled: opts.cache_upload_enabled_s3,
++      agent_outputs,
+     }
+   };
+ 
+   match rx.await {
+-    Ok(DispatchResult::Succeeded { error_message }) => {
+-      let outputs = read_drv_outputs(drv_path).await;
+-      Some(result(true, 0, error_message.unwrap_or_default(), outputs))
++    Ok(DispatchResult::Succeeded { error_message, outputs }) => {
++      let expected = read_drv_outputs(drv_path).await;
++      if opts.cache_upload_enabled_s3 {
++        let mut reported: Vec<_> = outputs.iter().map(|o| o.path.as_str()).collect();
++        reported.sort_unstable();
++        let mut expected_sorted: Vec<_> = expected.iter().map(String::as_str).collect();
++        expected_sorted.sort_unstable();
++        if expected_sorted.is_empty() || reported != expected_sorted {
++          return Some(result(false, 1,
++            "agent did not publish every derivation output".into(),
++            Vec::new(), Vec::new()));
++        }
++        // Cache rows keep the original build ID when an output is reuploaded;
++        // require a verified cache URL refreshed during this dispatch.
++        for path in &expected {
++          match repo::narinfo_cache::get(pool, path).await {
++            Ok(info) if build.started_at.is_some_and(|started| info.updated_at >= started)
++              && info.url.starts_with("nar/")
++              && !info.url.contains("?hash=") => {},
++            _ => return Some(result(false, 1,
++              format!("agent output {path} has no verified cache upload"),
++              Vec::new(), Vec::new())),
++          }
++        }
++        Some(result(true, 0, error_message.unwrap_or_default(),
++          expected, outputs))
++      } else {
++        Some(result(true, 0, error_message.unwrap_or_default(),
++          expected, Vec::new()))
++      }
+     },
+     Ok(DispatchResult::Failed(error_message)) => {
+-      Some(result(false, 1, error_message, Vec::new()))
++      Some(result(false, 1, error_message, Vec::new(), Vec::new()))
+     },
+     Ok(DispatchResult::TimedOut) => {
+-      Some(result(false, 124, "build timed out".into(), Vec::new()))
++      Some(result(false, 124, "build timed out".into(), Vec::new(), Vec::new()))
+     },
+     Ok(DispatchResult::Aborted) => {
+-      Some(result(false, 130, "build aborted".into(), Vec::new()))
++      Some(result(false, 130, "build aborted".into(), Vec::new(), Vec::new()))
+     },
+     Ok(DispatchResult::OomKilled(error_message)) => {
+-      Some(result(false, -9, error_message, Vec::new()))
++      Some(result(false, -9, error_message, Vec::new(), Vec::new()))
+     },
+     Ok(DispatchResult::Disconnected) | Err(_) => {
+       tracing::warn!(name = %snap.name, "agent disconnected mid-build; falling back");
+--- a/crates/queue-runner/src/builder.rs
++++ b/crates/queue-runner/src/builder.rs
+@@ -20,6 +20,7 @@
+   pub stderr:               String,
+   pub output_paths:         Vec<String>,
+   pub cache_upload_handled: bool,
++  pub agent_outputs:        Vec<crate::rpc::pool::AgentOutput>,
+ }
+ 
+ /// Run `nix build` for a derivation path.
+@@ -131,6 +132,7 @@
+       stderr: stderr_buf,
+       output_paths,
+       cache_upload_handled: false,
++      agent_outputs: Vec::new(),
+     })
+   })
+   .await;
+--- a/crates/queue-runner/src/worker.rs
++++ b/crates/queue-runner/src/worker.rs
+@@ -513,6 +513,14 @@
+   };
+ 
+   for info in infos {
++    // Reused cache-published outputs may also be present locally. Never
++    // replace their verified S3 URL with a runner-local virtual NAR URL.
++    if let Ok(existing) = repo::narinfo_cache::get(pool, &info.store_path).await
++      && existing.url.starts_with("nar/")
++      && !existing.url.contains("?hash=")
++    {
++      continue;
++    }
+     let Some(url) = nar_url_for_path(&info) else {
+       tracing::warn!(
+         store_path = %info.store_path,
+@@ -1066,7 +1074,7 @@
+         &snap,
+         slot,
+         pool,
+-        build,
++        &claimed_build,
+         drv_path,
+         &live_log_path,
+         &opts,
+@@ -1220,7 +1228,8 @@
+ 
+           // Register GC root
+           let mut gc_root_path = None;
+-          if let Ok(gc_roots) = GcRoots::new(
++          if !build_result.cache_upload_handled
++            && let Ok(gc_roots) = GcRoots::new(
+             gc_config.gc_roots_dir.clone(),
+             nix_store_dir.to_path_buf(),
+             gc_config.enabled,
+@@ -1241,12 +1250,31 @@
+             }
+           }
+ 
+-          // Get metadata from nix path-info
+-          let (sha256_hash, file_size) = match get_path_info(output_path).await
+-          {
+-            Some((hash, size)) => (Some(hash), Some(size)),
+-            None => (None, None),
+-          };
++          // Cache-only agent outputs are absent from this runner's store.
++          // Use the verified narinfo and the agent's raw file metadata.
++          let (sha256_hash, file_size, is_directory) =
++            if build_result.cache_upload_handled {
++              let info = repo::narinfo_cache::get(pool, output_path).await?;
++              let agent = build_result.agent_outputs.iter().find(|o| o.path == *output_path)
++                .ok_or_else(|| circus_common::CiError::Build(
++                  format!("agent omitted metadata for {output_path}")))?;
++              let size = if agent.is_directory {
++                info.nar_size
++              } else {
++                agent.file_size.try_into().map_err(|_| {
++                  circus_common::CiError::Build(
++                    format!("agent file size overflows for {output_path}"))
++                })?
++              };
++              (Some(info.nar_hash), Some(size), agent.is_directory)
++            } else {
++              let path_info = get_path_info(output_path).await;
++              let (hash, size) = match path_info {
++                Some((hash, size)) => (Some(hash), Some(size)),
++                None => (None, None),
++              };
++              (hash, size, tokio::fs::metadata(output_path).await?.is_dir())
++            };
+ 
+           let product =
+             repo::build_products::create(pool, CreateBuildProduct {
+@@ -1256,7 +1284,7 @@
+               sha256_hash,
+               file_size,
+               content_type: None,
+-              is_directory: tokio::fs::metadata(output_path).await?.is_dir(),
++              is_directory,
+             })
+             .await?;
+ 
+@@ -1272,20 +1300,23 @@
+         }
+ 
+         // Sign outputs at build time
+-        if sign_outputs(&build_result.output_paths, signing_config).await
++        if !build_result.cache_upload_handled
++          && sign_outputs(&build_result.output_paths, signing_config).await
+           && let Err(e) = repo::builds::mark_signed(pool, build.id).await
+         {
+           tracing::warn!(build_id = %build.id, "Failed to mark build as signed: {e}");
+         }
+ 
+-        persist_closure_narinfos(
+-          pool,
+-          build.id,
+-          &build_result.output_paths,
+-          signing_config,
+-          project_context.as_ref().map(|(project, _)| project.id),
+-        )
+-        .await;
++        if !build_result.cache_upload_handled {
++          persist_closure_narinfos(
++            pool,
++            build.id,
++            &build_result.output_paths,
++            signing_config,
++            project_context.as_ref().map(|(project, _)| project.id),
++          )
++          .await;
++        }
+ 
+         // Push to external binary cache if configured
+         let upload_failed_paths = if cache_upload_config.enabled
+--- a/crates/agent/src/upload.rs
++++ b/crates/agent/src/upload.rs
+@@ -333,7 +333,11 @@
+   cmd.args(["path-info", "--json", "--closure-size", store_path]);
+   let mut cmd = crate::sandbox::wrap_command(rootless, cmd)?;
+   let out = cmd.output().await.context("nix path-info")?;
+   if !out.status.success() {
+-    bail!("nix path-info exited with {}", out.status);
++    bail!(
++      "nix path-info exited with {}: {}",
++      out.status,
++      String::from_utf8_lossy(&out.stderr)
++    );
+   }
+   let v: serde_json::Value =
