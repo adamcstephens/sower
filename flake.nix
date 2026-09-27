@@ -94,6 +94,8 @@
               };
             };
           };
+
+        sower.devshells.enable = true;
       }
     );
 }
