@@ -244,3 +244,331 @@ fn missing_logs_are_explicit_even_when_diagnostic_fetch_fails() {
         assert!(text.contains("result stale"));
     }
 }
+
+#[cfg(unix)]
+mod seed_warming {
+    use super::*;
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+
+    struct Fixture {
+        root: PathBuf,
+        artifact: PathBuf,
+    }
+
+    impl Fixture {
+        fn new() -> Self {
+            let root = std::env::temp_dir().join(format!(
+                "sower-deploy-warming-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            fs::create_dir_all(root.join("bin")).unwrap();
+            let artifact = root.join("abc-nixos-system-host-26.05");
+            fs::create_dir(&artifact).unwrap();
+            fs::write(artifact.join("nixos-version"), "26.05").unwrap();
+            let fixture = Self { root, artifact };
+            fixture.executable(
+                "nom",
+                "#!/bin/sh\nprintf 'flake-build\\n' >> \"$SOWER_TEST_LOG\"\nprintf '%s\\n' \"$SOWER_TEST_ARTIFACT\"\n",
+            );
+            fixture.executable(
+                "nix",
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" | paste -sd ' ' - >> \"$SOWER_TEST_LOG\"\n",
+            );
+            fixture
+        }
+
+        fn executable(&self, name: &str, script: &str) {
+            let path = self.root.join("bin").join(name);
+            fs::write(&path, script).unwrap();
+            fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        fn run(
+            &self,
+            responses: Vec<(&'static str, u16, Value)>,
+            args: &[&str],
+        ) -> (Output, Vec<String>) {
+            self.run_flake(".#host", responses, args)
+        }
+
+        fn run_flake(
+            &self,
+            flake: &str,
+            responses: Vec<(&'static str, u16, Value)>,
+            args: &[&str],
+        ) -> (Output, Vec<String>) {
+            self.run_source(&[flake], responses, args)
+        }
+
+        fn run_source(
+            &self,
+            source: &[&str],
+            responses: Vec<(&'static str, u16, Value)>,
+            args: &[&str],
+        ) -> (Output, Vec<String>) {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            listener.set_nonblocking(true).unwrap();
+            let endpoint = format!("http://{}", listener.local_addr().unwrap());
+            let server = thread::spawn(move || {
+                let mut requests = Vec::new();
+                for (expected, status, body) in responses {
+                    let deadline = Instant::now() + Duration::from_secs(10);
+                    let mut stream = loop {
+                        match listener.accept() {
+                            Ok((stream, _)) => break stream,
+                            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                                assert!(Instant::now() < deadline, "missing {expected}");
+                                thread::sleep(Duration::from_millis(10));
+                            }
+                            Err(error) => panic!("{error}"),
+                        }
+                    };
+                    stream
+                        .set_read_timeout(Some(Duration::from_secs(5)))
+                        .unwrap();
+                    let mut reader = BufReader::new(&mut stream);
+                    let mut request = String::new();
+                    reader.read_line(&mut request).unwrap();
+                    assert!(request.starts_with(expected), "{request}");
+                    let mut length = 0;
+                    let mut authenticated = false;
+                    loop {
+                        let mut line = String::new();
+                        reader.read_line(&mut line).unwrap();
+                        if line == "\r\n" {
+                            break;
+                        }
+                        let lower = line.to_ascii_lowercase();
+                        authenticated |= lower.trim() == "authorization: bearer test-token";
+                        if let Some(value) = lower.strip_prefix("content-length:") {
+                            length = value.trim().parse().unwrap();
+                        }
+                    }
+                    assert!(authenticated, "missing auth for {request}");
+                    reader.read_exact(&mut vec![0; length]).unwrap();
+                    requests.push(request.trim().to_owned());
+                    let body = body.to_string();
+                    write!(stream, "HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+                }
+                requests
+            });
+            let mut command = Command::new(env!("CARGO_BIN_EXE_sower"));
+            let path = format!(
+                "{}:{}",
+                self.root.join("bin").display(),
+                std::env::var("PATH").unwrap()
+            );
+            let output = command
+                .env("PATH", path)
+                .env("SOWER_TEST_LOG", self.root.join("calls"))
+                .env("SOWER_TEST_ARTIFACT", &self.artifact)
+                .env_remove("SOWER_ACCESS_TOKEN_FILE")
+                .env_remove("SOWER_CONFIG_FILE")
+                .env("RUST_LOG", "warn")
+                .arg("deploy")
+                .args(source)
+                .args([
+                    "--to",
+                    "garden name",
+                    "--no-wait",
+                    "--access-token",
+                    "test-token",
+                    "--endpoint",
+                    &endpoint,
+                ])
+                .args(args)
+                .output()
+                .unwrap();
+            let requests = server.join().unwrap();
+            (output, requests)
+        }
+
+        fn calls(&self) -> String {
+            fs::read_to_string(self.root.join("calls")).unwrap_or_default()
+        }
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            fs::remove_dir_all(&self.root).unwrap();
+        }
+    }
+
+    fn registration() -> Value {
+        json!({"artifact": "/nix/store/built", "name": "host", "seed_type": "nixos", "sid": "seed_built", "tags": []})
+    }
+
+    fn deployment() -> Value {
+        super::deployment("created", None, vec![])
+    }
+
+    #[test]
+    fn warms_matching_seed_with_caches_before_flake_build_and_substitutes_copy() {
+        let fixture = Fixture::new();
+        let (out, requests) = fixture.run(vec![
+            ("GET /api/v1/gardens/garden%20name/latest-seed?name=host&seed_type=nixos ", 200,
+                json!({"artifact": "/nix/store/previous", "name": "host", "seed_type": "nixos", "sid": "seed_previous", "tags": []})),
+            ("GET /api/v1/nix/caches ", 200, json!([{"sid": "cache_1", "url": "https://cache.example", "public_key": "cache.example:key"}])),
+            ("POST /api/v1/seeds ", 201, registration()),
+            ("POST /api/v1/deployments ", 201, deployment()),
+        ], &["--copy-to", "ssh://host"]);
+        assert!(out.status.success(), "{}", stderr(&out));
+        assert_eq!(requests.len(), 4);
+        let calls = fixture.calls();
+        let lines: Vec<_> = calls.lines().collect();
+        assert_eq!(
+            lines[0],
+            "build /nix/store/previous --extra-substituters https://cache.example --extra-trusted-public-keys cache.example:key"
+        );
+        assert_eq!(lines[1], "flake-build");
+        assert_eq!(
+            lines[2],
+            format!(
+                "copy --to ssh://host --substitute-on-destination {}",
+                fixture.artifact.display()
+            )
+        );
+    }
+
+    #[test]
+    fn no_match_and_disabled_download_leave_build_unwarmed() {
+        for (response, flags) in [(Some(204), vec![]), (None, vec!["--no-seed-download"])] {
+            let fixture = Fixture::new();
+            let mut responses = Vec::new();
+            if let Some(status) = response {
+                responses.push((
+                    "GET /api/v1/gardens/garden%20name/latest-seed?name=host&seed_type=nixos ",
+                    status,
+                    json!(null),
+                ));
+            }
+            responses.extend([
+                ("POST /api/v1/seeds ", 201, registration()),
+                ("POST /api/v1/deployments ", 201, deployment()),
+            ]);
+            let (out, requests) = fixture.run(responses, &flags);
+            assert!(out.status.success(), "{}", stderr(&out));
+            assert_eq!(requests.len(), if response.is_some() { 3 } else { 2 });
+            assert_eq!(fixture.calls(), "flake-build\n");
+        }
+    }
+
+    #[test]
+    fn unknown_prebuild_name_does_not_query_previous_seed() {
+        let fixture = Fixture::new();
+        let (out, requests) = fixture.run_flake(
+            ".#packages.x86_64-linux.thing",
+            vec![
+                ("POST /api/v1/seeds ", 201, registration()),
+                ("POST /api/v1/deployments ", 201, deployment()),
+            ],
+            &[],
+        );
+        assert!(out.status.success(), "{}", stderr(&out));
+        assert_eq!(requests.len(), 2);
+        assert_eq!(fixture.calls(), "flake-build\n");
+        assert!(stderr(&out).contains("Cannot infer a seed name"));
+    }
+
+    #[test]
+    fn old_server_or_lookup_failure_warns_but_still_deploys() {
+        for status in [401, 404, 409, 500] {
+            let fixture = Fixture::new();
+            let (out, requests) = fixture.run(
+                vec![
+                    (
+                        "GET /api/v1/gardens/garden%20name/latest-seed?name=host&seed_type=nixos ",
+                        status,
+                        json!({}),
+                    ),
+                    ("POST /api/v1/seeds ", 201, registration()),
+                    ("POST /api/v1/deployments ", 201, deployment()),
+                ],
+                &[],
+            );
+            assert!(out.status.success(), "{status}: {}", stderr(&out));
+            assert_eq!(requests.len(), 3);
+            assert_eq!(fixture.calls(), "flake-build\n");
+            assert!(
+                stderr(&out).contains("Could not download previous seed"),
+                "{status}: {}",
+                stderr(&out)
+            );
+        }
+    }
+
+    #[test]
+    fn cache_lookup_and_realization_failure_warn_but_still_build() {
+        for fail_realization in [false, true] {
+            let fixture = Fixture::new();
+            if fail_realization {
+                fixture.executable(
+                    "nix",
+                    "#!/bin/sh\nprintf '%s\\n' \"$@\" | paste -sd ' ' - >> \"$SOWER_TEST_LOG\"\nexit 88\n",
+                );
+            }
+            let (out, requests) = fixture.run(vec![
+                ("GET /api/v1/gardens/garden%20name/latest-seed?name=host&seed_type=nixos ", 200,
+                    json!({"artifact": "/nix/store/previous", "name": "host", "seed_type": "nixos", "sid": "seed_previous", "tags": []})),
+                ("GET /api/v1/nix/caches ", if fail_realization { 200 } else { 500 },
+                    if fail_realization { json!([]) } else { json!({}) }),
+                ("POST /api/v1/seeds ", 201, registration()),
+                ("POST /api/v1/deployments ", 201, deployment()),
+            ], &[]);
+            assert!(out.status.success(), "{}", stderr(&out));
+            assert_eq!(requests.len(), 4);
+            assert!(stderr(&out).contains("Could not download previous seed"));
+            let calls = fixture.calls();
+            if fail_realization {
+                assert_eq!(calls, "build /nix/store/previous\nflake-build\n");
+            } else {
+                assert_eq!(calls, "flake-build\n");
+            }
+        }
+    }
+
+    #[test]
+    fn explicit_name_is_used_for_matching_without_changing_artifact() {
+        let fixture = Fixture::new();
+        let (out, requests) = fixture.run(vec![
+            ("GET /api/v1/gardens/garden%20name/latest-seed?name=explicit+host&seed_type=nixos ", 204, json!(null)),
+            ("POST /api/v1/seeds ", 201, registration()),
+            ("POST /api/v1/deployments ", 201, deployment()),
+        ], &["--name", "explicit host"]);
+        assert!(out.status.success(), "{}", stderr(&out));
+        assert_eq!(requests.len(), 3);
+        assert_eq!(fixture.calls(), "flake-build\n");
+    }
+
+    #[test]
+    fn path_and_registered_seed_never_fetch_previous_seed() {
+        let fixture = Fixture::new();
+        let (out, requests) = fixture.run_source(
+            &["--path", fixture.artifact.to_str().unwrap()],
+            vec![
+                ("POST /api/v1/seeds ", 201, registration()),
+                ("POST /api/v1/deployments ", 201, deployment()),
+            ],
+            &[],
+        );
+        assert!(out.status.success(), "{}", stderr(&out));
+        assert_eq!(requests.len(), 2);
+        assert_eq!(fixture.calls(), "");
+
+        let fixture = Fixture::new();
+        let (out, requests) = fixture.run_source(
+            &["--seed", "seed_existing"],
+            vec![("POST /api/v1/deployments ", 201, deployment())],
+            &[],
+        );
+        assert!(out.status.success(), "{}", stderr(&out));
+        assert_eq!(requests.len(), 1);
+        assert_eq!(fixture.calls(), "");
+    }
+}

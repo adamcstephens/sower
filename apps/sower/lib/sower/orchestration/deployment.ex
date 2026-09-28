@@ -483,7 +483,7 @@ defmodule Sower.Orchestration.Deployment do
   def deploy_direct(%Garden{} = garden, %Seed{} = seed, opts \\ []) do
     case authorize_direct(garden, seed, opts) do
       {:ok, action, event_reason} ->
-        subscription = match_direct_subscription(garden, seed)
+        subscription = Subscription.find_for_garden_seed(garden, seed.name, seed.seed_type)
 
         seed_deploys = [
           %SowerClient.Orchestration.SeedDeployment{
@@ -577,17 +577,6 @@ defmodule Sower.Orchestration.Deployment do
       _ ->
         {:error, :garden_upgrade_required}
     end
-  end
-
-  defp match_direct_subscription(%Garden{} = garden, %Seed{} = seed) do
-    from(s in Subscription,
-      where:
-        s.garden_id == ^garden.id and s.seed_name == ^seed.name and
-          s.seed_type == ^seed.seed_type,
-      order_by: [asc: s.inserted_at],
-      limit: 1
-    )
-    |> Repo.one()
   end
 
   def request_deployment(%SowerClient.Orchestration.DeploymentRequest{} = request) do

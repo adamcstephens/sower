@@ -204,6 +204,42 @@ fn sudo_deploy_uses_existing_remote_sower_without_server_credentials() {
 }
 
 #[test]
+fn copy_substitutes_on_destination_by_default_and_can_be_disabled() {
+    for (extra, substitutes) in [
+        (Vec::<&str>::new(), true),
+        (vec!["--no-substitute-on-destination"], false),
+    ] {
+        let fixture =
+            Fixture::new("{\"id\":\"sudo-deploy\",\"type\":\"complete\",\"exit_code\":0}\n");
+        let out = fixture
+            .command()
+            .arg("--path")
+            .arg(&fixture.artifact)
+            .args(["--copy-to", "ssh://host", "--sudo"])
+            .args(extra)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let args = fs::read_to_string(fixture.root.join("nix-args")).unwrap();
+        let copied: Vec<_> = args.lines().collect();
+        let mut expected = vec!["copy", "--to", "ssh://host"];
+        if substitutes {
+            expected.push("--substitute-on-destination");
+        }
+        expected.push(fixture.artifact.to_str().unwrap());
+        assert_eq!(copied, expected);
+        assert_eq!(
+            fixture.request()["path"],
+            fixture.artifact.to_str().unwrap()
+        );
+    }
+}
+
+#[test]
 fn nom_build_output_is_live_and_its_stdout_selects_the_artifact() {
     let fixture = Fixture::new("{\"id\":\"sudo-deploy\",\"type\":\"complete\",\"exit_code\":0}\n");
     fixture.executable(

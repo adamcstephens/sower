@@ -118,6 +118,7 @@ defmodule SowerWeb.Router do
     get "/auth/verify", AuthController, :verify
 
     post "/gardens/register", GardenController, :register
+    get "/gardens/:garden/latest-seed", GardenController, :latest_seed
 
     get "/nix/caches", Nix.CacheController, :list
     get "/seeds", SeedController, :list

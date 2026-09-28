@@ -57,6 +57,19 @@ defmodule Sower.Orchestration.Subscription do
     |> Repo.all()
   end
 
+  @doc """
+  Finds the oldest subscription for a garden and seed identity, regardless of
+  its tag rules. Direct deployment and seed warming use the same selection.
+  """
+  def find_for_garden_seed(%Garden{} = garden, name, seed_type) do
+    from(s in __MODULE__,
+      where: s.garden_id == ^garden.id and s.seed_name == ^name and s.seed_type == ^seed_type,
+      order_by: [asc: s.inserted_at, asc: s.id],
+      limit: 1
+    )
+    |> Repo.one()
+  end
+
   def get_subscription!(id) do
     Repo.get!(__MODULE__, id)
     |> Repo.preload(:garden)

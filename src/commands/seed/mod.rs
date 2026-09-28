@@ -11,7 +11,7 @@ mod reboot;
 mod submit;
 mod upgrade;
 
-pub use ops::{SeedType, precheck, run_inherited};
+pub use ops::{SeedType, precheck, realize, run_inherited};
 pub use submit::parse_tags;
 
 #[derive(Debug, Args)]

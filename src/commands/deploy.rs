@@ -49,6 +49,14 @@ pub struct DeployArgs {
     #[arg(long = "copy-to")]
     copy_to: Option<String>,
 
+    /// Do not substitute store paths from caches on the destination when copying.
+    #[arg(long)]
+    no_substitute_on_destination: bool,
+
+    /// Skip downloading the garden's latest matching seed before building a flake.
+    #[arg(long)]
+    no_seed_download: bool,
+
     /// Activate as root over SSH with interactive sudo instead of using the garden.
     /// Requires --copy-to ssh://[user@]host; no server deployment is created.
     #[arg(
@@ -130,6 +138,7 @@ pub fn run(args: DeployArgs) -> Result<()> {
 
     rt.block_on(async move {
         let client = args.connection.authenticated_client()?;
+        warm_seed(&client, &args, &garden).await;
         let seed_sid = resolve_seed(&client, &args).await?;
         deploy(&client, &args, &garden, &seed_sid).await
     })
@@ -188,9 +197,78 @@ fn prepare_artifact(args: &DeployArgs) -> Result<(String, Option<String>)> {
         .context("pre-check artifact")?;
 
     if let Some(target) = &args.copy_to {
-        nix_copy(&artifact, target)?;
+        nix_copy(&artifact, target, !args.no_substitute_on_destination)?;
     }
     Ok((artifact, inferred_name))
+}
+
+async fn warm_seed(client: &Client, args: &DeployArgs, garden: &str) {
+    if args.no_seed_download || args.seed.is_some() || args.sudo {
+        return;
+    }
+    let Some(flake) = args.flake.as_deref() else {
+        return;
+    };
+    let name = match flake_installable(flake) {
+        Ok((_, inferred)) => args
+            .name
+            .as_deref()
+            .or(inferred.as_deref())
+            .map(str::to_owned),
+        Err(_) => return,
+    };
+    let Some(name) = name else {
+        tracing::warn!("Cannot infer a seed name before building; skipping seed download");
+        return;
+    };
+    if let Err(error) = download_previous_seed(client, garden, &name, args.seed_type).await {
+        tracing::warn!(%error, "Could not download previous seed; continuing with flake build");
+    }
+}
+
+async fn download_previous_seed(
+    client: &Client,
+    garden: &str,
+    name: &str,
+    seed_type: SeedType,
+) -> Result<()> {
+    let mut url = reqwest::Url::parse(&format!(
+        "{}/api/v1/gardens",
+        client.baseurl.trim_end_matches('/')
+    ))?;
+    url.path_segments_mut()
+        .map_err(|_| anyhow!("server endpoint cannot be used as a URL path"))?
+        .push(garden)
+        .push("latest-seed");
+    url.query_pairs_mut()
+        .append_pair("name", name)
+        .append_pair("seed_type", seed_type.as_str());
+    let response = client
+        .client
+        .get(url)
+        .send()
+        .await
+        .context("look up garden's latest seed")?;
+    if response.status() == reqwest::StatusCode::NO_CONTENT {
+        tracing::info!(garden, name, "No matching seed to download");
+        return Ok(());
+    }
+    let response = response
+        .error_for_status()
+        .context("look up garden's latest seed")?;
+    let seed: types::Seed = response
+        .json()
+        .await
+        .context("decode garden's latest seed")?;
+    let caches = client
+        .list_nix_caches()
+        .await
+        .context("list nix caches")?
+        .into_inner();
+    crate::commands::seed::realize(&seed.artifact, &caches, false, None)
+        .with_context(|| format!("realize previous seed {}", seed.artifact))?;
+    tracing::info!(name = %seed.name, artifact = %seed.artifact, "Downloaded previous seed");
+    Ok(())
 }
 
 async fn resolve_seed(client: &Client, args: &DeployArgs) -> Result<String> {
@@ -450,10 +528,14 @@ fn nix_build(installable: &str) -> Result<String> {
         .ok_or_else(|| anyhow!("{program} build printed no store path for {installable}"))
 }
 
-fn nix_copy(artifact: &str, target: &str) -> Result<()> {
+fn nix_copy(artifact: &str, target: &str, substitute_on_destination: bool) -> Result<()> {
     tracing::info!(target, "Copying closure");
     let mut cmd = Command::new("nix");
-    cmd.args(["copy", "--to", target, artifact]);
+    cmd.args(["copy", "--to", target]);
+    if substitute_on_destination {
+        cmd.arg("--substitute-on-destination");
+    }
+    cmd.arg(artifact);
     crate::commands::seed::run_inherited(cmd).context("nix copy")
 }
 

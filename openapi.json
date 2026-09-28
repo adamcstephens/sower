@@ -403,7 +403,7 @@
   },
   "info": {
     "title": "sower",
-    "version": "0.12.10"
+    "version": "0.12.11"
   },
   "openapi": "3.0.0",
   "paths": {
@@ -731,6 +731,121 @@
           }
         },
         "summary": "Register a new garden",
+        "tags": []
+      }
+    },
+    "/api/v1/gardens/{garden}/latest-seed": {
+      "get": {
+        "callbacks": {},
+        "operationId": "LatestGardenSeed",
+        "parameters": [
+          {
+            "description": "Garden SID or unambiguous name",
+            "in": "path",
+            "name": "garden",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          },
+          {
+            "description": "Seed name",
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          },
+          {
+            "description": "Seed type",
+            "in": "query",
+            "name": "seed_type",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Seed"
+                }
+              }
+            },
+            "description": "Latest matching seed"
+          },
+          "204": {
+            "description": "No matching subscription or seed"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Garden not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Garden name is ambiguous"
+          }
+        },
+        "summary": "Find the latest seed for a garden's oldest matching subscription",
         "tags": []
       }
     },

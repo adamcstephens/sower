@@ -66,4 +66,82 @@ defmodule SowerWeb.Api.GardenController do
       conn |> put_status(:unauthorized) |> render(:error, error: "unauthorized")
     end
   end
+
+  operation(:latest_seed,
+    operation_id: "LatestGardenSeed",
+    summary: "Find the latest seed for a garden's oldest matching subscription",
+    parameters: [
+      garden: [
+        in: :path,
+        required: true,
+        description: "Garden SID or unambiguous name",
+        type: :string
+      ],
+      name: [
+        in: :query,
+        required: true,
+        description: "Seed name",
+        type: :string
+      ],
+      seed_type: [
+        in: :query,
+        required: true,
+        description: "Seed type",
+        type: :string
+      ]
+    ],
+    responses: %{
+      ok: {"Latest matching seed", "application/json", SowerClient.Seed},
+      no_content: "No matching subscription or seed",
+      not_found:
+        {"Garden not found", "application/json",
+         %Schema{type: :object, properties: %{error: %Schema{type: :string}}}},
+      conflict:
+        {"Garden name is ambiguous", "application/json",
+         %Schema{type: :object, properties: %{error: %Schema{type: :string}}}},
+      unauthorized:
+        {"Unauthorized", "application/json",
+         %Schema{type: :object, properties: %{error: %Schema{type: :string}}}}
+    }
+  )
+
+  def latest_seed(conn, %{garden: identifier, name: name, seed_type: seed_type}) do
+    token = conn.assigns.access_token
+
+    if token |> can() |> read?(%Sower.Orchestration.Seed{org_id: token.org_id}) do
+      case Sower.Orchestration.Garden.resolve(identifier) do
+        {:ok, %Sower.Orchestration.Garden{org_id: org_id} = garden}
+        when org_id == token.org_id ->
+          case Sower.Orchestration.Subscription.find_for_garden_seed(garden, name, seed_type) do
+            nil ->
+              send_resp(conn, :no_content, "")
+
+            subscription ->
+              case Sower.Orchestration.Deployment.match_seed(subscription) do
+                %Sower.Orchestration.Seed{org_id: org_id} = seed
+                when org_id == token.org_id ->
+                  conn
+                  |> put_view(json: SowerWeb.Api.SeedJSON)
+                  |> render(:show, seed: seed)
+
+                _ ->
+                  send_resp(conn, :no_content, "")
+              end
+          end
+
+        {:ok, _garden} ->
+          conn |> put_status(:not_found) |> render(:error, error: "garden_not_found")
+
+        {:error, :garden_not_found} ->
+          conn |> put_status(:not_found) |> render(:error, error: "garden_not_found")
+
+        {:error, :ambiguous_garden} ->
+          conn
+          |> put_status(:conflict)
+          |> render(:error, error: "garden name is ambiguous, use the sid")
+      end
+    else
+      conn |> put_status(:unauthorized) |> render(:error, error: "unauthorized")
+    end
+  end
 end
