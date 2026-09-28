@@ -81,7 +81,7 @@ in
         xdg.configFile."sower/client.json".source = lib.mkIf (cfg.settings != { }) jsonConfig;
       }
 
-      (lib.mkIf pkgs.stdenv.isLinux {
+      (lib.mkIf pkgs.stdenv.hostPlatform.isLinux {
         systemd.user.services.sower-garden = {
           Service = {
             Environment = [
@@ -143,7 +143,7 @@ in
         };
       })
 
-      (lib.mkIf pkgs.stdenv.isDarwin {
+      (lib.mkIf pkgs.stdenv.hostPlatform.isDarwin {
         launchd = {
           agents.sower-garden = {
             enable = true;

@@ -7,7 +7,7 @@
       ...
     }:
     {
-      checks = lib.optionalAttrs pkgs.stdenv.isLinux {
+      checks = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
         default = pkgs.callPackage ./e2e.nix {
           flake = self;
         };

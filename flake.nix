@@ -81,7 +81,7 @@
                   pkgs.s5cmd
                   pkgs.sd-switch
                 ]
-                ++ lib.optionals pkgs.stdenv.isLinux [
+                ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
                   # elixir
                   pkgs.inotify-tools
                 ];
