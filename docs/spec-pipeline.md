@@ -358,6 +358,14 @@ type, tags).
 | tags          | object  | no       | {}      | Extra tags merged with git/meta tags.                       |
 | authoritative | boolean | no       | true    | Same semantics as `sower-build` (rename on artifact match). |
 
+Standalone seed wrappers built by `mkSeedManifest` are directories at
+`/nix/store/<hash>-seed-<name>` containing `seed.json`. Consumers read that
+exact file, without directory scanning or a legacy raw-file path. The
+version-1 manifest's `artifact` names the deployable target, not the wrapper;
+the wrapper retains the target in its closure. Circus publication must
+expose `seed.json` as a file product returning raw JSON, not the wrapper
+directory as a NAR. The wrapper itself contains no CI-specific files.
+
 ### resolve
 
 Resolves the subscriptions of a set of gardens against the seed registry

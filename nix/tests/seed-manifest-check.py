@@ -4,11 +4,11 @@ import sys
 
 import jsonschema
 
-manifest = json.loads(pathlib.Path(sys.argv[1]).read_text())
+manifest = json.loads((pathlib.Path(sys.argv[1]) / "seed.json").read_text())
 target = sys.argv[2]
 schema = json.loads(pathlib.Path(sys.argv[3]).read_text())
-nixos = json.loads(pathlib.Path(sys.argv[4]).read_text())
-home = json.loads(pathlib.Path(sys.argv[5]).read_text())
+nixos = json.loads((pathlib.Path(sys.argv[4]) / "seed.json").read_text())
+home = json.loads((pathlib.Path(sys.argv[5]) / "seed.json").read_text())
 system = sys.argv[6]
 
 assert manifest == {

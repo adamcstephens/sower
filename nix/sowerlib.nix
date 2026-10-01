@@ -27,13 +27,14 @@ rec {
       validator = pkgs.callPackage ./packages/seed-manifest-validator.nix { };
     in
     pkgs.stdenv.mkDerivation {
-      name = "seed-manifest-${name}.json";
+      name = "seed-${name}";
       dontUnpack = true;
       nativeBuildInputs = [ validator ];
       installPhase = ''
         runHook preInstall
-        cp "${manifest}" "$out"
-        validate-seed-manifest "${./seed-manifest.schema.json}" "$out"
+        mkdir --parents "$out"
+        cp "${manifest}" "$out/seed.json"
+        validate-seed-manifest "${./seed-manifest.schema.json}" "$out/seed.json"
         runHook postInstall
       '';
     };
