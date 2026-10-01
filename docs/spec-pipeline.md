@@ -366,6 +366,24 @@ the wrapper retains the target in its closure. Circus publication must
 expose `seed.json` as a file product returning raw JSON, not the wrapper
 directory as a NAR. The wrapper itself contains no CI-specific files.
 
+Local `sower build --seed` recognizes wrapper jobs by the `manifest/`
+namespace, including qualified flake attributes such as
+`packages.<system>.manifest/nixos/<name>`. Custom producers use
+`mkSeedManifest { pkgs; name; type; target; tags; }` and expose the wrapper
+as `manifest/<job>`; ordinary package outputs are not probed for JSON.
+Registration reads `<build.store_path>/seed.json`, validates the complete
+version-1 manifest, and registers its `artifact`, never the wrapper path.
+Tags retain CLI, intrinsic manifest, then repository composition order;
+`--non-authoritative` retains its existing registration semantics.
+
+Until wrapper jobs become canonical, local registration still accepts
+metadata-bearing jobs without a corresponding `manifest/<job>`. When both
+jobs were built, the manifest job takes precedence even if its manifest is
+invalid: it reports a registration error rather than falling back to metadata.
+Missing, malformed, or unsupported manifests also fail registration. With
+`--fail-fast` this returns `seed_failed`; otherwise the pipeline retains
+error status. Ordinary non-seed jobs remain unregistered.
+
 ### resolve
 
 Resolves the subscriptions of a set of gardens against the seed registry

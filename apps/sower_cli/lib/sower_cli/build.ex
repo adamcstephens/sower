@@ -11,8 +11,6 @@ defmodule SowerCli.Build do
 
   use TypedStruct
 
-  require Logger
-
   alias SowerCli.{Cache, Output}
 
   typedstruct do
@@ -253,79 +251,123 @@ defmodule SowerCli.Build do
 
     repo_tags = SowerCli.Repo.get_tags(state.request)
 
-    Output.step("Registering #{length(state.builds)} seed(s)")
+    results = register_seeds(state, client, repo_tags)
 
-    results =
-      state.builds
-      |> Enum.with_index()
-      |> Enum.map(fn
-        {%Nix.Build{
-           eval: %Nix.Eval{
-             output: %{
-               "meta" => %{
-                 "sower" => %{
-                   "seed" => seed_meta
-                 }
-               }
-             }
-           }
-         } = build, idx} ->
-          seed_name = Map.get(seed_meta, "name", build.store_path)
-          block_id = {:seed, idx}
-          Output.live_item_start(block_id, "Registering", seed_name)
-
-          tags =
-            cli_tags(state) ++
-              convert_meta_tags(seed_meta) ++
-              repo_tags
-
-          result =
-            case seed_meta
-                 |> Map.put("tags", tags)
-                 |> Map.put("artifact", build.store_path)
-                 |> SowerClient.Seed.cast() do
-              {:ok, seed} ->
-                case SowerClient.Seed.create(client, seed, rename: !state.flags.non_authoritative) do
-                  {:ok, _} = result ->
-                    Output.live_item_done(block_id, "Registered", seed_name)
-                    result
-
-                  {:error, reason} = error ->
-                    Output.live_item_error(block_id, "Failed", seed_name)
-                    Output.error("Failed to register seed: #{inspect(reason)}")
-                    error
-                end
-
-              {:error, error} ->
-                Output.live_item_error(block_id, "Failed", seed_name)
-                Output.error("Failed to cast seed: #{inspect(error)}")
-                {:error, {:cast_failed, error}}
-            end
-
-          result
-
-        {%Nix.Build{eval: eval}, _idx} ->
-          Logger.debug(msg: "Eval is missing sower seed metadata", eval: eval)
-          :skip
-      end)
-
-    Output.live_flush()
-
-    errors =
-      results
-      |> Enum.filter(fn
-        {:error, _} -> true
-        _ -> false
-      end)
-
-    if Enum.empty?(errors) do
-      run_steps(rest, state)
-    else
+    if Enum.any?(results, &match?({:error, _}, &1)) do
       if state.flags.fail_fast do
         {:error, :seed_failed}
       else
         run_steps(rest, %{state | status: :error})
       end
+    else
+      run_steps(rest, state)
+    end
+  end
+
+  def register_seeds(%__MODULE__{} = state, %Req.Request{} = client, repo_tags) do
+    Output.step("Registering seeds")
+
+    results =
+      state
+      |> seed_candidates(repo_tags)
+      |> Enum.with_index()
+      |> Enum.map(fn
+        {{:ok, seed}, idx} ->
+          block_id = {:seed, idx}
+          Output.live_item_start(block_id, "Registering", seed.name)
+
+          case SowerClient.Seed.create(client, seed, rename: !state.flags.non_authoritative) do
+            {:ok, _} = result ->
+              Output.live_item_done(block_id, "Registered", seed.name)
+              result
+
+            {:error, reason} = error ->
+              Output.live_item_error(block_id, "Failed", seed.name)
+              Output.error("Failed to register seed: #{inspect(reason)}")
+              error
+          end
+
+        {{:error, reason} = error, idx} ->
+          Output.live_item_error({:seed, idx}, "Failed", "seed manifest or metadata")
+          Output.error("Failed to prepare seed: #{inspect(reason)}")
+          error
+
+        {:skip, _idx} ->
+          :skip
+      end)
+
+    Output.live_flush()
+
+    results
+  end
+
+  def seed_candidates(%__MODULE__{} = state, repo_tags) do
+    manifest_jobs =
+      state.builds
+      |> Enum.flat_map(fn %Nix.Build{} = build ->
+        case manifest_job(build.eval.request.attr) do
+          nil -> []
+          job -> [job]
+        end
+      end)
+      |> MapSet.new()
+
+    Enum.map(state.builds, fn %Nix.Build{} = build ->
+      case manifest_job(build.eval.request.attr) do
+        job when is_binary(job) ->
+          with {:ok, json} <- File.read(Path.join(build.store_path, "seed.json")),
+               {:ok, payload} <- Jason.decode(json),
+               {:ok, manifest} <- SowerClient.SeedManifest.cast(payload) do
+            seed_from_meta(
+              %{
+                "name" => manifest.name,
+                "seed_type" => manifest.seed_type,
+                "artifact" => manifest.artifact,
+                "tags" => manifest.tags
+              },
+              state,
+              repo_tags
+            )
+          else
+            {:error, reason} -> {:error, {:manifest_failed, reason}}
+          end
+
+        nil ->
+          if MapSet.member?(manifest_jobs, build.eval.request.attr) do
+            :skip
+          else
+            case build.eval.output do
+              %{"meta" => %{"sower" => %{"seed" => seed_meta}}} ->
+                seed_meta
+                |> Map.put_new("name", build.store_path)
+                |> Map.put("artifact", build.store_path)
+                |> seed_from_meta(state, repo_tags)
+
+              _ ->
+                :skip
+            end
+          end
+      end
+    end)
+  end
+
+  defp manifest_job("manifest/" <> job), do: job
+
+  defp manifest_job(attr) when is_binary(attr) do
+    case String.split(attr, ".manifest/", parts: 2) do
+      [prefix, job] -> prefix <> "." <> job
+      _ -> nil
+    end
+  end
+
+  defp manifest_job(nil), do: nil
+
+  defp seed_from_meta(seed_meta, %__MODULE__{} = state, repo_tags) do
+    tags = cli_tags(state) ++ convert_meta_tags(seed_meta) ++ repo_tags
+
+    case seed_meta |> Map.put("tags", tags) |> SowerClient.Seed.cast() do
+      {:ok, seed} -> {:ok, seed}
+      {:error, reason} -> {:error, {:cast_failed, reason}}
     end
   end
 
@@ -335,7 +377,7 @@ defmodule SowerCli.Build do
   end
 
   defp convert_meta_tags(seed_meta) do
-    Map.get(seed_meta, "tags", {})
+    Map.get(seed_meta, "tags", %{})
     |> Map.to_list()
     |> Enum.map(fn {key, value} when is_binary(value) ->
       %SowerClient.SeedTag{
