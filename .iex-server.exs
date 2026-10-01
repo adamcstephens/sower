@@ -1,12 +1,13 @@
 Application.ensure_all_started([:sower])
+
 if Code.loaded?(Sower.Accounts.Organization) do
-  Sower.Accounts.Organization.list()
-  |> List.first()
-  |> Map.get(:org_id)
-  |> Sower.Repo.put_org_id()
+  if organization = List.first(Sower.Accounts.Organization.list()) do
+    Sower.Repo.put_org_id(organization.org_id)
+  end
 else
   Application.ensure_all_started([:exsync])
 end
+
 IEx.configure(
   inspect: [
     pretty: true,

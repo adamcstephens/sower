@@ -25,3 +25,11 @@ processes:
       timeout_seconds: 5
       success_threshold: 1
       failure_threshold: 20
+
+  sower:
+    command: just start-server
+    disabled: true
+    depends_on:
+      postgres:
+        condition: process_healthy
+    ready_log_line: "Access SowerWeb.Endpoint at"

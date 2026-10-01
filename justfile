@@ -1,12 +1,14 @@
 default:
     just -l
 
+# Prepare local configs, dependencies, database, assets, and the development client.
 bootstrap: dev-services dev-client
     [ -f dev-client.json ] || cp ./dev-client-example.json ./dev-client.json
     [ -f dev-server.json ] || cp ./dev-server-example.json ./dev-server.json
     mix deps.get
     mix deps.compile
-    mix ecto.setup
+    mix ecto.create
+    mix ecto.migrate
     mix assets.build
     -just doctor
 
@@ -159,7 +161,20 @@ release-version:
     @echo "Current version: $(cat VERSION)"
     @read -p "New version? " new_version; [ -n "$new_version" ] && just set-version $new_version
 
-start: dev-services start-all
+# Bootstrap and run Phoenix in the foreground; stop with Ctrl-C.
+start: bootstrap start-server
+
+# Bootstrap and launch detached Phoenix; inspect with process-compose attach.
+start-background: bootstrap
+    process-compose project update
+    process-compose process start sower
+
+# Stop detached Phoenix without stopping Postgres.
+stop-server:
+    process-compose process stop sower
+
+# Bootstrap and run the server in an interactive IEx shell.
+start-iex: bootstrap start-server-iex
 
 start-all:
     nix shell ".#activator" -c iex --sname dev1 -S mix phx.server
@@ -168,6 +183,9 @@ start-garden:
     nix shell ".#activator" -c iex --sname garden1 --dot-iex ./.iex-garden.exs -S mix run --no-start
 
 start-server:
+    mix phx.server --no-start --eval '{:ok, _} = Application.ensure_all_started(:sower)'
+
+start-server-iex:
     iex --sname server1 --dot-iex ./.iex-server.exs -S mix phx.server --no-start
 
 start-pry:
