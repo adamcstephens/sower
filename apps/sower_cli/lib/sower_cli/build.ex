@@ -288,7 +288,7 @@ defmodule SowerCli.Build do
           end
 
         {{:error, reason} = error, idx} ->
-          Output.live_item_error({:seed, idx}, "Failed", "seed manifest or metadata")
+          Output.live_item_error({:seed, idx}, "Failed", "seed manifest")
           Output.error("Failed to prepare seed: #{inspect(reason)}")
           error
 
@@ -302,70 +302,45 @@ defmodule SowerCli.Build do
   end
 
   def seed_candidates(%__MODULE__{} = state, repo_tags) do
-    manifest_jobs =
-      state.builds
-      |> Enum.flat_map(fn %Nix.Build{} = build ->
-        case manifest_job(build.eval.request.attr) do
-          nil -> []
-          job -> [job]
-        end
-      end)
-      |> MapSet.new()
-
     Enum.map(state.builds, fn %Nix.Build{} = build ->
-      case manifest_job(build.eval.request.attr) do
-        job when is_binary(job) ->
-          with {:ok, json} <- File.read(Path.join(build.store_path, "seed.json")),
-               {:ok, payload} <- Jason.decode(json),
-               {:ok, manifest} <- SowerClient.SeedManifest.cast(payload) do
-            seed_from_meta(
-              %{
-                "name" => manifest.name,
-                "seed_type" => manifest.seed_type,
-                "artifact" => manifest.artifact,
-                "tags" => manifest.tags
-              },
-              state,
-              repo_tags
-            )
-          else
-            {:error, reason} -> {:error, {:manifest_failed, reason}}
-          end
-
-        nil ->
-          if MapSet.member?(manifest_jobs, build.eval.request.attr) do
-            :skip
-          else
-            case build.eval.output do
-              %{"meta" => %{"sower" => %{"seed" => seed_meta}}} ->
-                seed_meta
-                |> Map.put_new("name", build.store_path)
-                |> Map.put("artifact", build.store_path)
-                |> seed_from_meta(state, repo_tags)
-
-              _ ->
-                :skip
-            end
-          end
+      if seed_job?(build.eval.request.attr) do
+        with {:ok, json} <- File.read(Path.join(build.store_path, "seed.json")),
+             {:ok, payload} <- Jason.decode(json),
+             {:ok, manifest} <- SowerClient.SeedManifest.cast(payload) do
+          seed_from_manifest(manifest, state, repo_tags)
+        else
+          {:error, reason} -> {:error, {:manifest_failed, reason}}
+        end
+      else
+        :skip
       end
     end)
   end
 
-  defp manifest_job("manifest/" <> job), do: job
-
-  defp manifest_job(attr) when is_binary(attr) do
-    case String.split(attr, ".manifest/", parts: 2) do
-      [prefix, job] -> prefix <> "." <> job
-      _ -> nil
-    end
+  defp seed_job?(attr) when is_binary(attr) do
+    Regex.match?(~r{^(?:[^/]+\.)?(?:nixos|home|seed)/.+$}, attr)
   end
 
-  defp manifest_job(nil), do: nil
+  defp seed_job?(nil), do: false
 
-  defp seed_from_meta(seed_meta, %__MODULE__{} = state, repo_tags) do
-    tags = cli_tags(state) ++ convert_meta_tags(seed_meta) ++ repo_tags
+  defp seed_from_manifest(
+         %SowerClient.SeedManifest{} = manifest,
+         %__MODULE__{} = state,
+         repo_tags
+       ) do
+    manifest_tags =
+      Enum.map(manifest.tags, fn {key, value} ->
+        %SowerClient.SeedTag{key: key, value: value}
+      end)
 
-    case seed_meta |> Map.put("tags", tags) |> SowerClient.Seed.cast() do
+    attrs = %{
+      "name" => manifest.name,
+      "seed_type" => manifest.seed_type,
+      "artifact" => manifest.artifact,
+      "tags" => cli_tags(state) ++ manifest_tags ++ repo_tags
+    }
+
+    case SowerClient.Seed.cast(attrs) do
       {:ok, seed} -> {:ok, seed}
       {:error, reason} -> {:error, {:cast_failed, reason}}
     end
@@ -374,17 +349,6 @@ defmodule SowerCli.Build do
   defp cli_tags(%__MODULE__{} = state) do
     state.options.tag
     |> Enum.map(&SowerClient.SeedTag.from_string/1)
-  end
-
-  defp convert_meta_tags(seed_meta) do
-    Map.get(seed_meta, "tags", %{})
-    |> Map.to_list()
-    |> Enum.map(fn {key, value} when is_binary(value) ->
-      %SowerClient.SeedTag{
-        key: key,
-        value: value
-      }
-    end)
   end
 
   defp receive_progress(task, blocks, handler) do

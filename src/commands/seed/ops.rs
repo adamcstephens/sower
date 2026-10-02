@@ -6,7 +6,8 @@ use std::str::FromStr;
 
 use crate::api::types;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum SeedType {
     Nixos,
     HomeManager,

@@ -287,9 +287,8 @@ derivation, so build parallelism *is* the phase's `concurrency`.
 source, not item fields.
 
 **Outputs:** one emitted item per derivation, carrying `name`, `attr`,
-`drv_path`, `system`, and `meta` (including `meta.sower.seed`, which is
-how eval-time knowledge reaches the `seed` step with no extra
-plumbing). An attribute that fails to evaluate becomes a failed item
+`drv_path`, `system`, and `meta`. Seed identity and tags come from the built
+wrapper manifest, not evaluation metadata. An attribute that fails to evaluate becomes a failed item
 carrying `error` — evaluation continues (keep-going), but the phase
 aggregate cannot be `success`.
 
@@ -342,12 +341,11 @@ uploading anywhere else is an `effect` with a user secret.
 
 Registers the item as a seed with the server, exactly as the `:seed`
 step of `sower-build` does today (`SowerClient.Seed.create`). Name,
-type, and tags come from the item's `meta.sower.seed` plus the fields
-below. A server-side engine operation — a registry write needing no VM
+type, tags, and the deployable artifact come from the built `seed.json` manifest.
+A server-side engine operation — a registry write needing no VM
 and accepting no `vm` or `environment` config.
 
-**Inputs:** `out_paths` (the artifact) and `meta.sower.seed` (name,
-type, tags).
+**Inputs:** `out_paths` (the wrapper containing `seed.json`).
 
 **Outputs:** adds `seed` (sid, name, seed_type, artifact, tags).
 
@@ -355,10 +353,10 @@ type, tags).
 
 | Field         | Type    | Required | Default | Description                                                 |
 | ------------- | ------- | -------- | ------- | ----------------------------------------------------------- |
-| tags          | object  | no       | {}      | Extra tags merged with git/meta tags.                       |
+| tags          | object  | no       | {}      | Extra tags merged with git/manifest tags.                  |
 | authoritative | boolean | no       | true    | Same semantics as `sower-build` (rename on artifact match). |
 
-Standalone seed wrappers built by `mkSeedManifest` are directories at
+Standalone seed wrappers built by `mkSeed` are directories at
 `/nix/store/<hash>-seed-<name>` containing `seed.json`. Consumers read that
 exact file, without directory scanning or a legacy raw-file path. The
 version-1 manifest's `artifact` names the deployable target, not the wrapper;
@@ -366,23 +364,29 @@ the wrapper retains the target in its closure. Circus publication must
 expose `seed.json` as a file product returning raw JSON, not the wrapper
 directory as a NAR. The wrapper itself contains no CI-specific files.
 
-Local `sower build --seed` recognizes wrapper jobs by the `manifest/`
-namespace, including qualified flake attributes such as
-`packages.<system>.manifest/nixos/<name>`. Custom producers use
-`mkSeedManifest { pkgs; name; type; target; tags; }` and expose the wrapper
-as `manifest/<job>`; ordinary package outputs are not probed for JSON.
+Local `sower build --seed` recognizes canonical `nixos/`, `home/`, and
+custom `seed/` jobs, including qualified flake attributes such as
+`packages.<system>.nixos/<name>`. Custom producers use
+`mkSeed { pkgs; name; type; target; tags; }` and expose the wrapper
+as `seed/<job>`; ordinary package outputs are not probed for JSON.
 Registration reads `<build.store_path>/seed.json`, validates the complete
 version-1 manifest, and registers its `artifact`, never the wrapper path.
 Tags retain CLI, intrinsic manifest, then repository composition order;
 `--non-authoritative` retains its existing registration semantics.
 
-Until wrapper jobs become canonical, local registration still accepts
-metadata-bearing jobs without a corresponding `manifest/<job>`. When both
-jobs were built, the manifest job takes precedence even if its manifest is
-invalid: it reports a registration error rather than falling back to metadata.
-Missing, malformed, or unsupported manifests also fail registration. With
+Generated NixOS and Home Manager jobs each build one wrapper; there is no
+separate `manifest/` namespace or evaluation-metadata registration fallback.
+NixOS `sower.seed.meta` supports `name`, `seed_type`, and string-valued `tags`;
+identity overrides replace generated defaults and tags merge recursively.
+Unsupported metadata fields are rejected rather than silently discarded.
+Missing, malformed, or unsupported manifests fail registration. With
 `--fail-fast` this returns `seed_failed`; otherwise the pipeline retains
 error status. Ordinary non-seed jobs remain unregistered.
+
+Direct and sudo deployment of canonical wrapper jobs read the same manifest
+before prechecking or copying. Registration and activation use its underlying
+target and seed type, never the wrapper directory. Raw artifact paths and
+already-registered seeds retain their existing workflows.
 
 ### resolve
 
@@ -737,7 +741,7 @@ JSON.
 
 | Producer       | Fields added                                                                       |
 | -------------- | ---------------------------------------------------------------------------------- |
-| eval           | `name`, `attr`, `drv_path`, `system`, `meta` (incl. `meta.sower.seed`), or `error` |
+| eval           | `name`, `attr`, `drv_path`, `system`, `meta`, or `error`                            |
 | gardens source | `name`, `garden` (sid, name)                                                       |
 | static source  | as written in the list                                                             |
 | resolve        | `name`, `garden` (sid, name), `seeds` (pending subscription resolutions)           |

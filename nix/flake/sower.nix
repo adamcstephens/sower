@@ -43,12 +43,8 @@ in
         sowerLib.prefixFlakeSystemOutputs "devshells" (self.devShells or { })
       ))
       (lib.mkIf cfg.nixos.enable (sowerLib.genNixosPackages (self.nixosConfigurations or { })))
-      (lib.mkIf cfg.nixos.enable (sowerLib.genNixosManifestPackages (self.nixosConfigurations or { })))
       (lib.mkIf cfg.home-manager.enable (
         sowerLib.genHomeManagerPackages (self.homeConfigurations or { })
-      ))
-      (lib.mkIf cfg.home-manager.enable (
-        sowerLib.genHomeManagerManifestPackages (self.homeConfigurations or { })
       ))
       (lib.mkIf cfg.packages.enable (sowerLib.prefixFlakeSystemOutputs "packages" (self.packages or { })))
     ];

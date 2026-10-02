@@ -7,7 +7,7 @@
 
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args, ValueEnum};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
@@ -24,8 +24,9 @@ const POLL_INTERVAL: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Args)]
 pub struct DeployArgs {
-    /// Flake reference to build, e.g. `.#myhost`. A bare attribute expands to
-    /// `nixosConfigurations.<attr>.config.system.build.toplevel`.
+    /// Flake reference to build, e.g. `.#myhost` or `.#nixos/myhost`.
+    /// Bare host attributes build a NixOS toplevel; nixos/, home/, and seed/
+    /// jobs build wrappers whose seed.json identifies the deployable artifact.
     flake: Option<String>,
 
     #[command(flatten)]
@@ -73,9 +74,10 @@ pub struct DeployArgs {
     #[arg(long, short = 'n')]
     name: Option<String>,
 
-    /// Seed type: nixos | home-manager | nix-darwin | service
-    #[arg(long = "type", short = 't', default_value = "nixos")]
-    seed_type: SeedType,
+    /// Seed type: nixos | home-manager | nix-darwin | service.
+    /// Defaults to the wrapper manifest's type, or nixos for raw artifacts.
+    #[arg(long = "type", short = 't')]
+    seed_type: Option<SeedType>,
 
     /// Tags in `key=value` format. May be repeated.
     #[arg(long = "tag")]
@@ -153,7 +155,10 @@ fn validate(args: &DeployArgs) -> Result<()> {
     }
     if args.sudo {
         sudo::validate_target(args.copy_to.as_deref().expect("required by clap"))?;
-        if !matches!(args.seed_type, SeedType::Nixos | SeedType::HomeManager) {
+        if args
+            .seed_type
+            .is_some_and(|kind| !matches!(kind, SeedType::Nixos | SeedType::HomeManager))
+        {
             bail!("--sudo supports nixos and home-manager activation");
         }
     }
@@ -162,11 +167,11 @@ fn validate(args: &DeployArgs) -> Result<()> {
 
 fn deploy_sudo(args: &DeployArgs) -> Result<()> {
     let endpoint = args.connection.endpoint()?;
-    let (artifact, _) = prepare_artifact(args)?;
+    let prepared = prepare_artifact(args)?;
     let request = Request {
         id: "sudo-deploy".to_owned(),
-        kind: args.seed_type.as_str().to_owned(),
-        path: artifact,
+        kind: prepared.seed_type.as_str().to_owned(),
+        path: prepared.artifact,
         mode: "switch".to_owned(),
         reason: String::new(),
         seeds: Vec::new(),
@@ -183,23 +188,112 @@ fn deploy_sudo(args: &DeployArgs) -> Result<()> {
     Ok(())
 }
 
-fn prepare_artifact(args: &DeployArgs) -> Result<(String, Option<String>)> {
-    let (artifact, inferred_name) = match (&args.path, &args.flake) {
-        (Some(path), _) => (store_path(path)?, None),
+struct PreparedArtifact {
+    artifact: String,
+    name: Option<String>,
+    seed_type: SeedType,
+    tags: Vec<types::SeedTag>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SeedManifest {
+    version: u64,
+    name: String,
+    seed_type: SeedType,
+    artifact: String,
+    tags: BTreeMap<String, String>,
+}
+
+impl SeedManifest {
+    fn parse(json: &str) -> Result<Self> {
+        let manifest: Self = serde_json::from_str(json).context("decode seed manifest")?;
+        if manifest.version != 1 {
+            bail!(
+                "unsupported seed manifest version {}; expected 1",
+                manifest.version
+            );
+        }
+        if manifest.name.is_empty() {
+            bail!("seed manifest name must not be empty");
+        }
+        let valid_artifact = manifest
+            .artifact
+            .strip_prefix("/nix/store/")
+            .and_then(|path| path.split_once('-'))
+            .is_some_and(|(hash, name)| {
+                hash.len() == 32
+                    && hash
+                        .bytes()
+                        .all(|byte| b"0123456789abcdfghijklmnpqrsvwxyz".contains(&byte))
+                    && !name.is_empty()
+                    && !name.contains('/')
+            });
+        if !valid_artifact {
+            bail!("seed manifest artifact must be a top-level Nix store path");
+        }
+        Ok(manifest)
+    }
+}
+
+fn prepare_artifact(args: &DeployArgs) -> Result<PreparedArtifact> {
+    let (built_path, inferred_name, canonical) = match (&args.path, &args.flake) {
+        (Some(path), _) => (
+            store_path(path)?,
+            None,
+            path.join("seed.json").try_exists()?,
+        ),
         (None, Some(flake)) => {
             let (installable, name) = flake_installable(flake)?;
-            (nix_build(&installable)?, name)
+            let canonical = flake
+                .split_once('#')
+                .is_some_and(|(_, attr)| canonical_job(attr).is_some());
+            (nix_build(&installable)?, name, canonical)
         }
         (None, None) => unreachable!("validated above"),
     };
 
-    crate::commands::seed::precheck(Path::new(&artifact), args.seed_type)
+    let mut tags = parse_tags(&args.tags)?;
+    let (artifact, name, seed_type) = if canonical {
+        let manifest_path = Path::new(&built_path).join("seed.json");
+        let json = std::fs::read_to_string(&manifest_path)
+            .with_context(|| format!("read seed manifest {}", manifest_path.display()))?;
+        let manifest = SeedManifest::parse(&json)
+            .with_context(|| format!("validate seed manifest {}", manifest_path.display()))?;
+        tags.extend(
+            manifest
+                .tags
+                .into_iter()
+                .map(|(key, value)| types::SeedTag { key, value }),
+        );
+        (
+            manifest.artifact,
+            Some(manifest.name),
+            args.seed_type.unwrap_or(manifest.seed_type),
+        )
+    } else {
+        (
+            built_path,
+            inferred_name,
+            args.seed_type.unwrap_or(SeedType::Nixos),
+        )
+    };
+
+    if args.sudo && !matches!(seed_type, SeedType::Nixos | SeedType::HomeManager) {
+        bail!("--sudo supports nixos and home-manager activation");
+    }
+    crate::commands::seed::precheck(Path::new(&artifact), seed_type)
         .context("pre-check artifact")?;
 
     if let Some(target) = &args.copy_to {
         nix_copy(&artifact, target, !args.no_substitute_on_destination)?;
     }
-    Ok((artifact, inferred_name))
+    Ok(PreparedArtifact {
+        artifact,
+        name,
+        seed_type,
+        tags,
+    })
 }
 
 async fn warm_seed(client: &Client, args: &DeployArgs, garden: &str) {
@@ -221,7 +315,26 @@ async fn warm_seed(client: &Client, args: &DeployArgs, garden: &str) {
         tracing::warn!("Cannot infer a seed name before building; skipping seed download");
         return;
     };
-    if let Err(error) = download_previous_seed(client, garden, &name, args.seed_type).await {
+    let seed_type = args.seed_type.unwrap_or_else(|| {
+        if flake
+            .split_once('#')
+            .and_then(|(_, attr)| canonical_job(attr))
+            .is_some_and(|(namespace, _)| namespace == "home")
+        {
+            SeedType::HomeManager
+        } else {
+            SeedType::Nixos
+        }
+    });
+    if args.seed_type.is_none()
+        && flake
+            .split_once('#')
+            .and_then(|(_, attr)| canonical_job(attr))
+            .is_some_and(|(namespace, _)| namespace == "seed")
+    {
+        return;
+    }
+    if let Err(error) = download_previous_seed(client, garden, &name, seed_type).await {
         tracing::warn!(%error, "Could not download previous seed; continuing with flake build");
     }
 }
@@ -276,21 +389,21 @@ async fn resolve_seed(client: &Client, args: &DeployArgs) -> Result<String> {
         return Ok(sid.clone());
     }
 
-    let (artifact, inferred_name) = prepare_artifact(args)?;
-
+    let prepared = prepare_artifact(args)?;
+    let artifact = prepared.artifact;
     let name = args
         .name
         .clone()
-        .or(inferred_name)
+        .or(prepared.name)
         .or_else(|| infer_name(&artifact))
         .ok_or_else(|| anyhow!("cannot infer a seed name from {artifact}; pass --name"))?;
 
     let body = types::Seed {
         artifact,
         name,
-        seed_type: args.seed_type.into_api(),
+        seed_type: prepared.seed_type.into_api(),
         sid: None,
-        tags: parse_tags(&args.tags)?,
+        tags: prepared.tags,
     };
 
     let seed = client
@@ -306,8 +419,8 @@ async fn resolve_seed(client: &Client, args: &DeployArgs) -> Result<String> {
     Ok(sid)
 }
 
-/// The garden a bare `.#myhost` implies. Anything more qualified than a single
-/// attribute names a nix output, not a host, so it infers nothing.
+/// Bare hosts and canonical job names imply a garden. Qualified raw attributes
+/// name a Nix output rather than a host, so they infer nothing.
 fn resolve_garden(args: &DeployArgs) -> Result<String> {
     if let Some(to) = &args.to {
         return Ok(to.clone());
@@ -317,7 +430,11 @@ fn resolve_garden(args: &DeployArgs) -> Result<String> {
         .as_deref()
         .and_then(|reference| reference.split_once('#'))
         .map(|(_, attr)| attr)
-        .filter(|attr| !attr.is_empty() && !attr.contains('.'))
+        .and_then(|attr| {
+            canonical_job(attr)
+                .map(|(_, name)| name)
+                .or_else(|| (!attr.is_empty() && !attr.contains('.')).then_some(attr))
+        })
         .map(str::to_owned)
         .ok_or_else(|| anyhow!("missing --to: no garden to deploy to"))
 }
@@ -446,15 +563,27 @@ fn print_log_tails(info: &types::DeploymentInfo) {
     }
 }
 
+/// Canonical jobs may be selected directly or beneath a qualified flake output.
+fn canonical_job(attr: &str) -> Option<(&str, &str)> {
+    let (prefix, name) = attr.split_once('/')?;
+    let namespace = prefix.rsplit('.').next()?;
+    (!name.is_empty() && matches!(namespace, "nixos" | "home" | "seed"))
+        .then_some((namespace, name))
+}
+
 /// Split a flake reference into the installable to build and the seed name it
-/// implies. A bare attribute is expanded the way nixos-rebuild and colmena do;
-/// an attribute containing a `.` is passed through untouched.
+/// implies. Canonical jobs and qualified outputs are passed through untouched;
+/// a bare host attribute is expanded the way nixos-rebuild and colmena do.
 fn flake_installable(reference: &str) -> Result<(String, Option<String>)> {
     let (flake, attr) = reference.split_once('#').ok_or_else(|| {
         anyhow!("{reference:?} has no attribute; expected something like `.#myhost`")
     })?;
     if attr.is_empty() {
         bail!("{reference:?} has an empty attribute");
+    }
+
+    if let Some((_, name)) = canonical_job(attr) {
+        return Ok((reference.to_owned(), Some(name.to_owned())));
     }
 
     if attr.contains('.') {
@@ -643,12 +772,6 @@ mod tests {
         assert_eq!(args.action, Some(DeployAction::Activate));
     }
 
-    #[test]
-    fn seed_type_defaults_to_nixos() {
-        let args = parse(&["--to", "myhost", ".#myhost"]).unwrap();
-        assert_eq!(args.seed_type.as_str(), "nixos");
-    }
-
     fn info(state: &str, result: Option<&str>) -> types::DeploymentInfo {
         types::DeploymentInfo {
             deployed_at: None,
@@ -679,6 +802,101 @@ mod tests {
             "github:org/repo#nixosConfigurations.myhost.config.system.build.toplevel"
         );
         assert_eq!(name.as_deref(), Some("myhost"));
+    }
+
+    #[test]
+    fn canonical_jobs_select_wrappers_and_infer_gardens() {
+        for reference in [
+            ".#nixos/host",
+            ".#home/host",
+            ".#seed/host",
+            ".#packages.x86_64-linux.nixos/host",
+        ] {
+            let (installable, name) = flake_installable(reference).unwrap();
+            assert_eq!(installable, reference);
+            assert_eq!(name.as_deref(), Some("host"));
+            let args = parse(&[reference]).unwrap();
+            assert_eq!(resolve_garden(&args).unwrap(), "host");
+        }
+    }
+
+    #[test]
+    fn manifests_require_every_schema_field_with_its_json_type() {
+        let payload = serde_json::json!({
+            "version": 1,
+            "name": "host",
+            "seed_type": "nixos",
+            "artifact": "/nix/store/00000000000000000000000000000000-target",
+            "tags": {"owner": "alice"}
+        });
+        for field in ["version", "name", "seed_type", "artifact", "tags"] {
+            let mut missing = payload.clone();
+            missing.as_object_mut().unwrap().remove(field);
+            assert!(
+                SeedManifest::parse(&missing.to_string()).is_err(),
+                "{field}"
+            );
+            for invalid in [serde_json::Value::Null, serde_json::json!([])] {
+                let mut wrong_type = payload.clone();
+                wrong_type[field] = invalid;
+                assert!(
+                    SeedManifest::parse(&wrong_type.to_string()).is_err(),
+                    "{field}"
+                );
+            }
+        }
+        for (field, invalid) in [
+            ("version", serde_json::json!("1")),
+            ("version", serde_json::json!(2)),
+            ("name", serde_json::json!("")),
+            ("seed_type", serde_json::json!("unsupported")),
+            ("tags", serde_json::json!({"owner": 7})),
+            ("unexpected", serde_json::json!(true)),
+        ] {
+            let mut invalid_payload = payload.clone();
+            invalid_payload[field] = invalid;
+            assert!(
+                SeedManifest::parse(&invalid_payload.to_string()).is_err(),
+                "{field}"
+            );
+        }
+    }
+
+    #[test]
+    fn manifest_artifacts_must_be_top_level_nix_store_paths() {
+        for artifact in [
+            "/tmp/target",
+            "/nix/store/0000000000000000000000000000000-target",
+            "/nix/store/00000000000000000000000000000000-",
+            "/nix/store/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee-target",
+            "/nix/store/00000000000000000000000000000000-target/bin",
+        ] {
+            let payload = serde_json::json!({
+                "version": 1, "name": "host", "seed_type": "nixos",
+                "artifact": artifact, "tags": {}
+            });
+            assert!(
+                SeedManifest::parse(&payload.to_string()).is_err(),
+                "{artifact}"
+            );
+        }
+    }
+
+    #[test]
+    fn manifests_accept_supported_seed_types_and_string_tags() {
+        for seed_type in ["nixos", "home-manager", "nix-darwin", "service"] {
+            let payload = serde_json::json!({
+                "version": 1, "name": "host", "seed_type": seed_type,
+                "artifact": "/nix/store/00000000000000000000000000000000-target",
+                "tags": {"owner": "alice"}
+            });
+            let manifest = SeedManifest::parse(&payload.to_string()).unwrap();
+            assert_eq!(manifest.seed_type.as_str(), seed_type);
+            assert_eq!(
+                manifest.tags.get("owner").map(String::as_str),
+                Some("alice")
+            );
+        }
     }
 
     #[test]

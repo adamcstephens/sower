@@ -547,6 +547,66 @@ mod seed_warming {
     }
 
     #[test]
+    fn canonical_jobs_validate_manifests_before_copy_or_registration() {
+        for (flake, manifest, expected) in [
+            (".#nixos/host", None, "seed.json"),
+            (".#home/alice", Some("not json"), "seed manifest"),
+            (
+                ".#seed/custom",
+                Some(
+                    r#"{"version":2,"name":"host","seed_type":"nixos","artifact":"/nix/store/00000000000000000000000000000000-target","tags":{}}"#,
+                ),
+                "version",
+            ),
+            (
+                ".#packages.x86_64-linux.nixos/host",
+                Some(
+                    r#"{"version":1,"name":"host","seed_type":"nixos","artifact":"/tmp/not-a-store-path","tags":{}}"#,
+                ),
+                "artifact",
+            ),
+        ] {
+            let fixture = Fixture::new();
+            if let Some(manifest) = manifest {
+                fs::write(fixture.artifact.join("seed.json"), manifest).unwrap();
+            }
+            let (out, _) = fixture.run_flake(
+                flake,
+                vec![],
+                &["--no-seed-download", "--copy-to", "ssh://host"],
+            );
+            assert!(!out.status.success(), "{}", stderr(&out));
+            assert!(stderr(&out).contains(expected), "{}", stderr(&out));
+            assert_eq!(fixture.calls(), "flake-build\n");
+        }
+    }
+
+    #[test]
+    fn canonical_deployment_prechecks_the_manifest_target_not_the_wrapper() {
+        let fixture = Fixture::new();
+        let target = "/nix/store/00000000000000000000000000000000-sower-missing-target";
+        fs::write(
+            fixture.artifact.join("seed.json"),
+            json!({"version": 1, "name": "alice", "seed_type": "home-manager",
+                "artifact": target, "tags": {"owner": "alice"}})
+            .to_string(),
+        )
+        .unwrap();
+        let (out, _) = fixture.run_flake(
+            ".#home/alice",
+            vec![],
+            &["--no-seed-download", "--copy-to", "ssh://host"],
+        );
+        assert!(!out.status.success());
+        assert!(
+            stderr(&out).contains(&format!("{target}/hm-version")),
+            "{}",
+            stderr(&out)
+        );
+        assert_eq!(fixture.calls(), "flake-build\n");
+    }
+
+    #[test]
     fn path_and_registered_seed_never_fetch_previous_seed() {
         let fixture = Fixture::new();
         let (out, requests) = fixture.run_source(

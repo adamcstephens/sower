@@ -6,79 +6,81 @@ defmodule SowerCli.BuildTest do
   @artifact "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-system"
 
   setup do
-    dir = Path.join(System.tmp_dir!(), "sower-manifest-#{System.unique_integer([:positive])}")
+    dir = Path.join(System.tmp_dir!(), "sower-seed-#{System.unique_integer([:positive])}")
     File.mkdir_p!(dir)
     on_exit(fn -> File.rm_rf!(dir) end)
     %{dir: dir}
   end
 
-  test "manifest target and tags win over paired legacy metadata", %{dir: dir} do
+  test "canonical wrappers register the manifest target and compose tags", %{dir: dir} do
     write_manifest(dir)
-    manifest = build("manifest/nixos/host", dir)
-    legacy = build("nixos/host", @artifact, %{"name" => "old", "seed_type" => "nixos"})
-    ordinary = build("package/tool", "/nonexistent")
-    state = state([legacy, ordinary, manifest])
     repo_tag = %SowerClient.SeedTag{key: "revision", value: "abc"}
 
-    assert [:skip, :skip, {:ok, seed}] = Build.seed_candidates(state, [repo_tag])
-    assert seed.name == "host"
-    assert seed.artifact == @artifact
-    assert seed.seed_type == "nixos"
+    for attr <- ["nixos/host", "home/host", "seed/service"] do
+      assert [{:ok, seed}] = Build.seed_candidates(state([build(attr, dir)]), [repo_tag])
+      assert seed.name == "host"
+      assert seed.artifact == @artifact
+      assert seed.artifact != dir
+      assert seed.seed_type == "nixos"
 
-    assert Enum.map(seed.tags, &{&1.key, &1.value}) ==
-             [{"source", "cli"}, {"system", "x86_64-linux"}, {"revision", "abc"}]
+      assert Enum.map(seed.tags, &{&1.key, &1.value}) ==
+               [{"source", "cli"}, {"system", "x86_64-linux"}, {"revision", "abc"}]
+    end
   end
 
-  test "custom manifest jobs and unmatched legacy jobs register", %{dir: dir} do
+  test "qualified canonical jobs are recognized", %{dir: dir} do
     write_manifest(dir)
-    legacy = build("custom/old", @artifact, %{"name" => "old", "seed_type" => "service"})
 
-    assert [{:ok, custom}, {:ok, old}] =
-             Build.seed_candidates(state([build("manifest/custom/service", dir), legacy]), [])
-
-    assert custom.artifact == @artifact
-    assert old.name == "old"
-    assert old.artifact == @artifact
+    for attr <- [
+          "packages.x86_64-linux.nixos/host",
+          "packages.aarch64-linux.home/host",
+          "legacyPackages.x86_64-linux.seed/service"
+        ] do
+      assert [{:ok, seed}] = Build.seed_candidates(state([build(attr, dir)]), [])
+      assert seed.name == "host"
+      assert seed.artifact == @artifact
+    end
   end
 
-  test "invalid paired manifest is an error, not a fallback to metadata", %{dir: dir} do
+  test "ordinary jobs and obsolete namespaces cannot register through metadata", %{dir: dir} do
+    write_manifest(dir)
+    metadata = %{"name" => "old", "seed_type" => "nixos"}
+
+    for attr <- [
+          nil,
+          "package/tool",
+          "custom/service",
+          "manifest/nixos/host",
+          "packages.x86_64-linux.manifest/home/host",
+          "packages.x86_64-linux.notseed/service",
+          "packages.x86_64-linux.package/nixos/host"
+        ] do
+      assert [:skip] = Build.seed_candidates(state([build(attr, dir, metadata)]), [])
+    end
+  end
+
+  test "invalid canonical manifest is an error, never a metadata fallback", %{dir: dir} do
     File.write!(Path.join(dir, "seed.json"), "not json")
-    legacy = build("nixos/host", @artifact, %{"name" => "old", "seed_type" => "nixos"})
+    metadata = %{"name" => "old", "seed_type" => "nixos"}
 
-    assert [:skip, {:error, {:manifest_failed, _}}] =
-             Build.seed_candidates(state([legacy, build("manifest/nixos/host", dir)]), [])
+    assert [{:error, {:manifest_failed, _}}] =
+             Build.seed_candidates(state([build("nixos/host", dir, metadata)]), [])
   end
 
-  test "missing and unsupported manifests report registration errors", %{dir: dir} do
+  test "missing and unsupported canonical manifests report registration errors", %{dir: dir} do
     assert [{:error, {:manifest_failed, :enoent}}] =
-             Build.seed_candidates(state([build("manifest/home/host", dir)]), [])
+             Build.seed_candidates(state([build("home/host", dir)]), [])
 
     write_manifest(dir, 2)
 
     assert [{:error, {:manifest_failed, _}}] =
-             Build.seed_candidates(state([build("manifest/home/host", dir)]), [])
-  end
-
-  test "qualified flake jobs suppress their corresponding legacy job", %{dir: dir} do
-    write_manifest(dir)
-    prefix = "packages.x86_64-linux."
-
-    legacy =
-      build(prefix <> "home/host", @artifact, %{"name" => "old", "seed_type" => "home-manager"})
-
-    assert [:skip, {:ok, seed}] =
-             Build.seed_candidates(
-               state([legacy, build(prefix <> "manifest/home/host", dir)]),
-               []
-             )
-
-    assert seed.name == "host"
+             Build.seed_candidates(state([build("seed/service", dir)]), [])
   end
 
   test "registration errors and malformed manifests are retained", %{dir: dir} do
     write_manifest(dir)
     client = Req.new(base_url: "http://127.0.0.1:0", retry: false)
-    state = %{state([build("manifest/nixos/host", dir)]) | flags: %{non_authoritative: false}}
+    state = %{state([build("nixos/host", dir)]) | flags: %{non_authoritative: false}}
     SowerCli.Output.init(debug: true)
 
     ExUnit.CaptureIO.capture_io(fn ->

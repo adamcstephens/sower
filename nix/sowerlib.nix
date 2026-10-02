@@ -7,7 +7,7 @@
   ],
 }:
 rec {
-  mkSeedManifest =
+  mkSeed =
     {
       pkgs,
       name,
@@ -39,72 +39,43 @@ rec {
       '';
     };
 
-  mkSeed =
-    {
-      name,
-      type,
-      package,
-      extraSeedMeta ? { },
-    }:
-    lib.addMetaAttrs {
-      sower.seed = lib.recursiveUpdate {
-        inherit name;
-        seed_type = type;
-      } extraSeedMeta;
-    } package;
-
   mkSeedNixos =
     name: nixosConfig:
-    lib.nameValuePair "nixos/${name}" (mkSeed {
-      inherit name;
-      package = nixosConfig.config.system.build.toplevel;
-      type = "nixos";
-      extraSeedMeta = lib.recursiveUpdate {
+    let
+      meta = lib.recursiveUpdate {
+        inherit name;
+        seed_type = "nixos";
         tags = {
           inherit (nixosConfig.pkgs.stdenv.hostPlatform) system;
           nixos_version = nixosConfig.config.system.nixos.version;
         };
       } (nixosConfig.config.sower.seed.meta or { });
-    });
-  mkSeedNixosManifest =
-    name: nixosConfig:
-    lib.nameValuePair "manifest/nixos/${name}" (mkSeedManifest {
+    in
+    assert lib.assertMsg (
+      builtins.attrNames meta == [
+        "name"
+        "seed_type"
+        "tags"
+      ]
+    ) "sower.seed.meta supports only name, seed_type, and tags";
+    lib.nameValuePair "nixos/${name}" (mkSeed {
       pkgs = nixosConfig.pkgs;
-      inherit name;
+      inherit (meta) name tags;
+      type = meta.seed_type;
       target = nixosConfig.config.system.build.toplevel;
-      type = "nixos";
-      tags = lib.recursiveUpdate {
-        inherit (nixosConfig.pkgs.stdenv.hostPlatform) system;
-        nixos_version = nixosConfig.config.system.nixos.version;
-      } (nixosConfig.config.sower.seed.meta.tags or { });
-    });
-
-  mkSeedHomeManagerManifest =
-    name: homeConfig:
-    lib.nameValuePair "manifest/home/${name}" (mkSeedManifest {
-      pkgs = homeConfig.pkgs;
-      inherit name;
-      target = homeConfig.activationPackage;
-      type = "home-manager";
-      tags = {
-        inherit (homeConfig.pkgs.stdenv.hostPlatform) system;
-        inherit (homeConfig.config.home) username homeDirectory;
-        inherit (homeConfig.config.home.version) release;
-      };
     });
 
   mkSeedHomeManager =
     name: homeConfig:
     lib.nameValuePair "home/${name}" (mkSeed {
+      pkgs = homeConfig.pkgs;
       inherit name;
       type = "home-manager";
-      package = homeConfig.activationPackage;
-      extraSeedMeta = {
-        tags = {
-          inherit (homeConfig.pkgs.stdenv.hostPlatform) system;
-          inherit (homeConfig.config.home) username homeDirectory;
-          inherit (homeConfig.config.home.version) release;
-        };
+      target = homeConfig.activationPackage;
+      tags = {
+        inherit (homeConfig.pkgs.stdenv.hostPlatform) system;
+        inherit (homeConfig.config.home) username homeDirectory;
+        inherit (homeConfig.config.home.version) release;
       };
     });
 
@@ -140,26 +111,6 @@ rec {
         name = system;
         value = home system;
       }) supportedSystems
-    );
-
-  genNixosManifestPackages =
-    nixosConfigurations:
-    lib.genAttrs supportedSystems (
-      system:
-      lib.pipe nixosConfigurations [
-        (lib.filterAttrs (_: config: config.pkgs.stdenv.hostPlatform.system == system))
-        (lib.mapAttrs' mkSeedNixosManifest)
-      ]
-    );
-
-  genHomeManagerManifestPackages =
-    homeConfigurations:
-    lib.genAttrs supportedSystems (
-      system:
-      lib.pipe homeConfigurations [
-        (lib.filterAttrs (_: config: config.pkgs.stdenv.hostPlatform.system == system))
-        (lib.mapAttrs' mkSeedHomeManagerManifest)
-      ]
     );
 
   prefixFlakeSystemOutputs =

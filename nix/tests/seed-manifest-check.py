@@ -10,6 +10,8 @@ schema = json.loads(pathlib.Path(sys.argv[3]).read_text())
 nixos = json.loads((pathlib.Path(sys.argv[4]) / "seed.json").read_text())
 home = json.loads((pathlib.Path(sys.argv[5]) / "seed.json").read_text())
 system = sys.argv[6]
+overridden = json.loads((pathlib.Path(sys.argv[7]) / "seed.json").read_text())
+closure = pathlib.Path(sys.argv[8]).read_text().splitlines()
 
 assert manifest == {
     "version": 1,
@@ -20,11 +22,23 @@ assert manifest == {
 }
 artifact_ready = pathlib.Path(manifest["artifact"]) / "ready"
 assert artifact_ready.read_text().strip() == "ready"
+assert target in closure
+for wrapper in (sys.argv[1], sys.argv[4], sys.argv[5], sys.argv[7]):
+    assert wrapper != target
 assert nixos == {
     **manifest,
     "tags": {
         "system": system,
         "nixos_version": "26.11",
+    },
+}
+assert overridden == {
+    **manifest,
+    "name": "overridden",
+    "seed_type": "service",
+    "tags": {
+        "system": "overridden-system",
+        "nixos_version": "overridden-version",
         "origin": "configuration",
     },
 }
@@ -39,7 +53,8 @@ assert home == {
     },
 }
 validator = jsonschema.Draft7Validator(schema)
-validator.validate(manifest)
+for generated in (manifest, nixos, overridden, home):
+    validator.validate(generated)
 for version in (None, "1", 2):
     changed = dict(manifest)
     if version is None:

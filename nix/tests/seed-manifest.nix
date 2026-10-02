@@ -4,23 +4,59 @@ let
     mkdir --parents "$out"
     echo ready > "$out/ready"
   '';
-  manifest = sowerLib.mkSeedManifest {
-    inherit pkgs target;
-    name = "example";
-    type = "nixos";
-    tags.system = pkgs.stdenv.hostPlatform.system;
+  system = pkgs.stdenv.hostPlatform.system;
+  seedJobs = {
+    "seed/example" = sowerLib.mkSeed {
+      inherit pkgs target;
+      name = "example";
+      type = "nixos";
+      tags = { inherit system; };
+    };
   };
-  nixosManifest =
-    (sowerLib.genNixosManifestPackages {
-      example = {
-        inherit pkgs;
-        config.system.build.toplevel = target;
-        config.system.nixos.version = "26.11";
-        config.sower.seed.meta.tags.origin = "configuration";
+  seed = seedJobs."seed/example";
+  meta =
+    (pkgs.lib.evalModules {
+      modules = [
+        ../nixos/seed.nix
+        {
+          _module.args.pkgs = pkgs;
+          sower.seed.meta = {
+            name = "overridden";
+            seed_type = "service";
+            tags = {
+              system = "overridden-system";
+              nixos_version = "overridden-version";
+              origin = "configuration";
+            };
+          };
+        }
+      ];
+    }).config.sower.seed.meta;
+  nixosConfig = {
+    inherit pkgs;
+    config.system.build.toplevel = target;
+    config.system.nixos.version = "26.11";
+    config.sower.seed.meta =
+      (pkgs.lib.evalModules {
+        modules = [
+          ../nixos/seed.nix
+          { _module.args.pkgs = pkgs; }
+        ];
+      }).config.sower.seed.meta;
+  };
+  nixosJobs =
+    (sowerLib.genNixosPackages {
+      example = nixosConfig;
+      override = nixosConfig // {
+        config = nixosConfig.config // {
+          sower.seed = { inherit meta; };
+        };
       };
-    }).${pkgs.stdenv.hostPlatform.system}."manifest/nixos/example";
-  homeManifest =
-    (sowerLib.genHomeManagerManifestPackages {
+    }).${system};
+  nixosSeed = nixosJobs."nixos/example";
+  overrideSeed = nixosJobs."nixos/override";
+  homeJobs =
+    (sowerLib.genHomeManagerPackages {
       example = {
         inherit pkgs;
         activationPackage = target;
@@ -30,17 +66,48 @@ let
           version.release = "26.11";
         };
       };
-    }).${pkgs.stdenv.hostPlatform.system}."manifest/home/example";
+    }).${system};
+  homeSeed = homeJobs."home/example";
+  closure = pkgs.closureInfo {
+    rootPaths = [
+      seed
+      nixosSeed
+      overrideSeed
+      homeSeed
+    ];
+  };
+  unsupportedMeta = nixosConfig // {
+    config = nixosConfig.config // {
+      sower.seed.meta.unsupported = true;
+    };
+  };
+  unsupportedOption =
+    (pkgs.lib.evalModules {
+      modules = [
+        ../nixos/seed.nix
+        {
+          _module.args.pkgs = pkgs;
+          sower.seed.meta.unsupported = true;
+        }
+      ];
+    }).config.sower.seed.meta;
   check = pkgs.writers.writePython3Bin "check-seed-manifest" {
     libraries = [ pkgs.python3Packages.jsonschema ];
   } (builtins.readFile ./seed-manifest-check.py);
 in
+assert builtins.attrNames nixosJobs == [
+  "nixos/example"
+  "nixos/override"
+];
+assert builtins.attrNames homeJobs == [ "home/example" ];
+assert !(builtins.tryEval (sowerLib.mkSeedNixos "unsupported" unsupportedMeta).value.drvPath).success;
+assert !(builtins.tryEval (builtins.deepSeq unsupportedOption true)).success;
 pkgs.stdenv.mkDerivation {
   name = "seed-manifest-test";
   dontUnpack = true;
   nativeBuildInputs = [ check ];
   installPhase = ''
-    check-seed-manifest "${manifest}" "${target}" "${../seed-manifest.schema.json}" "${nixosManifest}" "${homeManifest}" "${pkgs.stdenv.hostPlatform.system}"
+    check-seed-manifest "${seed}" "${target}" "${../seed-manifest.schema.json}" "${nixosSeed}" "${homeSeed}" "${system}" "${overrideSeed}" "${closure}/store-paths"
     touch "$out"
   '';
 }

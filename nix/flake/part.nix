@@ -24,7 +24,6 @@
         "${inputs.nixpkgs}/nixos/maintainers/scripts/incus/incus-container-image.nix"
         ../nixos/seed.nix
         { system.stateVersion = "25.11"; }
-        # { sower.seed.meta.broken = true; }
         {
           sower.seed.meta.tags = {
             some = "5";

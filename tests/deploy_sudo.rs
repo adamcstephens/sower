@@ -177,6 +177,77 @@ impl Drop for Fixture {
 }
 
 #[test]
+fn sudo_canonical_jobs_validate_manifests_before_copy_or_activation() {
+    for (flake, manifest, expected) in [
+        (".#nixos/host", None, "seed.json"),
+        (".#home/alice", Some("not json"), "seed manifest"),
+        (
+            ".#seed/custom",
+            Some(
+                r#"{"version":2,"name":"host","seed_type":"nixos","artifact":"/nix/store/00000000000000000000000000000000-target","tags":{}}"#,
+            ),
+            "version",
+        ),
+        (
+            ".#packages.x86_64-linux.nixos/host",
+            Some(
+                r#"{"version":1,"name":"host","seed_type":"nixos","artifact":"/tmp/not-a-store-path","tags":{}}"#,
+            ),
+            "artifact",
+        ),
+    ] {
+        let fixture =
+            Fixture::new("{\"id\":\"sudo-deploy\",\"type\":\"complete\",\"exit_code\":0}\n");
+        fixture.executable(
+            "nom",
+            "#!/usr/bin/env sh\nprintf '%s\\n' \"$SOWER_TEST_ARTIFACT\"\n",
+        );
+        if let Some(manifest) = manifest {
+            fs::write(fixture.artifact.join("seed.json"), manifest).unwrap();
+        }
+        let out = fixture
+            .command()
+            .arg(flake)
+            .args(["--copy-to", "ssh://host", "--sudo"])
+            .output()
+            .unwrap();
+        assert!(!out.status.success());
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(stderr.contains(expected), "{stderr}");
+        assert!(!fixture.root.join("nix-args").exists());
+        assert!(!fixture.root.join("ssh-used").exists());
+    }
+}
+
+#[test]
+fn sudo_canonical_deployment_prechecks_the_manifest_target_not_the_wrapper() {
+    let fixture = Fixture::new("{\"id\":\"sudo-deploy\",\"type\":\"complete\",\"exit_code\":0}\n");
+    fixture.executable(
+        "nom",
+        "#!/usr/bin/env sh\nprintf '%s\\n' \"$SOWER_TEST_ARTIFACT\"\n",
+    );
+    let target = "/nix/store/00000000000000000000000000000000-sower-missing-target";
+    fs::write(
+        fixture.artifact.join("seed.json"),
+        serde_json::json!({"version": 1, "name": "alice", "seed_type": "home-manager",
+            "artifact": target, "tags": {"owner": "alice"}})
+        .to_string(),
+    )
+    .unwrap();
+    let out = fixture
+        .command()
+        .arg(".#home/alice")
+        .args(["--copy-to", "ssh://host", "--sudo"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains(&format!("{target}/hm-version")), "{stderr}");
+    assert!(!fixture.root.join("nix-args").exists());
+    assert!(!fixture.root.join("ssh-used").exists());
+}
+
+#[test]
 fn sudo_deploy_uses_existing_remote_sower_without_server_credentials() {
     let fixture = Fixture::new("{\"id\":\"sudo-deploy\",\"type\":\"complete\",\"exit_code\":0}\n");
     let out = fixture.run("ssh://user@host");
