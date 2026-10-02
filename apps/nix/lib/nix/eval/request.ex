@@ -100,5 +100,9 @@ defmodule Nix.Eval.Request do
   def to_flake_uri(%{type: :flake, path: path, attr: attr}), do: "#{path}##{attr}"
 
   def to_import(%{type: :path, path: path, attr: nil}), do: "import #{path} {}"
-  def to_import(%{type: :path, path: path, attr: attr}), do: "(import #{path} {}).#{attr}"
+
+  def to_import(%{type: :path, path: path, attr: attr}) do
+    selection = attr |> String.split(".") |> Enum.map_join(".", &Jason.encode!/1)
+    "(import #{path} {}).#{selection}"
+  end
 end

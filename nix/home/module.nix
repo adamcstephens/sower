@@ -92,6 +92,7 @@ in
                 ]
               }"
               "SOWER_CONFIG_FILE=%E/sower/client.json"
+              "XDG_STATE_HOME=${config.xdg.stateHome}"
               "RELEASE_MODE=interactive"
               "SHELL=${lib.getExe pkgs.bash}"
             ]
@@ -161,6 +162,7 @@ in
                   ]
                 }";
                 SOWER_CONFIG_FILE = "${config.xdg.configHome}/sower/client.json";
+                XDG_STATE_HOME = config.xdg.stateHome;
                 RELEASE_MODE = "interactive";
               }
               // lib.optionalAttrs (cfg.accessTokenFile != null) {

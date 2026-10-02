@@ -27,6 +27,10 @@ let
   # `sower` on PATH is the Rust CLI wrapped with the Elixir `sower-build` build
   # engine, so seed/garden commands run natively and `sower build` forwards.
   sowerPkg = flake.packages.${system}.sower;
+
+  # Public test-only key: retain signature verification during garden downloads.
+  cachePublicKey = "sower-e2e-cache:SqIMhQSUh14wpAZMTgOGBX5hd9233ZAF9TXSBYlRQdk=";
+  cacheSecretKey = pkgs.writeText "sower-e2e-cache-secret" "sower-e2e-cache:H5DCkmI4YSh4uZ0vZS9dG0or5AYtvHgzmNsg5mzHmshKogyFBJSHXjCkBkxOA4YFfmF33bfdkAX1NdIFiVFB2Q==";
 in
 testers.runNixOSTest {
   name = "sower";
@@ -67,7 +71,8 @@ testers.runNixOSTest {
               "flakes"
               "nix-command"
             ];
-            substituters = lib.mkForce [ ];
+            substituters = lib.mkForce [ "http://builder:8080" ];
+            trusted-public-keys = [ cachePublicKey ];
             hashed-mirrors = null;
             connect-timeout = 1;
           };
@@ -209,8 +214,111 @@ testers.runNixOSTest {
           };
 
           virtualisation.diskSize = 4096;
+          # Do not expose the host store: the builder's deployment targets must
+          # be genuinely absent here until a garden downloads them.
+          virtualisation.useNixStoreImage = true;
+          virtualisation.writableStore = true;
+          virtualisation.writableStoreUseTmpfs = false;
+          virtualisation.memorySize = 2048;
         };
 
+      };
+
+    builder =
+      { nodes, pkgs, ... }:
+      let
+        fixturePkgs = import pkgs.path { inherit system; };
+        # Rebuild real generations with a marker, preserving their activation
+        # scripts. Only the builder receives these new paths initially.
+        nixosTarget = nodes.server.system.build.toplevel.overrideAttrs (old: {
+          name = "nixos-system-wrapper-e2e";
+          buildCommand = old.buildCommand + ''
+            echo canonical-nixos > "$out/sower-wrapper-e2e"
+          '';
+        });
+        homeConfig = nodes.server.home-manager.users.testuser;
+        homeTarget = homeConfig.home.activationPackage.overrideAttrs (old: {
+          name = "home-manager-wrapper-e2e";
+          buildCommand = old.buildCommand + ''
+            echo canonical-home-manager > "$out/sower-wrapper-e2e"
+          '';
+        });
+        jobs = pkgs.writeText "sower-wrapper-jobs.nix" ''
+          {}:
+          let
+            pkgs = import ${pkgs.path} { system = "${system}"; };
+            sowerLib = import ${../.}/sowerlib.nix {
+              inputs = {};
+              lib = pkgs.lib;
+            };
+          in
+            (sowerLib.genNixosPackages {
+              server = {
+                inherit pkgs;
+                config = {
+                  system.build.toplevel = builtins.storePath "${nixosTarget}";
+                  system.nixos.version = "${nodes.server.system.nixos.version}";
+                };
+              };
+            }).${system}
+            // (sowerLib.genHomeManagerPackages {
+              testuser = {
+                inherit pkgs;
+                activationPackage = builtins.storePath "${homeTarget}";
+                config.home = {
+                  username = "${homeConfig.home.username}";
+                  homeDirectory = "${homeConfig.home.homeDirectory}";
+                  version.release = "${homeConfig.home.version.release}";
+                };
+              };
+            }).${system}
+        '';
+      in
+      {
+        environment.systemPackages = [
+          sowerPkg
+          pkgs.python3
+        ];
+        environment.etc."sower/client.json".source = (pkgs.formats.json { }).generate "builder-client.json" {
+          endpoint = "http://server:4000";
+          access_token_file = "/run/sower/test_token";
+        };
+        environment.etc."sower/wrapper-jobs.nix".source = jobs;
+        virtualisation = {
+          useNixStoreImage = true;
+          writableStore = true;
+          writableStoreUseTmpfs = false;
+          diskSize = 8192;
+          memorySize = 2048;
+          additionalPaths = [
+            # Wrapper outputs are deliberately NOT included: sower must build
+            # them inside this VM, with no network substituters.
+            fixturePkgs.stdenv
+            fixturePkgs.stdenvNoCC
+            (fixturePkgs.callPackage ../packages/seed-manifest-validator.nix { })
+            cacheSecretKey
+          ];
+        };
+        nix.settings = {
+          experimental-features = [
+            "flakes"
+            "nix-command"
+          ];
+          substituters = pkgs.lib.mkForce [ ];
+        };
+        networking.firewall.allowedTCPPorts = [ 8080 ];
+        systemd.tmpfiles.rules = [
+          "d /srv/sower-cache 0755 root root -"
+          "d /run/sower 0755 root root -"
+        ];
+        systemd.services.sower-test-cache = {
+          wantedBy = [ "multi-user.target" ];
+          after = [ "systemd-tmpfiles-setup.service" ];
+          serviceConfig = {
+            ExecStart = "${pkgs.python3}/bin/python3 -m http.server 8080 --directory /srv/sower-cache";
+            Restart = "no";
+          };
+        };
       };
 
     # Second NixOS host runs only the system garden module with the
@@ -250,6 +358,8 @@ testers.runNixOSTest {
 
   testScript = # python
     ''
+      import json
+      import shlex
       start_all()
       server.wait_for_unit("postgresql.service")
       server.wait_for_unit("sower.service")
@@ -427,6 +537,99 @@ testers.runNixOSTest {
               " --grep=Completed.activation'",
               timeout=15,
           )
+
+      with subtest("canonical wrappers are built, published, and register their targets"):
+          # Stop consumers while publishing so absence cannot race a deployment.
+          server.systemctl("stop sower-garden.service")
+          server.systemctl("stop sower-garden.service", "testuser")
+          builder.wait_for_unit("sower-test-cache.service")
+          builder.wait_for_open_port(8080)
+          builder.succeed(f"printf %s {shlex.quote(token.strip())} > /run/sower/test_token")
+          wrappers = json.loads(builder.succeed(
+              "nix eval --impure --json --file /etc/sower/wrapper-jobs.nix"
+              " --apply 'jobs: builtins.mapAttrs (_: job: job.outPath) (jobs {})'"
+          ))
+          assert set(wrappers) == {"nixos/server", "home/testuser"}
+          for wrapper in wrappers.values():
+              builder.succeed(f"test ! -e {shlex.quote(wrapper)}")
+              builder.fail(f"nix-store --check-validity {shlex.quote(wrapper)}")
+
+          builder.succeed(
+              "timeout --signal=KILL 900s"
+              " sower build --eval-type path --eval-jobs 1 --build-jobs 1"
+              " --seed --tag e2e=wrapper"
+              " --cache 'file:///srv/sower-cache?secret-key=${cacheSecretKey}&compression=zstd&compression-level=1'"
+              " /etc/sower/wrapper-jobs.nix",
+              timeout=960,
+          )
+
+          manifests = {}
+          seeds = {}
+          for attr, wrapper in wrappers.items():
+              manifest = json.loads(builder.succeed(f"cat {shlex.quote(wrapper)}/seed.json"))
+              manifests[attr] = manifest
+              seed = json.loads(server.succeed(api(
+                  "GET",
+                  f"/seeds/latest?name={manifest['name']}&seed_type={manifest['seed_type']}",
+              )))
+              seeds[attr] = seed
+              assert seed["artifact"] == manifest["artifact"]
+              assert seed["artifact"] != wrapper, "registered the wrapper instead of its target"
+              tags = {(tag["key"], tag["value"]) for tag in seed["tags"]}
+              assert ("e2e", "wrapper") in tags
+              assert set(manifest["tags"].items()) <= tags
+              for path in (wrapper, manifest["artifact"]):
+                  server.succeed(f"test ! -e {shlex.quote(path)}")
+                  server.fail(f"nix-store --check-validity {shlex.quote(path)}")
+
+          wrapper_args = " ".join(shlex.quote(path) for path in wrappers.values())
+          built_closure = set(builder.succeed(
+              f"nix path-info --recursive {wrapper_args}"
+          ).splitlines())
+          published_closure = set(server.succeed(
+              f"nix path-info --store http://builder:8080 --recursive {wrapper_args}",
+              timeout=120,
+          ).splitlines())
+          assert published_closure == built_closure, "cache is missing wrapper closure paths"
+          assert {manifest["artifact"] for manifest in manifests.values()} <= published_closure
+
+      with subtest("home-manager garden downloads and activates the manifest target"):
+          home_target = manifests["home/testuser"]["artifact"]
+          server.succeed(f"test ! -e {shlex.quote(home_target)}")
+          server.fail(f"nix-store --check-validity {shlex.quote(home_target)}")
+          server.systemctl("start sower-garden.service", "testuser")
+          server.wait_for_unit("sower-garden.service", "testuser")
+          server.wait_until_succeeds(
+              f"sower garden trigger --type home-manager"
+              f" --socket /run/user/{hm_uid}/sower-garden/admin.sock",
+              timeout=120,
+          )
+          server.wait_until_succeeds(
+              "test \"$(readlink -f /home/testuser/.local/state/home-manager/gcroots/current-home)\""
+              f" = {shlex.quote(home_target)}",
+              timeout=30,
+          )
+          server.succeed(
+              f"test \"$(cat {shlex.quote(home_target)}/sower-wrapper-e2e)\" = canonical-home-manager"
+          )
+          server.succeed(f"nix-store --check-validity {shlex.quote(home_target)}")
+          server.succeed(f"test ! -e {shlex.quote(wrappers['home/testuser'])}")
+
+      with subtest("nixos garden downloads and activates the manifest target"):
+          nixos_target = manifests["nixos/server"]["artifact"]
+          server.systemctl("start sower-garden.service")
+          server.wait_for_unit("sower-garden.service")
+          server.succeed(
+              f"{deploy} --seed {seeds['nixos/server']['sid']} --force",
+              timeout=120,
+          )
+          server.wait_until_succeeds(
+              f"test \"$(readlink -f /run/current-system)\" = {shlex.quote(nixos_target)}",
+              timeout=30,
+          )
+          server.succeed(f"test \"$(cat {shlex.quote(nixos_target)}/sower-wrapper-e2e)\" = canonical-nixos")
+          server.succeed(f"nix-store --check-validity {shlex.quote(nixos_target)}")
+          server.succeed(f"test ! -e {shlex.quote(wrappers['nixos/server'])}")
 
       def assert_lifecycle(machine, unit, user=None):
           ctl = f"systemctl --machine={user}@.host --user" if user else "systemctl"

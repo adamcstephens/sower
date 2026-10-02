@@ -12,30 +12,20 @@ defmodule SowerCli.BuildTest do
     %{dir: dir}
   end
 
+  @tag :nix
   @tag timeout: 120_000
-  test "discovers and builds jobs without forcing metadata, then reads the seed manifest" do
+  test "builds custom seed and ordinary jobs without metadata and prepares mixed registration" do
     fixture = Path.expand("../fixtures/seed-jobs.nix", __DIR__)
     {:ok, discovery} = Nix.Eval.run(fixture)
     assert Enum.sort(Enum.map(discovery.output, & &1.attr)) == ["package/tool", "seed/host"]
 
-    evals =
-      Enum.map(discovery.output, fn request ->
-        assert {_, 0} =
-                 System.cmd("nix-instantiate", [fixture, "--attr", inspect(request.attr)],
-                   stderr_to_stdout: true
-                 )
-
-        {:ok, eval} = Nix.Eval.run(%{request | attr: inspect(request.attr)})
-        %{eval | request: request}
-      end)
-
-    {:ok, result} = Nix.Build.Jobs.run(evals)
+    {:ok, evaluations} = Nix.Eval.Jobs.run(fixture)
+    {:ok, result} = Nix.Build.Jobs.run(evaluations.results)
     ordinary = Enum.find(result.results, &(&1.eval.request.attr == "package/tool"))
     wrapper = Enum.find(result.results, &(&1.eval.request.attr == "seed/host"))
     assert File.read!(Path.join(ordinary.store_path, "ready")) == "ready\n"
     repo_tag = %SowerClient.SeedTag{key: "revision", value: "abc"}
-    assert [:skip] = Build.seed_candidates(state([ordinary]), [repo_tag])
-    assert [{:ok, seed}] = Build.seed_candidates(state([wrapper]), [repo_tag])
+    assert [:skip, {:ok, seed}] = Build.seed_candidates(state([ordinary, wrapper]), [repo_tag])
     assert seed.name == "manifest-host"
     assert seed.seed_type == "nixos"
     assert seed.artifact == ordinary.store_path

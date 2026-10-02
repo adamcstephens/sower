@@ -61,7 +61,10 @@ defmodule SowerCli.Repo do
     {dir, existing ++ new}
   end
 
-  def get_type_tags(dir, _), do: {dir, []}
+  def get_eval_type_tags({path, existing}, :path) do
+    dir = if File.dir?(path), do: path, else: Path.dirname(path)
+    {dir, existing}
+  end
 
   def get_jj_tags({dir, existing}) do
     new =

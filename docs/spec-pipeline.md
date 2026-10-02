@@ -368,13 +368,21 @@ directory as a NAR. The wrapper itself contains no CI-specific files.
 
 Local `sower build --seed` recognizes canonical `nixos/`, `home/`, and
 custom `seed/` jobs, including qualified flake attributes such as
-`packages.<system>.nixos/<name>`. Custom producers use
-`mkSeed { pkgs; name; type; target; tags; }` and expose the wrapper
-as `seed/<job>`; ordinary package outputs are not probed for JSON.
+`packages.<system>.nixos/<name>`. Custom producers expose a wrapper as
+`seed/<job>` using `mkSeed { pkgs; name; type; target; tags; }` or independently
+emitting the same version-1 `seed.json` contract while retaining the target
+in the wrapper closure. Ordinary package outputs are not probed for JSON.
 Registration reads `<build.store_path>/seed.json`, validates the complete
 version-1 manifest, and registers its `artifact`, never the wrapper path.
 Tags retain CLI, intrinsic manifest, then repository composition order;
 `--non-authoritative` retains its existing registration semantics.
+
+Binary-cache publication uploads the wrapper's recursive closure, including
+the manifest target and its dependencies. Gardens download and activate the
+registered target through the existing seed API; they do not need the wrapper
+or evaluated seed metadata. Home Manager garden services explicitly supply
+their configured `XDG_STATE_HOME` so profile reporting survives activation
+and service restarts.
 
 Generated NixOS and Home Manager jobs each build one wrapper; there is no
 separate `manifest/` namespace or evaluation-metadata registration fallback.

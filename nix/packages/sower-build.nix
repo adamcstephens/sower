@@ -50,7 +50,7 @@ beamPackages.mixRelease {
     ln -sv $PWD/_build/prod _build/test
 
     pushd apps/sower_cli
-    mix do deps.loadpaths --no-deps-check + test
+    mix do deps.loadpaths --no-deps-check + test --exclude nix
     popd
 
     export MIX_ENV=prod
