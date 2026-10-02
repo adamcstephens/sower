@@ -287,8 +287,10 @@ derivation, so build parallelism *is* the phase's `concurrency`.
 source, not item fields.
 
 **Outputs:** one emitted item per derivation, carrying `name`, `attr`,
-`drv_path`, `system`, and `meta`. Seed identity and tags come from the built
-wrapper manifest, not evaluation metadata. An attribute that fails to evaluate becomes a failed item
+`drv_path` and `system`. Intrinsic seed identity, type, target, and tags come
+from the built wrapper manifest; registration also composes explicit CLI and
+repository tags. Evaluation does not serialize derivation metadata.
+An attribute that fails to evaluate becomes a failed item
 carrying `error` — evaluation continues (keep-going), but the phase
 aggregate cannot be `success`.
 
@@ -741,7 +743,7 @@ JSON.
 
 | Producer       | Fields added                                                                       |
 | -------------- | ---------------------------------------------------------------------------------- |
-| eval           | `name`, `attr`, `drv_path`, `system`, `meta`, or `error`                            |
+| eval           | `name`, `attr`, `drv_path`, `system`, or `error`                                    |
 | gardens source | `name`, `garden` (sid, name)                                                       |
 | static source  | as written in the list                                                             |
 | resolve        | `name`, `garden` (sid, name), `seeds` (pending subscription resolutions)           |

@@ -78,7 +78,7 @@ defmodule Nix.Eval do
       null
     else
       if (x.type or null == "derivation") then
-        { drvPath = x.drvPath; storePath = x.outPath; meta = x.meta or {}; system = x.system; }
+        { drvPath = x.drvPath; storePath = x.outPath; system = x.system; }
       else
         builtins.attrNames x
     """

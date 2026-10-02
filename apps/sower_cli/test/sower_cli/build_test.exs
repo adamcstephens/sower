@@ -12,6 +12,38 @@ defmodule SowerCli.BuildTest do
     %{dir: dir}
   end
 
+  @tag timeout: 120_000
+  test "discovers and builds jobs without forcing metadata, then reads the seed manifest" do
+    fixture = Path.expand("../fixtures/seed-jobs.nix", __DIR__)
+    {:ok, discovery} = Nix.Eval.run(fixture)
+    assert Enum.sort(Enum.map(discovery.output, & &1.attr)) == ["package/tool", "seed/host"]
+
+    evals =
+      Enum.map(discovery.output, fn request ->
+        assert {_, 0} =
+                 System.cmd("nix-instantiate", [fixture, "--attr", inspect(request.attr)],
+                   stderr_to_stdout: true
+                 )
+
+        {:ok, eval} = Nix.Eval.run(%{request | attr: inspect(request.attr)})
+        %{eval | request: request}
+      end)
+
+    {:ok, result} = Nix.Build.Jobs.run(evals)
+    ordinary = Enum.find(result.results, &(&1.eval.request.attr == "package/tool"))
+    wrapper = Enum.find(result.results, &(&1.eval.request.attr == "seed/host"))
+    assert File.read!(Path.join(ordinary.store_path, "ready")) == "ready\n"
+    repo_tag = %SowerClient.SeedTag{key: "revision", value: "abc"}
+    assert [:skip] = Build.seed_candidates(state([ordinary]), [repo_tag])
+    assert [{:ok, seed}] = Build.seed_candidates(state([wrapper]), [repo_tag])
+    assert seed.name == "manifest-host"
+    assert seed.seed_type == "nixos"
+    assert seed.artifact == ordinary.store_path
+
+    assert Enum.map(seed.tags, &{&1.key, &1.value}) ==
+             [{"source", "cli"}, {"origin", "manifest"}, {"revision", "abc"}]
+  end
+
   test "canonical wrappers register the manifest target and compose tags", %{dir: dir} do
     write_manifest(dir)
     repo_tag = %SowerClient.SeedTag{key: "revision", value: "abc"}
@@ -42,9 +74,8 @@ defmodule SowerCli.BuildTest do
     end
   end
 
-  test "ordinary jobs and obsolete namespaces cannot register through metadata", %{dir: dir} do
+  test "ordinary jobs and obsolete namespaces do not register", %{dir: dir} do
     write_manifest(dir)
-    metadata = %{"name" => "old", "seed_type" => "nixos"}
 
     for attr <- [
           nil,
@@ -55,16 +86,15 @@ defmodule SowerCli.BuildTest do
           "packages.x86_64-linux.notseed/service",
           "packages.x86_64-linux.package/nixos/host"
         ] do
-      assert [:skip] = Build.seed_candidates(state([build(attr, dir, metadata)]), [])
+      assert [:skip] = Build.seed_candidates(state([build(attr, dir)]), [])
     end
   end
 
-  test "invalid canonical manifest is an error, never a metadata fallback", %{dir: dir} do
+  test "invalid canonical manifest is a registration error", %{dir: dir} do
     File.write!(Path.join(dir, "seed.json"), "not json")
-    metadata = %{"name" => "old", "seed_type" => "nixos"}
 
     assert [{:error, {:manifest_failed, _}}] =
-             Build.seed_candidates(state([build("nixos/host", dir, metadata)]), [])
+             Build.seed_candidates(state([build("nixos/host", dir)]), [])
   end
 
   test "missing and unsupported canonical manifests report registration errors", %{dir: dir} do
@@ -109,13 +139,11 @@ defmodule SowerCli.BuildTest do
     %Build{builds: builds, options: %{tag: ["source=cli"]}}
   end
 
-  defp build(attr, path, meta \\ nil) do
-    output = if meta, do: %{"meta" => %{"sower" => %{"seed" => meta}}}, else: %{}
-
+  defp build(attr, path) do
     %Nix.Build{
       store_path: path,
       status: :ok,
-      eval: %Nix.Eval{request: %Nix.Eval.Request{attr: attr}, output: output}
+      eval: %Nix.Eval{request: %Nix.Eval.Request{attr: attr}}
     }
   end
 end
