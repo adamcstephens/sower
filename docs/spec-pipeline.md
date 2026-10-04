@@ -236,11 +236,12 @@ builds pass" is a whole-collection ref.
 
 ## Server Resources
 
-Registered server resources — caches, secrets, gardens — are referenced
-from definitions by name (`push.cache`, `vm.caches`, `secrets`,
-`gardens.names`). Anywhere a name is accepted, the resource's sid is
-accepted too: names are the readable convention for hand-written
-definitions; sids are stable across renames and suit generated ones.
+Registered server resources — caches, secrets, gardens, network endpoints
+— are referenced from definitions by name (`push.cache`, `vm.caches`,
+`secrets`, `gardens.names`, `vm.network_endpoints`). Anywhere a name is
+accepted, the resource's sid is accepted too: names are the readable
+convention for hand-written definitions; sids are stable across renames
+and suit generated ones.
 Validation resolves both against the same registry, and the resolved
 definition stores the reference as written.
 
@@ -489,6 +490,11 @@ outbound, so the server assumes no routable address for them —
 garden-advertised endpoints may become garden-level config later (Future
 Considerations).
 
+Reaching a target also requires `vm.network = "full"` and, for a private
+endpoint, a server-authorized and operator-approved
+`vm.network_endpoints` reference (Execution Environment). The app's
+configuration identifies the target; it does not authorize reachability.
+
 ### effect
 
 Runs the executable of an evaluated derivation for its side effect. Same
@@ -553,13 +559,54 @@ why the environment closure sits in eval's memoization key).
 | ------- | ---------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | cpus    | int        | no       | engine  | Virtual CPUs.                                                                                                                                                          |
 | memory  | int        | no       | engine  | Memory in MiB. Bounds the whole step; step-internal knobs (e.g. eval's `memory_limit`) operate within it.                                                              |
-| network | string     | no       | none    | `none` (default) or `full`. Substitution needs no network — it flows through the builder's read proxy (spec-builder.md).                                               |
+| network | string     | no       | none    | `none` (no NIC) or `full` (networked under mandatory host filtering), never unrestricted. Substitution uses the scoped vsock read proxy in either mode. |
+| network_endpoints | string[] | no | [] | Approved endpoint resources by name or sid; requests narrowly scoped exceptions with `full`, not arbitrary addresses or firewall rules. |
 | caches  | string[]   | no       | []      | Registered cache resources (by name) the VM may substitute from. The server materializes substituter configuration; raw URLs and keys do not appear in the definition. |
 
 Settable on a step, a phase (default for its steps), or the pipeline
-`defaults`. `network` is enforced by the host, not the guest — under
-`none` the guest has no network device at all, substitution riding
-vsock instead; `full` is for checks and effects that reach out.
+`defaults`. Resolve `vm` fields from step to phase to pipeline defaults,
+then engine defaults; lists replace rather than accumulate.
+`network_endpoints = []` explicitly clears inherited endpoint requests.
+After inheritance, a non-empty endpoint list with `network = "none"`
+is invalid; changing only the mode does not silently grant or drop
+inherited exceptions.
+
+`network` is enforced outside the guest and VMM. Under `none` the guest
+has no NIC or general-purpose network proxy, but guest loopback and
+scoped vsock services still work. `full` permits public internet egress
+within operator policy through per-execution routed TAPs and host
+nftables. Builder-host addresses/services (including non-loopback),
+other execution guests, metadata, and control-plane services remain
+unreachable in either mode. Private and other special-use destinations
+are denied unless an exact endpoint exception is approved; the mandatory
+protections cannot be overridden.
+
+Network endpoint resources are operator-approved sets of exact IP
+addresses, transport protocol (`tcp` or `udp`), and destination ports
+(spec-builder.md, Network Policy). Their server-side `access` rules use
+the same closed run-context vocabulary and allow-only matching as
+Secrets, but default to no access: missing or empty rules grant nothing.
+Admission computes the allowed resource set; definition validation
+resolves requested names/sids and rejects any outside that set.
+Definitions contain references only, never destination grants.
+
+The server dispatches authorized stable sids as `network_endpoints`,
+separate from the execution's `network` mode. The existing root activator
+independently resolves them against its operator-owned local policy;
+server approval alone cannot create or widen a grant. Operator denies
+and mandatory protections take precedence, and missing local approval
+fails before connectivity. Address sets are pinned for an execution;
+guest DNS answers cannot expand them. The activator handles only scoped
+privileged setup and teardown; the garden host agent and VMM remain
+unprivileged. See spec-builder.md for dual-stack filtering, lifecycle
+failure handling, and identical dev/e2e enforcement.
+
+These references authorize application connectivity, not garden
+deployment access, credentials, or automatic target discovery. A private
+HTTP check can request an approved garden application endpoint without
+gaining access to the garden or server control plane. Enabling networking
+does not change the separate work store, scoped vsock cache services,
+host-held sower credentials, or user-secret tmpfs injection.
 
 ### environment
 
@@ -803,10 +850,11 @@ not a distinct operation — a rerun after a build failure skips eval by
 key, skips the builds that succeeded, and picks up at the failure.
 
 Cancellation stops the run from dispatching further step executions and
-kills executing VMs; their items end cancelled rather than failed —
-distinguishable in run results. What has already left the engine is not
-recalled: a dispatched deployment proceeds garden-side under the
-garden's own policy and reports its result, which the run records
+revokes connectivity and kills executing VMs, with execution-resource
+cleanup as specified in spec-builder.md; their items end cancelled rather
+than failed — distinguishable in run results. What has already left the
+engine is not recalled: a dispatched deployment proceeds garden-side
+under the garden's own policy and reports its result, which the run records
 before closing. Cancelled runs are terminal; the path forward is a
 rerun, which memoizes past everything that completed. Cancellation
 never touches subscriptions or garden convergence — as with a failed
@@ -959,11 +1007,13 @@ a cache; private inputs use scoped read credentials minted like any
 other step credential.
 
 The honest boundary: an `effect` or `check` with `network` set to `full`
-can fetch anything, and no engine can prevent it. Anything fetched at
-run time is outside provenance, memoization, and admission — if it
-affects what gets built or deployed, it must be an input. Runtime
-fetching is for genuinely external interaction, which is what effects
-are for.
+can fetch from destinations its host-enforced policy permits, not from
+arbitrary private or protected services. Address filtering cannot attest
+to the content returned or prevent an allowed endpoint from acting as
+an application-layer relay. Anything fetched at run time is outside
+provenance, memoization, and admission — if it affects what gets built
+or deployed, it must be an input. Runtime fetching is for genuinely
+external interaction, which is what effects are for.
 
 ## Run Admission
 
@@ -1032,12 +1082,16 @@ provenance, signature result, and pipeline policy:
 | seed                 | policy-decidable; default deny for forks and unsigned runs                                    | never — the ephemeral SHA would be provenance pointing at a commit that will cease to exist       |
 | deploy               | policy-decidable                                                                              | never — denied outright, not just transitively; validation runs have no business touching gardens |
 | secrets              | per-secret access rules (see Secrets)                                                         | same rules; `merge` mode matches only rules that allow it                                         |
+| network endpoints    | per-endpoint access rules; default deny                                                       | same rules; `merge` mode matches only rules that allow it                                         |
 
 Enforcement is layered, deliberately redundantly: run-start validation
 rejects definitions exceeding the run's capabilities with a clear error
 (the courtesy); the credential minter refuses to mint authority the run
 does not have, the server refuses server-side steps, and the host mounts
-only granted secrets (the boundary).
+only granted secrets (the boundary). Network endpoint requests must also
+pass the activator's independent operator-governed bounds; neither a
+capability nor a definition can disable the builder's mandatory firewall
+protections.
 
 ## Definition Contract
 
@@ -1073,6 +1127,9 @@ Validation at submission:
 8.  Declared `secrets` resolve against the org's secret store and must
     be admitted by their access rules for this run; `vm.caches` entries
     and `push.cache` resolve against registered cache resources.
+    Inherited `vm.network_endpoints` entries resolve against registered
+    endpoint resources and must be admitted by their access rules;
+    non-empty requests require `vm.network = "full"`.
 9.  The definition must not exceed the run's capability set — e.g.
     `seed` or `deploy` steps in a merge run are rejected.
 
@@ -1140,6 +1197,7 @@ sower.pipelines.release = ctx:
         steps = [
           { kind = "deploy"; seeds = [ "register/web" ]; }
           { kind = "check"; app = "checks/http";
+            vm = { network = "full"; network_endpoints = [ "door-http" ]; };
             wait = { timeout = "10m"; interval = "15s"; }; }
         ];
       }
@@ -1149,7 +1207,8 @@ sower.pipelines.release = ctx:
         items = { gardens = { names = [ "gate" "wall" "keep" ]; }; };
         steps = [
           { kind = "deploy"; seeds = [ "register/web" ]; }
-          { kind = "check"; app = "checks/http"; }
+          { kind = "check"; app = "checks/http";
+            vm = { network = "full"; network_endpoints = [ "fleet-http" ]; }; }
         ];
       }
     ];
@@ -1162,6 +1221,11 @@ build set (`needs` via the `register` barrier), the canary garden must
 report a successful deployment and pass its http check within ten
 minutes, and only then does the fleet follow. On any other branch — and
 in any merge run — the pipeline is eval/build/push only.
+
+The private HTTP endpoint resources `door-http` and `fleet-http` must be
+registered with access rules admitting these release runs and exact
+address/protocol/port approvals in the builder's operator policy. Their
+names in the definition request access; they do not establish that policy.
 
 ### Scheduled deploy-only rollout
 
@@ -1186,6 +1250,7 @@ sower.pipelines.nightly-rollout = {
       steps = [
         { kind = "deploy"; }
         { kind = "check"; app = "checks/http";
+          vm = { network = "full"; network_endpoints = [ "door-http" ]; };
           wait = { timeout = "10m"; interval = "15s"; }; }
       ];
     }
@@ -1195,7 +1260,8 @@ sower.pipelines.nightly-rollout = {
       items = { from = "resolve"; except = [ "door" ]; };
       steps = [
         { kind = "deploy"; }
-        { kind = "check"; app = "checks/http"; }
+        { kind = "check"; app = "checks/http";
+          vm = { network = "full"; network_endpoints = [ "fleet-http" ]; }; }
       ];
     }
   ];
@@ -1205,7 +1271,9 @@ sower.pipelines.nightly-rollout = {
 Gardens already running their resolved seeds produce no items, so an
 unchanged fleet makes the nightly run a near-instant no-op. The `rest`
 wave deploys the same snapshot the canary validated, even if newer seeds
-were registered mid-run.
+were registered mid-run. As in the release example, endpoint access rules
+and operator approval must admit this scheduled run; scheduling does not
+grant network authority.
 
 ### Selective barrier
 
@@ -1235,12 +1303,17 @@ A single-item phase (no `items`) runs its chain once:
   needs = [ "seeds" ];
   steps = [
     { kind = "check"; app = "checks/release-policy"; }        # gate: one attempt
-    { kind = "effect"; app = "announce"; }
+    { kind = "effect"; app = "announce"; vm.network = "full"; }
     { kind = "check"; app = "checks/mirrors-synced";
+      vm.network = "full";
       wait = { timeout = "30m"; interval = "1m"; }; }         # wait with deadline
   ];
 }
 ```
+
+The announcement and mirror check reach public endpoints allowed by
+builder policy; private targets would require approved endpoint
+references as well.
 
 ### Custom environment and secrets
 
@@ -1282,7 +1355,8 @@ let
     items = { gardens = { names = gardens; }; };
     steps = [
       { kind = "deploy"; seeds = [ "seeds/web" ]; }
-      { kind = "check"; app = "checks/http"; }
+      { kind = "check"; app = "checks/http";
+        vm = { network = "full"; network_endpoints = [ "fleet-http" ]; }; }
     ];
   };
 in
@@ -1330,6 +1404,12 @@ in
   builder-side and server-side respectively. The contract carries
   resources, network policy, and references; software configuration is
   NixOS modules on a sower base.
+- **Network modes are `none` and filtered `full`.** No NIC by default;
+  networked execution uses routed TAPs and host nftables, never
+  unrestricted egress. Private access requests named endpoint resources
+  under both server-side access rules and independent activator-enforced
+  operator bounds. Mandatory builder, metadata, control-plane, and
+  other-guest protections cannot be overridden.
 - **Secrets are declared per step and injected as files at VM start.**
   Never through evaluation, the store, or the run context.
 - **Builtin steps run in the stock image by default.** `environment` is

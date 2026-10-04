@@ -178,6 +178,16 @@ independent of both the server and the garden BEAM, and simultaneously
 closes the current activator findings (it presently trusts any
 `/nix/store` path).
 
+On a builder, this same activator also provisions and releases narrowly
+scoped execution networking resources (spec-builder.md, Network Policy).
+That is a separate capability, not seed activation or permission to run
+arbitrary commands as root: requests are execution-bound, endpoint
+approval is independently operator-governed, and no caller-supplied
+firewall program or unchecked resource path is accepted. The garden
+host agent and VMM remain unprivileged; guest traffic does not pass
+through the activator. Network reachability grants no activation or
+signing authority and cannot bypass any of the verification checks above.
+
 ### D5 — Inputs are external git repositories, with guards
 
 Builds are driven from git repos (content-addressed by commit SHA, deps

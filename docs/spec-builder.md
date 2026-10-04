@@ -43,9 +43,14 @@ spec-seed-trust.md's.
   does not know what a pipeline, step, or seed is. Builtin step
   behavior ships as programs in the stock image, versioned by the guest
   contract.
-- **Isolation is the product.** The VM boundary plus host-enforced
-  network policy is what makes untrusted eval, checks, and effects
-  safe. There is no non-VM server-side execution path.
+- **Isolation is the product.** The VM boundary, process sandbox, and
+  host-enforced network policy protect the host and other executions.
+  There is no non-VM server-side execution path and no unrestricted
+  network mode.
+- **Privilege is setup, not execution.** The existing root activator
+  provisions narrowly scoped resources under operator policy. The garden
+  host agent and VMM stay unprivileged; neither guest traffic nor guest
+  commands run through the activator.
 - **Authority never rides with untrusted code.** Every sower
   credential — substitution, push, registration, signing — is held
   host-side, minted short-TTL and scoped, and exercised on the
@@ -67,7 +72,9 @@ spec-seed-trust.md's.
 | Execution     | One unit of dispatched work: image + command + payload + resources → event stream + result.   |
 | Run           | A client-scoped group of executions: pins to one builder and scopes its work-store gcroots.   |
 | Image         | A complete guest system closure — the stock image, or a `mkEnvironment` output as a seed.     |
-| Host agent    | The builder role of the garden application: VM lifecycle, vsock services, secrets, work store. |
+| Host agent    | The unprivileged builder role of the garden application: VM lifecycle, vsock services, secrets, work store. |
+| Activator     | The existing root boundary: operator-authorized setup and release of execution network resources. |
+| Network endpoint | An operator-approved destination address/protocol/port resource; a reference requests access, never grants it. |
 | Guest runtime | The sower-owned service inside every image that receives the command and mediates I/O.        |
 | Work store    | The host agent's separate Nix store for all execution I/O; the host system store stays clean. |
 | Dispatch      | Server-side assignment of a queued execution to a builder: free once per run, then pinned.    |
@@ -104,6 +111,15 @@ already make a garden a garden. It prefers native Elixir throughout and
 falls to Rust as needed, through a NIF or port. That is a choice inside
 the agent, not a component boundary, and it changes no contract.
 
+The existing activator is the only privileged setup boundary, not a new
+builder daemon or a general root-command service. It creates and releases
+execution-specific TAPs, routes, isolation namespaces, and nftables
+rules. The host agent owns orchestration, starts the VMM unprivileged,
+and serves the scoped vsock endpoints. The activator does not launch
+repository commands, handle packets in userspace, or hold guest-facing
+application services. Builder installation must provision this scoped
+activator capability and operator policy before networked work can run.
+
 ## Execution Contract
 
 The dispatch message. Schemas live in `sower_client` and are covered by
@@ -118,7 +134,8 @@ the contract baseline.
 | command | object   | yes      | `{ path, args, env }` — a store-path executable inside the image's closure.          |
 | payload | object   | yes      | JSON delivered to the command on stdin (a pipeline item, for step executions).       |
 | vm      | object   | yes      | `{ cpus, memory }`, resolved by the server from definition defaults.                 |
-| network | string   | yes      | `none` (default; no network device) or `full` — NIC presence, host-enforced.         |
+| network | string   | yes      | `none` (default; no NIC) or `full` (routed NIC with mandatory host filtering).        |
+| network_endpoints | string[] | no | Approved endpoint resource sids, server-resolved; default `[]`, valid only with `full`. |
 | caches  | object[] | no       | Upstream caches the read proxy fronts for this execution; server-resolved.           |
 | secrets | object   | no       | Named user-secret material injected as files (see Security). Never logged/persisted. |
 | paths   | string[] | no       | Work-store roots the read proxy serves this execution (closure allowlist).           |
@@ -131,10 +148,12 @@ resolves step kinds to commands: `eval` becomes the stock runtime's
 eval program; a `check` becomes the built app's executable. Arbitrary
 *commands* are excluded at pipeline validation, not here — a definition
 may only name executables built from the pinned source, while the
-builder contract stays deliberately mechanism, not policy. Commands are
-customized through three channels: static `args`, static `env`, and the
-structured payload on stdin; anything richer is Nix — wrap the program
-and bake the configuration into the derivation.
+builder contract stays generic rather than interpreting client semantics.
+Resource access is still constrained by operator policy, independently
+of command validation. Commands are customized through three channels:
+static `args`, static `env`, and the structured payload on stdin;
+anything richer is Nix — wrap the program and bake the configuration
+into the derivation.
 
 Events stream back over the garden channel as the execution proceeds:
 
@@ -154,11 +173,11 @@ for the walk to finish.
 **Engine operations carry a different message** over the same queue and
 channel. `push`, the only one today, takes `sid`, `run_sid`, the
 work-store `paths` to upload, the `cache` resource to upload them to,
-and `timeout`; `image`, `vm`, and `network` have no meaning because
-nothing boots. It reports the same events minus `item`, and occupies one
-slot against a fixed minimal memory budget, so capacity accounting stays
-uniform and concurrent uploads are bounded by the same arithmetic as
-everything else.
+and `timeout`; `image`, `vm`, `network`, and `network_endpoints` have
+no meaning because nothing boots. It reports the same events minus
+`item`, and occupies one slot against a fixed minimal memory budget, so
+capacity accounting stays uniform and concurrent uploads are bounded by
+the same arithmetic as everything else.
 
 ## Host–Guest Contract
 
@@ -284,20 +303,28 @@ without a guest.
   was not pushed. Retry is the client layer's move (a pipeline rerun
   memoizes past completed work), keeping builder semantics at-most-once
   and dumb.
-- **Cancellation:** kills the VM; the execution reports `cancelled`.
-  Already-exported paths and emitted items stand.
+- **Cancellation and timeout:** revoke network connectivity and kill the
+  VM; the execution reports `cancelled` or `timeout` respectively.
+  Already-exported paths and emitted items stand. All terminal paths
+  release execution resources through the lifecycle below.
 - **Placement policy** beyond system, capacity, and the run pin —
   labels, tenant pools — is a future consideration; the contract fields
   do not change for it.
 
 ## Security
 
-- **Network policy is NIC presence.** Guests default to no network
-  device at all — substitution and egress ride vsock, so `none` costs
-  nothing. `full` attaches a device for checks and effects that reach
-  out and currently grants unrestricted egress; an internet-only tier
-  (special-use ranges blackholed, as spindle does) is a future
-  expansion.
+- **Networking is externally enforced.** `none` supplies no NIC;
+  `full` uses routed per-execution TAPs and mandatory host nftables
+  filtering. Neither guest configuration nor a pipeline definition can
+  remove the protections specified in Network Policy.
+- **The VMM is unprivileged and execution-scoped.** It receives only
+  its image, scratch storage, sockets, and required device handles
+  (including KVM and its own TAP). It has no garden credentials, access
+  to other executions, or broad host filesystem access. The host agent
+  retains the credentials needed for its own services; it does not pass
+  them through VMM arguments, environment, or inherited descriptors.
+  Seccomp, process/filesystem sandboxing, and resource limits remain
+  required independent protections, not substitutes for network policy.
 - **Secrets** are injected by the host agent at VM start as files under
   `/run/sower/secrets/<name>` on a tmpfs, and die with the VM. They
   arrive in the dispatch message over the channel's TLS, are never
@@ -334,6 +361,152 @@ without a guest.
   dedicated non-guest step) over a completed, exported result — the
   compromise of a guest never yields signing authority.
 
+## Network Policy
+
+These are required implementation contracts, not a claim that networking
+is implemented. Cloud-hypervisor remains the single execution backend.
+Its choice does not depend on all setup being rootless.
+
+### Modes and topology
+
+- **`none` is the default.** No network device, route to the outside, or
+  general-purpose network proxy is supplied. Guest loopback works for
+  services inside the same VM. Control, the Nix read proxy, and the write
+  endpoint remain execution-scoped vsock services, not arbitrary
+  tunnels; enabling networking changes neither their scope nor store
+  and credential ownership.
+- **`full` means networked, not unrestricted.** Public internet egress
+  is permitted only within operator policy. It never authorizes access
+  to the builder, other execution guests, metadata, or control-plane
+  services. Private and other special-use destinations are denied by
+  default; narrowly approved endpoint exceptions are described below.
+- **One routed TAP per execution.** Provision per-execution network
+  isolation, using network namespaces where needed to isolate routes
+  and devices. Do not bridge guests directly onto the physical LAN;
+  a bridge is not a security boundary. Host nftables rules enforce the
+  boundary outside the guest and VMM. There is no parallel or fallback
+  passt implementation. Routing and any necessary NAT provide
+  connectivity, not authorization.
+
+### Endpoint references and authorization
+
+`network_endpoints` is the minimal exception mechanism, not another
+network mode. A pipeline requests registered resources by name or sid
+via `vm.network_endpoints`; other clients use the same generic resource
+references. The server resolves names to stable sids, authorizes them
+against the run's capability set, and dispatches only those sids. Unknown
+or unauthorized references fail validation. An empty list requests no
+exceptions; a non-empty list with `network = none` is invalid.
+
+An endpoint resource denotes a finite set of exact destination IP
+addresses, a transport protocol (`tcp` or `udp`), and destination ports.
+It is not an arbitrary URL, subnet, wildcard, proxy, or firewall rule.
+The server registry is the reference and per-run authorization layer;
+the activator independently looks up each sid in its operator-governed
+local policy. That local entry bounds the addresses, protocol, ports,
+and availability to this builder. The server and garden BEAM cannot
+create or widen it. Missing local approval fails the execution before
+connectivity; it does not silently drop a requested exception or select
+a weaker mode. A compromised orchestrator remains bounded by those
+operator-approved endpoints, not by an allowlist it supplies itself.
+
+This supports a check of a private garden application without treating
+the garden's deployment channel as reachable or authorized. The check
+still owns its target configuration; an endpoint reference grants only
+the specified network reachability, not credentials, service discovery,
+or permission to activate a seed. Definitions cannot self-authorize
+private access by naming an IP or changing a repository file.
+
+Effective access is the intersection of server-granted references and
+operator approval, subject to mandatory denials. No endpoint can override
+denial of builder-host addresses/services, other execution guests,
+metadata endpoints, or control-plane services. Operator policy can
+further restrict public egress and endpoint access; an explicit operator
+deny wins over an endpoint grant. Only the private/special-use
+destination default may be lifted for the exact approved tuple.
+
+Endpoint address sets are pinned when an execution is provisioned.
+Hostnames used by apps are not firewall identities: every resulting
+packet is checked against its actual destination. DNS re-resolution
+cannot expand a grant, and address changes require operator-approved
+reprovisioning rather than automatic firewall widening. Policy tightening
+or revocation must remove affected access, including existing flows, or
+terminate the affected executions before taking effect; failures remain
+closed.
+
+### Packet enforcement
+
+- Apply default-deny host INPUT and forwarding rules for each execution.
+  Public egress allowed by policy and approved endpoint tuples are the
+  only forwarded openings. Cover all builder addresses, including its
+  non-loopback LAN/public addresses, not just `127.0.0.1` or `::1`.
+  Protect metadata and control-plane destinations regardless of whether
+  their addresses are private, link-local, or public; their address sets
+  are operator-maintained, never inferred solely from private ranges.
+- Deny guest-to-guest traffic, including between executions in the same
+  run. Deny unsolicited inbound connections. Admit only replies to
+  permitted outbound flows, scoped to the originating execution; a
+  generic established-flow rule must not bypass mandatory denials,
+  revocation, or isolation when addresses are reused.
+- Bind source addresses and link-layer identity to the provisioned TAP.
+  Reject source spoofing, guest routing advertisements, and attempts to
+  use another execution's route or interface. Apply equivalent
+  destination and anti-spoofing protections to IPv4 and IPv6; if IPv6 is
+  not provisioned, deny it rather than leaving an alternate path.
+- Any required DNS, DHCP, ARP, or NDP bootstrap traffic is confined to
+  operator-selected peers and the minimal protocol/port/link scope.
+  Such exceptions do not grant general host access or override the
+  service denials above. Do not expose a general host resolver/proxy
+  interface as an escape from the egress filter.
+- Check the effective destination across routing/NAT so translation or
+  hairpin routing cannot bypass a denial. Deny special-use destinations
+  (including loopback, link-local, private, multicast, and reserved
+  ranges) except the narrowly scoped bootstrap traffic and approved
+  endpoint tuples. No alternate device or address family may evade the
+  same policy.
+
+This is address-based isolation, not an application-layer provenance or
+data-loss guarantee. An allowed public service or approved endpoint can
+relay traffic or data; host filtering cannot promise otherwise. Operator
+approval must account for that authority, and user secrets remain
+available to the guest programs to which they were granted.
+
+### Provisioning and teardown
+
+The activator accepts only constrained provision/release operations from
+the local authorized host agent, bound to an execution identity and its
+resource ownership. It validates modes and endpoint references against
+operator policy itself. No raw commands, arbitrary nftables snippets,
+unchecked paths, caller-chosen namespace handles, or caller-chosen
+resource names cross this interface. Names and handles are derived and
+tracked by the activator; a reused sid cannot take over another
+execution's resources.
+
+Provision isolation and install the complete deny-first firewall before
+enabling the TAP or making a route usable by a guest. Only then hand the
+execution-scoped device access to the unprivileged VMM. Partial setup,
+policy rejection, firewall failure, or missing prerequisites roll back
+with no reachable guest; no unfiltered fallback is allowed. `none`
+creates no TAP or network exception resources.
+
+Normal exit, cancellation, timeout, failed boot, host-agent/VMM crash, and
+builder restart all require cleanup. Revoke connectivity first, stop any
+remaining VMM, and then release the execution's TAP, routes, namespace,
+firewall and connection-tracking state. Keep deny protection until its
+interfaces are gone. Release is idempotent and ownership-checked;
+duplicate, late, or concurrent cleanup cannot remove a different
+execution's resources. Do not reuse addresses or identifiers while stale
+flows or resources could authorize traffic.
+
+Crash recovery must not depend on the unprivileged agent successfully
+sending a final request. The privileged lifecycle must detect abandoned
+owners, keep surviving resources filtered, and reclaim them. On restart,
+reconcile leftover resources before accepting work; if safe cleanup or
+policy enforcement cannot be established, quarantine the affected
+resources and refuse new networked execution rather than flush shared
+rules or continue unfiltered. This does not change at-most-once
+execution, run pinning, or the separate run-close gcroot lifecycle.
+
 ## Local Mode and Development
 
 `sower-build` keeps its in-process eval/build path: development and
@@ -344,24 +517,68 @@ property of the server-side path, not of the vocabulary.
 
 Server-side, there is exactly one execution path — through builders.
 The development server therefore needs a local builder: `sower_dev`
-runs one host agent beside the server (requiring KVM), and e2e runs
-real cloud-hypervisor builders inside its incus VMs under nested KVM —
-an accepted infrastructure assumption. There is no degraded or
-container-backed builder mode.
+runs one unprivileged host agent beside the server. KVM, the existing
+activator's privileged network setup capability, and operator-governed
+network policy are explicit prerequisites. E2e runs real
+cloud-hypervisor builders inside its incus VMs under nested KVM — an
+accepted infrastructure assumption — with the same activator, routed
+TAPs, and firewall enforcement. Test endpoint approvals belong to the
+operator-controlled fixture configuration, not repository code. There
+is no degraded, container-backed, root-run VMM, or unfiltered networking
+mode for development or tests.
+
+### Implementation acceptance
+
+The following scenarios are required before the corresponding execution
+path ships; they are not evidence of current implementation or live
+verification:
+
+- A `none` execution has no NIC, cannot reach external addresses, and
+  still runs loopback services, substitutes through the scoped vsock
+  read proxy, and exports through the write endpoint.
+- A `full` execution reaches an allowed public destination, while
+  attempts to reach builder loopback and non-loopback services, another
+  execution (including one in the same run), metadata, control-plane,
+  and unapproved private/special-use destinations fail.
+- A server-authorized, locally operator-approved private endpoint
+  permits exactly its address/protocol/port tuple. Wrong ports,
+  unapproved references, a server-supplied forged grant, and a grant
+  targeting a non-overridable destination fail. DNS changes do not widen
+  it; revocation closes existing as well as new flows.
+- IPv4/IPv6, source spoofing, routing/NAT, unsolicited inbound, and
+  bootstrap-protocol attempts cannot bypass isolation. Replies to a
+  permitted flow work only for its owning execution.
+- Inject failures before and after each provisioning stage, cancel and
+  time out running guests, kill the VMM/agent/activator, and restart the
+  builder. No stage exposes an unfiltered interface; recovery reclaims
+  leftovers. Concurrent executions and duplicate/late teardown retain
+  each other's resources and cannot inherit old flow authorization.
+- Exercise these scenarios between real nested-KVM guests in e2e,
+  observing denied traffic at protected services as well as guest
+  failures. Verify the agent and VMM run unprivileged and that the VMM
+  cannot read garden credentials or another execution's files/devices.
+  Missing privileged setup or firewall support must fail closed, never
+  select a weaker test path.
 
 ## Phasing
 
 1. **Builder role + generic executions.** Capability advertisement,
    dispatch with run pinning and run close, event stream, stock image
    with eval and build guest programs, the work store, and the vsock
-   read/write services. Unblocks sow-221.
+   read/write services. Includes no-NIC isolation, unprivileged VMM
+   sandboxing, and failure cleanup from the first execution. Unblocks
+   sow-221.
 2. **Builder-side push, credential minting.** Backend upload clients
    on the host agent; scoped short-TTL credentials; quarantine
    redirection.
 3. **Custom environments.** `sower.lib.mkEnvironment`, environment
    seeds, materialization, pre-warm subscriptions, pinning.
-4. **Secrets and user code.** Secret injection; `check` and `effect`
-   step kinds land in the pipeline engine.
+4. **Filtered networking, secrets, and user code.** Scoped activator
+   setup, routed TAPs, nftables, endpoint authorization, crash-safe
+   teardown, and the network acceptance scenarios must land before any
+   `full` execution is admitted. Secret injection and `check`/`effect`
+   step kinds land in the pipeline engine; private checks require the
+   approved endpoint path, not a temporary unrestricted mode.
 5. **Seed-trust integration.** Ephemeral signing on builders
    (spec-seed-trust.md phases 4–5), signing separation enforced.
 
@@ -372,7 +589,9 @@ container-backed builder mode.
 - **The host agent is part of the garden application.** Native Elixir
   by preference, in the garden's own supervision tree and deployment
   path, falling to Rust through a NIF or port as needed — never a
-  second service or a second contract.
+  second builder service or a second execution contract. The existing
+  root activator remains the narrowly scoped privileged setup boundary;
+  it does not run guest commands or carry guest traffic.
 - **The execution contract is generic.** Image + command + payload +
   resources + network + secrets → events. Step semantics live in guest
   programs; the host never interprets work.
@@ -408,10 +627,18 @@ container-backed builder mode.
   Guests substitute through the read proxy and `nix copy` results to
   the write endpoint; no NIC is involved, no bespoke NAR protocol
   exists, and what a program does not copy out does not persist.
-- **Network modes are `none` and `full`.** Substitution needs no
-  network — the proxy provides it — so `cache-only` disappears as a
-  distinct mode; `full` means everything for now, internet-only
-  blackholing later.
+- **Network modes stay `none` and `full`, never unrestricted.** `none`
+  has no NIC; `full` permits operator-governed public egress through
+  routed TAPs and host nftables. No physical-LAN bridge or passt
+  fallback. Scoped vsock services work in both modes.
+- **Private access is an approved endpoint reference.** The server
+  authorizes resource sids per run; the activator independently bounds
+  them by operator-owned exact address/protocol/port grants. Builder,
+  metadata, control-plane, and other-guest protections are mandatory and
+  cannot be overridden.
+- **Privilege ends at setup.** The garden host agent and VMM run
+  unprivileged. Firewall installation precedes connectivity; all
+  lifecycle failures and cleanup remain fail-closed, including dev/e2e.
 - **push is a builder-side engine operation.** No VM: the host agent
   uploads from the work store with the backend-specific client and
   host-held credentials. The builtin serves registered cache resources
