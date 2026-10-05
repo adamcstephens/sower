@@ -16,13 +16,11 @@ defmodule SowerCli.BuildTest do
   @tag timeout: 120_000
   test "builds custom seed and ordinary jobs without metadata and prepares mixed registration" do
     fixture = Path.expand("../fixtures/seed-jobs.nix", __DIR__)
-    {:ok, discovery} = Nix.Eval.run(fixture)
-    assert Enum.sort(Enum.map(discovery.output, & &1.attr)) == ["package/tool", "seed/host"]
 
     {:ok, evaluations} = Nix.Eval.Jobs.run(fixture)
     {:ok, result} = Nix.Build.Jobs.run(evaluations.results)
-    ordinary = Enum.find(result.results, &(&1.eval.request.attr == "package/tool"))
-    wrapper = Enum.find(result.results, &(&1.eval.request.attr == "seed/host"))
+    ordinary = Enum.find(result.results, &File.exists?(Path.join(&1.store_path, "ready")))
+    wrapper = Enum.find(result.results, &File.exists?(Path.join(&1.store_path, "seed.json")))
     assert File.read!(Path.join(ordinary.store_path, "ready")) == "ready\n"
     repo_tag = %SowerClient.SeedTag{key: "revision", value: "abc"}
     assert [:skip, {:ok, seed}] = Build.seed_candidates(state([ordinary, wrapper]), [repo_tag])

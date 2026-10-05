@@ -104,6 +104,7 @@ defmodule Nix.Eval do
           [
             System.find_executable("nix-instantiate"),
             "--eval",
+            "--read-write-mode",
             "--strict",
             "--json"
           ] ++
@@ -225,16 +226,7 @@ defmodule Nix.Eval do
   def finalize_output(%Eval{request: %Eval.Request{} = req, output: output}) do
     case output |> Enum.reverse() |> Enum.join() |> Jason.decode() do
       {:ok, json} when is_list(json) ->
-        Enum.map(json, fn child ->
-          attr =
-            if is_nil(req.attr) do
-              child
-            else
-              "#{req.attr}.#{child}"
-            end
-
-          %{req | attr: attr, id: Eval.Request.new_id(), root_id: req.root_id || req.id}
-        end)
+        Enum.map(json, &Eval.Request.child(req, &1))
 
       {:ok, json} ->
         json

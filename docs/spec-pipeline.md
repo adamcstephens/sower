@@ -276,6 +276,13 @@ existing `Nix.Eval.Jobs` worker-pool machinery
 (`sower-build --eval-jobs` / `--memory-limit`), including its flake and
 path dual mode.
 
+Path-based selectors preserve quoted Nix attribute components: `"seed/host"`
+selects a single slash-containing name, while
+`nested."group.with.dot"."seed/host.example"` retains dots inside names.
+Automatic discovery treats each returned attribute name as one component,
+quoting and escaping it before extending the selector. Path evaluation writes
+the selected derivations to the store so the builder can realize fresh jobs.
+
 `workers` is intra-step parallelism: one eval step fans its attribute
 walk over a worker pool and streams items out. It is a different axis
 from the phase-level `concurrency`, which bounds items in flight in a

@@ -97,12 +97,32 @@ defmodule Nix.Eval.Request do
 
   def parse_path(:path, path, attr), do: {Path.expand(path), attr}
 
+  def child(%__MODULE__{} = request, name) do
+    component =
+      if Regex.match?(~r/^[a-zA-Z_][a-zA-Z0-9_'-]*$/, name),
+        do: name,
+        else: quote_component(name)
+
+    attr = if is_nil(request.attr), do: component, else: "#{request.attr}.#{component}"
+    %{request | attr: attr, id: new_id(), root_id: request.root_id || request.id}
+  end
+
   def to_flake_uri(%{type: :flake, path: path, attr: attr}), do: "#{path}##{attr}"
 
   def to_import(%{type: :path, path: path, attr: nil}), do: "import #{path} {}"
 
   def to_import(%{type: :path, path: path, attr: attr}) do
-    selection = attr |> String.split(".") |> Enum.map_join(".", &Jason.encode!/1)
+    selection =
+      ~r/"(?:[^"\\]|\\.)*"|[^."]+/
+      |> Regex.scan(attr)
+      |> Enum.map_join(".", fn [component] ->
+        if String.starts_with?(component, "\""), do: component, else: quote_component(component)
+      end)
+
     "(import #{path} {}).#{selection}"
+  end
+
+  defp quote_component(name) do
+    name |> Jason.encode!() |> String.replace("${", "\\${")
   end
 end
