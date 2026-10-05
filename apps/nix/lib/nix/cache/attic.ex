@@ -112,7 +112,7 @@ defmodule Nix.Cache.Attic do
         await_completion(pid, ospid, [], [])
 
       {:error, reason} ->
-        {:error, %{exit_status: 1, stderr: to_string(reason), stdout: ""}}
+        {:error, %{exit_status: 1, stderr: inspect(reason), stdout: ""}}
     end
   end
 
@@ -124,15 +124,24 @@ defmodule Nix.Cache.Attic do
       {:stderr, ^ospid, data} ->
         await_completion(pid, ospid, stdout, [data | stderr])
 
-      {:DOWN, _ospid, :process, _pid, :normal} ->
+      {:DOWN, _ref, :process, ^pid, :normal} ->
         {:ok, finalize_output(stdout, stderr)}
 
-      {:DOWN, _ospid, :process, _pid, {:shutdown, {:exit_status, status}}} ->
+      {:DOWN, _ref, :process, ^pid, {:shutdown, {:exit_status, status}}} ->
         {:error, finalize_output(stdout, stderr) |> Map.put(:exit_status, status)}
+
+      {:DOWN, _ref, :process, ^pid, {:shutdown, {:signal, signal}}} ->
+        {:error, finalize_output(stdout, stderr) |> Map.put(:exit_status, 128 + signal)}
+
+      {:DOWN, _ref, :process, ^pid, {:shutdown, {:cleanup_failed, message}}} ->
+        {:error, finalize_output(stdout, [message | stderr]) |> Map.put(:exit_status, 1)}
+
+      {:cleanup_error, ^ospid, message} ->
+        {:error, finalize_output(stdout, [message | stderr]) |> Map.put(:exit_status, 1)}
     after
       # 30 minute timeout for large uploads
       30 * 60 * 1000 ->
-        Rexec.kill(pid, :sigterm)
+        Rexec.kill_tree(pid, :sigterm)
         {:error, %{exit_status: 1, stderr: "timeout", stdout: ""}}
     end
   end

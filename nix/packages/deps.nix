@@ -1752,8 +1752,8 @@ let
             src = fetchFromGitHub {
               owner = "adamcstephens";
               repo = "rexec";
-              rev = "eb4760ce8a51c8296b553681ef202ea124d896c6";
-              hash = "sha256-hsdz7pFoapa8uOLqt8ZMj3Z5Z3T63aAKuNdQ15pvWZM=";
+              rev = "35f7a952077e84a4946418377201a0788dfdae23";
+              hash = "sha256-rA+ew1jP+6Eh9mqG9rrKth4mMM+0f4FVZMBhhJLQx3E=";
             };
           };
         in

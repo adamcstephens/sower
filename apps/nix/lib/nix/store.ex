@@ -12,9 +12,14 @@ defmodule Nix.Store do
         cmd = [nix_store, "--realize", path]
 
         Process.flag(:trap_exit, true)
-        {:ok, pid, ospid} = Rexec.run_link(cmd)
 
-        collect_output(pid, ospid, [])
+        case Rexec.run_link(cmd) do
+          {:ok, pid, ospid} ->
+            collect_output(pid, ospid, [])
+
+          {:error, reason} ->
+            {:error, reason}
+        end
     end
   end
 
@@ -33,6 +38,15 @@ defmodule Nix.Store do
 
       {:EXIT, ^pid, {:shutdown, {:exit_status, status}}} ->
         {:error, status}
+
+      {:EXIT, ^pid, {:shutdown, {:signal, signal}}} ->
+        {:error, {:signal, signal}}
+
+      {:EXIT, ^pid, {:shutdown, {:cleanup_failed, message}}} ->
+        {:error, {:cleanup_failed, message}}
+
+      {:cleanup_error, ^ospid, message} ->
+        {:error, {:cleanup_failed, message}}
     end
   end
 end

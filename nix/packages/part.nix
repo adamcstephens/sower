@@ -13,6 +13,9 @@
         mix = pkgs.callPackage ./mix-checks.nix {
           inherit beamPackages version;
         };
+        cloud-hypervisor = pkgs.callPackage ./cloud-hypervisor.nix {
+          inherit beamPackages;
+        };
       };
 
       packages = rec {

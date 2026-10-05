@@ -96,17 +96,29 @@ defmodule Nix.Build do
       drv_path: state.build.drv_path
     )
 
-    {:ok, pid, ospid} = Rexec.run_link(cmd)
+    case Rexec.run_link(cmd) do
+      {:ok, pid, ospid} ->
+        state = %{
+          state
+          | pid: pid,
+            ospid: ospid,
+            from: from,
+            build: %{state.build | start_time: start_time}
+        }
 
-    state = %{
-      state
-      | pid: pid,
-        ospid: ospid,
-        from: from,
-        build: %{state.build | start_time: start_time}
-    }
+        {:noreply, state}
 
-    {:noreply, state}
+      {:error, reason} ->
+        build = %{
+          state.build
+          | status: :error,
+            log: [format_crash_reason(reason)],
+            start_time: start_time,
+            end_time: DateTime.utc_now()
+        }
+
+        {:stop, :normal, {:error, build}, state}
+    end
   end
 
   def handle_info({:stdout, ospid, stdout}, %Build.Exec{ospid: ospid} = state) do
@@ -115,6 +127,11 @@ defmodule Nix.Build do
 
   def handle_info({:stderr, ospid, stderr}, %Build.Exec{ospid: ospid} = state) do
     {:noreply, %{state | stderr: [stderr | state.stderr]}}
+  end
+
+  def handle_info({:cleanup_error, ospid, message}, %Build.Exec{ospid: ospid} = state) do
+    state = %{state | stderr: [message | state.stderr]}
+    handle_info({:EXIT, state.pid, {:shutdown, {:cleanup_failed, message}}}, state)
   end
 
   def handle_info({:EXIT, pid, reason}, %Build.Exec{pid: pid} = state) do
@@ -143,7 +160,11 @@ defmodule Nix.Build do
     }
 
     log = [
-      msg: "Build complete",
+      msg:
+        if(match?({:shutdown, {:cleanup_failed, _}}, reason),
+          do: "Build cleanup failed",
+          else: "Build complete"
+        ),
       store_path: build.store_path,
       reason: reason,
       status: status

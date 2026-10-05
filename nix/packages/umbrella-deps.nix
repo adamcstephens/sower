@@ -3,6 +3,7 @@
   callPackages,
   lib,
   rustPlatform,
+  util-linux,
 }:
 
 callPackages ./deps.nix {
@@ -38,6 +39,7 @@ callPackages ./deps.nix {
           version = old.version;
           src = "${old.src}/native/rexec_native";
           cargoLock.lockFile = "${old.src}/native/rexec_native/Cargo.lock";
+          nativeCheckInputs = [ util-linux ];
         };
       in
       {

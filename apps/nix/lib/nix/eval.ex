@@ -122,18 +122,31 @@ defmodule Nix.Eval do
 
     Logger.debug(msg: "Running command", cmd: Enum.join(cmd, " "))
 
-    {:ok, pid, ospid} = Rexec.run_link(cmd)
+    case Rexec.run_link(cmd) do
+      {:ok, pid, ospid} ->
+        state = %{
+          state
+          | pid: pid,
+            ospid: ospid,
+            from: from,
+            eval: %{state.eval | start_time: start_time}
+        }
 
-    state = %{
-      state
-      | pid: pid,
-        ospid: ospid,
-        from: from,
-        eval: %{state.eval | start_time: start_time}
-    }
+        Process.send_after(self(), :tick, @tick_interval)
+        {:noreply, state}
 
-    Process.send_after(self(), :tick, @tick_interval)
-    {:noreply, state}
+      {:error, reason} ->
+        eval = %{
+          state.eval
+          | status: :error,
+            output: nil,
+            errors: [format_error(reason)],
+            start_time: start_time,
+            end_time: DateTime.utc_now()
+        }
+
+        {:stop, :normal, {:error, eval}, state}
+    end
   end
 
   def handle_info({:stdout, ospid, stdout}, %Eval.Exec{} = state) when ospid == state.ospid do
@@ -177,6 +190,11 @@ defmodule Nix.Eval do
     {:noreply, %{state | eval: %{state.eval | mem_samples: mem_samples}}}
   end
 
+  def handle_info({:cleanup_error, ospid, message}, %Eval.Exec{ospid: ospid} = state) do
+    state = %{state | eval: %{state.eval | errors: [message | state.eval.errors]}}
+    handle_info({:EXIT, state.pid, {:shutdown, {:cleanup_failed, message}}}, state)
+  end
+
   def handle_info({:EXIT, pid, reason}, %Eval.Exec{} = state) when pid == state.pid do
     end_time = DateTime.utc_now()
 
@@ -205,7 +223,11 @@ defmodule Nix.Eval do
     }
 
     log = [
-      msg: "Evaluation complete",
+      msg:
+        if(match?({:shutdown, {:cleanup_failed, _}}, reason),
+          do: "Evaluation cleanup failed",
+          else: "Evaluation complete"
+        ),
       request: state.eval.request,
       reason: reason,
       status: status,
