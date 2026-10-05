@@ -23,7 +23,17 @@ If more than one of the rules conflict, ask before implementing.
 
 ## Code conventions
 
-- Prefer red/green TDD. If unsure what style of testing, stop and ask.
+- Prefer red/green TDD for new or changed behavior:
+  - Work in small behavioral increments.
+  - Add or extend a focused test derived from the requirements.
+    Test observable outcomes through an appropriate existing boundary.
+  - Run the test and confirm it fails because the required behavior
+    is missing or incorrect before implementing it.
+  - Implement the simplest complete solution, confirm the test passes,
+    then refactor and run the relevant existing tests.
+  - Add tests only when they protect a meaningful requirement or
+    plausible regression. Avoid redundant tests, implementation-detail
+    assertions, and tests that merely reproduce the implementation.
 - Always read code for project elixir dependencies from `deps`. Never query hexdocs or hex.
 - SowerClient schemas must *always* be added to `sower_client.ex`
 
