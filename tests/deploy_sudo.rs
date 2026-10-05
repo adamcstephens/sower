@@ -234,17 +234,28 @@ fn sudo_canonical_deployment_prechecks_the_manifest_target_not_the_wrapper() {
         .to_string(),
     )
     .unwrap();
-    let out = fixture
-        .command()
-        .arg(".#home/alice")
-        .args(["--copy-to", "ssh://host", "--sudo"])
-        .output()
-        .unwrap();
-    assert!(!out.status.success());
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains(&format!("{target}/hm-version")), "{stderr}");
-    assert!(!fixture.root.join("nix-args").exists());
-    assert!(!fixture.root.join("ssh-used").exists());
+    for flake in [
+        ".#home/alice",
+        ".#\"home/alice\"",
+        ".#packages.x86_64-linux.\"home/alice.example\"",
+        ".#\"nixos/alice.example\"",
+        ".#packages.x86_64-linux.\"seed/alice.example\"",
+    ] {
+        let out = fixture
+            .command()
+            .arg(flake)
+            .args(["--copy-to", "ssh://host", "--sudo"])
+            .output()
+            .unwrap();
+        assert!(!out.status.success(), "{flake}");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains(&format!("{target}/hm-version")),
+            "{flake}: {stderr}"
+        );
+        assert!(!fixture.root.join("nix-args").exists());
+        assert!(!fixture.root.join("ssh-used").exists());
+    }
 }
 
 #[test]

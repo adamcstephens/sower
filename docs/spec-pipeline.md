@@ -369,7 +369,9 @@ directory as a NAR. The wrapper itself contains no CI-specific files.
 
 Local `sower build --seed` recognizes canonical `nixos/`, `home/`, and
 custom `seed/` jobs, including qualified flake attributes such as
-`packages.<system>.nixos/<name>`. Custom producers expose a wrapper as
+`packages.<system>.nixos/<name>` and quoted components such as
+`sowerJobs.<system>."seed/service.example"`. Dots inside quoted names remain
+part of the job name. Custom producers expose a wrapper as
 `seed/<job>` using `mkSeed { pkgs; name; type; target; tags; }` or independently
 emitting the same version-1 `seed.json` contract while retaining the target
 in the wrapper closure. Ordinary package outputs are not probed for JSON.
@@ -394,10 +396,13 @@ Missing, malformed, or unsupported manifests fail registration. With
 `--fail-fast` this returns `seed_failed`; otherwise the pipeline retains
 error status. Ordinary non-seed jobs remain unregistered.
 
-Direct and sudo deployment of canonical wrapper jobs read the same manifest
-before prechecking or copying. Registration and activation use its underlying
-target and seed type, never the wrapper directory. Raw artifact paths and
-already-registered seeds retain their existing workflows.
+Direct and sudo deployment of canonical wrapper jobs, including direct
+`"home/alice"` and qualified quoted selectors, read the same manifest before
+prechecking or copying. Registration and activation use its underlying target
+and seed type, never the wrapper directory. Explicit name, type, and destination
+overrides retain precedence; otherwise the canonical job name implies the
+destination. Raw artifact paths and already-registered seeds retain their
+existing workflows.
 
 ### resolve
 

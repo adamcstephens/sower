@@ -592,17 +592,80 @@ mod seed_warming {
             .to_string(),
         )
         .unwrap();
-        let (out, _) = fixture.run_flake(
+        for flake in [
             ".#home/alice",
-            vec![],
-            &["--no-seed-download", "--copy-to", "ssh://host"],
+            ".#\"home/alice\"",
+            ".#packages.x86_64-linux.\"home/alice.example\"",
+            ".#\"nixos/alice.example\"",
+            ".#packages.x86_64-linux.\"seed/alice.example\"",
+        ] {
+            let (out, _) = fixture.run_flake(
+                flake,
+                vec![],
+                &["--no-seed-download", "--copy-to", "ssh://host"],
+            );
+            assert!(!out.status.success(), "{flake}: {}", stderr(&out));
+            assert!(
+                stderr(&out).contains(&format!("{target}/hm-version")),
+                "{flake}: {}",
+                stderr(&out)
+            );
+        }
+        assert_eq!(fixture.calls(), "flake-build\n".repeat(5));
+    }
+
+    #[test]
+    fn quoted_home_job_warms_using_the_unquoted_name_and_home_manager_type() {
+        let fixture = Fixture::new();
+        let (out, requests) = fixture.run_flake(
+            ".#packages.x86_64-linux.\"home/alice.example\"",
+            vec![(
+                "GET /api/v1/gardens/garden%20name/latest-seed?name=alice.example&seed_type=home-manager ",
+                204,
+                json!(null),
+            )],
+            &[],
+        );
+        assert!(!out.status.success());
+        assert!(stderr(&out).contains("seed.json"), "{}", stderr(&out));
+        assert_eq!(requests.len(), 1);
+        assert_eq!(fixture.calls(), "flake-build\n");
+    }
+
+    #[test]
+    fn quoted_jobs_keep_explicit_name_and_type_overrides() {
+        let fixture = Fixture::new();
+        let target = "/nix/store/00000000000000000000000000000000-sower-missing-target";
+        fs::write(
+            fixture.artifact.join("seed.json"),
+            json!({"version": 1, "name": "manifest-name", "seed_type": "home-manager",
+                "artifact": target, "tags": {}})
+            .to_string(),
+        )
+        .unwrap();
+        let (out, requests) = fixture.run_flake(
+            ".#\"home/alice.example\"",
+            vec![(
+                "GET /api/v1/gardens/garden%20name/latest-seed?name=explicit+name&seed_type=nixos ",
+                204,
+                json!(null),
+            )],
+            &[
+                "--name",
+                "explicit name",
+                "--type",
+                "nixos",
+                "--copy-to",
+                "ssh://host",
+            ],
         );
         assert!(!out.status.success());
         assert!(
-            stderr(&out).contains(&format!("{target}/hm-version")),
+            stderr(&out).contains(&format!("{target}/nixos-version")),
             "{}",
             stderr(&out)
         );
+        assert_eq!(requests.len(), 1);
         assert_eq!(fixture.calls(), "flake-build\n");
     }
 

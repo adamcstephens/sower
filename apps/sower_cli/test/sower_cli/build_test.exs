@@ -64,6 +64,50 @@ defmodule SowerCli.BuildTest do
     end
   end
 
+  test "quoted canonical jobs register manifest identity, target and tags", %{dir: dir} do
+    write_manifest(dir)
+    repo_tag = %SowerClient.SeedTag{key: "revision", value: "abc"}
+
+    for attr <- [
+          ~s("nixos/host"),
+          ~s("home/host.example"),
+          ~s("seed/service.example"),
+          ~s(packages.x86_64-linux."nixos/host.example"),
+          ~s(packages.aarch64-linux."home/host.example"),
+          ~s(legacyPackages.x86_64-linux."seed/service.example"),
+          ~s("packages"."x86_64-linux"."nixos/host.example"),
+          ~s("legacyPackages"."aarch64-linux"."seed/service.example"),
+          ~s("packages.with.dot"."x86_64-linux"."home/user.example"),
+          ~S(packages.x86_64-linux."seed/service\".example")
+        ] do
+      assert [{:ok, seed}] = Build.seed_candidates(state([build(attr, dir)]), [repo_tag])
+      assert seed.name == "host"
+      assert seed.seed_type == "nixos"
+      assert seed.artifact == @artifact
+      assert seed.artifact != dir
+
+      assert Enum.map(seed.tags, &{&1.key, &1.value}) ==
+               [{"source", "cli"}, {"system", "x86_64-linux"}, {"revision", "abc"}]
+    end
+  end
+
+  test "unquoted dotted canonical jobs retain manifest registration", %{dir: dir} do
+    write_manifest(dir)
+
+    for attr <- [
+          "nixos/host.example",
+          "home/host.example",
+          "seed/service.example",
+          "packages.x86_64-linux.nixos/host.example",
+          "packages.aarch64-linux.home/host.example",
+          "legacyPackages.x86_64-linux.seed/service.example"
+        ] do
+      assert [{:ok, seed}] = Build.seed_candidates(state([build(attr, dir)]), [])
+      assert seed.name == "host"
+      assert seed.artifact == @artifact
+    end
+  end
+
   test "ordinary jobs and obsolete namespaces do not register", %{dir: dir} do
     write_manifest(dir)
 
@@ -74,7 +118,14 @@ defmodule SowerCli.BuildTest do
           "manifest/nixos/host",
           "packages.x86_64-linux.manifest/home/host",
           "packages.x86_64-linux.notseed/service",
-          "packages.x86_64-linux.package/nixos/host"
+          "packages.x86_64-linux.package/nixos/host",
+          ~s("package/nixos/host"),
+          ~s("manifest/nixos/host"),
+          ~s(packages.x86_64-linux."package/nixos/host"),
+          ~s(packages.x86_64-linux."notseed/service"),
+          ~s(packages.x86_64-linux."nixos/"),
+          ~s(packages.x86_64-linux."nixos/host".outPath),
+          ~s(packages.x86_64-linux."nixos/host)
         ] do
       assert [:skip] = Build.seed_candidates(state([build(attr, dir)]), [])
     end

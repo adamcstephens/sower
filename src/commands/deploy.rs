@@ -431,9 +431,11 @@ fn resolve_garden(args: &DeployArgs) -> Result<String> {
         .and_then(|reference| reference.split_once('#'))
         .map(|(_, attr)| attr)
         .and_then(|attr| {
-            canonical_job(attr)
-                .map(|(_, name)| name)
-                .or_else(|| (!attr.is_empty() && !attr.contains('.')).then_some(attr))
+            canonical_job(attr).map(|(_, name)| name).or_else(|| {
+                let mut components = attribute_components(attr);
+                let name = components.next()?;
+                (!name.is_empty() && components.next().is_none()).then(|| unquote_component(name))
+            })
         })
         .map(str::to_owned)
         .ok_or_else(|| anyhow!("missing --to: no garden to deploy to"))
@@ -563,10 +565,45 @@ fn print_log_tails(info: &types::DeploymentInfo) {
     }
 }
 
+/// Dots inside quoted Nix attribute components belong to the component's name.
+fn attribute_components(attr: &str) -> impl Iterator<Item = &str> {
+    let mut quoted = false;
+    let mut escaped = false;
+    attr.split(move |character| {
+        if escaped {
+            escaped = false;
+            return false;
+        }
+        match character {
+            '\\' if quoted => escaped = true,
+            '"' => quoted = !quoted,
+            '.' if !quoted => return true,
+            _ => {}
+        }
+        false
+    })
+}
+
+fn unquote_component(component: &str) -> &str {
+    component
+        .strip_prefix('"')
+        .and_then(|component| component.strip_suffix('"'))
+        .unwrap_or(component)
+}
+
 /// Canonical jobs may be selected directly or beneath a qualified flake output.
 fn canonical_job(attr: &str) -> Option<(&str, &str)> {
     let (prefix, name) = attr.split_once('/')?;
-    let namespace = prefix.rsplit('.').next()?;
+    let component = attribute_components(prefix).last()?;
+    let (namespace, name) = if let Some(namespace) = component.strip_prefix('"') {
+        let name = name.strip_suffix('"')?;
+        if name.contains('"') {
+            return None;
+        }
+        (namespace, name)
+    } else {
+        (component, name)
+    };
     (!name.is_empty() && matches!(namespace, "nixos" | "home" | "seed"))
         .then_some((namespace, name))
 }
@@ -586,17 +623,16 @@ fn flake_installable(reference: &str) -> Result<(String, Option<String>)> {
         return Ok((reference.to_owned(), Some(name.to_owned())));
     }
 
-    if attr.contains('.') {
-        let name = attr
-            .strip_prefix("nixosConfigurations.")
-            .and_then(|rest| rest.split('.').next())
-            .map(str::to_owned);
+    let mut components = attribute_components(attr);
+    let first = components.next().expect("nonempty attribute");
+    if let Some(second) = components.next() {
+        let name = (first == "nixosConfigurations").then(|| unquote_component(second).to_owned());
         return Ok((reference.to_owned(), name));
     }
 
     Ok((
         format!("{flake}#nixosConfigurations.{attr}.config.system.build.toplevel"),
-        Some(attr.to_owned()),
+        Some(unquote_component(attr).to_owned()),
     ))
 }
 
@@ -811,6 +847,12 @@ mod tests {
             ".#home/host",
             ".#seed/host",
             ".#packages.x86_64-linux.nixos/host",
+            ".#\"nixos/host\"",
+            ".#\"home/host\"",
+            ".#\"seed/host\"",
+            ".#packages.x86_64-linux.\"nixos/host\"",
+            ".#packages.x86_64-linux.\"home/host\"",
+            ".#packages.x86_64-linux.\"seed/host\"",
         ] {
             let (installable, name) = flake_installable(reference).unwrap();
             assert_eq!(installable, reference);
@@ -818,6 +860,32 @@ mod tests {
             let args = parse(&[reference]).unwrap();
             assert_eq!(resolve_garden(&args).unwrap(), "host");
         }
+    }
+
+    #[test]
+    fn quoted_canonical_jobs_preserve_dotted_names_without_quotes() {
+        for namespace in ["nixos", "home", "seed"] {
+            for qualifier in ["", "packages.x86_64-linux.", "packages.\"system.name\"."] {
+                let reference = format!(".#{qualifier}\"{namespace}/host.example\"");
+                let (installable, name) = flake_installable(&reference).unwrap();
+                assert_eq!(installable, reference);
+                assert_eq!(name.as_deref(), Some("host.example"));
+                let args = parse(&[&reference]).unwrap();
+                assert_eq!(resolve_garden(&args).unwrap(), "host.example");
+
+                let args = parse(&[&reference, "--to", "explicit-garden"]).unwrap();
+                assert_eq!(resolve_garden(&args).unwrap(), "explicit-garden");
+            }
+        }
+    }
+
+    #[test]
+    fn quoted_nixos_configuration_names_leave_raw_installables_unchanged() {
+        let reference = ".#nixosConfigurations.\"host.example\".config.system.build.toplevel";
+        let (installable, name) = flake_installable(reference).unwrap();
+        assert_eq!(installable, reference);
+        assert_eq!(name.as_deref(), Some("host.example"));
+        assert!(resolve_garden(&parse(&[reference]).unwrap()).is_err());
     }
 
     #[test]
