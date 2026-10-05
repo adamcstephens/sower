@@ -7,12 +7,14 @@ defmodule CloudHypervisor.API do
   Requests never retry or follow redirects. Mutations return `:ok`; reads
   return `{:ok, %Ping{}}` or `{:ok, %Info{}}`. Failures return `{:error, %Error{}}`.
 
-  `create/2` accepts the native string-keyed VM configuration, not a shared
-  domain configuration. `shutdown/1` stops the VM, not the VMM process and
-  not a guest power-button request. `shutdown_vmm/1` exits the VMM.
+  `create/2` accepts the shared `CloudHypervisor.Config` direct-boot contract.
+  `shutdown/1` stops the VM, not the VMM process and not a guest power-button
+  request. `shutdown_vmm/1` exits the VMM.
   """
 
   use TypedStruct
+
+  alias CloudHypervisor.Config
 
   typedstruct do
     field :socket, String.t(), enforce: true
@@ -43,8 +45,8 @@ defmodule CloudHypervisor.API do
   def ping(%__MODULE__{} = client), do: request(client, :get, "vmm.ping", :ping)
   def info(%__MODULE__{} = client), do: request(client, :get, "vm.info", :info)
 
-  def create(%__MODULE__{} = client, config) when is_map(config),
-    do: request(client, :put, "vm.create", :empty, json: config)
+  def create(%__MODULE__{} = client, %Config{} = config),
+    do: request(client, :put, "vm.create", :empty, json: Config.to_api(config))
 
   def boot(%__MODULE__{} = client), do: request(client, :put, "vm.boot", :empty)
   def shutdown(%__MODULE__{} = client), do: request(client, :put, "vm.shutdown", :empty)

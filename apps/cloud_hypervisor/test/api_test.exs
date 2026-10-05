@@ -1,7 +1,7 @@
 defmodule CloudHypervisor.APITest do
   use ExUnit.Case, async: true
 
-  alias CloudHypervisor.API
+  alias CloudHypervisor.{API, Config}
   alias CloudHypervisor.API.{Error, Info, Ping}
 
   test "decodes typed reads from independently addressed sockets" do
@@ -31,13 +31,19 @@ defmodule CloudHypervisor.APITest do
     assert {"GET /api/v1/vm.info HTTP/1.1", ""} = Task.await(other_task)
   end
 
-  test "native create payload and empty 200/204 mutation successes" do
-    config = %{"payload" => %{"kernel" => "/kernel"}, "memory" => %{"size" => 134_217_728}}
+  test "shared create configuration encodes byte memory and direct boot over HTTP" do
+    config = %Config{kernel: "/kernel", memory: 134_221_824}
     {client, task} = server(204, "")
     assert :ok = API.create(client, config)
     assert {"PUT /api/v1/vm.create HTTP/1.1", body} = Task.await(task)
-    assert Jason.decode!(body) == config
 
+    assert Jason.decode!(body) == %{
+             "payload" => %{"kernel" => "/kernel"},
+             "memory" => %{"size" => 134_221_824}
+           }
+  end
+
+  test "empty 200/204 mutation successes" do
     for {function, endpoint} <- [
           boot: "vm.boot",
           shutdown: "vm.shutdown",

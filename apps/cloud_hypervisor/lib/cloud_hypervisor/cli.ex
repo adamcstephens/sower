@@ -2,13 +2,14 @@ defmodule CloudHypervisor.CLI do
   @moduledoc """
   Native Cloud Hypervisor command construction, without process execution.
 
-  `command/1` returns `{executable, argv}` for direct process invocation.
+  `command/1` renders a launch-only VMM for API configuration; `command/2`
+  also renders a shared `CloudHypervisor.Config` for direct boot.
   Values remain individual arguments: do not join this output into a shell
-  command. Only VMM launch options are currently rendered; guest configuration
-  will extend this entry point rather than introduce another renderer.
+  command.
   """
 
-  alias CloudHypervisor.Launch
+  alias CloudHypervisor.{Config, Launch}
+  alias CloudHypervisor.Config.{CPUs, Disk, LandlockRule, Output, RNG, Vsock}
 
   def command(%Launch{} = launch) do
     args =
@@ -22,6 +23,54 @@ defmodule CloudHypervisor.CLI do
 
     {launch.executable, args}
   end
+
+  def command(%Launch{} = launch, %Config{} = config) do
+    {executable, args} = command(launch)
+
+    {executable,
+     args ++
+       option("--kernel", config.kernel) ++
+       option("--initramfs", config.initramfs) ++
+       option("--cmdline", config.cmdline) ++
+       option("--cpus", cpus(config.cpus)) ++
+       option("--memory", memory(config.memory)) ++
+       repeated("--disk", Enum.map(config.disks, &disk/1)) ++
+       option("--serial", output(config.serial)) ++
+       option("--console", output(config.console)) ++
+       option("--rng", rng(config.rng)) ++
+       option("--vsock", vsock(config.vsock)) ++
+       if(config.landlock, do: ["--landlock"], else: []) ++
+       repeated("--landlock-rules", Enum.map(config.landlock_rules, &landlock_rule/1))}
+  end
+
+  defp repeated(_flag, []), do: []
+  defp repeated(flag, values), do: [flag | values]
+
+  defp cpus(nil), do: nil
+  defp cpus(%CPUs{} = cpus), do: "boot=#{cpus.boot_vcpus},max=#{cpus.max_vcpus}"
+  defp memory(nil), do: nil
+  defp memory(bytes), do: "size=#{bytes}"
+
+  defp disk(%Disk{} = disk) do
+    "path=" <>
+      disk.path <>
+      readonly(disk.readonly) <> image_type(disk.image_type)
+  end
+
+  defp readonly(nil), do: ""
+  defp readonly(true), do: ",readonly=on"
+  defp readonly(false), do: ",readonly=off"
+  defp image_type(nil), do: ""
+  defp image_type(:raw), do: ",image_type=raw"
+  defp output(nil), do: nil
+  defp output(%Output{mode: :file} = output), do: "file=" <> output.file
+  defp output(%Output{mode: :socket} = output), do: "socket=" <> output.socket
+  defp output(%Output{} = output), do: Atom.to_string(output.mode)
+  defp rng(nil), do: nil
+  defp rng(%RNG{} = rng), do: "src=" <> rng.src
+  defp vsock(nil), do: nil
+  defp vsock(%Vsock{} = vsock), do: "cid=#{vsock.cid},socket=#{vsock.socket}"
+  defp landlock_rule(%LandlockRule{} = rule), do: "path=#{rule.path},access=#{rule.access}"
 
   defp option(flag, value, prefix \\ "")
   defp option(_flag, nil, _prefix), do: []
