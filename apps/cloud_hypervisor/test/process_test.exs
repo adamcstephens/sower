@@ -6,6 +6,15 @@ defmodule CloudHypervisor.ProcessTest do
 
   @timeout 5_000
 
+  test "rejects unsupported socket console before starting either execution mode" do
+    vm_config = %{config() | console: %Config.Output{mode: :socket, socket: "/unused-console"}}
+
+    for mode <- [:cli, :api] do
+      assert {:error, {:invalid_option, :console}} =
+               VMM.start_link(launch: %Launch{}, config: vm_config, mode: mode)
+    end
+  end
+
   test "keeps real exit status and separate stdout and stderr after early exit" do
     executable = executable("printf 'native stdout\\n'; printf 'native stderr\\n' >&2; exit 23")
     {:ok, pid} = start(executable)
@@ -121,6 +130,179 @@ defmodule CloudHypervisor.ProcessTest do
     refute File.exists?("/proc/#{status.os_pid}")
     refute File.exists?("/proc/#{descendant}")
     refute File.exists?(status.directory)
+  end
+
+  test "normal completion removes the native API lock with its owned socket" do
+    {:ok, pid} =
+      start(executable("printf 'running\\n'; read release; exit 0"), readiness_timeout: 15_000)
+
+    assert output(pid, :stdout) == "running\n"
+    status = VMM.status(pid)
+    {:ok, client} = VMM.client(pid)
+    runner = :sys.get_state(pid).runner
+
+    {:ok, listener} =
+      :gen_tcp.listen(0, [:binary, active: false, ifaddr: {:local, client.socket}])
+
+    on_exit(fn ->
+      :gen_tcp.close(listener)
+      File.rm_rf(status.directory)
+    end)
+
+    File.write!(client.socket <> ".lock", "")
+    Rexec.send(runner, "finish\n")
+    assert_receive {:cloud_hypervisor, ^pid, {:exited, {:exit_status, 0}}}, @timeout
+    refute File.exists?(client.socket)
+    refute File.exists?(client.socket <> ".lock")
+    refute File.exists?(status.directory)
+  end
+
+  test "certified completion removes the API lock but retains unexpected execution files" do
+    {:ok, pid} =
+      start(executable("printf 'running\\n'; read release; exit 0"), readiness_timeout: 15_000)
+
+    assert output(pid, :stdout) == "running\n"
+    status = VMM.status(pid)
+    {:ok, client} = VMM.client(pid)
+    runner = :sys.get_state(pid).runner
+
+    {:ok, listener} =
+      :gen_tcp.listen(0, [:binary, active: false, ifaddr: {:local, client.socket}])
+
+    on_exit(fn ->
+      :gen_tcp.close(listener)
+      File.rm_rf(status.directory)
+    end)
+
+    unrelated = Path.join(status.directory, "caller-owned")
+    File.write!(unrelated, "retain this resource")
+    File.write!(client.socket <> ".lock", "")
+    Rexec.send(runner, "finish\n")
+
+    assert_receive {:cloud_hypervisor, ^pid, {:failed, {:cleanup_failed, message}}}, @timeout
+    assert {:error, {:cleanup_failed, ^message}} = VMM.stop(pid, :force)
+    refute File.exists?("/proc/#{status.os_pid}")
+    refute File.exists?(client.socket)
+    refute File.exists?(client.socket <> ".lock")
+    assert File.exists?(status.directory)
+    assert File.read!(unrelated) == "retain this resource"
+    refute_receive {:cloud_hypervisor, ^pid, {:exited, _outcome}}
+  end
+
+  test "lifecycle hard kill reclaims owned sockets only after certified native tree cleanup" do
+    executable =
+      executable("setsid sh -c 'printf \"descendant=%s\\n\" \"$$\"; exec sleep 60' &\nwait")
+
+    vm_config = %{config() | vsock: %Config.Vsock{cid: 5, socket: nil}}
+    {:ok, pid} = start(executable, config: vm_config, readiness_timeout: 15_000)
+    descendant = output(pid, :stdout) |> String.trim() |> String.replace_prefix("descendant=", "")
+    status = VMM.status(pid)
+    {:ok, client} = VMM.client(pid)
+    runner = :sys.get_state(pid).runner
+    runner_monitor = Process.monitor(runner)
+    server_monitor = Process.monitor(pid)
+    vsock = Path.join(status.directory, "vsock.sock")
+
+    {:ok, api_listener} =
+      :gen_tcp.listen(0, [:binary, active: false, ifaddr: {:local, client.socket}])
+
+    {:ok, vsock_listener} =
+      :gen_tcp.listen(0, [:binary, active: false, ifaddr: {:local, vsock}])
+
+    File.write!(client.socket <> ".lock", "")
+
+    foreign = executable("exec sleep 60")
+
+    {:ok, foreign_pid} =
+      start_supervised(
+        {VMM,
+         launch: %Launch{executable: foreign},
+         config: config(),
+         owner: self(),
+         readiness_timeout: 15_000},
+        id: :other_execution
+      )
+
+    foreign_status = VMM.status(foreign_pid)
+    {:ok, foreign_client} = VMM.client(foreign_pid)
+
+    {:ok, foreign_listener} =
+      :gen_tcp.listen(0, [:binary, active: false, ifaddr: {:local, foreign_client.socket}])
+
+    File.write!(foreign_client.socket <> ".lock", "other execution lock")
+
+    on_exit(fn ->
+      :gen_tcp.close(api_listener)
+      :gen_tcp.close(vsock_listener)
+      :gen_tcp.close(foreign_listener)
+      File.rm_rf(status.directory)
+    end)
+
+    Process.unlink(pid)
+    Process.exit(pid, :kill)
+    assert_receive {:DOWN, ^server_monitor, :process, ^pid, :killed}, @timeout
+
+    assert_receive {:DOWN, ^runner_monitor, :process, ^runner, {:shutdown, {:signal, 9}}},
+                   @timeout
+
+    refute File.exists?("/proc/#{status.os_pid}")
+    refute File.exists?("/proc/#{descendant}")
+    wait_for_path_absence(status.directory)
+    refute File.exists?(client.socket)
+    refute File.exists?(vsock)
+    refute File.exists?(client.socket <> ".lock")
+    assert File.exists?("/proc/#{foreign_status.os_pid}")
+    assert File.exists?(foreign_status.directory)
+    assert File.exists?(foreign_client.socket)
+    assert File.read!(foreign_client.socket <> ".lock") == "other execution lock"
+  end
+
+  test "lifecycle hard kill retains sockets when Rexec death cannot certify native cleanup" do
+    {:ok, pid} = start(executable("exec sleep 60"), readiness_timeout: 15_000)
+    status = VMM.status(pid)
+    {:ok, client} = VMM.client(pid)
+    runner = :sys.get_state(pid).runner
+    runner_monitor = Process.monitor(runner)
+    server_monitor = Process.monitor(pid)
+
+    {:ok, listener} =
+      :gen_tcp.listen(0, [:binary, active: false, ifaddr: {:local, client.socket}])
+
+    [_state, native_runner | _] =
+      File.read!("/proc/#{status.os_pid}/stat")
+      |> String.split(") ", parts: 2)
+      |> List.last()
+      |> String.split()
+
+    on_exit(fn ->
+      System.cmd("kill", ["--signal", "CONT", native_runner], stderr_to_stdout: true)
+      :gen_tcp.close(listener)
+      wait_for_absence(status.os_pid)
+      File.rm_rf(status.directory)
+    end)
+
+    assert {_, 0} =
+             System.cmd("kill", ["--signal", "STOP", native_runner], stderr_to_stdout: true)
+
+    wait_for_stopped(native_runner)
+
+    :ok = :sys.suspend(runner)
+    Process.unlink(pid)
+    Process.exit(pid, :kill)
+    assert_receive {:DOWN, ^server_monitor, :process, ^pid, :killed}, @timeout
+    Process.exit(runner, :kill)
+    assert_receive {:DOWN, ^runner_monitor, :process, ^runner, :killed}, @timeout
+    assert File.exists?("/proc/#{status.os_pid}")
+    assert File.exists?(status.directory)
+    assert File.exists?(client.socket)
+
+    assert {_, 0} =
+             System.cmd("kill", ["--signal", "CONT", native_runner], stderr_to_stdout: true)
+
+    wait_for_absence(status.os_pid)
+    wait_for_absence(native_runner)
+    assert File.exists?(status.directory)
+    assert File.exists?(client.socket)
   end
 
   @tag timeout: 15_000
@@ -339,6 +521,33 @@ defmodule CloudHypervisor.ProcessTest do
     if File.exists?("/proc/#{pid}") do
       Process.sleep(10)
       wait_for_absence(pid, attempts - 1)
+    end
+  end
+
+  defp wait_for_stopped(pid, attempts \\ 100)
+  defp wait_for_stopped(pid, 0), do: flunk("native runner #{pid} was not stopped")
+
+  defp wait_for_stopped(pid, attempts) do
+    state =
+      File.read!("/proc/#{pid}/stat")
+      |> String.split(") ", parts: 2)
+      |> List.last()
+      |> String.split()
+      |> hd()
+
+    if state != "T" do
+      Process.sleep(10)
+      wait_for_stopped(pid, attempts - 1)
+    end
+  end
+
+  defp wait_for_path_absence(path, attempts \\ 500)
+  defp wait_for_path_absence(path, 0), do: flunk("owned resource #{path} was not reclaimed")
+
+  defp wait_for_path_absence(path, attempts) do
+    if File.exists?(path) do
+      Process.sleep(10)
+      wait_for_path_absence(path, attempts - 1)
     end
   end
 

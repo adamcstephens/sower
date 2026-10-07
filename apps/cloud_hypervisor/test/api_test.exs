@@ -87,6 +87,103 @@ defmodule CloudHypervisor.APITest do
     Task.await(task)
   end
 
+  test "pool checkout exhaustion returns a typed transport error without raising" do
+    socket = socket_path()
+
+    {:ok, listener} =
+      :gen_tcp.listen(0, [:binary, active: false, ifaddr: {:local, socket}, backlog: 50])
+
+    on_exit(fn ->
+      :gen_tcp.close(listener)
+      File.rm!(socket)
+    end)
+
+    supervisor = start_supervised!(Task.Supervisor)
+    owner = self()
+    client = %API{socket: socket, timeout: 50}
+
+    try do
+      server =
+        Task.Supervisor.async_nolink(supervisor, fn ->
+          connections =
+            for index <- 1..50 do
+              {:ok, connection} = :gen_tcp.accept(listener, 5_000)
+              {headers, ""} = receive_request(connection, "")
+              assert hd(String.split(headers, "\r\n")) == "GET /api/v1/vmm.ping HTTP/1.1"
+              send(owner, {:held_request, self(), index})
+              connection
+            end
+
+          receive do
+            :release ->
+              body =
+                Jason.encode!(%{
+                  version: "53.0.0",
+                  build_version: "build",
+                  pid: 42,
+                  features: []
+                })
+
+              for connection <- connections do
+                :ok =
+                  :gen_tcp.send(
+                    connection,
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: #{byte_size(body)}\r\nConnection: close\r\n\r\n#{body}"
+                  )
+
+                :ok = :gen_tcp.close(connection)
+              end
+          end
+        end)
+
+      server_pid = server.pid
+
+      requests =
+        for index <- 1..50 do
+          task =
+            Task.Supervisor.async_nolink(supervisor, fn ->
+              Req.request(
+                url: "http://localhost/api/v1/vmm.ping",
+                unix_socket: socket,
+                finch: [
+                  conn_opts: [transport_opts: [timeout: client.timeout]],
+                  pool_timeout: 5_000,
+                  receive_timeout: 30_000,
+                  request_timeout: 30_000
+                ],
+                retry: false,
+                redirect: false,
+                decode_body: false
+              )
+            end)
+
+          assert_receive {:held_request, ^server_pid, ^index}, 5_000
+          task
+        end
+
+      started = System.monotonic_time(:millisecond)
+
+      assert {:error,
+              %Error{kind: :transport, status: nil, reason: {:pool_timeout, %RuntimeError{}}}} =
+               API.ping(client)
+
+      elapsed = System.monotonic_time(:millisecond) - started
+
+      assert elapsed < 1_000
+
+      send(server_pid, :release)
+
+      for task <- requests do
+        assert {:ok, %Req.Response{status: 200}} = Task.await(task, 5_000)
+      end
+
+      Task.await(server, 5_000)
+    after
+      stop_supervised!(Task.Supervisor)
+      :gen_tcp.close(listener)
+    end
+  end
+
   test "malformed successful read responses are decode failures" do
     for body <- ["", "not JSON", "[]", "{}", "{\"version\":12}"] do
       {client, task} = server(200, body)

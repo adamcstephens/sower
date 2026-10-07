@@ -1,7 +1,8 @@
 defmodule CloudHypervisor.CLITest do
   use ExUnit.Case, async: true
 
-  alias CloudHypervisor.{CLI, Launch}
+  alias CloudHypervisor.{CLI, Config, Launch}
+  alias CloudHypervisor.Config.Output
 
   test "default launch leaves optional settings to the binary" do
     assert CLI.command(%Launch{}) == {"cloud-hypervisor", ["--seccomp", "true"]}
@@ -42,6 +43,14 @@ defmodule CloudHypervisor.CLITest do
     for {mode, value} <- [{true, "true"}, {false, "false"}, {:log, "log"}, {:errno, "errno"}] do
       assert CLI.command(%Launch{seccomp: mode}) ==
                {"cloud-hypervisor", ["--seccomp", value]}
+    end
+  end
+
+  test "direct boot rejects virtio-console socket mode rather than substituting a mode" do
+    config = %Config{kernel: "/kernel", console: %Output{mode: :socket, socket: "/console"}}
+
+    assert_raise ArgumentError, fn ->
+      CLI.command(%Launch{}, config)
     end
   end
 end

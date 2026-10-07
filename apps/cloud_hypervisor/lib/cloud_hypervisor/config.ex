@@ -12,9 +12,12 @@ defmodule CloudHypervisor.Config do
   `on|off` versus JSON booleans. CLI devices/rules are multiple values after
   one flag; API devices/rules are arrays. No network devices are configured.
 
-  Serial and virtio-console share `Output` modes. File/socket modes require
-  their corresponding path. RNG configuration requires a source path; omission
-  retains CH's default RNG. Vsock configures a device, not a stream connection.
+  Serial and virtio-console share `Output`. Both support `:off`, `:null`,
+  `:tty`, `:pty`, and `:file`; only serial supports `:socket`. File/socket
+  modes require their corresponding path. `to_api/1` and `CLI.command/2`
+  raise `ArgumentError` for virtio-console socket mode before projection.
+  RNG configuration requires a source path; omission retains CH's default RNG.
+  Vsock configures a device, not a stream connection.
 
   Landlock uses a CLI presence flag versus API `landlock_enable`; explicit
   `false` therefore omits the CLI flag. Rules use native `r`, `w`, or `rw`
@@ -70,6 +73,10 @@ defmodule CloudHypervisor.Config do
     field :vsock, Vsock.t()
     field :landlock, boolean() | nil
     field :landlock_rules, [LandlockRule.t()], default: []
+  end
+
+  def to_api(%__MODULE__{console: %Output{mode: :socket}}) do
+    raise ArgumentError, "socket output is supported only for serial"
   end
 
   def to_api(%__MODULE__{} = config) do

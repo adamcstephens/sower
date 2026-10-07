@@ -6,6 +6,9 @@ defmodule CloudHypervisor.API do
   `timeout` bounds connection, pool wait, and response waits in milliseconds.
   Requests never retry or follow redirects. Mutations return `:ok`; reads
   return `{:ok, %Ping{}}` or `{:ok, %Info{}}`. Failures return `{:error, %Error{}}`.
+  Pool-checkout timeouts are transport errors with
+  `reason: {:pool_timeout, exception}`, retaining Finch's original failure detail.
+  Unrelated exceptions propagate.
 
   `create/2` accepts the shared `CloudHypervisor.Config` direct-boot contract.
   `shutdown/1` stops the VM, not the VMM process and not a guest power-button
@@ -60,7 +63,7 @@ defmodule CloudHypervisor.API do
              url: "http://localhost/api/v1/" <> endpoint,
              unix_socket: client.socket,
              finch: [
-               conn_opts: [timeout: client.timeout],
+               conn_opts: [transport_opts: [timeout: client.timeout]],
                pool_timeout: client.timeout,
                receive_timeout: client.timeout,
                request_timeout: client.timeout
@@ -79,6 +82,22 @@ defmodule CloudHypervisor.API do
       {:error, reason} ->
         {:error, %Error{kind: :transport, reason: reason}}
     end
+  rescue
+    error in RuntimeError ->
+      case __STACKTRACE__ do
+        [{NimblePool, :exit!, 3, _}, {Finch.HTTP1.Pool, :request, 6, _} | _] ->
+          if String.starts_with?(
+               error.message,
+               "Finch was unable to provide a connection within the timeout due to excess queuing"
+             ) do
+            {:error, %Error{kind: :transport, reason: {:pool_timeout, error}}}
+          else
+            reraise error, __STACKTRACE__
+          end
+
+        _ ->
+          reraise error, __STACKTRACE__
+      end
   end
 
   defp decode(:empty, %Req.Response{}), do: :ok

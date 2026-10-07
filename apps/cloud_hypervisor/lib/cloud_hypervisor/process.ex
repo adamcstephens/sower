@@ -41,16 +41,19 @@ defmodule CloudHypervisor.Process do
   directory. Supply no launch API socket, and use `socket: nil` for an owned
   vsock device. Caller-supplied API/vsock paths are rejected, never removed.
   Other configured paths, including serial/console sockets, remain caller-owned.
-  Requires Rexec's Linux 5.3+, pidfd, and readable `/proc` support. This owns a
-  process tree; it is not a sandbox or system-wide crash reconciler. An
-  unexpected Rexec death is not proof of cleanup and retains owned sockets.
+  An independent, unlinked cleanup owner starts Rexec as its linked caller before
+  execution begins. It forwards output and terminal status, surviving lifecycle
+  server death and reclaiming only owned sockets and the private directory after
+  certified tree completion. Requires Rexec's Linux 5.3+, pidfd, and readable
+  `/proc` support. This is not a sandbox or system-wide crash reconciler.
+  Unexpected Rexec death is not proof of cleanup and retains owned sockets.
   Standalone `API` clients may still address arbitrary sockets.
   """
 
   use GenServer
   use TypedStruct
 
-  alias CloudHypervisor.{API, CLI, Config, Launch}
+  alias CloudHypervisor.{API, CLI, Cleanup, Config, Launch}
   alias Elixir.Process, as: BEAM
 
   @grace_timeout 500
@@ -127,7 +130,7 @@ defmodule CloudHypervisor.Process do
   def init({:ok, launch, config, mode, owner, timeout}) do
     BEAM.flag(:trap_exit, true)
 
-    with {:ok, directory} <- execution_directory() do
+    with {:ok, cleanup_owner, directory} <- Cleanup.prepare(&execution_directory/0) do
       launch = %{launch | api_socket: Path.join(directory, "api.sock")}
       config = own_vsock(config, directory)
       client = %API{socket: launch.api_socket, timeout: min(timeout, 1_000)}
@@ -144,7 +147,7 @@ defmodule CloudHypervisor.Process do
         deadline: now() + timeout
       }
 
-      case run(launch, config, mode) do
+      case run(cleanup_owner, launch, config, mode) do
         {:ok, runner, os_pid} ->
           timer = BEAM.send_after(self(), :readiness_timeout, timeout)
 
@@ -166,18 +169,8 @@ defmodule CloudHypervisor.Process do
               {:cleanup_error, _os_pid, message} -> cleanup_failed(state, message)
             after
               0 ->
-                case File.rmdir(directory) do
-                  :ok ->
-                    notify(state, {:failed, reason})
-                    finish_startup(state, {:error, reason})
-
-                  {:error, cleanup_reason} ->
-                    cleanup_failed(
-                      state,
-                      "Startup failed #{inspect(reason)}; execution directory removal failed " <>
-                        "#{inspect(cleanup_reason)} and process-tree cleanup is unconfirmed"
-                    )
-                end
+                notify(state, {:failed, reason})
+                finish_startup(state, {:error, reason})
             end
 
           {:ok, state}
@@ -327,6 +320,7 @@ defmodule CloudHypervisor.Process do
       not is_integer(timeout) or timeout <= 0 -> {:error, {:invalid_option, :readiness_timeout}}
       not is_nil(launch.api_socket) -> {:error, {:caller_socket, :api_socket}}
       not is_nil(get_in(config.vsock.socket)) -> {:error, {:caller_socket, :vsock}}
+      get_in(config.console.mode) == :socket -> {:error, {:invalid_option, :console}}
       true -> {:ok, launch, config, mode, owner, timeout}
     end
   end
@@ -363,11 +357,11 @@ defmodule CloudHypervisor.Process do
     %{config | vsock: %{config.vsock | socket: Path.join(directory, "vsock.sock")}}
   end
 
-  defp run(%Launch{} = launch, %Config{} = config, mode) do
+  defp run(cleanup_owner, %Launch{} = launch, %Config{} = config, mode) do
     {executable, arguments} =
       if mode == :cli, do: CLI.command(launch, config), else: CLI.command(launch)
 
-    Rexec.run_link([executable | arguments])
+    Cleanup.run(cleanup_owner, [executable | arguments])
   end
 
   defp request(%State{request: %Request{}} = state, _kind), do: state
@@ -497,7 +491,6 @@ defmodule CloudHypervisor.Process do
     {outcome, cleanup_error} =
       case completion(reason) do
         {:ok, outcome} when state.cleanup_error == nil ->
-          File.rm_rf(state.status.directory)
           {outcome, nil}
 
         {:ok, _outcome} ->
@@ -561,17 +554,7 @@ defmodule CloudHypervisor.Process do
 
   defp cleanup_failed(%State{} = state, _message), do: state
 
-  defp completion(:normal), do: {:ok, {:exit_status, 0}}
-
-  defp completion({:shutdown, {kind, value}})
-       when kind in [:exit_status, :signal],
-       do: {:ok, {kind, value}}
-
-  defp completion({:shutdown, {:cleanup_failed, message}}), do: {:error, message}
-
-  defp completion(reason),
-    do:
-      {:error, "Rexec exited #{inspect(reason)} without confirming complete process-tree cleanup"}
+  defp completion(reason), do: Cleanup.completion(reason)
 
   defp finish_startup(%State{startup_result: nil} = state, result) do
     Enum.each(state.startup_waiters, &GenServer.reply(&1, result))
@@ -611,7 +594,6 @@ defmodule CloudHypervisor.Process do
       {:EXIT, runner, reason} when runner == state.runner ->
         case completion(reason) do
           {:ok, _outcome} when state.cleanup_error == nil ->
-            File.rm_rf(state.status.directory)
             :ok
 
           {:ok, _outcome} ->

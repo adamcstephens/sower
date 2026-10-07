@@ -4,6 +4,9 @@ defmodule CloudHypervisor.CLI do
 
   `command/1` renders a launch-only VMM for API configuration; `command/2`
   also renders a shared `CloudHypervisor.Config` for direct boot.
+  Virtio-console supports `:off`, `:null`, `:tty`, `:pty`, and `:file`;
+  serial additionally supports `:socket`. `command/2` raises `ArgumentError`
+  for virtio-console socket mode before constructing the command.
   Values remain individual arguments: do not join this output into a shell
   command.
   """
@@ -22,6 +25,10 @@ defmodule CloudHypervisor.CLI do
         if(launch.exit_on_guest_shutdown, do: [], else: ["--no-shutdown"])
 
     {launch.executable, args}
+  end
+
+  def command(%Launch{}, %Config{console: %Output{mode: :socket}}) do
+    raise ArgumentError, "socket output is supported only for serial"
   end
 
   def command(%Launch{} = launch, %Config{} = config) do

@@ -104,4 +104,12 @@ defmodule CloudHypervisor.ConfigTest do
     assert {_, args} = CLI.command(%Launch{}, config)
     assert Enum.take(args, -2) == ["--serial", "socket=/serial"]
   end
+
+  test "API projection rejects virtio-console socket mode rather than substituting a mode" do
+    config = %Config{kernel: "/kernel", console: %Output{mode: :socket, socket: "/console"}}
+
+    assert_raise ArgumentError, fn ->
+      Config.to_api(config)
+    end
+  end
 end

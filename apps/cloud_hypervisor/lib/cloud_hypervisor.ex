@@ -22,8 +22,9 @@ defmodule CloudHypervisor do
   Guest runtime readiness remains the caller's responsibility.
 
   Rexec owns and reaps the child process tree, including descendants retaining
-  output descriptors. Execution API/vsock sockets live
-  in a private directory; caller-supplied execution socket paths are not reused.
+  output descriptors. An independent cleanup owner survives lifecycle-server
+  death and removes execution API/vsock sockets and the API lock only after
+  certified completion. Caller-supplied execution socket paths are not reused.
   Graceful VMM shutdown and forced process termination are distinct from API
   VM shutdown. Owner death terminates the owned process tree.
   Cleanup failures are explicit and retain execution sockets rather than
