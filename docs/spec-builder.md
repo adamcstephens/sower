@@ -17,9 +17,9 @@ Known clients:
 
 - **Pipeline steps** — `eval`, `build`, `check`, `effect` as guest
   executions; `push` as a builder-side engine operation
-  (spec-pipeline.md, Execution Environment).
-- **Environment materialization** — the builtin chain applied to
-  environment images (spec-pipeline.md, Environment seeds).
+  (spec-pipeline.md, Execution Image).
+- **Image materialization** — the builtin chain applied to
+  images (spec-pipeline.md, Image seeds).
 - **Seed trust** — the sandboxed eval/build half of the ephemeral
   signing model (spec-seed-trust.md, D5c and phases 4–5).
 - **Remote `sower-build`** — a possible later client submitting work
@@ -58,7 +58,7 @@ spec-seed-trust.md's.
   declares, injected as files.
 - **Everything the builder runs is Nix.** Images are closures: the
   stock image rides in the builder's own deployed closure, and user
-  environments arrive as seeds through the same registry, cache, and
+  images arrive as seeds through the same registry, cache, and
   subscription machinery as everything else.
 - **Local mode stays.** `sower-build` keeps its in-process eval/build
   for development and bootstrap. It shares the step vocabulary, not the
@@ -71,7 +71,7 @@ spec-seed-trust.md's.
 | Builder       | A garden with the builder capability: a host agent executing microVMs for the server.         |
 | Execution     | One unit of dispatched work: image + command + payload + resources → event stream + result.   |
 | Run           | A client-scoped group of executions: pins to one builder and scopes its work-store gcroots.   |
-| Image         | A complete guest system closure — the stock image, or a `mkEnvironment` output as a seed.     |
+| Image         | A complete guest system closure — the stock image, or a `mkImage` output as a seed.           |
 | Host agent    | The unprivileged builder role of the garden application: VM lifecycle, vsock services, secrets, work store. |
 | Activator     | The existing root boundary: operator-authorized setup and release of execution network resources. |
 | Network endpoint | An operator-approved destination address/protocol/port resource; a reference requests access, never grants it. |
@@ -100,9 +100,9 @@ the moment it is deployed, with no fetch, no registry lookup, and no
 bootstrap ordering problem. It sits at a well-known path the builder's
 own configuration provides at eval and build time, so nobody has to
 carry its store path around: dispatch names it `stock` and the host
-agent resolves the rest. Custom environments arrive the other way: a
-builder subscribes to `environment` seeds with a stage-only policy
-(spec-pipeline.md, Environment seeds), so those images are pinned
+agent resolves the rest. Custom images arrive the other way: a
+builder subscribes to `image` seeds with a stage-only policy
+(spec-pipeline.md, Image seeds), so those images are pinned
 locally before a run asks.
 
 The host agent is part of the garden application, not a service beside
@@ -130,7 +130,7 @@ the contract baseline.
 | sid     | string   | yes      | Execution id; idempotency key for redispatch.                                        |
 | run_sid | string   | yes      | The run this execution belongs to: gcroot scope, pin key, lifecycle owner.           |
 | system  | string   | yes      | Target system; what dispatch matched the builder on.                                 |
-| image   | string   | yes      | `stock` for the builder's own image, or an environment seed's store path.            |
+| image   | string   | yes      | `stock` for the builder's own image, or an image seed's store path.                  |
 | command | object   | yes      | `{ path, args, env }` — a store-path executable inside the image's closure.          |
 | payload | object   | yes      | JSON delivered to the command on stdin (a pipeline item, for step executions).       |
 | vm      | object   | yes      | `{ cpus, memory }`, resolved by the server from definition defaults.                 |
@@ -182,8 +182,8 @@ the same arithmetic as everything else.
 ## Host–Guest Contract
 
 Every image embeds the sower guest runtime via the mandatory base
-module of `sower.lib.mkEnvironment` (spec-pipeline.md, Execution
-Environment), and stamps `/etc/sower/env.json` with a versioned
+module of `sower.lib.mkImage` (spec-pipeline.md, Execution
+Image), and stamps `/etc/sower/image.json` with a versioned
 guest-contract marker. The host agent refuses images whose marker is
 missing or out of its supported range — the runtime surface is a
 cross-component contract like any other. One marker versions that whole
@@ -243,7 +243,7 @@ path. Wiping the work store must never break the builder host.
   needs no separate mechanism.
 - **Boot images** are read from where they legitimately live, in the
   host store: the stock image at the well-known path in the builder's
-  own deployed closure, environment images as registered seeds staged
+  own deployed closure, custom images as registered seeds staged
   through its subscription. Both are operator-governed and pinned.
   Ephemeral merge-run images are work products and live in the work
   store like any other.
@@ -571,7 +571,7 @@ verification:
 2. **Builder-side push, credential minting.** Backend upload clients
    on the host agent; scoped short-TTL credentials; quarantine
    redirection.
-3. **Custom environments.** `sower.lib.mkEnvironment`, environment
+3. **Custom images.** `sower.lib.mkImage`, image
    seeds, materialization, pre-warm subscriptions, pinning.
 4. **Filtered networking, secrets, and user code.** Scoped activator
    setup, routed TAPs, nftables, endpoint authorization, crash-safe
@@ -621,7 +621,7 @@ verification:
   rather than dropping a live run's products.
 - **The stock image ships in the builder closure,** at a well-known
   path its own configuration provides at eval and build time. Dispatch
-  names it `stock` and the host resolves it; only custom environments
+  names it `stock` and the host resolves it; only custom images
   come through registry, cache, and subscriptions.
 - **Ingress and egress are the binary-cache protocol over vsock.**
   Guests substitute through the read proxy and `nix copy` results to
@@ -682,9 +682,9 @@ verification:
   builder disconnecting fails the execution, which makes a transient
   channel blip kill a two-hour build; logs are sequence-numbered, which
   gestures at resume, but no reconnect window is specified.
-- **Environment image on miss.** Pre-warm subscriptions cover the happy
+- **Image on miss.** Pre-warm subscriptions cover the happy
   path, and the stock image is always local. When dispatch would name an
-  environment image a builder has not staged, is that a placement
+  image a builder has not staged, is that a placement
   constraint (only builders holding it are candidates) or a fetch the
   execution waits on? Phase 3.
 - **Read proxy implementation.** Adopt ncps or build the equivalent

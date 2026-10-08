@@ -53,7 +53,7 @@ its policy denies.
   effects are pinned in a closure.
 - Builtin steps are memoized on content-addressed keys. Re-running a
   pipeline skips work whose inputs have not changed.
-- Step software is Nix: execution environments are NixOS modules on a
+- Step software is Nix: execution images are NixOS modules on a
   sower-provided base. The contract carries only resources and
   references.
 - Deployment policy is evaluated as usual on every garden. Pipelines
@@ -103,11 +103,11 @@ The contract is source-mode agnostic — nothing in it records which mode
 produced it. The registered pipeline resource's source carries the mode:
 
 - `flake` (default, blessed): definitions are flake outputs
-  (`sower.pipelines.<name>`, `sower.environments.<name>`); attrpaths
+  (`sower.pipelines.<name>`, `sower.images.<name>`); attrpaths
   resolve as flake attrs; eval defaults to the run's own source.
 - `nix` (classic): a conventional entrypoint `sower.nix` at the
   repository root exposes the same shape (`pipelines.<name>`,
-  `environments.<name>`); evaluation uses the path-based evaluator (the
+  `images.<name>`); evaluation uses the path-based evaluator (the
   dual mode `Nix.Eval` already implements).
 
 Evaluation is **pure** in both modes: every external input must be
@@ -172,8 +172,8 @@ attribute name.
 | needs       | ref[]            | no       | []                     | Explicit barriers in addition to data-flow edges.                        |
 | steps       | step[]           | yes      |                        | Chain applied to each item, in order.                                    |
 | concurrency | int              | no       | engine                 | Max items in flight in this phase.                                       |
-| vm          | object           | no       | pipeline default       | Default VM resources for this phase's steps (see Execution Environment). |
-| environment | string or object | no       | pipeline default       | Default environment for this phase's steps.                              |
+| vm          | object           | no       | pipeline default       | Default VM resources for this phase's steps (see Execution Image). |
+| image       | string or object | no       | pipeline default       | Default image for this phase's steps.                              |
 
 For a build phase, `concurrency` is the item-level parallelism that
 `sower-build --build-jobs` expresses today.
@@ -253,8 +253,8 @@ Every step accepts:
 | ----------- | ---------------- | -------- | ------------- | ---------------------------------------------------------------------- |
 | kind        | string           | yes      |               | One of the kinds below.                                                |
 | timeout     | string           | no       | kind-specific | Per-attempt execution limit.                                           |
-| vm          | object           | no       | phase default | VM resources (see Execution Environment).                              |
-| environment | string or object | no       | phase default | Environment ref, optionally source-pinned (see Execution Environment). |
+| vm          | object           | no       | phase default | VM resources (see Execution Image).                              |
+| image       | string or object | no       | phase default | Image ref, optionally source-pinned (see Execution Image). |
 
 A step failure fails its item: the rest of the chain is skipped for that
 item, and the item does not flow to consumers. The phase's aggregate
@@ -333,7 +333,7 @@ quarantine cache without touching them. The resource's URL scheme
 selects the backend as today (`niks3://`, `attic://`, otherwise
 `nix copy`). A builder-side engine operation: the upload runs on the
 builder holding the paths, with host-held credentials and backend
-clients pinned in the builder closure; no `vm` or `environment` config
+clients pinned in the builder closure; no `vm` or `image` config
 (spec-builder.md). The builtin serves registered cache resources —
 uploading anywhere else is an `effect` with a user secret.
 
@@ -353,7 +353,7 @@ Registers the item as a seed with the server, exactly as the `:seed`
 step of `sower-build` does today (`SowerClient.Seed.create`). Name,
 type, tags, and the deployable artifact come from the built `seed.json` manifest.
 A server-side engine operation — a registry write needing no VM
-and accepting no `vm` or `environment` config.
+and accepting no `vm` or `image` config.
 
 **Inputs:** `out_paths` (the wrapper containing `seed.json`).
 
@@ -504,7 +504,7 @@ Considerations).
 
 Reaching a target also requires `vm.network = "full"` and, for a private
 endpoint, a server-authorized and operator-approved
-`vm.network_endpoints` reference (Execution Environment). The app's
+`vm.network_endpoints` reference (Execution Image). The app's
 configuration identifies the target; it does not authorize reachability.
 
 ### effect
@@ -548,22 +548,22 @@ delivering the item as a mounted file is the natural extension (Future
 Considerations); the convention that the engine never templates
 arguments stands either way.
 
-## Execution Environment
+## Execution Image
 
 Steps that execute work — `eval`, `build`, `check`, `effect` — each
 run in their own cloud-hypervisor microVM on a builder
 (spec-builder.md). `resolve`, `deploy`, and `seed` are server-side
 engine operations; `push` is a builder-side one, uploading from the
 builder's work store with host-held credentials. Engine operations
-accept no `vm` or `environment` config. The contract carries resources
+accept no `vm` or `image` config. The contract carries resources
 and references; all software configuration is Nix.
 
 The default guest is the sower **stock image**: prebuilt, shipped with
 the builder, requiring no user-source evaluation. Builtin steps need the
-sower machinery it provides and default to it; specifying `environment`
+sower machinery it provides and default to it; specifying `image`
 is the exception — chiefly for `check` and `effect`, or to control
 eval's toolchain (a different Nix version changes eval results, which is
-why the environment closure sits in eval's memoization key).
+why the image closure sits in eval's memoization key).
 
 ### vm
 
@@ -620,18 +620,18 @@ gaining access to the garden or server control plane. Enabling networking
 does not change the separate work store, scoped vsock cache services,
 host-held sower credentials, or user-secret tmpfs injection.
 
-### environment
+### image
 
 An installable in the pipeline source producing a complete guest system,
-assembled with `sower.lib.mkEnvironment` (sower as a flake input, or
+assembled with `sower.lib.mkImage` (sower as a flake input, or
 imported as a plain Nix library in classic mode — sower is consumable
 without flakes). The user writes ordinary NixOS modules — extra
 packages, services (a per-step database for an integration check),
-container support — and `mkEnvironment` composes them onto the sower
+container support — and `mkImage` composes them onto the sower
 base module:
 
 ``` nix
-sower.environments.integration = inputs.sower.lib.mkEnvironment {
+sower.images.integration = inputs.sower.lib.mkImage {
   modules = [
     ({ pkgs, ... }: {
       environment.systemPackages = [ pkgs.postgresql ];
@@ -649,13 +649,13 @@ runtime and the boot-time optimizations a hand-rolled NixOS system would
 not get (direct kernel boot, trimmed initrd and services, read-only
 root), pins its invariants with module priorities so user modules cannot
 break them, and stamps the image with a versioned guest-contract marker
-(`/etc/sower/env.json`). The guest runtime talks to the host — item on
+(`/etc/sower/image.json`). The guest runtime talks to the host — item on
 stdin, secrets, logs — so that surface is versioned like every other
 cross-component contract; builders reject images whose marker is missing
-or out of range. There is no supported path to an environment that
-bypasses `mkEnvironment`.
+or out of range. There is no supported path to an image that
+bypasses `mkImage`.
 
-Everything in the environment is pinned by the source's
+Everything in the image is pinned by the source's
 content-addressed inputs — nixpkgs, the user's modules, and the sower
 base they compose against; pure evaluation enforces that the definition
 cannot introduce moving inputs. The VM is ephemeral: services start with
@@ -666,15 +666,15 @@ How the guest reaches the Nix store (shared from the host or hydrated
 from a cache) is a builder concern, out of scope here; the contract is
 agnostic to it.
 
-### Environment pinning
+### Image pinning
 
-The `environment` ref optionally pins its source:
+The `image` ref optionally pins its source:
 
 | Form                                                      | Materialized from                              |
 | --------------------------------------------------------- | ---------------------------------------------- |
-| `"environments/integration"`                              | The run's own pinned rev (default).            |
-| `{ "attr": "environments/integration", "ref": "main" }`   | `main`, resolved and pinned once at run start. |
-| `{ "attr": "environments/integration", "rev": "aaaaaa" }` | That rev, frozen until the pin is edited.      |
+| `"images/integration"`                              | The run's own pinned rev (default).            |
+| `{ "attr": "images/integration", "ref": "main" }`   | `main`, resolved and pinned once at run start. |
+| `{ "attr": "images/integration", "rev": "aaaaaa" }` | That rev, frozen until the pin is edited.      |
 
 The string form is shorthand for `{ "attr": ... }`.
 
@@ -685,29 +685,29 @@ main's image and re-materialization happens only when main moves. A
 `rev` pin never re-materializes until the pin itself changes —
 invalidation is a reviewed diff.
 
-The trade is explicit staleness: a branch that edits environment modules
+The trade is explicit staleness: a branch that edits image modules
 without moving the pin keeps running the pinned image — deliberately not
 what that branch's tree defines. The escape hatch composes with run
 context: point `ref` at `ctx.source_branch` (or drop the pin) while iterating
-on an environment, restore the pin before merge. Both the staleness and
+on an image, restore the pin before merge. Both the staleness and
 the override are data in the resolved definition — diffable and
 reviewable, never silent.
 
-Pinned sources go through admission: the environment's source rev is
+Pinned sources go through admission: the image's source rev is
 verified against the same admission policy as the run source before
 materialization. Without this, pinning would be a bypass channel for
 unverified code into builder VMs.
 
-### Environment seeds
+### Image seeds
 
-Materializing an environment is the builtin chain applied to itself: an
+Materializing an image is the builtin chain applied to itself: an
 internal eval → build → push → seed job, its guest steps in stock VMs,
-registering the image as a seed of a new stage-only `environment` seed
+registering the image as a seed of a new stage-only `image` seed
 type (joining
 the policy spec's actions-by-seed-type table alongside `gcroot`). The
 seed registry is the server-side tracking:
 
-- The seed's tags carry the materialization key — the environment's
+- The seed's tags carry the materialization key — the image's
   source rev (the run's rev by default, or the pinned one) plus the attr
   — which the scheduler computes **without evaluating anything**, since
   revs are pinned at run start. Pinning converges many runs onto one
@@ -717,28 +717,28 @@ seed registry is the server-side tracking:
 - Miss: materialize once, register, and every subsequent run and builder
   hits.
 - Pre-warming is a subscription: a builder garden subscribing to
-  `environment` seeds with a stage-only policy has images pinned locally
+  `image` seeds with a stage-only policy has images pinned locally
   before a run asks. Staging already means "download and pin a closure";
   no new machinery.
 
 Merge runs materialize without registering: their seed capability is
 absent, and the synthetic rev is no durable provenance. The image is
 built — and pushed where the run's push capability allows — then used
-for that run only, so iterating on an environment through a PR works; it
-re-materializes whenever a parent moves. Pinned environments behave
+for that run only, so iterating on an image through a PR works; it
+re-materializes whenever a parent moves. Pinned images behave
 normally in merge runs: their source revs are durable and
 admission-verified.
 
 Cost accounting for pipelines that override stock: with an unpinned
-environment, each new commit — and each branch's first run — pays one
-environment evaluation (module definitions live in the repository, so
+image, each new commit — and each branch's first run — pays one
+evaluation (module definitions live in the repository, so
 the key must include the rev), in a stock VM, prefetchable off the
 critical path; the build almost always resolves to an existing store
-path and registration dedupes to a no-op. Pinned environments pay only
-when the pin's target moves. Pipelines that never specify `environment`
+path and registration dedupes to a no-op. Pinned images pay only
+when the pin's target moves. Pipelines that never specify `image`
 pay nothing.
 
-A failed environment is a distinct, attributed failure — "environment
+A failed image is a distinct, attributed failure — "image
 `integration` failed to build" — that transitively fails the steps
 depending on it, the same way a failed item skips its remaining chain.
 
@@ -831,14 +831,14 @@ execution:
 
 | Step   | Key                                            |
 | ------ | ---------------------------------------------- |
-| eval   | pinned source rev + attr + environment closure |
+| eval   | pinned source rev + attr + image closure |
 | build  | drv_path                                       |
 | push   | out_paths + cache url                          |
 | seed   | artifact + seed_type + name + tags             |
 | deploy | seed artifacts + garden sid                    |
 
 Keys are declared per kind — fields outside the key (metadata,
-timestamps) never invalidate. The environment joins eval's key because
+timestamps) never invalidate. The image joins eval's key because
 the toolchain can change evaluation results; build's key stays
 `drv_path` alone — the derivation fully determines its output. Rev-based
 keys are sound in both source modes: pure evaluation means the rev
@@ -1116,7 +1116,7 @@ and stores.
 | version  | int       | yes      | Contract version. Currently `1`.                                               |
 | name     | string    | yes      | Pipeline name.                                                                 |
 | phases   | phase[]   | yes      | As specified above.                                                            |
-| defaults | object    | no       | Default `vm` and `environment` applied where phases and steps do not override. |
+| defaults | object    | no       | Default `vm` and `image` applied where phases and steps do not override. |
 
 Validation at submission:
 
@@ -1131,7 +1131,7 @@ Validation at submission:
 5.  Collection/scalar shape: `items.from` must reference a phase, not a
     single item; step refs like `deploy.seeds` entries must reference
     items or single-item phases.
-6.  `effect=/=check` apps and `environment` refs are attrpaths in the
+6.  `effect=/=check` apps and `image` refs are attrpaths in the
     pipeline source evaluating to derivations; arbitrary commands are
     rejected.
 7.  Garden names resolve against registered gardens; deploy targets must
@@ -1327,11 +1327,11 @@ The announcement and mirror check reach public endpoints allowed by
 builder policy; private targets would require approved endpoint
 references as well.
 
-### Custom environment and secrets
+### Custom image and secrets
 
 An integration check with its own guest system and a notification effect
-using a declared secret. The environment is pinned to `main` so feature
-branches share its image instead of materializing their own:
+using a declared secret. The image is pinned to `main` so feature
+branches share it instead of materializing their own:
 
 ``` nix
 {
@@ -1340,7 +1340,7 @@ branches share its image instead of materializing their own:
   steps = [
     { kind = "check";
       app = "checks/integration";
-      environment = { attr = "environments/integration"; ref = "main"; };
+      image = { attr = "images/integration"; ref = "main"; };
       vm = { cpus = 4; memory = 4096; };
       env = { PGHOST = "/run/postgresql"; }; }
     { kind = "effect";
@@ -1424,15 +1424,15 @@ in
   other-guest protections cannot be overridden.
 - **Secrets are declared per step and injected as files at VM start.**
   Never through evaluation, the store, or the run context.
-- **Builtin steps run in the stock image by default.** `environment` is
+- **Builtin steps run in the stock image by default.** `image` is
   the exception — for checks, effects, and toolchain control.
-- **Environments are assembled only by `sower.lib.mkEnvironment`.** The
+- **Images are assembled only by `sower.lib.mkImage`.** The
   mandatory base module carries the step runtime, boot optimizations,
   and a versioned guest-contract marker.
-- **Environments are tracked as stage-only `environment` seeds.**
+- **Images are tracked as stage-only `image` seeds.**
   Materialization reuses the builtin chain; pre-warming reuses
   subscriptions.
-- **Environment sources may be pinned by branch or rev**, defaulting to
+- **Image sources may be pinned by branch or rev**, defaulting to
   the run's own rev. Pinned revs pass the same admission verification as
   the run source.
 - **Triggers, PRs, and merge runs are first-class contract.** Forge
@@ -1478,10 +1478,10 @@ in
 - Per-pipeline secret allowlists, log masking, and an env-var secret
   mapping convenience.
 - Host capability flags on `vm` (e.g. nested virtualisation).
-- Narrower environment materialization keys (input hashing below
+- Narrower image materialization keys (input hashing below
   whole-rev granularity) — likely unnecessary now that source pinning
   exists.
-- Full flake refs as environment sources (org-shared environment
+- Full flake refs as image sources (org-shared image
   repositories).
 - Execution placement details: guest steps run on builder gardens
   (spec-builder.md); deploy coordination belongs to the server.
