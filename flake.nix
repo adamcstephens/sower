@@ -84,6 +84,8 @@
                 ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
                   # elixir
                   pkgs.inotify-tools
+                  pkgs.cloud-hypervisor
+                  pkgs.e2fsprogs
                 ];
 
                 env = {

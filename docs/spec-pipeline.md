@@ -666,6 +666,31 @@ How the guest reaches the Nix store (shared from the host or hydrated
 from a cache) is a builder concern, out of scope here; the contract is
 agnostic to it.
 
+### Local image implementation
+
+`mkImage { system ? "x86_64-linux"; modules ? []; }` currently produces
+an installable NixOS image for x86_64 Linux. Stock is `packages.x86_64-linux.image`;
+the garden package retains it at `share/sower/image`. Kernel, initrd, and
+compressed EROFS root are separately referenced by `boot.json`.
+
+The base ships Nix and a small Rust executor, with no NIC or login service.
+A fresh ext4 scratch disk holds writable state and the store overlay; the
+base closure is registered before executor readiness. Nix operations write
+through the daemon while ordinary processes retain NixOS's read-only store
+view. Guest-internal store paths are contained in the image, not duplicated
+as loose host dependencies.
+
+From the project development shell:
+
+```sh
+nix build .#image --out-link .image
+mix sower.image.run .image --path /run/current-system/sw/bin/bash \
+  --argv '["-c","printf hello"]' --env '{}' --payload '{}'
+```
+
+This local command path does not implement pipeline dispatch, image seed
+registration, cache services, or the production builder sandbox.
+
 ### Image pinning
 
 The `image` ref optionally pins its source:

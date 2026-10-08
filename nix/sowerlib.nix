@@ -7,6 +7,8 @@
   ],
 }:
 rec {
+  mkImage = import ./image { inherit inputs lib; };
+
   mkSeed =
     {
       pkgs,

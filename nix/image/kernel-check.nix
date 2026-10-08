@@ -1,4 +1,8 @@
-{ lib, pkgs, kernel }:
+{
+  lib,
+  pkgs,
+  kernel,
+}:
 let
   required = {
     y = [

@@ -6,6 +6,7 @@
   lib,
   version,
   tzdata,
+  stockImage ? null,
 }:
 
 beamPackages.mixRelease {
@@ -18,6 +19,7 @@ beamPackages.mixRelease {
       ../../apps/nix
       ../../apps/garden
       ../../apps/sower_client
+      ../../apps/cloud_hypervisor
       ../../config
       ../../mix.exs
       ../../mix.lock
@@ -36,6 +38,10 @@ beamPackages.mixRelease {
 
   postInstall = ''
     mv $out/bin/garden $out/bin/sower-garden
+  ''
+  + lib.optionalString (stockImage != null) ''
+    mkdir --parents "$out/share/sower"
+    ln --symbolic ${stockImage} "$out/share/sower/image"
   '';
 
   doCheck = true;

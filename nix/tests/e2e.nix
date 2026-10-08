@@ -279,10 +279,12 @@ testers.runNixOSTest {
           sowerPkg
           pkgs.python3
         ];
-        environment.etc."sower/client.json".source = (pkgs.formats.json { }).generate "builder-client.json" {
-          endpoint = "http://server:4000";
-          access_token_file = "/run/sower/test_token";
-        };
+        environment.etc."sower/client.json".source =
+          (pkgs.formats.json { }).generate "builder-client.json"
+            {
+              endpoint = "http://server:4000";
+              access_token_file = "/run/sower/test_token";
+            };
         environment.etc."sower/wrapper-jobs.nix".source = jobs;
         virtualisation = {
           useNixStoreImage = true;
@@ -472,6 +474,12 @@ testers.runNixOSTest {
               f"{deploy} --seed {seed_sid} --force --no-wait"
           ).strip()
           assert sid.startswith("dply_"), f"unexpected deployment sid {sid}"
+          server.wait_until_succeeds(
+              api("GET", f"/deployments/{sid}")
+              + " | python3 -c 'import json,sys; d=json.load(sys.stdin);"
+              + " assert d[\"state\"] == \"completed\" and d[\"result\"] == \"success\"'",
+              timeout=120,
+          )
 
       with subtest("deploy rejects an override with no reason"):
           server.fail(f"{deploy} --seed {seed_sid} --override --action activate")

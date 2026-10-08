@@ -13,10 +13,13 @@
         inherit (pkgs) lib;
         inherit pkgs;
       };
+      supportedImage = pkgs.stdenv.hostPlatform.system == "x86_64-linux";
+      stockImage =
+        if supportedImage then self.lib.mkImage { system = pkgs.stdenv.hostPlatform.system; } else null;
     in
     {
       checks = {
-        guest-kernel-config = guestKernelPackages.guestConfigCheck;
+        ${if supportedImage then "guest-kernel-config" else null} = guestKernelPackages.guestConfigCheck;
         mix = pkgs.callPackage ./mix-checks.nix {
           inherit beamPackages version;
         };
@@ -27,7 +30,8 @@
 
       packages = rec {
         activator = cli;
-        guest-kernel = guestKernelPackages.kernel;
+        ${if supportedImage then "guest-kernel" else null} = guestKernelPackages.kernel;
+        ${if supportedImage then "image" else null} = stockImage;
         guest = pkgs.callPackage ./guest.nix {
           inherit craneLib;
         };
@@ -48,6 +52,7 @@
 
         garden = pkgs.callPackage ./garden.nix {
           inherit beamPackages version;
+          inherit stockImage;
         };
 
         sower = pkgs.callPackage ./sower.nix {

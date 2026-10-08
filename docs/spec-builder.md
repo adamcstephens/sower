@@ -191,12 +191,12 @@ surface, vsock protocol included; there is no second negotiation, and
 builders advertise the range they accept so the server never dispatches
 an image it would refuse.
 
-Transport between host agent and guest runtime is vsock, carrying
-three services today: the control channel (command delivery, events,
-exit), the read proxy, and the write endpoint (see Nix Store Strategy).
-The guest runtime forwards localhost HTTP to the latter two, so
-unmodified nix inside the guest sees an ordinary substituter and upload
-target.
+The builder design uses vsock for three services: the control channel
+(command delivery, events, exit), the read proxy, and the write endpoint
+(see Nix Store Strategy). The guest runtime forwards localhost HTTP to
+the latter two, so unmodified nix sees an ordinary substituter and upload
+target. The current local image implementation provides command execution
+only; the cache services and server-side builder dispatch remain separate.
 The command's own I/O convention is unchanged from the pipeline spec:
 payload as JSON on stdin, stdout and stderr captured as the step log.
 Programs that emit items (eval; later, checks enriching items) write
@@ -216,6 +216,33 @@ service, it needs no NIC, no in-guest credential, and no change to
 network policy, and the server gates who reaches it. What it does need
 is a guest that outlives its command, so holding a VM open past exit is
 a lifecycle question to leave room for.
+
+### Local command protocol
+
+The implemented Rust executor listens on guest vsock port 5000. Garden
+opens Cloud Hypervisor's owned Unix socket, sends `CONNECT 5000\n`, consumes
+`OK <host-port>\n`, then exchanges binary stream frames.
+
+Each frame has a one-byte kind, a four-byte unsigned big-endian payload
+length, and at most 65,536 payload bytes. Kind 1 is JSON metadata; kinds 2
+and 3 carry raw stdout and stderr. Ordering is preserved within each output
+stream, without a cross-stream ordering guarantee.
+
+The guest sends `{"type":"ready","version":1}`. One execute request carries
+`type`, `version`, `path`, `args`, `env`, and `stdin`; `args` excludes argv[0].
+The executor launches the absolute path directly with only the supplied
+environment, writes JSON stdin, closes it, and drains both output pipes.
+An `exited` event contains either an integer `code` or an integer `signal`,
+with the other field null. Request/spawn failures return an `error` event,
+never a fabricated exit status.
+
+`Garden.Image` supervises local execution and streams output outside its
+lifecycle process. An independent guard survives owner/controller death
+and reclaims scratch and known files only after confirmed VM teardown.
+Deadlines and cancellation do not depend on a responsive guest or output
+consumer. Uncertain cleanup or unexpected files retain resources and fail.
+The image marker's contract 1 describes this implemented command surface,
+not the complete future builder services.
 
 ## Nix Store Strategy
 

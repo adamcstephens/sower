@@ -32,6 +32,7 @@ defmodule Garden.MixProject do
       {:jason, "~> 1.0"},
       {:jose, "~> 1.11"},
       {:nix, in_umbrella: true},
+      {:cloud_hypervisor, in_umbrella: true},
       {:slipstream, "~> 1.0"},
       # load typedstruct before typed_struct_ecto_changeset
       {:typedstruct, "~> 0.5", runtime: false},
