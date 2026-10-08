@@ -8,8 +8,15 @@
       version,
       ...
     }:
+    let
+      guestKernelPackages = import ../image/kernel.nix {
+        inherit (pkgs) lib;
+        inherit pkgs;
+      };
+    in
     {
       checks = {
+        guest-kernel-config = guestKernelPackages.guestConfigCheck;
         mix = pkgs.callPackage ./mix-checks.nix {
           inherit beamPackages version;
         };
@@ -20,6 +27,10 @@
 
       packages = rec {
         activator = cli;
+        guest-kernel = guestKernelPackages.kernel;
+        guest = pkgs.callPackage ./guest.nix {
+          inherit craneLib;
+        };
 
         cli = pkgs.callPackage ./cli.nix {
           inherit craneLib;

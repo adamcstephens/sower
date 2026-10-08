@@ -17,6 +17,7 @@ let
         ../../build.rs
         ../../openapi.json
         ../../src
+        ../../guest
         ../../tests
         # interface-drift guardrail fixture shared with the Elixir CLI
         ../../apps/sower_cli/priv/build_interface.json

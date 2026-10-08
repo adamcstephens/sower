@@ -32,10 +32,10 @@ check-elixir-test: dev-services
 check-rust: check-rust-lint check-rust-test
 
 check-rust-test:
-    cargo test
+    cargo test --workspace
 
 check-rust-lint:
-    cargo clippy
+    cargo clippy --workspace
 
 clean:
     mix ecto.drop
@@ -123,7 +123,7 @@ format-elixir:
     mix format
 
 format-rust:
-    cargo fmt
+    cargo fmt --all
     nixfmt **/*.nix
 
 mix-nix-lock:
