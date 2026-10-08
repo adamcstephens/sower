@@ -1,6 +1,7 @@
 [workspace]
 members = ["guest"]
 default-members = ["."]
+exclude = ["deps"]
 resolver = "3"
 
 [package]
