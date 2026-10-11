@@ -44,6 +44,10 @@ defmodule Garden.Image do
     field :os_pid, pos_integer()
     field :result, term()
     field :cleanup, term()
+    field :execution_id, integer()
+    field :execution, pid()
+    field :guard, pid()
+    field :owner, pid()
   end
 
   def load(path) do

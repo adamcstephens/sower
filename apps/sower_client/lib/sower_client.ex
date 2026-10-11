@@ -57,7 +57,8 @@ defmodule SowerClient do
       SowerClient.Seed,
       SowerClient.SeedMeta,
       SowerClient.SeedManifest,
-      SowerClient.SeedTag
+      SowerClient.SeedTag,
+      SowerClient.Config.ImageCapacity
     ])
     |> OpenApiSpex.resolve_schema_modules()
   end
@@ -143,4 +144,20 @@ defmodule SowerClient.SeedManifest do
 
     defp check_type(%Cast{} = ctx, type), do: Cast.error(ctx, {:invalid_type, type})
   end
+end
+
+defmodule SowerClient.Config.ImageCapacity do
+  use SowerClient.Schema
+
+  OpenApiSpex.schema(%{
+    title: "ImageCapacity",
+    type: :object,
+    additionalProperties: false,
+    properties: %{
+      vms: %Schema{type: :integer, minimum: 1, default: 1},
+      cpus: %Schema{type: :integer, minimum: 1, default: 1},
+      memory: %Schema{type: :integer, minimum: 1, default: 512 * 1024 * 1024},
+      scratch_bytes: %Schema{type: :integer, minimum: 1, default: 4 * 1024 * 1024 * 1024}
+    }
+  })
 end

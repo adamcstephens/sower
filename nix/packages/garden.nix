@@ -32,6 +32,11 @@ beamPackages.mixRelease {
   # https://github.com/NixOS/nixpkgs/pull/558236
   buildInputs = [ bashNonInteractive ];
 
+
+  postPatch = ''
+    substituteInPlace apps/garden/test/garden/image_manager_test.exs \
+      --replace-fail '#!/usr/bin/env sh' '#!${bashNonInteractive}/bin/sh'
+  '';
   mixReleaseName = "garden";
 
   mixNixDeps = callPackages ./umbrella-deps.nix { inherit beamPackages; };

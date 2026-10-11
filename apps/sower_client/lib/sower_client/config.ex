@@ -46,6 +46,9 @@ defmodule SowerClient.Config do
         description: "Sower server endpoint",
         example: "https://my.sower.dev"
       },
+      image_capacity: SowerClient.Config.ImageCapacity,
+      image_result_limit: %Schema{type: :integer, minimum: 0, default: 128},
+      image_shutdown_ms: %Schema{type: :integer, minimum: 1, default: 15_000},
       name: %Schema{
         type: :string,
         description: "Garden name (garden-only)"
@@ -130,6 +133,7 @@ defmodule SowerClient.Config do
       "name" => default_client_name(),
       "state_directory" => default_state_dir(),
       "admin_socket" => default_admin_socket(),
+      "image_capacity" => %{},
       "default" => "/var/lib/sower-garden"
     }
   end

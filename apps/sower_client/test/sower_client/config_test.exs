@@ -358,6 +358,19 @@ defmodule SowerClient.ConfigTest do
     end
   end
 
+  test "rejects nonpositive image admission budgets" do
+    spec = Config.build_spec()
+
+    for dimension <- ["vms", "cpus", "memory", "scratch_bytes"], value <- [0, -1] do
+      assert {:error, _errors} =
+               OpenApiSpex.cast_value(
+                 %{"image_capacity" => %{dimension => value}},
+                 spec.components.schemas["Config"],
+                 spec
+               )
+    end
+  end
+
   # Helper to temporarily set environment variables
   defp with_env(env_vars, fun) do
     original_env =

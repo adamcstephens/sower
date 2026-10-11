@@ -41,14 +41,7 @@ defmodule Garden.Config do
     errors = []
 
     errors =
-      if is_nil(config.endpoint) do
-        ["endpoint is required" | errors]
-      else
-        errors
-      end
-
-    errors =
-      if is_nil(config.access_token) do
+      if config.endpoint && is_nil(config.access_token) do
         ["access_token is required" | errors]
       else
         errors

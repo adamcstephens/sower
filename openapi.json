@@ -403,7 +403,7 @@
   },
   "info": {
     "title": "sower",
-    "version": "0.12.17"
+    "version": "0.12.18"
   },
   "openapi": "3.0.0",
   "paths": {

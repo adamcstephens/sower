@@ -7,6 +7,7 @@ defmodule Garden.Image.Guard do
     field :server, pid(), enforce: true
     field :server_monitor, reference(), enforce: true
     field :owner_monitor, reference(), enforce: true
+    field :ledger_monitor, reference()
     field :directory, String.t()
     field :vmm, pid()
     field :formatter, pid()
@@ -28,6 +29,25 @@ defmodule Garden.Image.Guard do
       started: System.monotonic_time(:millisecond)
     }
 
+    state =
+      if options[:ledger] do
+        ledger = GenServer.whereis(options[:ledger])
+        %{state | ledger_monitor: Process.monitor(ledger || self())}
+      else
+        state
+      end
+
+    registration = register(state)
+
+    if registration != :ok do
+      finish(state, {:error, :owner_down}, :ok)
+    else
+      allocate(state)
+    end
+  end
+
+  defp allocate(%__MODULE__{} = state) do
+    options = state.options
     Process.send_after(self(), :deadline, Keyword.get(options, :deadline_ms, 60_000))
 
     directory =
@@ -41,14 +61,14 @@ defmodule Garden.Image.Guard do
         prepare(%{state | directory: directory})
 
       {:error, reason} ->
-        send(server, {:image_finished, {:error, {:resource_directory, reason}}, :ok})
+        finish(state, {:error, {:resource_directory, reason}}, :ok)
     end
   end
 
   defp prepare(%__MODULE__{} = state) do
     directory = state.directory
     options = state.options
-    send(state.server, {:image_status, [directory: directory]})
+    notify_status(state, directory: directory)
 
     with :ok <- File.chmod(directory, 0o700),
          :ok <-
@@ -129,14 +149,15 @@ defmodule Garden.Image.Guard do
         finish(state, state.outcome, :shutdown_timeout)
 
       {:DOWN, ref, :process, _pid, _reason}
-      when ref == state.server_monitor or ref == state.owner_monitor ->
+      when ref == state.server_monitor or ref == state.owner_monitor or
+             ref == state.ledger_monitor ->
         stop(state, {:error, :owner_down})
 
       {:DOWN, _ref, :process, io, reason} when io == state.io ->
         stop(state, {:error, {:io_down, reason}})
 
       {:guest_ready, _ready} ->
-        send(state.server, {:image_status, [phase: :running]})
+        notify_status(state, phase: :running)
         loop(state)
 
       {:cloud_hypervisor, vmm, {:exited, outcome}} when vmm == state.vmm ->
@@ -187,7 +208,7 @@ defmodule Garden.Image.Guard do
          ) do
       {:ok, vmm} ->
         status = CloudHypervisor.Process.status(vmm)
-        send(state.server, {:image_status, [vmm: vmm, os_pid: status.os_pid]})
+        notify_status(state, vmm: vmm, os_pid: status.os_pid)
         guard = self()
 
         {io, _monitor} =
@@ -212,6 +233,8 @@ defmodule Garden.Image.Guard do
     do: loop(state)
 
   defp stop(%__MODULE__{formatter: formatter} = state, result) when not is_nil(formatter) do
+    notify_status(state, phase: :stopping)
+
     try do
       Rexec.kill_tree(formatter, :sigkill)
     catch
@@ -225,6 +248,7 @@ defmodule Garden.Image.Guard do
   defp stop(%__MODULE__{vmm: nil} = state, result), do: finish(state, result, :ok)
 
   defp stop(%__MODULE__{} = state, result) do
+    notify_status(state, phase: :stopping)
     if state.io, do: Process.exit(state.io, :kill)
     guard = self()
     vmm = state.vmm
@@ -292,8 +316,62 @@ defmodule Garden.Image.Guard do
         do: result,
         else: {:error, {:cleanup_unconfirmed, result, cleanup, state.directory}}
 
+    if state.options[:ledger] do
+      id = state.options[:execution_id]
+
+      :ets.insert(
+        state.options[:ledger_table],
+        {{:terminal, id}, self(), result, cleanup, state.directory}
+      )
+
+      try do
+        GenServer.call(
+          state.options[:ledger],
+          {:finished, id, self(), result, cleanup},
+          :infinity
+        )
+      catch
+        :exit, _reason -> :ok
+      end
+    end
+
     send(state.server, {:image_finished, result, cleanup})
   end
+
+  defp register(%__MODULE__{} = state) do
+    if state.options[:ledger] do
+      id = state.options[:execution_id]
+      :ets.insert(state.options[:ledger_table], {{:guard, id}, self()})
+
+      try do
+        GenServer.call(state.options[:ledger], {:guard_started, id, self()}, :infinity)
+      catch
+        :exit, _reason -> {:cancel, {:error, :owner_down}}
+      end
+    else
+      :ok
+    end
+  end
+
+  defp notify_status(%__MODULE__{} = state, changes) do
+    send(state.server, {:image_status, changes})
+
+    if state.options[:ledger] do
+      :ets.insert(
+        state.options[:ledger_table],
+        Enum.map(changes, fn {key, value} ->
+          {{:status, state.options[:execution_id], key}, value}
+        end)
+      )
+
+      GenServer.cast(
+        state.options[:ledger],
+        {:status, state.options[:execution_id], self(), changes}
+      )
+    end
+  end
+
+  defp remove_known(nil), do: :ok
 
   defp remove_known(directory) do
     with {:ok, files} <- File.ls(directory),
