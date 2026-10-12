@@ -684,7 +684,7 @@ From the project development shell:
 
 ```sh
 nix build .#image --out-link .image
-mix sower.image.run .image --path /run/current-system/sw/bin/bash \
+mix sower.vm.run .image --path /run/current-system/sw/bin/bash \
   --argv '["-c","printf hello"]' --env '{}' --payload '{}'
 ```
 

@@ -1,4 +1,4 @@
-defmodule Garden.Image.Guard do
+defmodule Garden.VM.Guard do
   @moduledoc false
   use TypedStruct
   alias CloudHypervisor.{Config, Launch}
@@ -53,7 +53,7 @@ defmodule Garden.Image.Guard do
     directory =
       Path.join(
         Keyword.get(options, :resource_directory, System.tmp_dir!()),
-        "sower-image-#{System.pid()}-#{System.unique_integer([:positive])}"
+        "sower-vm-#{System.pid()}-#{System.unique_integer([:positive])}"
       )
 
     case File.mkdir(directory) do
@@ -213,11 +213,11 @@ defmodule Garden.Image.Guard do
 
         {io, _monitor} =
           spawn_monitor(fn ->
-            Garden.Image.IO.run(
+            Garden.VM.IO.run(
               guard,
               vmm,
               state.options[:command],
-              Keyword.get(state.options, :on_output, &Garden.Image.IO.output/2),
+              Keyword.get(state.options, :on_output, &Garden.VM.IO.output/2),
               state.started
             )
           end)
@@ -335,7 +335,7 @@ defmodule Garden.Image.Guard do
       end
     end
 
-    send(state.server, {:image_finished, result, cleanup})
+    send(state.server, {:vm_finished, result, cleanup})
   end
 
   defp register(%__MODULE__{} = state) do
@@ -354,7 +354,7 @@ defmodule Garden.Image.Guard do
   end
 
   defp notify_status(%__MODULE__{} = state, changes) do
-    send(state.server, {:image_status, changes})
+    send(state.server, {:vm_status, changes})
 
     if state.options[:ledger] do
       :ets.insert(

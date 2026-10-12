@@ -236,7 +236,7 @@ An `exited` event contains either an integer `code` or an integer `signal`,
 with the other field null. Request/spawn failures return an `error` event,
 never a fabricated exit status.
 
-`Garden.Image` supervises local execution and streams output outside its
+`Garden.VM` supervises local execution and streams output outside its
 lifecycle process. An independent guard survives owner/controller death
 and reclaims scratch and known files only after confirmed VM teardown.
 Deadlines and cancellation do not depend on a responsive guest or output
@@ -246,13 +246,13 @@ not the complete future builder services.
 
 ### Garden-local admission
 
-`Garden.Image.Manager.start/1` admits an image command with an explicit
+`Garden.VM.Manager.start/1` admits a VM command with an explicit
 process owner and returns an execution ID. `status/1`, `cancel/1`, and
 `await/1` use that ID independently of the temporary controller lifetime.
 Output callbacks retain the local launcher's `(stream, bytes)` interface;
 callers capture their job/step identity in the callback.
 
-Garden configuration sets `image_capacity` with positive integer `vms`,
+Garden configuration sets `vm_capacity` with positive integer `vms`,
 `cpus`, `memory` (bytes), and `scratch_bytes`. Defaults admit one VM,
 one CPU, 512 MiB memory, and 4 GiB scratch. Reservations cover startup,
 execution, and stopping; these are admission budgets, not hard host
@@ -263,12 +263,12 @@ both with the exhausted dimension. Neither case queues or allocates a VM.
 Only certified native teardown and successful owned-file cleanup release
 a reservation. Cleanup failures retain their ID, result, directory, and
 reservation indefinitely. Clean terminal results are retained up to
-`image_result_limit` (default 128); oldest results are evicted first, after
+`vm_result_limit` (default 128); oldest results are evicted first, after
 recording the result and retiring its controller.
 
 Recovery closes admission and drains existing executions without replaying
 commands. Orderly shutdown closes admission first and waits up to
-`image_shutdown_ms` (default 15,000) for cleanup; incomplete cleanup is
+`vm_shutdown_ms` (default 15,000) for cleanup; incomplete cleanup is
 reported explicitly. A whole-BEAM crash still requires host-enforced
 containment and startup reconciliation, which this local manager does not
 provide. Server dispatch and production sandbox integration remain separate.

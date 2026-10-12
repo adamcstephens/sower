@@ -6,7 +6,7 @@ resolver = "3"
 
 [package]
 name = "sower"
-version = "0.12.18"
+version = "0.12.19"
 edition = "2024"
 
 [dependencies]

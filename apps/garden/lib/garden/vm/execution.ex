@@ -1,12 +1,12 @@
-defmodule Garden.Image.Execution do
+defmodule Garden.VM.Execution do
   @moduledoc false
   use GenServer
   use TypedStruct
-  alias Garden.Image
+  alias Garden.{Image, VM}
 
   typedstruct do
     field :guard, pid(), enforce: true
-    field :status, Image.Status.t(), default: %Image.Status{}
+    field :status, VM.Status.t(), default: %VM.Status{}
     field :waiters, [GenServer.from()], default: []
     field :managed, boolean(), default: false
   end
@@ -24,9 +24,9 @@ defmodule Garden.Image.Execution do
   def validate_options(options) do
     with %Image{system: "x86_64-linux", contract: 1, vsock_port: 5000} <-
            Keyword.get(options, :image),
-         %Image.Command{} = command <- Keyword.get(options, :command),
-         :ok <- Image.validate_command(command),
-         {:ok, _frame} <- Garden.Image.Protocol.execute(command),
+         %VM.Command{} = command <- Keyword.get(options, :command),
+         :ok <- VM.validate_command(command),
+         {:ok, _frame} <- Garden.VM.Protocol.execute(command),
          :ok <- validate(options) do
       :ok
     else
@@ -47,7 +47,7 @@ defmodule Garden.Image.Execution do
       :ets.insert(options[:ledger_table], {{:execution, options[:execution_id]}, server})
     end
 
-    guard = spawn(fn -> Garden.Image.Guard.run(server, options) end)
+    guard = spawn(fn -> Garden.VM.Guard.run(server, options) end)
     Process.monitor(guard)
     {:ok, %__MODULE__{guard: guard, managed: Keyword.has_key?(options, :ledger)}}
   end
@@ -60,7 +60,7 @@ defmodule Garden.Image.Execution do
     {:reply, :ok, state}
   end
 
-  def handle_call(:await, from, %__MODULE__{status: %Image.Status{phase: phase}} = state)
+  def handle_call(:await, from, %__MODULE__{status: %VM.Status{phase: phase}} = state)
       when phase not in [:finished, :retained] do
     {:noreply, %{state | waiters: [from | state.waiters]}}
   end
@@ -74,11 +74,11 @@ defmodule Garden.Image.Execution do
   end
 
   @impl GenServer
-  def handle_info({:image_status, changes}, %__MODULE__{} = state) do
+  def handle_info({:vm_status, changes}, %__MODULE__{} = state) do
     {:noreply, %{state | status: struct!(state.status, changes)}}
   end
 
-  def handle_info({:image_finished, result, cleanup}, %__MODULE__{} = state) do
+  def handle_info({:vm_finished, result, cleanup}, %__MODULE__{} = state) do
     Enum.each(state.waiters, &GenServer.reply(&1, result))
     phase = if cleanup == :ok, do: :finished, else: :retained
 
@@ -95,7 +95,7 @@ defmodule Garden.Image.Execution do
     if state.status.phase in [:finished, :retained] do
       {:noreply, state}
     else
-      handle_info({:image_finished, {:error, {:guard_down, reason}}, :unconfirmed}, state)
+      handle_info({:vm_finished, {:error, {:guard_down, reason}}, :unconfirmed}, state)
     end
   end
 
@@ -110,7 +110,7 @@ defmodule Garden.Image.Execution do
       end) ->
         {:error, :invalid_resource_option}
 
-      not is_function(Keyword.get(options, :on_output, &Garden.Image.IO.output/2), 2) ->
+      not is_function(Keyword.get(options, :on_output, &Garden.VM.IO.output/2), 2) ->
         {:error, {:invalid_option, :on_output}}
 
       true ->

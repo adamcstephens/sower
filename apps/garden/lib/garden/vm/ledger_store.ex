@@ -1,8 +1,8 @@
-defmodule Garden.Image.Ledger.Store do
+defmodule Garden.VM.Ledger.Store do
   @moduledoc false
   use GenServer
 
-  # Deliberately unlinked: accounting custody must outlive the replaceable image
+  # Deliberately unlinked: accounting custody must outlive the replaceable VM
   # and application trees. Its lifetime is the BEAM, not an execution subtree.
   def table(identity) do
     name = {:global, {__MODULE__, identity}}

@@ -1,11 +1,11 @@
-defmodule Garden.Image.IO do
+defmodule Garden.VM.IO do
   @moduledoc false
-  alias Garden.Image.Protocol
+  alias Garden.VM.Protocol
 
   def output(:stdout, bytes), do: IO.binwrite(:stdio, bytes)
   def output(:stderr, bytes), do: IO.binwrite(:standard_error, bytes)
 
-  def run(guard, vmm, %Garden.Image.Command{} = command, callback, started) do
+  def run(guard, vmm, %Garden.VM.Command{} = command, callback, started) do
     result =
       with {:ok, status} <- CloudHypervisor.Process.await_ready(vmm),
            {:ok, socket} <- connect(Path.join(status.directory, "vsock.sock")) do
@@ -75,7 +75,7 @@ defmodule Garden.Image.IO do
 
       {:ok, {:exited, code, signal}, <<>>} ->
         {:ok,
-         %Garden.Image.Result{
+         %Garden.VM.Result{
            code: code,
            signal: signal,
            ready_ms: ready,

@@ -34,7 +34,7 @@ beamPackages.mixRelease {
 
 
   postPatch = ''
-    substituteInPlace apps/garden/test/garden/image_manager_test.exs \
+    substituteInPlace apps/garden/test/garden/vm_manager_test.exs \
       --replace-fail '#!/usr/bin/env sh' '#!${bashNonInteractive}/bin/sh'
   '';
   mixReleaseName = "garden";

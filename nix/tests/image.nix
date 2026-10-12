@@ -62,13 +62,14 @@ let
   scenario = pkgs.writeText "image-scenario.exs" ''
     {:ok, _} = Application.ensure_all_started(:cloud_hypervisor)
     alias Garden.Image
+    alias Garden.VM
     {:ok, stock} = Image.load("${stock}")
     {:ok, custom} = Image.load("${custom}")
     root = "/tmp/image-scenarios"
     File.mkdir!(root)
     opts = [resource_directory: root, deadline_ms: 90_000, scratch_bytes: 1024 * 1024 * 1024]
     command = fn mode, args ->
-      %Image.Command{path: "${pkgs.python3}/bin/python3", args: ["/etc/sower/probe.py", mode | args],
+      %VM.Command{path: "${pkgs.python3}/bin/python3", args: ["/etc/sower/probe.py", mode | args],
         env: %{"ONLY" => "provided", "PYTHONCOERCECLOCALE" => "0"},
         stdin: %{"message" => "stdin", "number" => 7}}
     end
@@ -76,34 +77,34 @@ let
     clean = fn -> ensure.(File.ls!(root) == []) end
     parent = self()
     output = fn stream, bytes -> send(parent, {stream, bytes}) end
-    {:ok, missing_vmm} = Image.start_link(opts ++ [image: stock,
-      command: %Image.Command{path: "/run/current-system/sw/bin/true"},
+    {:ok, missing_vmm} = VM.start_link(opts ++ [image: stock,
+      command: %VM.Command{path: "/run/current-system/sw/bin/true"},
       hypervisor: "/nonexistent/sower-hypervisor"])
-    {:error, {:vmm_failed, {:startup, startup_message}}} = Image.await(missing_vmm)
+    {:error, {:vmm_failed, {:startup, startup_message}}} = VM.await(missing_vmm)
     ensure.(is_binary(startup_message))
-    missing_status = Image.status(missing_vmm)
+    missing_status = VM.status(missing_vmm)
     ensure.(missing_status.cleanup == :ok and missing_status.os_pid == nil)
     ensure.(is_pid(missing_status.vmm) and not Process.alive?(missing_status.vmm))
     GenServer.stop(missing_vmm)
     clean.()
-    {:ok, failed_formatter} = Image.start_link(opts ++ [image: stock,
-      command: %Image.Command{path: "/run/current-system/sw/bin/true"},
+    {:ok, failed_formatter} = VM.start_link(opts ++ [image: stock,
+      command: %VM.Command{path: "/run/current-system/sw/bin/true"},
       mkfs: "${pkgs.coreutils}/bin/false"])
-    {:error, {:mkfs, {:shutdown, {:exit_status, 1}}}} = Image.await(failed_formatter)
-    formatter_status = Image.status(failed_formatter)
+    {:error, {:mkfs, {:shutdown, {:exit_status, 1}}}} = VM.await(failed_formatter)
+    formatter_status = VM.status(failed_formatter)
     ensure.(formatter_status.cleanup == :ok and formatter_status.vmm == nil)
     GenServer.stop(failed_formatter)
     clean.()
-    {:ok, result} = Image.run(stock, %Image.Command{path: "/run/current-system/sw/bin/bash",
+    {:ok, result} = VM.run(stock, %VM.Command{path: "/run/current-system/sw/bin/bash",
       args: ["-c", "printf stock-command"]}, Keyword.put(opts, :on_output, output))
     ensure.(result.code == 0)
     receive do {:stdout, "stock-command"} -> :ok after 1000 -> raise "missing stock output" end
     clean.()
-    {:ok, cli_result} = Garden.Image.CLI.main(["${stock}", "--path",
+    {:ok, cli_result} = Garden.VM.CLI.main(["${stock}", "--path",
       "/run/current-system/sw/bin/bash", "--argv", "[\"-c\",\"printf cli-command\"]",
       "--scratch-mib", "1024", "--deadline-ms", "90000"])
     ensure.(cli_result.code == 0)
-    {:ok, result} = Image.run(custom, command.("exact", ["space argument", "", "literal;$x"]),
+    {:ok, result} = VM.run(custom, command.("exact", ["space argument", "", "literal;$x"]),
       Keyword.put(opts, :on_output, output))
     ensure.(result.code == 23)
     collect = fn collect, acc ->
@@ -114,51 +115,51 @@ let
     end
     ensure.(collect.(collect, %{}) == %{stdout: <<"out", 0, 255, 10>>, stderr: <<"err", 0, 254, 10>>})
     clean.()
-    {:ok, a} = Image.start_link(opts ++ [image: custom, command: command.("write", ["a", "2"])])
-    {:ok, b} = Image.start_link(opts ++ [image: custom, command: command.("write", ["b", "0"])])
-    {:ok, ra} = Image.await(a)
-    {:ok, rb} = Image.await(b)
+    {:ok, a} = VM.start_link(opts ++ [image: custom, command: command.("write", ["a", "2"])])
+    {:ok, b} = VM.start_link(opts ++ [image: custom, command: command.("write", ["b", "0"])])
+    {:ok, ra} = VM.await(a)
+    {:ok, rb} = VM.await(b)
     ensure.(ra.code == 0 and rb.code == 0)
     GenServer.stop(a)
     GenServer.stop(b)
     clean.()
-    {:ok, fresh} = Image.run(custom, command.("write", ["fresh", "0"]), opts)
+    {:ok, fresh} = VM.run(custom, command.("write", ["fresh", "0"]), opts)
     ensure.(fresh.code == 0)
     clean.()
     wait = fn wait, execution ->
-      status = Image.status(execution)
+      status = VM.status(execution)
       if status.phase == :running, do: status, else: (Process.sleep(20); wait.(wait, execution))
     end
     blocked = fn _, _ -> receive do :never -> :ok end end
     drain = fn _, _ -> :ok end
-    {:ok, timed} = Image.start_link(Keyword.merge(opts,
+    {:ok, timed} = VM.start_link(Keyword.merge(opts,
       image: custom, command: command.("block", []), on_output: blocked, deadline_ms: 30_000))
-    {:error, :timeout} = Image.await(timed)
+    {:error, :timeout} = VM.await(timed)
     GenServer.stop(timed)
     clean.()
-    {:ok, cancelled} = Image.start_link(opts ++ [image: custom, command: command.("block", []), on_output: blocked])
+    {:ok, cancelled} = VM.start_link(opts ++ [image: custom, command: command.("block", []), on_output: blocked])
     wait.(wait, cancelled)
-    :ok = Image.cancel(cancelled)
-    {:error, :cancelled} = Image.await(cancelled)
+    :ok = VM.cancel(cancelled)
+    {:error, :cancelled} = VM.await(cancelled)
     GenServer.stop(cancelled)
     clean.()
     owner = spawn(fn -> receive do :never -> :ok end end)
-    {:ok, orphan} = Image.start_link(opts ++ [image: custom, command: command.("block", []),
+    {:ok, orphan} = VM.start_link(opts ++ [image: custom, command: command.("block", []),
       owner: owner, on_output: drain])
     wait.(wait, orphan)
     Process.exit(owner, :kill)
-    {:error, :owner_down} = Image.await(orphan)
+    {:error, :owner_down} = VM.await(orphan)
     GenServer.stop(orphan)
     clean.()
-    {:ok, dead} = Image.start_link(opts ++ [image: custom, command: command.("block", []),
+    {:ok, dead} = VM.start_link(opts ++ [image: custom, command: command.("block", []),
       on_output: drain])
     status = wait.(wait, dead)
     {_, 0} = System.cmd("kill", ["--signal", "KILL", Integer.to_string(status.os_pid)])
-    {:error, _} = Image.await(dead)
-    ensure.(Image.status(dead).cleanup == :ok)
+    {:error, _} = VM.await(dead)
+    ensure.(VM.status(dead).cleanup == :ok)
     GenServer.stop(dead)
     clean.()
-    {:ok, severed} = Image.start_link(opts ++ [image: custom, command: command.("block", []),
+    {:ok, severed} = VM.start_link(opts ++ [image: custom, command: command.("block", []),
       on_output: drain])
     status = wait.(wait, severed)
     Process.unlink(severed)
@@ -173,13 +174,13 @@ let
     end
     reclaimed.(reclaimed)
     clean.()
-    {:ok, retained} = Image.start_link(opts ++ [image: custom, command: command.("block", [])])
+    {:ok, retained} = VM.start_link(opts ++ [image: custom, command: command.("block", [])])
     status = wait.(wait, retained)
     unexpected = Path.join(status.directory, "unowned")
     File.write!(unexpected, "retain me")
-    :ok = Image.cancel(retained)
+    :ok = VM.cancel(retained)
     {:error, {:cleanup_unconfirmed, {:error, :cancelled},
-      {:error, {:unexpected_files, ["unowned"]}}, directory}} = Image.await(retained)
+      {:error, {:unexpected_files, ["unowned"]}}, directory}} = VM.await(retained)
     ensure.(directory == status.directory and File.read!(unexpected) == "retain me")
     ensure.(File.exists?(Path.join(directory, "scratch.ext4")))
     GenServer.stop(retained)
@@ -188,7 +189,7 @@ let
     end)
     :ok = File.rmdir(directory)
     clean.()
-    alias Garden.Image.Manager
+    alias Garden.VM.Manager
     eventually = fn eventually, predicate, deadline ->
       if predicate.() do
         :ok
@@ -230,7 +231,7 @@ let
     budgets = [vms: 2, cpus: 2, memory: 1024 * 1024 * 1024,
       scratch_bytes: 2 * 1024 * 1024 * 1024]
     start_manager = fn overrides ->
-      {:ok, supervisor} = Image.Supervisor.start_link(
+      {:ok, supervisor} = VM.Supervisor.start_link(
         Keyword.merge([budgets: budgets, result_limit: 2, shutdown_ms: 15_000], overrides))
       Process.unlink(supervisor)
       supervisor
@@ -257,7 +258,7 @@ let
       {:error, {:request_exceeds_capacity, ^dimension}} =
         Manager.start(Keyword.put(manager_opts, dimension, excessive))
       clean.()
-      ensure.(DynamicSupervisor.count_children(Garden.Image.ExecutionSupervisor).active == 0)
+      ensure.(DynamicSupervisor.count_children(Garden.VM.ExecutionSupervisor).active == 0)
     end
     {:error, :not_found} = Manager.status("not-an-execution")
     {:error, :not_found} = Manager.await("not-an-execution")
@@ -312,7 +313,7 @@ let
     ensure.(not File.exists?(a_socket_directory) and not File.exists?(b_socket_directory))
     {:error, :not_found} = Manager.status(exact_id)
     {:error, :not_found} = Manager.status(signal_id)
-    until.(fn -> DynamicSupervisor.count_children(Garden.Image.ExecutionSupervisor).active == 0 end)
+    until.(fn -> DynamicSupervisor.count_children(Garden.VM.ExecutionSupervisor).active == 0 end)
     clean.()
     :ok = Manager.shutdown()
     {:error, :draining} = Manager.start(manager_opts)
@@ -376,7 +377,7 @@ let
     end
     :ok = Manager.shutdown()
     :ok = Supervisor.stop(supervisor, :normal, :infinity)
-    for subtree <- [Garden.Image.Manager, Garden.Image.ExecutionSupervisor] do
+    for subtree <- [Garden.VM.Manager, Garden.VM.ExecutionSupervisor] do
       supervisor = start_manager.([])
       {:ok, first_id} = Manager.start(manager_opts)
       {:ok, second_id} = Manager.start(manager_opts)
@@ -387,9 +388,9 @@ let
       until.(fn ->
         new_subtree = Process.whereis(subtree)
         new_subtree != nil and new_subtree != old_subtree and
-          Process.whereis(Garden.Image.Manager) != nil
+          Process.whereis(Garden.VM.Manager) != nil
       end)
-      until.(fn -> DynamicSupervisor.count_children(Garden.Image.ExecutionSupervisor).active == 0 end)
+      until.(fn -> DynamicSupervisor.count_children(Garden.VM.ExecutionSupervisor).active == 0 end)
       Enum.each([first_id, second_id], fn id ->
         {:error, :owner_down} = Manager.await(id)
         {:ok, status} = Manager.status(id)
@@ -413,8 +414,8 @@ let
       CloudHypervisor.Process.status(killed_subtree_status.vmm).directory
     Process.exit(supervisor, :kill)
     until.(fn ->
-      Enum.all?([Garden.Image.Supervisor, Garden.Image.Manager,
-        Garden.Image.ExecutionSupervisor, Garden.Image.Ledger], fn name ->
+      Enum.all?([Garden.VM.Supervisor, Garden.VM.Manager,
+        Garden.VM.ExecutionSupervisor, Garden.VM.Ledger], fn name ->
         Process.whereis(name) == nil
       end)
     end)
@@ -425,7 +426,7 @@ let
     {:error, :owner_down} = Manager.await(killed_subtree_id)
     {:ok, killed_subtree_terminal} = Manager.status(killed_subtree_id)
     ensure.(killed_subtree_terminal.phase == :finished and killed_subtree_terminal.cleanup == :ok)
-    ensure.(DynamicSupervisor.count_children(Garden.Image.ExecutionSupervisor).active == 0)
+    ensure.(DynamicSupervisor.count_children(Garden.VM.ExecutionSupervisor).active == 0)
     clean.()
     {:ok, after_subtree_id} = Manager.start(manager_opts)
     ensure.(after_subtree_id != killed_subtree_id)
@@ -441,13 +442,13 @@ let
     receive do {:output_blocked, _, _, size} when size > 0 -> :ok
       after 10_000 -> raise "shutdown output did not block" end
     :ok = Supervisor.stop(supervisor, :normal, :infinity)
-    ensure.(Process.whereis(Garden.Image.Manager) == nil)
+    ensure.(Process.whereis(Garden.VM.Manager) == nil)
     os_gone.(shutdown_status.os_pid)
     clean.()
     config = Garden.Config.load(%{
       "state_directory" => "/tmp/image-garden-state",
       "admin_socket" => "/tmp/image-garden-admin.sock",
-      "image_capacity" => Map.new(Keyword.put(budgets, :vms, 1), fn {key, value} ->
+      "vm_capacity" => Map.new(Keyword.put(budgets, :vms, 1), fn {key, value} ->
         {Atom.to_string(key), value}
       end)
     }, skip_config_file: true)
@@ -468,8 +469,8 @@ let
     end)
     true = :erlang.resume_process(garden_status.guard)
     receive do :garden_stopped -> :ok after 30_000 -> raise "garden did not drain" end
-    ensure.(Process.whereis(Garden.Image.Supervisor) == nil)
-    ensure.(Process.whereis(Garden.Image.Manager) == nil)
+    ensure.(Process.whereis(Garden.VM.Supervisor) == nil)
+    ensure.(Process.whereis(Garden.VM.Manager) == nil)
     os_gone.(garden_status.os_pid)
     ensure.(not File.exists?(garden_status.directory))
     clean.()
@@ -501,7 +502,7 @@ let
     ensure.(restarted_retained_status.result == retained_status.result)
     ensure.(restarted_retained_status.directory == retained_directory)
     ensure.(File.read!(retained_file) == "managed retention")
-    ensure.(DynamicSupervisor.count_children(Garden.Image.ExecutionSupervisor).active == 0)
+    ensure.(DynamicSupervisor.count_children(Garden.VM.ExecutionSupervisor).active == 0)
     {:error, {:capacity_exhausted, :vms}} = Manager.start(manager_opts)
     {:error, {:cleanup_incomplete, _}} = Manager.shutdown()
     :ok = Supervisor.stop(supervisor, :normal, :infinity)

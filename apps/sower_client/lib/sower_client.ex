@@ -58,7 +58,7 @@ defmodule SowerClient do
       SowerClient.SeedMeta,
       SowerClient.SeedManifest,
       SowerClient.SeedTag,
-      SowerClient.Config.ImageCapacity
+      SowerClient.Config.VMCapacity
     ])
     |> OpenApiSpex.resolve_schema_modules()
   end
@@ -146,11 +146,11 @@ defmodule SowerClient.SeedManifest do
   end
 end
 
-defmodule SowerClient.Config.ImageCapacity do
+defmodule SowerClient.Config.VMCapacity do
   use SowerClient.Schema
 
   OpenApiSpex.schema(%{
-    title: "ImageCapacity",
+    title: "VMCapacity",
     type: :object,
     additionalProperties: false,
     properties: %{

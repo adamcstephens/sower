@@ -1,6 +1,6 @@
-defmodule Garden.Image.CLI do
+defmodule Garden.VM.CLI do
   @moduledoc """
-  Local entrypoint: `mix sower.image.run IMAGE --request JSON`.
+  Local entrypoint: `mix sower.vm.run IMAGE --request JSON`.
 
   Request JSON contains path, args, env and stdin. Alternatively supply
   `--path`, `--argv` (JSON array), `--env` (JSON object), and `--payload` (JSON).
@@ -8,7 +8,7 @@ defmodule Garden.Image.CLI do
   `--deadline-ms`. Output streams remain raw; status is returned to the caller.
   Only Cloud Hypervisor's actual application dependencies are started.
   """
-  alias Garden.Image
+  alias Garden.{Image, VM}
 
   def main(argv) do
     {options, positional, invalid} =
@@ -31,7 +31,7 @@ defmodule Garden.Image.CLI do
          {:ok, command} <- command(options),
          {:ok, image} <- Image.load(directory),
          {:ok, _apps} <- Application.ensure_all_started(:cloud_hypervisor) do
-      Image.run(image, command,
+      VM.run(image, command,
         cpus: Keyword.get(options, :cpus, 1),
         memory: Keyword.get(options, :memory_mib, 512) * 1024 * 1024,
         scratch_bytes: Keyword.get(options, :scratch_mib, 4096) * 1024 * 1024,
@@ -47,7 +47,7 @@ defmodule Garden.Image.CLI do
     if options[:request] do
       with {:ok, %{"path" => path} = request} <- Jason.decode(options[:request]) do
         {:ok,
-         %Image.Command{
+         %VM.Command{
            path: path,
            args: Map.get(request, "args", []),
            env: Map.get(request, "env", %{}),
@@ -61,7 +61,7 @@ defmodule Garden.Image.CLI do
       with {:ok, args} <- Jason.decode(Keyword.get(options, :argv, "[]")),
            {:ok, env} <- Jason.decode(Keyword.get(options, :env, "{}")),
            {:ok, stdin} <- Jason.decode(Keyword.get(options, :payload, "{}")) do
-        {:ok, %Image.Command{path: options[:path], args: args, env: env, stdin: stdin}}
+        {:ok, %VM.Command{path: options[:path], args: args, env: env, stdin: stdin}}
       else
         {:error, reason} -> {:error, reason}
       end

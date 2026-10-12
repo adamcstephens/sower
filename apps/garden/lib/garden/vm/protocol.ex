@@ -1,4 +1,4 @@
-defmodule Garden.Image.Protocol do
+defmodule Garden.VM.Protocol do
   @moduledoc false
   @maximum 65_536
 
@@ -25,7 +25,7 @@ defmodule Garden.Image.Protocol do
     end
   end
 
-  def execute(%Garden.Image.Command{} = command) do
+  def execute(%Garden.VM.Command{} = command) do
     with {:ok, payload} <-
            Jason.encode(%{
              "type" => "execute",

@@ -1,4 +1,4 @@
-defmodule Garden.Image.Manager do
+defmodule Garden.VM.Manager do
   @moduledoc """
   Garden-local, atomic admission and execution-ID lookup.
 

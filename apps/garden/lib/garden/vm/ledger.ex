@@ -1,14 +1,14 @@
-defmodule Garden.Image.Ledger do
+defmodule Garden.VM.Ledger do
   @moduledoc false
   use GenServer
   use TypedStruct
-  alias Garden.Image
+  alias Garden.VM
 
   @dimensions [:vms, :cpus, :memory, :scratch_bytes]
   @defaults [vms: 1, cpus: 1, memory: 536_870_912, scratch_bytes: 4_294_967_296]
 
   typedstruct module: Entry do
-    field :status, Image.Status.t(), enforce: true
+    field :status, VM.Status.t(), enforce: true
     field :resources, keyword(), enforce: true
     field :reserved, boolean(), default: true
     field :waiters, [GenServer.from()], default: []
@@ -35,7 +35,7 @@ defmodule Garden.Image.Ledger do
 
   @impl GenServer
   def init(options) do
-    table = Garden.Image.Ledger.Store.table(Keyword.fetch!(options, :name))
+    table = Garden.VM.Ledger.Store.table(Keyword.fetch!(options, :name))
     :ets.insert(table, {:identity, Keyword.fetch!(options, :name)})
     budgets = Keyword.get(options, :budgets, @defaults)
     limit = Keyword.get(options, :result_limit, 128)
@@ -133,10 +133,10 @@ defmodule Garden.Image.Ledger do
 
     resources = Keyword.take(options, [:cpus, :memory, :scratch_bytes]) |> Keyword.put(:vms, 1)
 
-    with :ok <- Image.Execution.validate_options(options),
+    with :ok <- VM.Execution.validate_options(options),
          :ok <- capacity(state, resources) do
       id = System.unique_integer([:positive, :monotonic])
-      status = %Image.Status{execution_id: id, owner: options[:owner]}
+      status = %VM.Status{execution_id: id, owner: options[:owner]}
       entry = %Entry{status: status, resources: resources}
       state = persist(%{state | entries: Map.put(state.entries, id, entry)})
 
@@ -147,7 +147,7 @@ defmodule Garden.Image.Ledger do
           execution_id: id
         )
 
-      case DynamicSupervisor.start_child(state.supervisor, {Image.Execution, options}) do
+      case DynamicSupervisor.start_child(state.supervisor, {VM.Execution, options}) do
         {:ok, execution} ->
           entry = %{entry | status: %{status | execution: execution}}
 
@@ -242,7 +242,7 @@ defmodule Garden.Image.Ledger do
   @impl GenServer
   def handle_cast({:status, id, guard, changes}, %__MODULE__{} = state) do
     case Map.fetch(state.entries, id) do
-      {:ok, %Entry{status: %Image.Status{guard: ^guard}} = entry} ->
+      {:ok, %Entry{status: %VM.Status{guard: ^guard}} = entry} ->
         if active?(entry) do
           entry = %{entry | status: struct!(entry.status, changes)}
           noreply(%{state | entries: Map.put(state.entries, id, entry)})
@@ -343,7 +343,7 @@ defmodule Garden.Image.Ledger do
 
   defp complete(%__MODULE__{} = state, id, guard, result, cleanup) do
     case Map.get(state.entries, id) do
-      %Entry{status: %Image.Status{guard: ^guard}} = entry ->
+      %Entry{status: %VM.Status{guard: ^guard}} = entry ->
         if active?(entry) do
           status = %{
             entry.status

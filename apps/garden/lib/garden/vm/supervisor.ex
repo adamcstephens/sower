@@ -1,6 +1,6 @@
-defmodule Garden.Image.Supervisor do
+defmodule Garden.VM.Supervisor do
   @moduledoc """
-  Dedicated image execution subtree with a final, first-stopped drain boundary.
+  Dedicated VM execution subtree with a final, first-stopped drain boundary.
 
   `:manager`, `:execution_supervisor`, and `:ledger` override child names. The
   ledger name also identifies BEAM-lifetime accounting custody across subtree
@@ -18,19 +18,19 @@ defmodule Garden.Image.Supervisor do
 
   @impl Supervisor
   def init(options) do
-    ledger = Keyword.get(options, :ledger, Garden.Image.Ledger)
-    manager = Keyword.get(options, :manager, Garden.Image.Manager)
-    executions = Keyword.get(options, :execution_supervisor, Garden.Image.ExecutionSupervisor)
+    ledger = Keyword.get(options, :ledger, Garden.VM.Ledger)
+    manager = Keyword.get(options, :manager, Garden.VM.Manager)
+    executions = Keyword.get(options, :execution_supervisor, Garden.VM.ExecutionSupervisor)
 
     ledger_options =
       Keyword.take(options, [:budgets, :result_limit, :shutdown_ms]) ++
         [name: ledger, parent: self()]
 
     children = [
-      {Garden.Image.Ledger, ledger_options},
-      {Garden.Image.ExecutionSupervisor, [name: executions, ledger: ledger]},
-      {Garden.Image.Manager, [name: manager, ledger: ledger]},
-      {Garden.Image.Drain, [ledger: ledger]}
+      {Garden.VM.Ledger, ledger_options},
+      {Garden.VM.ExecutionSupervisor, [name: executions, ledger: ledger]},
+      {Garden.VM.Manager, [name: manager, ledger: ledger]},
+      {Garden.VM.Drain, [ledger: ledger]}
     ]
 
     Supervisor.init(children, strategy: :one_for_one)
@@ -40,7 +40,7 @@ defmodule Garden.Image.Supervisor do
   defp name_options(name), do: [name: name]
 end
 
-defmodule Garden.Image.ExecutionSupervisor do
+defmodule Garden.VM.ExecutionSupervisor do
   @moduledoc false
   use DynamicSupervisor
 
@@ -54,7 +54,7 @@ defmodule Garden.Image.ExecutionSupervisor do
   end
 end
 
-defmodule Garden.Image.Drain do
+defmodule Garden.VM.Drain do
   @moduledoc false
   use GenServer
   require Logger
@@ -84,7 +84,7 @@ defmodule Garden.Image.Drain do
         :ok
 
       {:error, reason} ->
-        Logger.error(msg: "Image subtree cleanup incomplete", reason: inspect(reason))
+        Logger.error(msg: "VM subtree cleanup incomplete", reason: inspect(reason))
     end
   end
 end

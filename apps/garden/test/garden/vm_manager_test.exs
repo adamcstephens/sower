@@ -1,7 +1,7 @@
-defmodule Garden.Image.ManagerTest do
+defmodule Garden.VM.ManagerTest do
   use ExUnit.Case, async: false
-  alias Garden.Image
-  alias Garden.Image.Manager
+  alias Garden.{Image, VM}
+  alias Garden.VM.Manager
 
   @moduletag :tmp_dir
 
@@ -34,7 +34,7 @@ defmodule Garden.Image.ManagerTest do
 
     options = [
       image: image,
-      command: %Image.Command{path: "/bin/true"},
+      command: %VM.Command{path: "/bin/true"},
       owner: self(),
       mkfs: formatter,
       resource_directory: directory,
@@ -53,7 +53,7 @@ defmodule Garden.Image.ManagerTest do
       shutdown_ms: 1000
     ]
 
-    {:ok, supervisor} = Image.Supervisor.start_link(supervisor_options)
+    {:ok, supervisor} = VM.Supervisor.start_link(supervisor_options)
     Process.unlink(supervisor)
 
     on_exit(fn ->
@@ -93,7 +93,7 @@ defmodule Garden.Image.ManagerTest do
       assert :ok = Manager.cancel(id, context.names.manager)
       assert {:error, :cancelled} = Manager.await(id, context.names.manager)
 
-      assert {:ok, %Image.Status{phase: :finished, cleanup: :ok}} =
+      assert {:ok, %VM.Status{phase: :finished, cleanup: :ok}} =
                Manager.status(id, context.names.manager)
 
       eventually(fn -> not Process.alive?(status.execution) end)
@@ -147,10 +147,10 @@ defmodule Garden.Image.ManagerTest do
              Manager.start(context.options, context.names.manager)
 
     Supervisor.stop(context.supervisor)
-    {:ok, replacement} = Image.Supervisor.start_link(context.supervisor_options)
+    {:ok, replacement} = VM.Supervisor.start_link(context.supervisor_options)
     Process.unlink(replacement)
 
-    assert {:ok, %Image.Status{phase: :retained, directory: ^directory}} =
+    assert {:ok, %VM.Status{phase: :retained, directory: ^directory}} =
              Manager.status(id, context.names.manager)
 
     assert {:error, {:capacity_exhausted, :cpus}} =
@@ -166,7 +166,7 @@ defmodule Garden.Image.ManagerTest do
     Supervisor.stop(context.supervisor)
 
     {:ok, supervisor} =
-      Image.Supervisor.start_link(Keyword.put(context.supervisor_options, :result_limit, 1))
+      VM.Supervisor.start_link(Keyword.put(context.supervisor_options, :result_limit, 1))
 
     Process.unlink(supervisor)
     {:ok, retained} = Manager.start(context.options, context.names.manager)
@@ -181,14 +181,14 @@ defmodule Garden.Image.ManagerTest do
     {:ok, second} = Manager.start(context.options, context.names.manager)
     cancel_clean(second, context.names.manager)
     assert {:error, :not_found} = Manager.status(first, context.names.manager)
-    assert {:ok, %Image.Status{phase: :finished}} = Manager.status(second, context.names.manager)
+    assert {:ok, %VM.Status{phase: :finished}} = Manager.status(second, context.names.manager)
 
-    assert {:ok, %Image.Status{phase: :retained}} =
+    assert {:ok, %VM.Status{phase: :retained}} =
              Manager.status(retained, context.names.manager)
 
     assert :ok = Manager.cancel(retained, context.names.manager)
 
-    assert {:ok, %Image.Status{phase: :retained}} =
+    assert {:ok, %VM.Status{phase: :retained}} =
              Manager.status(retained, context.names.manager)
   end
 
@@ -206,7 +206,7 @@ defmodule Garden.Image.ManagerTest do
       assert {:error, :owner_down} = Manager.await(id, context.names.manager)
 
       eventually(fn ->
-        match?({:ok, %Image.Status{phase: :finished}}, Manager.status(id, context.names.manager))
+        match?({:ok, %VM.Status{phase: :finished}}, Manager.status(id, context.names.manager))
       end)
 
       refute File.exists?(status.directory)
@@ -238,7 +238,7 @@ defmodule Garden.Image.ManagerTest do
 
     assert directory == status.directory
 
-    assert {:ok, %Image.Status{phase: :retained, cleanup: :unconfirmed}} =
+    assert {:ok, %VM.Status{phase: :retained, cleanup: :unconfirmed}} =
              Manager.status(id, context.names.manager)
 
     assert {:error, {:capacity_exhausted, :cpus}} =
@@ -254,7 +254,7 @@ defmodule Garden.Image.ManagerTest do
     assert {:error, :timeout} = Manager.await(id, context.names.manager)
     refute File.exists?(status.directory)
 
-    assert {:ok, %Image.Status{phase: :finished, cleanup: :ok}} =
+    assert {:ok, %VM.Status{phase: :finished, cleanup: :ok}} =
              Manager.status(id, context.names.manager)
   end
 
@@ -278,7 +278,7 @@ defmodule Garden.Image.ManagerTest do
       )
     end)
 
-    {:ok, replacement} = Image.Supervisor.start_link(context.supervisor_options)
+    {:ok, replacement} = VM.Supervisor.start_link(context.supervisor_options)
     Process.unlink(replacement)
     assert {:error, :draining} = Manager.start(context.options, context.names.manager)
     :erlang.resume_process(status.guard)
@@ -326,14 +326,14 @@ defmodule Garden.Image.ManagerTest do
 
     assert {:error, {:cleanup_incomplete, [{^id, :pending, _}]}} = Task.await(shutdown)
 
-    assert {:ok, %Image.Status{phase: :starting, cleanup: nil}} =
+    assert {:ok, %VM.Status{phase: :starting, cleanup: nil}} =
              Manager.status(id, context.names.manager)
 
     :erlang.resume_process(status.guard)
     assert {:error, :cancelled} = Manager.await(id, context.names.manager)
     assert :ok = Manager.shutdown(context.names.manager)
     Supervisor.stop(context.supervisor)
-    {:ok, replacement} = Image.Supervisor.start_link(context.supervisor_options)
+    {:ok, replacement} = VM.Supervisor.start_link(context.supervisor_options)
     Process.unlink(replacement)
     {:ok, next} = Manager.start(context.options, context.names.manager)
     next_status = ready(next, context.names.manager)
@@ -346,7 +346,7 @@ defmodule Garden.Image.ManagerTest do
   defp ready(id, manager) do
     eventually(fn ->
       case Manager.status(id, manager) do
-        {:ok, %Image.Status{directory: directory}} when is_binary(directory) ->
+        {:ok, %VM.Status{directory: directory}} when is_binary(directory) ->
           File.exists?(Path.join(directory, "scratch.ext4.ready"))
 
         _ ->
