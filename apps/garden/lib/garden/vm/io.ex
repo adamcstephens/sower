@@ -5,13 +5,13 @@ defmodule Garden.VM.IO do
   def output(:stdout, bytes), do: IO.binwrite(:stdio, bytes)
   def output(:stderr, bytes), do: IO.binwrite(:standard_error, bytes)
 
-  def run(guard, vmm, %Garden.VM.Command{} = command, callback, started) do
+  def run(guard, vmm, %Garden.VM.Command{} = command, callback, started, work_store \\ false) do
     result =
       with {:ok, status} <- CloudHypervisor.Process.await_ready(vmm),
            {:ok, socket} <- connect(Path.join(status.directory, "vsock.sock")) do
         try do
           with {:ok, :ready, <<>>} <- Protocol.recv(socket),
-               {:ok, frame} <- Protocol.execute(command),
+               {:ok, frame} <- Protocol.execute(command, work_store),
                :ok <- :gen_tcp.send(socket, frame) do
             ready = System.monotonic_time(:millisecond) - started
             send(guard, {:guest_ready, ready})

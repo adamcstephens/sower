@@ -1,6 +1,9 @@
 defmodule Garden.Image do
   @moduledoc """
   Boot artifacts and metadata for an image produced by mkImage.
+
+  Contract 1 supports commands only. Contract 2 additionally reserves the fixed
+  execution-scoped work-store read/write ports; both retain control protocol 1.
   """
   use TypedStruct
 
@@ -26,14 +29,15 @@ defmodule Garden.Image do
          kernel: metadata["kernel"],
          initrd: metadata["initrd"],
          root: metadata["root"],
-         cmdline: metadata["cmdline"]
+         cmdline: metadata["cmdline"],
+         contract: metadata["contract"]
        }}
     else
       {:error, reason} -> {:error, reason}
     end
   end
 
-  defp supported(%{"contract" => contract}) when contract != 1,
+  defp supported(%{"contract" => contract}) when contract not in [1, 2],
     do: {:error, {:unsupported_contract, contract}}
 
   defp supported(%{"system" => system}) when system != "x86_64-linux",
@@ -42,7 +46,17 @@ defmodule Garden.Image do
   defp supported(%{"version" => version}) when version != 1,
     do: {:error, {:unsupported_metadata_version, version}}
 
-  defp supported(%{
+  defp supported(%{"contract" => 2} = metadata) do
+    if metadata["work_store_read_port"] == 5001 and metadata["work_store_write_port"] == 5002 do
+      supported_command(Map.put(metadata, "contract", 1))
+    else
+      {:error, :invalid_boot_metadata}
+    end
+  end
+
+  defp supported(metadata), do: supported_command(metadata)
+
+  defp supported_command(%{
          "version" => 1,
          "system" => "x86_64-linux",
          "contract" => 1,
@@ -56,7 +70,7 @@ defmodule Garden.Image do
        })
        when is_binary(cmdline), do: :ok
 
-  defp supported(_), do: {:error, :invalid_boot_metadata}
+  defp supported_command(_), do: {:error, :invalid_boot_metadata}
 
   defp artifacts(metadata) do
     Enum.reduce_while(["kernel", "initrd", "root"], :ok, fn key, :ok ->

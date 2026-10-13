@@ -120,6 +120,9 @@ in
     settings = {
       substituters = lib.mkForce [ ];
       trusted-public-keys = lib.mkForce [ ];
+      # Only executions with work_store enabled receive this substituter in NIX_CONFIG.
+      # Trust is scoped to the private, fixed transport, never disabled globally.
+      trusted-substituters = lib.mkForce [ "http://127.0.0.1:5001?trusted=true" ];
       experimental-features = [
         "nix-command"
         "flakes"

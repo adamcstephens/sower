@@ -5,9 +5,15 @@ defmodule Garden.VM.Guard do
 
   typedstruct do
     field :server, pid(), enforce: true
+    field :execution_id, integer(), enforce: true
     field :server_monitor, reference(), enforce: true
     field :owner_monitor, reference(), enforce: true
     field :ledger_monitor, reference()
+    field :work_store_monitor, reference()
+    field :transfer, Garden.WorkStore.Transfer.t()
+    field :transfer_monitor, reference()
+    field :transfer_cleanup, term(), default: :ok
+    field :vmm_directory, String.t()
     field :directory, String.t()
     field :vmm, pid()
     field :formatter, pid()
@@ -18,11 +24,15 @@ defmodule Garden.VM.Guard do
     field :options, keyword(), enforce: true
   end
 
+  defp transfer_error(:deadline), do: {:error, :timeout}
+  defp transfer_error(reason), do: {:error, {:work_store_failed, reason}}
+
   def run(server, options) do
     Process.flag(:trap_exit, true)
 
     state = %__MODULE__{
       server: server,
+      execution_id: options[:execution_id],
       server_monitor: Process.monitor(server),
       owner_monitor: Process.monitor(options[:owner]),
       options: options,
@@ -37,10 +47,20 @@ defmodule Garden.VM.Guard do
         state
       end
 
+    state =
+      if options[:run_sid] do
+        case GenServer.whereis(options[:work_store]) do
+          nil -> %{state | outcome: {:error, :work_store_unavailable}}
+          service -> %{state | work_store_monitor: Process.monitor(service)}
+        end
+      else
+        state
+      end
+
     registration = register(state)
 
-    if registration != :ok do
-      finish(state, {:error, :owner_down}, :ok)
+    if registration != :ok or state.outcome != nil do
+      finish(state, state.outcome || {:error, :owner_down}, :ok)
     else
       allocate(state)
     end
@@ -148,6 +168,24 @@ defmodule Garden.VM.Guard do
       :cleanup_deadline ->
         finish(state, state.outcome, :shutdown_timeout)
 
+      {:cloud_hypervisor_cleanup, cleanup_owner, reference, directory} ->
+        state = detach(state)
+        send(cleanup_owner, {reference, state.transfer_cleanup})
+        stop(state, {:error, {:vmm_exited, directory}})
+
+      {:work_store_paths, execution_id, paths}
+      when execution_id == state.execution_id ->
+        notify_paths(state, execution_id, paths)
+        loop(state)
+
+      {:work_store_failed, execution_id, reason}
+      when execution_id == state.execution_id ->
+        stop(state, transfer_error(reason))
+
+      {:DOWN, ref, :process, _pid, reason}
+      when ref == state.work_store_monitor or ref == state.transfer_monitor ->
+        stop(state, {:error, {:work_store_down, reason}})
+
       {:DOWN, ref, :process, _pid, _reason}
       when ref == state.server_monitor or ref == state.owner_monitor or
              ref == state.ledger_monitor ->
@@ -204,28 +242,187 @@ defmodule Garden.VM.Guard do
            launch: %Launch{
              executable: Keyword.get(state.options, :hypervisor, "cloud-hypervisor")
            },
+           resource_cleanup_owner: if(state.options[:run_sid], do: self(), else: nil),
            readiness_timeout: Keyword.get(state.options, :deadline_ms, 60_000)
          ) do
       {:ok, vmm} ->
         status = CloudHypervisor.Process.status(vmm)
-        notify_status(state, vmm: vmm, os_pid: status.os_pid)
-        guard = self()
+        notify_status(state, vmm: vmm, os_pid: status.os_pid, vmm_directory: status.directory)
+        state = %{state | vmm: vmm, vmm_directory: status.directory}
 
-        {io, _monitor} =
-          spawn_monitor(fn ->
-            Garden.VM.IO.run(
-              guard,
-              vmm,
-              state.options[:command],
-              Keyword.get(state.options, :on_output, &Garden.VM.IO.output/2),
-              state.started
-            )
-          end)
+        case attach(state) do
+          {:ok, state} ->
+            guard = self()
 
-        loop(%{state | vmm: vmm, io: io})
+            {io, _monitor} =
+              spawn_monitor(fn ->
+                Garden.VM.IO.run(
+                  guard,
+                  vmm,
+                  state.options[:command],
+                  Keyword.get(state.options, :on_output, &Garden.VM.IO.output/2),
+                  state.started,
+                  state.transfer != nil
+                )
+              end)
+
+            loop(%{state | io: io})
+
+          {:stopped, state, result} ->
+            stop(state, result)
+        end
 
       {:error, reason} ->
         finish(state, {:error, {:vmm_startup, reason}}, :unconfirmed)
+    end
+  end
+
+  defp attach(%__MODULE__{} = state) do
+    if state.options[:run_sid] do
+      remaining =
+        Keyword.get(state.options, :deadline_ms, 60_000) -
+          (System.monotonic_time(:millisecond) - state.started)
+
+      if remaining <= 0 do
+        {:stopped, state, {:error, :timeout}}
+      else
+        guard = self()
+        reference = make_ref()
+
+        {worker, monitor} =
+          spawn_monitor(fn ->
+            result =
+              try do
+                Garden.WorkStore.attach(
+                  state.options[:work_store],
+                  state.options[:run_sid],
+                  state.execution_id,
+                  state.vmm_directory,
+                  guard,
+                  remaining
+                )
+              catch
+                :exit, reason -> {:error, {:work_store_unavailable, reason}}
+              end
+
+            send(guard, {:attached, reference, result})
+          end)
+
+        await_attach(state, worker, monitor, reference)
+      end
+    else
+      {:ok, state}
+    end
+  end
+
+  defp await_attach(%__MODULE__{} = state, worker, monitor, reference) do
+    receive do
+      {:attached, ^reference, {:ok, transfer}} ->
+        Process.demonitor(monitor, [:flush])
+        {:ok, %{state | transfer: transfer, transfer_monitor: Process.monitor(transfer.service)}}
+
+      {:attached, ^reference, {:error, reason}} ->
+        abort_attach(state, worker, monitor, {:error, {:work_store_attach, reason}})
+
+      {:finish, result} ->
+        abort_attach(state, worker, monitor, result)
+
+      {:work_store_failed, execution_id, reason} when execution_id == state.execution_id ->
+        abort_attach(state, worker, monitor, transfer_error(reason))
+
+      :deadline ->
+        abort_attach(state, worker, monitor, {:error, :timeout})
+
+      {:DOWN, ref, :process, _pid, _reason}
+      when ref == state.owner_monitor or ref == state.server_monitor or
+             ref == state.ledger_monitor ->
+        abort_attach(state, worker, monitor, {:error, :owner_down})
+
+      {:DOWN, ref, :process, _pid, reason}
+      when ref == state.work_store_monitor or ref == monitor ->
+        abort_attach(state, worker, monitor, {:error, {:work_store_down, reason}})
+
+      {:cloud_hypervisor_cleanup, cleanup_owner, cleanup_reference, directory} ->
+        {:stopped, state, result} =
+          abort_attach(state, worker, monitor, {:error, {:vmm_exited, directory}})
+
+        send(cleanup_owner, {cleanup_reference, state.transfer_cleanup})
+        {:stopped, state, result}
+
+      {:cloud_hypervisor, vmm, {:failed, reason}} when vmm == state.vmm ->
+        abort_attach(state, worker, monitor, {:error, {:vmm_failed, reason}})
+
+      {:EXIT, vmm, reason} when vmm == state.vmm ->
+        abort_attach(state, worker, monitor, {:error, {:vmm_server_down, reason}})
+
+      _ ->
+        await_attach(state, worker, monitor, reference)
+    end
+  end
+
+  defp abort_attach(%__MODULE__{} = state, worker, monitor, result) do
+    Process.exit(worker, :kill)
+    Process.demonitor(monitor, [:flush])
+    guard = self()
+
+    cleanup =
+      transfer_cleanup(fn -> Garden.WorkStore.revoke_owner(state.options[:work_store], guard) end)
+
+    {:stopped, %{state | transfer_cleanup: cleanup}, result}
+  end
+
+  defp detach(%__MODULE__{transfer: nil} = state), do: state
+
+  defp detach(%__MODULE__{} = state) do
+    result = transfer_cleanup(fn -> Garden.WorkStore.detach(state.transfer) end)
+
+    Process.demonitor(state.transfer_monitor, [:flush])
+    %{state | transfer: nil, transfer_monitor: nil, transfer_cleanup: result}
+  end
+
+  defp transfer_cleanup(cleanup_fun) do
+    guard = self()
+    reference = make_ref()
+
+    {worker, monitor} =
+      spawn_monitor(fn ->
+        result =
+          try do
+            cleanup_fun.()
+          catch
+            :exit, reason -> {:error, {:transfer_cleanup, reason}}
+          end
+
+        send(guard, {:transfer_cleanup, reference, result})
+      end)
+
+    result =
+      receive do
+        {:transfer_cleanup, ^reference, result} -> result
+        {:DOWN, ^monitor, :process, ^worker, reason} -> {:error, {:transfer_cleanup, reason}}
+      after
+        10_000 ->
+          Process.exit(worker, :kill)
+          {:error, :transfer_cleanup_timeout}
+      end
+
+    Process.demonitor(monitor, [:flush])
+    result
+  end
+
+  defp notify_paths(%__MODULE__{} = state, execution_id, paths) do
+    send(state.server, {:vm_paths, execution_id, paths})
+    notify_status(state, paths: paths)
+  end
+
+  defp drain_paths(%__MODULE__{} = state) do
+    receive do
+      {:work_store_paths, execution_id, paths}
+      when execution_id == state.execution_id ->
+        notify_paths(state, execution_id, paths)
+        drain_paths(state)
+    after
+      0 -> :ok
     end
   end
 
@@ -250,6 +447,7 @@ defmodule Garden.VM.Guard do
   defp stop(%__MODULE__{} = state, result) do
     notify_status(state, phase: :stopping)
     if state.io, do: Process.exit(state.io, :kill)
+    state = detach(state)
     guard = self()
     vmm = state.vmm
 
@@ -288,6 +486,16 @@ defmodule Garden.VM.Guard do
 
   defp await_stop(%__MODULE__{} = state) do
     receive do
+      {:cloud_hypervisor_cleanup, cleanup_owner, reference, _directory} ->
+        state = detach(state)
+        send(cleanup_owner, {reference, state.transfer_cleanup})
+        await_stop(state)
+
+      {:work_store_paths, execution_id, paths}
+      when execution_id == state.execution_id ->
+        notify_paths(state, execution_id, paths)
+        await_stop(state)
+
       {:stopped, {:ok, _}} ->
         GenServer.stop(state.vmm, :normal)
         finish(state, state.outcome, :ok)
@@ -309,6 +517,12 @@ defmodule Garden.VM.Guard do
 
   defp finish(%__MODULE__{} = state, result, certification) do
     if state.io, do: Process.exit(state.io, :kill)
+    state = detach(state)
+    drain_paths(state)
+
+    certification =
+      if state.transfer_cleanup == :ok, do: certification, else: state.transfer_cleanup
+
     cleanup = if certification == :ok, do: remove_known(state.directory), else: certification
 
     result =

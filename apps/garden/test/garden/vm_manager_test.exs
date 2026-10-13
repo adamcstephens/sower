@@ -70,6 +70,129 @@ defmodule Garden.VM.ManagerTest do
      options: options}
   end
 
+  test "command-only contracts cannot admit work runs or allocate VM resources", context do
+    options =
+      Keyword.merge(context.options,
+        work_store: self(),
+        run_sid: "unsupported",
+        output_budget: 4096
+      )
+
+    assert {:error, :unsupported_work_store_contract} =
+             Manager.start(options, context.names.manager)
+
+    assert {:ok, []} = Manager.list(context.names.manager)
+    assert {:ok, []} = File.ls(context.options[:resource_directory]) |> without_formatter()
+  end
+
+  test "unavailable work store fails admission before scratch allocation", context do
+    service = spawn(fn -> :ok end)
+    monitor = Process.monitor(service)
+    assert_receive {:DOWN, ^monitor, :process, ^service, _}
+
+    options =
+      Keyword.merge(context.options,
+        image: %{context.options[:image] | contract: 2},
+        work_store: service,
+        run_sid: "unavailable",
+        output_budget: 4096
+      )
+
+    assert {:error, {:work_store_unavailable, _}} =
+             Manager.start(options, context.names.manager)
+
+    assert {:ok, []} = Manager.list(context.names.manager)
+    assert {:ok, []} = File.ls(context.options[:resource_directory]) |> without_formatter()
+  end
+
+  test "work-store death tears down an admitted execution without closing its run", context do
+    root = Path.join(context.options[:resource_directory], "work-store")
+    name = {:global, {make_ref(), :work_store}}
+
+    store =
+      start_supervised!(
+        {Garden.WorkStore,
+         root: root,
+         name: name,
+         output_bytes: 8192,
+         cache_bytes: 4096,
+         staging_bytes: 4096,
+         transfer_bytes: 4096}
+      )
+
+    options =
+      Keyword.merge(context.options,
+        image: %{context.options[:image] | contract: 2},
+        work_store: store,
+        run_sid: "retained-run",
+        output_budget: 4096
+      )
+
+    {:ok, id} = Manager.start(options, context.names.manager)
+    status = ready(id, context.names.manager)
+    assert status.run_sid == "retained-run"
+    File.rm!(Path.join(status.directory, "scratch.ext4.ready"))
+    Process.exit(store, :kill)
+
+    assert {:error, {:work_store_down, :killed}} = Manager.await(id, context.names.manager)
+    refute File.exists?(status.directory)
+
+    assert {:ok, %VM.Status{phase: :finished, cleanup: :ok}} =
+             Manager.status(id, context.names.manager)
+
+    eventually(fn ->
+      replacement = GenServer.whereis(name)
+      is_pid(replacement) and replacement != store
+    end)
+
+    replacement = GenServer.whereis(name)
+
+    assert {:ok, []} = Garden.WorkStore.paths(replacement, "retained-run")
+    assert :ok = Garden.WorkStore.close_run(replacement, "retained-run")
+  end
+
+  test "stalled input admission does not block live execution cancellation or shutdown",
+       context do
+    {:ok, active} = Manager.start(context.options, context.names.manager)
+    status = ready(active, context.names.manager)
+    File.rm!(Path.join(status.directory, "scratch.ext4.ready"))
+    root = Path.join(context.options[:resource_directory], "work-store")
+
+    store =
+      start_supervised!(
+        {Garden.WorkStore,
+         root: root,
+         output_bytes: 8192,
+         cache_bytes: 4096,
+         staging_bytes: 4096,
+         transfer_bytes: 4096}
+      )
+
+    :ok = :sys.suspend(store)
+    on_exit(fn -> if Process.alive?(store), do: :sys.resume(store) end)
+
+    options =
+      Keyword.merge(context.options,
+        image: %{context.options[:image] | contract: 2},
+        work_store: store,
+        run_sid: "pending-run",
+        output_budget: 4096
+      )
+
+    pending = Task.async(fn -> Manager.start(options, context.names.manager) end)
+    eventually(fn -> Process.info(store, :message_queue_len) != {:message_queue_len, 0} end)
+    assert :ok = Manager.cancel(active, context.names.manager)
+    assert {:error, :cancelled} = Manager.await(active, context.names.manager)
+    refute File.exists?(status.directory)
+    assert :ok = Manager.shutdown(context.names.manager)
+    assert nil == Task.yield(pending, 0)
+
+    :ok = :sys.resume(store)
+    assert {:error, :draining} = Task.await(pending)
+    assert {:ok, []} = Garden.WorkStore.paths(store, "pending-run")
+    assert :ok = Garden.WorkStore.close_run(store, "pending-run")
+  end
+
   test "listing includes active executions and retained records after controller retirement",
        context do
     assert {:ok, []} = Manager.list(context.names.manager)

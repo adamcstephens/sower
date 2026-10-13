@@ -4,6 +4,7 @@
   callPackages,
   getent,
   lib,
+  nix,
   version,
   tzdata,
   stockImage ? null,
@@ -32,7 +33,6 @@ beamPackages.mixRelease {
   # https://github.com/NixOS/nixpkgs/pull/558236
   buildInputs = [ bashNonInteractive ];
 
-
   postPatch = ''
     substituteInPlace apps/garden/test/garden/vm_manager_test.exs \
       --replace-fail '#!/usr/bin/env sh' '#!${bashNonInteractive}/bin/sh'
@@ -52,6 +52,7 @@ beamPackages.mixRelease {
   doCheck = true;
   nativeCheckInputs = [
     getent
+    nix
   ];
   checkPhase = ''
     runHook preCheck

@@ -37,6 +37,72 @@ defmodule CloudHypervisor.ProcessTest do
     refute File.exists?(VMM.status(pid).directory)
   end
 
+  test "spontaneous native exit waits for external transfer cleanup before certification" do
+    {:ok, pid} = start(executable("exit 23"), resource_cleanup_owner: self())
+    assert_receive {:cloud_hypervisor_cleanup, cleanup, reference, directory}, @timeout
+    status = VMM.status(pid)
+    assert status.directory == directory
+    refute File.exists?("/proc/#{status.os_pid}")
+    assert File.dir?(directory)
+    refute_receive {:cloud_hypervisor, ^pid, {:exited, _}}, 50
+
+    send(cleanup, {reference, :ok})
+    assert {:error, {:exited, {:exit_status, 23}}} = VMM.await_ready(pid)
+    refute File.exists?(directory)
+  end
+
+  test "forced cleanup drains exact transfer sockets but retains unrelated files" do
+    {:ok, pid} =
+      start(executable("printf 'running\\n'; exec sleep 60"), resource_cleanup_owner: self())
+
+    assert output(pid, :stdout) == "running\n"
+    directory = VMM.status(pid).directory
+    on_exit(fn -> File.rm_rf(directory) end)
+    unknown = Path.join(directory, "not-owned")
+    File.write!(unknown, "retain")
+
+    sockets =
+      Enum.map([5001, 5002], fn port ->
+        path = Path.join(directory, "vsock.sock_#{port}")
+        {:ok, listener} = :gen_tcp.listen(0, [:binary, active: false, ifaddr: {:local, path}])
+        on_exit(fn -> :gen_tcp.close(listener) end)
+        {listener, path}
+      end)
+
+    stopped = Task.async(fn -> VMM.stop(pid, :force) end)
+    assert_receive {:cloud_hypervisor_cleanup, cleanup, reference, ^directory}, @timeout
+    assert File.exists?(unknown)
+
+    Enum.each(sockets, fn {listener, path} ->
+      :gen_tcp.close(listener)
+      File.rm!(path)
+    end)
+
+    send(cleanup, {reference, :ok})
+    assert {:error, {:cleanup_failed, _}} = Task.await(stopped)
+    assert File.read!(unknown) == "retain"
+    assert File.dir?(directory)
+  end
+
+  test "external cleanup owner death never certifies resource removal" do
+    owner =
+      spawn(fn ->
+        receive do
+          :stop -> :ok
+        end
+      end)
+
+    on_exit(fn -> Process.exit(owner, :kill) end)
+    {:ok, pid} = start(executable("exit 0"), resource_cleanup_owner: owner)
+    directory = VMM.status(pid).directory
+    on_exit(fn -> File.rm_rf(directory) end)
+    Process.exit(owner, :kill)
+
+    assert {:error, {:cleanup_failed, _}} = VMM.await_ready(pid)
+    assert File.dir?(directory)
+    refute File.exists?("/proc/#{VMM.status(pid).os_pid}")
+  end
+
   test "reaps descendants holding output open when the direct child exits" do
     executable = executable("sleep 60 &\nprintf 'descendant=%s\\n' \"$!\"\nexit 7")
     {:ok, pid} = start(executable)

@@ -13,7 +13,7 @@ defmodule SowerClient.Config do
   require OpenApiSpex
 
   @config_file_env "SOWER_CONFIG_FILE"
-  @path_setting_keys ["state_directory", "admin_socket"]
+  @path_setting_keys ["state_directory", "admin_socket", "work_store_directory"]
   @env_var_pattern ~r/\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\})/
 
   OpenApiSpex.schema(%{
@@ -49,6 +49,17 @@ defmodule SowerClient.Config do
       vm_capacity: SowerClient.Config.VMCapacity,
       vm_result_limit: %Schema{type: :integer, minimum: 0, default: 128},
       vm_shutdown_ms: %Schema{type: :integer, minimum: 1, default: 15_000},
+      work_store_directory: %Schema{
+        type: :string,
+        nullable: true,
+        description: "Private persistent VM work store; defaults beneath state_directory"
+      },
+      work_store_nix: %Schema{type: :string, default: "nix"},
+      work_store_output_bytes: %Schema{type: :integer, minimum: 1, default: 17_179_869_184},
+      work_store_cache_bytes: %Schema{type: :integer, minimum: 1, default: 4_294_967_296},
+      work_store_staging_bytes: %Schema{type: :integer, minimum: 1, default: 2_147_483_648},
+      work_store_transfer_bytes: %Schema{type: :integer, minimum: 1, default: 268_435_456},
+      work_store_max_transfers: %Schema{type: :integer, minimum: 1, default: 8},
       name: %Schema{
         type: :string,
         description: "Garden name (garden-only)"

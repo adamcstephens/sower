@@ -27,6 +27,7 @@ defmodule Garden.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:bandit, "~> 1.0"},
       {:quantum, "~> 3.0"},
       {:cuid2_ex, "~> 0.2"},
       {:jason, "~> 1.0"},

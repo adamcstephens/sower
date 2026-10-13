@@ -47,6 +47,12 @@ defmodule CloudHypervisor.Process do
   certified tree completion. Requires Rexec's Linux 5.3+, pidfd, and readable
   `/proc` support. This is not a sandbox or system-wide crash reconciler.
   Unexpected Rexec death is not proof of cleanup and retains owned sockets.
+  An optional `resource_cleanup_owner: pid` gates native-exit certification for
+  execution-owned external resources. After certified tree completion it receives
+  `{:cloud_hypervisor_cleanup, cleanup_pid, reference, directory}` and must reply
+  `{reference, :ok}` only after revoking and draining those resources, or
+  `{reference, {:error, reason}}`. Owner death, timeout, or cleanup failure retains
+  the directory and never produces a successful cleanup certificate.
   Standalone `API` clients may still address arbitrary sockets.
   """
 
@@ -102,7 +108,7 @@ defmodule CloudHypervisor.Process do
     options = Keyword.put_new(options, :owner, self())
 
     case validate(options) do
-      {:ok, _launch, _config, _mode, _owner, _timeout} = settings ->
+      {:ok, _launch, _config, _mode, _owner, _timeout, _resource_owner} = settings ->
         GenServer.start_link(__MODULE__, settings, Keyword.take(options, [:name]))
 
       {:error, reason} ->
@@ -127,10 +133,11 @@ defmodule CloudHypervisor.Process do
     do: GenServer.call(server, {:stop, mode}, @call_timeout)
 
   @impl GenServer
-  def init({:ok, launch, config, mode, owner, timeout}) do
+  def init({:ok, launch, config, mode, owner, timeout, resource_owner}) do
     BEAM.flag(:trap_exit, true)
 
-    with {:ok, cleanup_owner, directory} <- Cleanup.prepare(&execution_directory/0) do
+    with {:ok, cleanup_owner, directory} <-
+           Cleanup.prepare(&execution_directory/0, resource_owner) do
       launch = %{launch | api_socket: Path.join(directory, "api.sock")}
       config = own_vsock(config, directory)
       client = %API{socket: launch.api_socket, timeout: min(timeout, 1_000)}
@@ -311,17 +318,38 @@ defmodule CloudHypervisor.Process do
     mode = Keyword.get(options, :mode, :cli)
     owner = Keyword.get(options, :owner)
     timeout = Keyword.get(options, :readiness_timeout, 5_000)
+    resource_owner = Keyword.get(options, :resource_cleanup_owner)
 
     cond do
-      not match?(%Launch{}, launch) -> {:error, {:invalid_option, :launch}}
-      not match?(%Config{}, config) -> {:error, {:invalid_option, :config}}
-      mode not in [:cli, :api] -> {:error, {:invalid_option, :mode}}
-      not is_pid(owner) -> {:error, {:invalid_option, :owner}}
-      not is_integer(timeout) or timeout <= 0 -> {:error, {:invalid_option, :readiness_timeout}}
-      not is_nil(launch.api_socket) -> {:error, {:caller_socket, :api_socket}}
-      not is_nil(get_in(config.vsock.socket)) -> {:error, {:caller_socket, :vsock}}
-      get_in(config.console.mode) == :socket -> {:error, {:invalid_option, :console}}
-      true -> {:ok, launch, config, mode, owner, timeout}
+      not match?(%Launch{}, launch) ->
+        {:error, {:invalid_option, :launch}}
+
+      not match?(%Config{}, config) ->
+        {:error, {:invalid_option, :config}}
+
+      mode not in [:cli, :api] ->
+        {:error, {:invalid_option, :mode}}
+
+      not is_pid(owner) ->
+        {:error, {:invalid_option, :owner}}
+
+      not is_nil(resource_owner) and not is_pid(resource_owner) ->
+        {:error, {:invalid_option, :resource_cleanup_owner}}
+
+      not is_integer(timeout) or timeout <= 0 ->
+        {:error, {:invalid_option, :readiness_timeout}}
+
+      not is_nil(launch.api_socket) ->
+        {:error, {:caller_socket, :api_socket}}
+
+      not is_nil(get_in(config.vsock.socket)) ->
+        {:error, {:caller_socket, :vsock}}
+
+      get_in(config.console.mode) == :socket ->
+        {:error, {:invalid_option, :console}}
+
+      true ->
+        {:ok, launch, config, mode, owner, timeout, resource_owner}
     end
   end
 

@@ -1,3 +1,5 @@
+mod work_store;
+
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::os::fd::OwnedFd;
@@ -87,6 +89,12 @@ fn execute(stream: &mut File) -> io::Result<()> {
     let payload = request
         .get("stdin")
         .ok_or_else(|| invalid("stdin payload is required"))?;
+    let work_store = match request.get("work_store") {
+        None => false,
+        Some(value) => value
+            .as_bool()
+            .ok_or_else(|| invalid("work_store must be a boolean"))?,
+    };
     let mut command = Command::new(path);
     command.env_clear();
     for arg in args {
@@ -103,6 +111,19 @@ fn execute(stream: &mut File) -> io::Result<()> {
                 .ok_or_else(|| invalid("env values must be strings"))?,
         );
     }
+    let proxies = if work_store {
+        let proxies = work_store::Proxies::start()?;
+        let config = env.get("NIX_CONFIG").and_then(Value::as_str).unwrap_or("");
+        command.env(
+            "NIX_CONFIG",
+            format!("{config}\nsubstituters = {}\n", work_store::READ_URL),
+        );
+        command.env("SOWER_WORK_STORE_READ_URL", work_store::READ_URL);
+        command.env("SOWER_WORK_STORE_WRITE_URL", work_store::WRITE_URL);
+        Some(proxies)
+    } else {
+        None
+    };
     let input = serde_json::to_vec(payload)?;
     let mut child = command
         .stdin(Stdio::piped())
@@ -147,6 +168,8 @@ fn execute(stream: &mut File) -> io::Result<()> {
         .into_inner()
         .map_err(|_| io::Error::other("child lock poisoned"))?
         .wait()?;
+    // Stop accepting and join all forwarders before reporting command completion.
+    drop(proxies);
     metadata(
         stream,
         json!({"type": "exited", "version": 1, "code": status.code(), "signal": status.signal()}),

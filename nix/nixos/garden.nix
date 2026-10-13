@@ -153,6 +153,7 @@ in
 
       path = [
         config.nix.package
+        pkgs.bashNonInteractive
       ]
       ++ lib.optionals (!activatorCfg.enable) [
         "/run/wrappers"

@@ -6,13 +6,25 @@ defmodule Garden.VM.Manager do
   results are retained in completion order up to `result_limit`; failed cleanup
   is never evicted and never releases its reservation. Recovery closes admission
   and drains previous guards without replaying commands.
+  Work-store input admission runs in the start caller, never in the ledger.
+  Its run roots and persistent output reservation are independent of VM capacity:
+  a subsequent VM admission rejection leaves the run live until explicit
+  `Garden.WorkStore.close_run/2`.
   """
   use GenServer
 
   def start_link(options),
     do: GenServer.start_link(__MODULE__, options, Keyword.take(options, [:name]))
 
-  def start(options, server \\ __MODULE__), do: call(server, {:start, options})
+  def start(options, server \\ __MODULE__) do
+    with :ok <- Garden.VM.Execution.validate_options(options),
+         :ok <- Garden.VM.admit_work(options) do
+      call(server, {:start, options})
+    else
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   def list(server \\ __MODULE__), do: call(server, :list)
   def status(id, server \\ __MODULE__), do: call(server, {:status, id})
   def cancel(id, server \\ __MODULE__), do: call(server, {:cancel, id})

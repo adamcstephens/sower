@@ -136,7 +136,13 @@ defmodule Garden.VM.Ledger do
     with :ok <- VM.Execution.validate_options(options),
          :ok <- capacity(state, resources) do
       id = System.unique_integer([:positive, :monotonic])
-      status = %VM.Status{execution_id: id, owner: options[:owner]}
+
+      status = %VM.Status{
+        execution_id: id,
+        owner: options[:owner],
+        run_sid: options[:run_sid]
+      }
+
       entry = %Entry{status: status, resources: resources}
       state = persist(%{state | entries: Map.put(state.entries, id, entry)})
 

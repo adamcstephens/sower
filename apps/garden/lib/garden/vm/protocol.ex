@@ -25,7 +25,7 @@ defmodule Garden.VM.Protocol do
     end
   end
 
-  def execute(%Garden.VM.Command{} = command) do
+  def execute(%Garden.VM.Command{} = command, work_store \\ false) do
     with {:ok, payload} <-
            Jason.encode(%{
              "type" => "execute",
@@ -33,7 +33,8 @@ defmodule Garden.VM.Protocol do
              "path" => command.path,
              "args" => command.args,
              "env" => command.env,
-             "stdin" => command.stdin
+             "stdin" => command.stdin,
+             "work_store" => work_store
            }),
          true <- byte_size(payload) <= @maximum do
       {:ok, <<1, byte_size(payload)::unsigned-big-32, payload::binary>>}

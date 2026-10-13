@@ -12,8 +12,10 @@ let
   };
   imageIdentity = {
     inherit system;
-    contract = 1;
+    contract = 2;
     vsock_port = 5000;
+    work_store_read_port = 5001;
+    work_store_write_port = 5002;
   };
   imageModule = import ./module.nix;
   evaluate =

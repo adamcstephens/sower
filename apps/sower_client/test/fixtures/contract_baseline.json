@@ -99,6 +99,10 @@
         "nullable": true,
         "type": "string"
       },
+      "override": {
+        "has_default": true,
+        "type": "boolean"
+      },
       "seed": {
         "ref": "Seed",
         "type": "object"

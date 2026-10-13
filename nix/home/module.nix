@@ -88,6 +88,7 @@ in
               "PATH=/run/current-system/sw/bin:${
                 lib.makeBinPath [
                   config.nix.package
+                  pkgs.bashNonInteractive
                   cfg.activatorPackage
                 ]
               }"
@@ -158,6 +159,7 @@ in
                 PATH = "/run/current-system/sw/bin:${
                   lib.makeBinPath [
                     config.nix.package
+                    pkgs.bashNonInteractive
                     cfg.activatorPackage
                   ]
                 }";

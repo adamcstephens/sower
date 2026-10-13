@@ -4,15 +4,39 @@ defmodule Garden.ImageTest do
   @moduletag :tmp_dir
 
   test "rejects an unsupported executor contract before resolving boot artifacts", %{tmp_dir: dir} do
-    write_manifest(dir, %{"contract" => 2})
+    write_manifest(dir, %{"contract" => 3})
 
-    assert {:error, {:unsupported_contract, 2}} = Garden.Image.load(dir)
+    assert {:error, {:unsupported_contract, 3}} = Garden.Image.load(dir)
   end
 
   test "rejects an unsupported architecture before resolving boot artifacts", %{tmp_dir: dir} do
     write_manifest(dir, %{"system" => "aarch64-linux"})
 
     assert {:error, {:unsupported_system, "aarch64-linux"}} = Garden.Image.load(dir)
+  end
+
+  test "command-only images remain supported", %{tmp_dir: dir} do
+    write_manifest(dir, %{})
+
+    assert {:error, {:invalid_boot_artifact, "kernel"}} = Garden.Image.load(dir)
+  end
+
+  test "work-store contract requires the fixed transport ports", %{tmp_dir: dir} do
+    write_manifest(dir, %{
+      "contract" => 2,
+      "work_store_read_port" => 5001,
+      "work_store_write_port" => 5002
+    })
+
+    assert {:error, {:invalid_boot_artifact, "kernel"}} = Garden.Image.load(dir)
+
+    write_manifest(dir, %{
+      "contract" => 2,
+      "work_store_read_port" => 6001,
+      "work_store_write_port" => 5002
+    })
+
+    assert {:error, :invalid_boot_metadata} = Garden.Image.load(dir)
   end
 
   defp write_manifest(dir, overrides) do

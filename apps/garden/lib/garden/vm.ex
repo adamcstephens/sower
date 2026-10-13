@@ -8,6 +8,11 @@ defmodule Garden.VM do
   independent teardown. `run/3` is the synchronous convenience boundary.
   `on_output` receives `(stream, bytes)` in the I/O worker, applying bounded
   backpressure without blocking cancellation or the execution deadline.
+  Work-backed executions supply `run_sid`, `work_store`, `input_roots`, `upstreams`,
+  and an explicit persistent `output_budget`. Inputs are admitted before VM
+  allocation; the run remains live until `Garden.WorkStore.close_run/2`.
+  `Garden.WorkStore.paths/2` looks up committed paths locally. Export events are
+  sent to the owner as `{:vm_paths, execution_id, paths}`, independently of stdout.
   This is development orchestration, not a production sandbox.
   """
   use TypedStruct
@@ -30,6 +35,7 @@ defmodule Garden.VM do
   typedstruct module: Status do
     field :phase, atom(), default: :starting
     field :directory, String.t()
+    field :vmm_directory, String.t()
     field :vmm, pid()
     field :os_pid, pos_integer()
     field :result, term()
@@ -38,6 +44,8 @@ defmodule Garden.VM do
     field :execution, pid()
     field :guard, pid()
     field :owner, pid()
+    field :run_sid, String.t()
+    field :paths, [String.t()], default: []
   end
 
   def start_link(options), do: Garden.VM.Execution.start_link(options)
@@ -55,6 +63,24 @@ defmodule Garden.VM do
       end
     else
       {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def admit_work(options) do
+    if options[:run_sid] do
+      try do
+        Garden.WorkStore.open_run(
+          options[:work_store],
+          options[:run_sid],
+          Keyword.get(options, :input_roots, []),
+          Keyword.get(options, :upstreams, []),
+          options[:output_budget]
+        )
+      catch
+        :exit, reason -> {:error, {:work_store_unavailable, reason}}
+      end
+    else
+      :ok
     end
   end
 

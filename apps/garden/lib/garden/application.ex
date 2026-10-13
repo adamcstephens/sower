@@ -22,16 +22,24 @@ defmodule Garden.Application do
         []
       end
 
+    work_store_children =
+      if :os.type() == {:unix, :linux},
+        do: [{Garden.WorkStore, work_store_options(config)}],
+        else: []
+
     children =
       [
         {Garden.Storage, []},
-        {Task.Supervisor, name: Garden.TaskSupervisor},
-        {Garden.VM.Supervisor, vm_options(config)},
-        # Admin socket starts unconditionally so admin commands work even when
-        # the garden has no endpoint / is disconnected.
-        {Garden.AdminSocket, []},
-        :systemd.ready()
-      ] ++ client_children
+        {Task.Supervisor, name: Garden.TaskSupervisor}
+      ] ++
+        work_store_children ++
+        [
+          {Garden.VM.Supervisor, vm_options(config)},
+          # Admin socket starts unconditionally so admin commands work even when
+          # the garden has no endpoint / is disconnected.
+          {Garden.AdminSocket, []},
+          :systemd.ready()
+        ] ++ client_children
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
@@ -51,6 +59,26 @@ defmodule Garden.Application do
     end
 
     state
+  end
+
+  defp work_store_options(nil) do
+    [
+      name: Garden.WorkStore,
+      root: Path.join(SowerClient.Config.default_state_dir(), "work-store")
+    ]
+  end
+
+  defp work_store_options(%SowerClient.Config{} = config) do
+    [
+      name: Garden.WorkStore,
+      root: config.work_store_directory || Path.join(config.state_directory, "work-store"),
+      nix: config.work_store_nix,
+      output_bytes: config.work_store_output_bytes,
+      cache_bytes: config.work_store_cache_bytes,
+      staging_bytes: config.work_store_staging_bytes,
+      transfer_bytes: config.work_store_transfer_bytes,
+      max_transfers: config.work_store_max_transfers
+    ]
   end
 
   defp vm_options(nil), do: []

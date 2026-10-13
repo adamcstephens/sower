@@ -191,21 +191,26 @@ surface, vsock protocol included; there is no second negotiation, and
 builders advertise the range they accept so the server never dispatches
 an image it would refuse.
 
-The builder design uses vsock for three services: the control channel
-(command delivery, events, exit), the read proxy, and the write endpoint
-(see Nix Store Strategy). The guest runtime forwards localhost HTTP to
-the latter two, so unmodified nix sees an ordinary substituter and upload
-target. The current local image implementation provides command execution
-only; the cache services and server-side builder dispatch remain separate.
+The local builder uses vsock for three services: control on port 5000
+(command delivery, events, exit), the read cache on port 5001, and the write
+cache on port 5002 (see Nix Store Strategy). The guest runtime forwards
+fixed localhost HTTP ports 5001 and 5002 to host CID 2, so unmodified nix
+sees an ordinary substituter and upload target. Guest contract 2 provides
+work transfer; contract 1 remains supported for command-only execution.
+Work-backed execution rejects contract 1 before VM allocation. Server-side
+builder dispatch remains separate.
 The command's own I/O convention is unchanged from the pipeline spec:
 payload as JSON on stdin, stdout and stderr captured as the step log.
 Programs that emit items (eval; later, checks enriching items) write
 JSON lines to a runtime-provided descriptor, which the runtime forwards
 as `item` events — application stdout stays log, never protocol.
 
-The guest runtime receives the command over vsock after boot, injects
-nothing into its environment beyond `command.env`, and reports exit
-status. VMs are ephemeral: booted per execution, destroyed after,
+The guest runtime receives the command over vsock after boot and reports
+its real exit status. Command-only execution injects nothing beyond
+`command.env`. Work-backed execution additionally supplies scoped
+`NIX_CONFIG`, `SOWER_WORK_STORE_READ_URL`, and `SOWER_WORK_STORE_WRITE_URL`
+for the private local cache endpoints; upstream URLs and credentials stay
+on the host. VMs are ephemeral: booted per execution, destroyed after,
 nothing surviving but exported paths and the event stream.
 
 That lifecycle is the default, not a constraint. Interactive access to
@@ -300,6 +305,11 @@ path. Wiping the work store must never break the builder host.
   execution's `run_sid` and emits the `paths` event. What a program
   does not copy out does not exist after the VM dies, so egress naming
   needs no separate mechanism.
+  NAR uploads are disk-backed staging, not committed outputs. A narinfo
+  succeeds only after Nix validates and imports its content and references,
+  the run budget accepts it, and its durable run root exists. Closure
+  members are outputs too; no stdout parsing or separate output manifest
+  is required. Committed paths survive cancellation and nonzero exit.
 - **Boot images** are read from where they legitimately live, in the
   host store: the stock image at the well-known path in the builder's
   own deployed closure, custom images as registered seeds staged
@@ -317,17 +327,37 @@ path. Wiping the work store must never break the builder host.
   (spec-pipeline.md, Repository Input). `full` network exists for the
   checks and effects that genuinely reach out.
 
-Run outputs and cached substitutions are separate budgets. Substitutions
-are evictable at any time under the LRU; paths under a live run's gcroot
-are not, because a later execution of that run is entitled to read them.
-The server releases a run's gcroots when the run closes, after which its
-outputs fall to the LRU like anything else and the cache remains the
-durable artifact layer. A builder whose work store is full stops
-accepting new *runs* — executions of runs already pinned to it still
-schedule, since finishing a run is what releases its gcroots. The
-pressure surfaces as scheduling backpressure, never as a failure
-mid-run. Storage is not endorsement — whether a work-store path may be
-activated anywhere is the signing layer's question (spec-seed-trust.md).
+The local work-store/VM transfer role uses Linux chroot-store and Cloud
+Hypervisor semantics. Other garden platforms retain deployment without
+starting this service.
+
+Read authorization is the live run's declared input closure plus committed
+outputs. A warm cache does not grant another run access by path hash or
+NAR URL. Host-side services bind only the execution's private
+Cloud Hypervisor Unix socket paths; guest forwarding has no configurable
+destination. Trust is scoped to these private HTTP endpoints, never a
+global signature bypass or operator endorsement of guest-produced paths.
+
+Run outputs, cached substitutions, and bounded transfer staging have
+separate budgets. Opening a run declares a maximum persistent-output
+budget, reserved atomically before admission. New runs are rejected when
+their reservation cannot fit; already admitted runs retain their reserved
+capacity. An export exceeding its run's declared budget fails explicitly
+before publication rather than evicting live outputs. Budget charging
+includes isolated-store content, its cache representation, and metadata,
+not only the final output file size. Operators provision backing storage
+for the sum of configured output, cache, and staging pools. The reservation
+is not an unlimited-disk guarantee: device failures and external exhaustion
+remain errors.
+
+Unpinned substitutions and closed-run paths are evictable under the LRU.
+Paths under a live run's gcroot and active-transfer roots are never evicted.
+Run close revokes new attachment and exports, drains transfers, and only
+then releases roots and the output reservation. It is idempotent. The local
+garden owns durable run roots independently of VM-ledger lifetime; server
+run-close delivery is separate. Storage is not endorsement — whether a
+work-store path may be activated anywhere is the signing layer's question
+(spec-seed-trust.md).
 
 ## Dispatch
 
@@ -675,9 +705,10 @@ verification:
   host's system store never holds a guest-produced path; wiping the
   work store never breaks the host. Sharing between builders happens
   at the cache layer, never as a shared filesystem.
-- **Run outputs sit outside the LRU.** Eviction governs cached
-  substitutions only; a full work store stops scheduling new runs
-  rather than dropping a live run's products.
+- **Run outputs sit outside the LRU.** Admission reserves a declared maximum
+  persistent-output budget. A full work store rejects new reservations
+  rather than dropping a live run's products; over-budget exports fail
+  before publication.
 - **The stock image ships in the builder closure,** at a well-known
   path its own configuration provides at eval and build time. Dispatch
   names it `stock` and the host resolves it; only custom images
@@ -746,7 +777,5 @@ verification:
   image a builder has not staged, is that a placement
   constraint (only builders holding it are candidates) or a fetch the
   execution waits on? Phase 3.
-- **Read proxy implementation.** Adopt ncps or build the equivalent
-  against the work store.
 - **Who performs ephemeral signing.** The host agent or a dedicated
   non-guest step (see Security); phase 5 picks one.

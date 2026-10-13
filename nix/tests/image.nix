@@ -43,6 +43,57 @@ let
         while True:
             sys.stdout.buffer.write(b"x" * 65536)
             sys.stdout.buffer.flush()
+    if mode in ("build-export", "consume-export"):
+        import subprocess
+        nix = "/run/current-system/sw/bin/nix"
+        write_url = os.environ["SOWER_WORK_STORE_WRITE_URL"]
+        assert not any(os.path.exists("/sys/class/net/" + interface + "/device")
+                       for interface in os.listdir("/sys/class/net"))
+        declared, expected = sys.argv[2:4]
+        subprocess.run(["/run/current-system/sw/bin/nix-store", "--realise", declared], check=True,
+                       stdout=subprocess.DEVNULL)
+        if mode == "build-export":
+            assert open(declared).read() == expected
+            name = sys.argv[4] if len(sys.argv) > 4 else "sower-vm-output"
+            expression = (
+                "let input = builtins.storePath " + json.dumps(declared) + "; "
+                'shell = builtins.storePath "${pkgs.bash}"; '
+                'tools = builtins.storePath "${pkgs.coreutils}"; in builtins.derivation { '
+                "name = " + json.dumps(name) + '; system = "x86_64-linux"; '
+                'builder = shell + "/bin/bash"; input = input; tools = tools; '
+                'args = [ "-c" "$tools/bin/mkdir $out; '
+                '$tools/bin/cat $input > $out/value; '
+                '$tools/bin/ln --symbolic $input $out/input; exit $?" ]; }'
+            )
+            output = subprocess.check_output(
+                [nix, "build", "--impure", "--no-link", "--print-out-paths", "--expr", expression]
+            ).decode().strip()
+            assert open(output + "/value").read() == expected
+            subprocess.run([nix, "copy", "--to", write_url, output], check=True)
+            sys.stdout.write("exported:" + output)
+            sys.stdout.flush()
+            if len(sys.argv) > 5:
+                if sys.argv[5] == "wait":
+                    time.sleep(600)
+                else:
+                    sys.exit(int(sys.argv[5]))
+        else:
+            assert open(declared + "/value").read() == expected
+            assert open(os.path.realpath(declared + "/input")).read() == expected
+            sys.stdout.write("consumed:" + declared)
+    if mode == "stall-upload":
+        import socket
+        connection = socket.create_connection(("127.0.0.1", 5002))
+        connection.sendall(
+            ("PUT /nar/" + "0" * 52 + ".nar HTTP/1.1\r\nHost: local\r\n"
+             "Content-Length: 33554432\r\n\r\n").encode()
+        )
+        connection.sendall(b"x" * 16777216)
+        sys.stdout.write("upload-stalled")
+        sys.stdout.flush()
+        while True:
+            time.sleep(1)
+            connection.sendall(b"x" * 65536)
   '';
   custom = flake.lib.mkImage {
     inherit system;
@@ -522,6 +573,158 @@ let
     :ok = Supervisor.stop(supervisor, :normal, :infinity)
     clean.()
     :ets.delete(managed_ids)
+    alias Garden.WorkStore
+    {:ok, _} = Application.ensure_all_started(:bandit)
+    input_store = "/tmp/image-input-store"
+    upstream = "/tmp/image-upstream"
+    work_root = "/tmp/image-work-store"
+    fixture = "/tmp/image-declared-input"
+    expected = "isolated VM build input " <> Integer.to_string(System.unique_integer([:positive]))
+    File.write!(fixture, expected)
+    nix = fn arguments ->
+      case System.cmd("${pkgs.nix}/bin/nix",
+        ["--extra-experimental-features", "nix-command" | arguments], stderr_to_stdout: true) do
+        {text, 0} -> String.trim(text)
+        {text, code} -> raise "Nix failed (#{code}): #{text}"
+      end
+    end
+    input = nix.(["store", "add-file", "--store", input_store, fixture])
+    nix.(["copy", "--from", input_store, "--to", "file://" <> upstream, input])
+    ensure.(not File.exists?(input))
+    store_opts = [root: work_root, nix: "${pkgs.nix}/bin/nix",
+      output_bytes: 512 * 1024 * 1024,
+      cache_bytes: 256 * 1024 * 1024, staging_bytes: 512 * 1024 * 1024,
+      transfer_bytes: 256 * 1024 * 1024]
+    {:ok, store} = WorkStore.start_link(store_opts)
+    :ok = WorkStore.open_run(store, "image-work", [input], ["file://" <> upstream], 256 * 1024 * 1024)
+    {:error, _} = WorkStore.open_run(store, "too-large", [], [], 513 * 1024 * 1024)
+    {:ok, work_supervisor} = VM.Supervisor.start_link(
+      name: Garden.ImageWorkSupervisor, manager: Garden.ImageWorkManager,
+      ledger: Garden.ImageWorkLedger, execution_supervisor: Garden.ImageWorkExecutions,
+      budgets: budgets, result_limit: 8)
+    work_options = opts ++ [owner: self(), image: custom, work_store: store,
+      run_sid: "image-work", input_roots: [input], upstreams: ["file://" <> upstream],
+      output_budget: 256 * 1024 * 1024, memory: 768 * 1024 * 1024, on_output: output]
+    {:ok, build_id} = Manager.start(
+      work_options ++ [command: command.("build-export", [input, expected])], Garden.ImageWorkManager)
+    {:ok, built} = Manager.await(build_id, Garden.ImageWorkManager)
+    build_log = collect.(collect, %{})
+    if built.code != 0, do: raise("VM build/export failed: #{inspect(built)} #{inspect(build_log)}")
+    {:ok, build_status} = Manager.status(build_id, Garden.ImageWorkManager)
+    ensure.(build_status.cleanup == :ok and not File.exists?(build_status.directory))
+    os_gone.(build_status.os_pid)
+    retired.(build_status.execution)
+    "exported:" <> produced = Map.fetch!(build_log, :stdout)
+    {:ok, exported} = WorkStore.paths(store, "image-work")
+    ensure.(produced in exported and input in exported)
+    ensure.(not File.exists?(produced) and not File.exists?(input))
+    {_text, absent_status} = System.cmd("${pkgs.nix}/bin/nix",
+      ["--extra-experimental-features", "nix-command", "path-info", "--store", "daemon", produced],
+      stderr_to_stdout: true)
+    ensure.(absent_status != 0)
+    ensure.(File.read!(Path.join(work_root, produced <> "/value")) == expected)
+    :ok = WorkStore.gc(store)
+    ensure.(File.exists?(Path.join(work_root, produced)))
+    File.rename!(upstream, upstream <> "-offline")
+    GenServer.stop(store)
+    {:ok, store} = WorkStore.start_link(store_opts)
+    {:ok, persisted} = WorkStore.paths(store, "image-work")
+    ensure.(produced in persisted)
+    work_options = Keyword.put(work_options, :work_store, store)
+    {:ok, consume_id} = Manager.start(
+      work_options ++ [command: command.("consume-export", [produced, expected])], Garden.ImageWorkManager)
+    {:ok, consumed} = Manager.await(consume_id, Garden.ImageWorkManager)
+    ensure.(consumed.code == 0)
+    {:ok, consume_status} = Manager.status(consume_id, Garden.ImageWorkManager)
+    ensure.(consume_status.cleanup == :ok and not File.exists?(consume_status.directory))
+    os_gone.(consume_status.os_pid)
+    retired.(consume_status.execution)
+    ensure.(collect.(collect, %{})[:stdout] == "consumed:" <> produced)
+    ensure.(consume_status.directory != build_status.directory)
+    committed_path = fn committed_path, id, name ->
+      receive do
+        {:vm_paths, ^id, paths} ->
+          case Enum.find(paths, &String.ends_with?(&1, "-" <> name)) do
+            nil -> committed_path.(committed_path, id, name)
+            path -> path
+          end
+      after 30_000 -> raise "missing execution-correlated committed paths"
+      end
+    end
+    {:ok, failed_id} = Manager.start(work_options ++ [
+      command: command.("build-export", [input, expected, "sower-vm-failed", "23"])
+    ], Garden.ImageWorkManager)
+    {:ok, failed} = Manager.await(failed_id, Garden.ImageWorkManager)
+    ensure.(failed.code == 23)
+    failed_path = committed_path.(committed_path, failed_id, "sower-vm-failed")
+    {:ok, cancelled_id} = Manager.start(work_options ++ [
+      command: command.("build-export", [input, expected, "sower-vm-cancelled", "wait"])
+    ], Garden.ImageWorkManager)
+    cancelled_path = committed_path.(committed_path, cancelled_id, "sower-vm-cancelled")
+    :ok = Manager.cancel(cancelled_id, Garden.ImageWorkManager)
+    {:error, :cancelled} = Manager.await(cancelled_id, Garden.ImageWorkManager)
+    :ok = WorkStore.gc(store)
+    {:ok, committed} = WorkStore.paths(store, "image-work")
+    ensure.(failed_path in committed and cancelled_path in committed)
+    ensure.(File.read!(Path.join(work_root, failed_path <> "/value")) == expected)
+    ensure.(File.read!(Path.join(work_root, cancelled_path <> "/value")) == expected)
+    for id <- [failed_id, cancelled_id] do
+      {:ok, status} = Manager.status(id, Garden.ImageWorkManager)
+      ensure.(status.cleanup == :ok and not File.exists?(status.directory))
+      os_gone.(status.os_pid)
+      retired.(status.execution)
+    end
+    upload_started = fn upload_started, token, bytes ->
+      receive do
+        {^token, :stdout, chunk} ->
+          bytes = bytes <> chunk
+          if bytes == "upload-stalled", do: :ok, else: upload_started.(upload_started, token, bytes)
+      after 30_000 -> raise "large upload did not start"
+      end
+    end
+    for action <- [:deadline, :cancel] do
+      token = make_ref()
+      callback = fn stream, bytes -> send(parent, {token, stream, bytes}) end
+      {:ok, upload_id} = Manager.start(Keyword.merge(work_options,
+        command: command.("stall-upload", []), on_output: callback,
+        deadline_ms: if(action == :deadline, do: 15_000, else: 90_000)
+      ), Garden.ImageWorkManager)
+      if action == :cancel do
+        :ok = upload_started.(upload_started, token, "")
+        :ok = Manager.cancel(upload_id, Garden.ImageWorkManager)
+      end
+      expected_error = if action == :deadline, do: :timeout, else: :cancelled
+      {:error, ^expected_error} = Manager.await(upload_id, Garden.ImageWorkManager)
+      if action == :deadline, do: upload_started.(upload_started, token, "")
+      {:ok, status} = Manager.status(upload_id, Garden.ImageWorkManager)
+      ensure.(status.cleanup == :ok and not File.exists?(status.directory))
+      ensure.(not File.exists?(status.vmm_directory))
+      os_gone.(status.os_pid)
+      retired.(status.execution)
+      ensure.(File.ls!(Path.join(work_root, "staging")) == [])
+      {:ok, unchanged} = WorkStore.paths(store, "image-work")
+      ensure.(unchanged == committed)
+      receive do
+        {:vm_paths, ^upload_id, _} -> raise "partial upload published paths"
+      after 0 -> :ok end
+    end
+    :ok = WorkStore.open_run(store, "independent-root", [produced], [], 128 * 1024 * 1024)
+    :ok = WorkStore.close_run(store, "image-work")
+    :ok = WorkStore.close_run(store, "image-work")
+    :ok = WorkStore.gc(store)
+    ensure.(File.exists?(Path.join(work_root, produced)))
+    :ok = WorkStore.close_run(store, "independent-root")
+    :ok = Manager.shutdown(Garden.ImageWorkManager)
+    :ok = Supervisor.stop(work_supervisor, :normal, :infinity)
+    GenServer.stop(store)
+    File.rm_rf!(work_root)
+    ensure.(File.exists?(custom.root) and File.exists?(stock.root))
+    ensure.(not File.exists?(produced))
+    File.rm_rf!(input_store)
+    File.rm_rf!(upstream <> "-offline")
+    File.rm!(fixture)
+    clean.()
+    IO.puts("real no-NIC work transfer passed: #{input} -> #{produced}; fresh VM consumed persisted closure")
     IO.puts("real image scenarios passed; ready_ms=#{result.ready_ms} elapsed_ms=#{result.elapsed_ms}")
   '';
   runner = pkgs.writeShellApplication {
@@ -533,6 +736,7 @@ let
       pkgs.coreutils
       pkgs.findutils
       pkgs.procps
+      pkgs.nix
     ];
     text = ''
       args=()
