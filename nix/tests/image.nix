@@ -297,6 +297,9 @@ let
     b_status = managed_wait.(b_id)
     ensure.(a_status.directory != b_status.directory and a_status.os_pid != b_status.os_pid)
     ensure.(a_status.execution_id == a_id and b_status.execution_id == b_id)
+    {:ok, listed} = Manager.list()
+    running_ids = for status <- listed, status.phase == :running, do: status.execution_id
+    ensure.(running_ids == [a_id, b_id])
     a_socket_directory = CloudHypervisor.Process.status(a_status.vmm).directory
     b_socket_directory = CloudHypervisor.Process.status(b_status.vmm).directory
     ensure.(a_socket_directory != b_socket_directory)

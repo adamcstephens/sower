@@ -13,6 +13,7 @@ defmodule Garden.VM.Manager do
     do: GenServer.start_link(__MODULE__, options, Keyword.take(options, [:name]))
 
   def start(options, server \\ __MODULE__), do: call(server, {:start, options})
+  def list(server \\ __MODULE__), do: call(server, :list)
   def status(id, server \\ __MODULE__), do: call(server, {:status, id})
   def cancel(id, server \\ __MODULE__), do: call(server, {:cancel, id})
   def await(id, server \\ __MODULE__), do: call(server, {:await, id})

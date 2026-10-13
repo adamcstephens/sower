@@ -165,6 +165,15 @@ defmodule Garden.VM.Ledger do
     end
   end
 
+  def handle_call(:list, _from, %__MODULE__{} = state) do
+    statuses =
+      state.entries
+      |> Enum.map(fn {_id, entry} -> entry.status end)
+      |> Enum.sort_by(& &1.execution_id)
+
+    {:reply, {:ok, statuses}, state}
+  end
+
   def handle_call({:status, id}, _from, %__MODULE__{} = state) do
     result =
       case Map.fetch(state.entries, id) do

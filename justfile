@@ -177,7 +177,7 @@ stop-server:
 start-iex: bootstrap start-server-iex
 
 start-all:
-    nix shell ".#activator" -c iex --sname dev1 -S mix phx.server
+    iex --sname dev1 -S mix phx.server
 
 start-garden:
     nix shell ".#activator" -c iex --sname garden1 --dot-iex ./.iex-garden.exs -S mix run --no-start

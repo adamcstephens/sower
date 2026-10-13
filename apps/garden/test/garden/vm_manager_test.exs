@@ -70,6 +70,31 @@ defmodule Garden.VM.ManagerTest do
      options: options}
   end
 
+  test "listing includes active executions and retained records after controller retirement",
+       context do
+    assert {:ok, []} = Manager.list(context.names.manager)
+    {:ok, first} = Manager.start(context.options, context.names.manager)
+    first_status = ready(first, context.names.manager)
+    {:ok, second} = Manager.start(context.options, context.names.manager)
+    second_status = ready(second, context.names.manager)
+    assert {:ok, [^first_status, ^second_status]} = Manager.list(context.names.manager)
+
+    cancel_clean(first, context.names.manager)
+    eventually(fn -> not Process.alive?(first_status.execution) end)
+    :ok = Manager.cancel(second, context.names.manager)
+
+    assert {:error, {:cleanup_unconfirmed, _, _, _}} =
+             Manager.await(second, context.names.manager)
+
+    eventually(fn -> not Process.alive?(second_status.execution) end)
+
+    assert {:ok,
+            [
+              %VM.Status{execution_id: ^first, phase: :finished, cleanup: :ok},
+              %VM.Status{execution_id: ^second, phase: :retained}
+            ]} = Manager.list(context.names.manager)
+  end
+
   test "atomic concurrent admission distinguishes oversized and exhausted requests", context do
     assert {:error, {:request_exceeds_capacity, :cpus}} =
              Manager.start(Keyword.put(context.options, :cpus, 3), context.names.manager)

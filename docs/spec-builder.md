@@ -249,6 +249,9 @@ not the complete future builder services.
 `Garden.VM.Manager.start/1` admits a VM command with an explicit
 process owner and returns an execution ID. `status/1`, `cancel/1`, and
 `await/1` use that ID independently of the temporary controller lifetime.
+`list/0` returns `{:ok, statuses}` from the ledger, ordered by execution ID.
+It includes active executions and retained terminal records even after their
+controllers exit. Filter statuses by `phase == :running` for running VMs.
 Output callbacks retain the local launcher's `(stream, bytes)` interface;
 callers capture their job/step identity in the callback.
 
