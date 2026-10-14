@@ -23,7 +23,7 @@ defmodule Garden.VM.Supervisor do
     executions = Keyword.get(options, :execution_supervisor, Garden.VM.ExecutionSupervisor)
 
     ledger_options =
-      Keyword.take(options, [:budgets, :result_limit, :shutdown_ms]) ++
+      Keyword.take(options, [:budgets, :result_limit, :shutdown_ms, :activator_socket]) ++
         [name: ledger, parent: self()]
 
     children = [

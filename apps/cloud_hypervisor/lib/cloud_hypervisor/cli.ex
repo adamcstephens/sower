@@ -12,7 +12,7 @@ defmodule CloudHypervisor.CLI do
   """
 
   alias CloudHypervisor.{Config, Launch}
-  alias CloudHypervisor.Config.{CPUs, Disk, LandlockRule, Output, RNG, Vsock}
+  alias CloudHypervisor.Config.{CPUs, Disk, LandlockRule, Net, Output, RNG, Vsock}
 
   def command(%Launch{} = launch) do
     args =
@@ -42,6 +42,7 @@ defmodule CloudHypervisor.CLI do
        option("--cpus", cpus(config.cpus)) ++
        option("--memory", memory(config.memory)) ++
        repeated("--disk", Enum.map(config.disks, &disk/1)) ++
+       repeated("--net", Enum.map(config.net, &net/1)) ++
        option("--serial", output(config.serial)) ++
        option("--console", output(config.console)) ++
        option("--rng", rng(config.rng)) ++
@@ -63,6 +64,8 @@ defmodule CloudHypervisor.CLI do
       disk.path <>
       readonly(disk.readonly) <> image_type(disk.image_type)
   end
+
+  defp net(%Net{} = net), do: "tap=#{net.tap},mac=#{net.mac}"
 
   defp readonly(nil), do: ""
   defp readonly(true), do: ",readonly=on"

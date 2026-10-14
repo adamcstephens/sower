@@ -101,6 +101,12 @@ defmodule Garden.VM.Execution do
 
   defp validate(options) do
     cond do
+      Keyword.get(options, :network, :none) not in [:none, :full] ->
+        {:error, {:invalid_option, :network}}
+
+      Keyword.get(options, :network, :none) == :full and options[:image].network_config != :static ->
+        {:error, :unsupported_network_config}
+
       not is_pid(options[:owner]) ->
         {:error, {:invalid_option, :owner}}
 

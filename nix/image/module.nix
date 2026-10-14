@@ -83,6 +83,7 @@ in
     firewall.enable = lib.mkForce false;
     useDHCP = lib.mkForce false;
     useNetworkd = lib.mkForce false;
+    resolvconf.enable = lib.mkForce false;
     networkmanager.enable = lib.mkForce false;
     wireless.enable = lib.mkForce false;
   };
@@ -118,8 +119,7 @@ in
     enable = lib.mkForce true;
     channel.enable = false;
     settings = {
-      substituters = lib.mkForce [ ];
-      trusted-public-keys = lib.mkForce [ ];
+      require-sigs = lib.mkForce true;
       experimental-features = [
         "nix-command"
         "flakes"
@@ -163,14 +163,74 @@ in
       ${config.nix.package}/bin/nix-store --load-db < "$registration"
     '';
   };
+  systemd.services.sower-network = lib.mkForce {
+    enable = true;
+    requires = [ "systemd-udev-trigger.service" ];
+    after = [ "systemd-udev-trigger.service" ];
+    before = [ "sower-guest.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      address= gateway= dns= mac=
+      network_requested=false
+      for parameter in $(cat /proc/cmdline); do
+        case "$parameter" in
+          sower.network.address=*|sower.network.gateway=*|sower.network.dns=*|sower.network.mac=*)
+            network_requested=true ;;
+        esac
+        case "$parameter" in
+          sower.network.address=*) address="''${parameter#sower.network.address=}" ;;
+          sower.network.gateway=*) gateway="''${parameter#sower.network.gateway=}" ;;
+          sower.network.dns=*) dns="''${parameter#sower.network.dns=}" ;;
+          sower.network.mac=*) mac="''${parameter#sower.network.mac=}" ;;
+        esac
+      done
+      if [ "$network_requested" = false ]; then
+        exit 0
+      fi
+      ipv4() {
+        local octet
+        local -a octets
+        [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+        IFS=. read -r -a octets <<< "$1"
+        for octet in "''${octets[@]}"; do
+          [ "''${#octet}" -le 3 ] && [ "$((10#$octet))" -le 255 ] || return 1
+        done
+      }
+      [[ "$address" == */30 ]]
+      ipv4 "''${address%/30}"
+      ipv4 "$gateway"
+      ipv4 "$dns"
+      [[ "$mac" =~ ^([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}$ ]]
+      # Wait for enumeration and interface renames before selecting by MAC.
+      ${config.systemd.package}/bin/udevadm settle --timeout=30
+      interface=
+      for device in /sys/class/net/*; do
+        read -r device_mac < "$device/address"
+        if [ "$device_mac" = "''${mac,,}" ]; then
+          interface="''${device##*/}"
+          break
+        fi
+      done
+      test -n "$interface"
+      ${pkgs.iproute2}/bin/ip link set dev "$interface" up
+      ${pkgs.iproute2}/bin/ip address replace "$address" dev "$interface"
+      ${pkgs.iproute2}/bin/ip route replace default via "$gateway" dev "$interface"
+      printf 'nameserver %s\n' "$dns" > /etc/resolv.conf
+    '';
+  };
   systemd.services.sower-guest = lib.mkForce {
     enable = true;
     requires = [
       "sower-register.service"
+      "sower-network.service"
       "multi-user.target"
     ];
     after = [
       "sower-register.service"
+      "sower-network.service"
       "multi-user.target"
     ];
     serviceConfig = {

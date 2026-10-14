@@ -36,6 +36,82 @@ let
         time.sleep(float(sys.argv[3]))
         assert open("/var/image-private").read() == sys.argv[2]
         sys.stdout.write("isolated:" + sys.argv[2])
+    if mode == "network-peer":
+        import select, socket, subprocess
+        addresses = json.loads(subprocess.check_output(["${pkgs.iproute2}/bin/ip", "--json", "address"]))
+        address = next(a["local"] for i in addresses if i["ifname"] != "lo" for a in i["addr_info"] if a["family"] == "inet")
+        datagram = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        datagram.bind(("0.0.0.0", 18080))
+        listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        listener.bind(("0.0.0.0", 443))
+        listener.listen()
+        print("peer-address=" + address, flush=True)
+        ready, _, _ = select.select([datagram, listener], [], [], 60)
+        assert not ready, "peer isolation breached: protected listener received traffic"
+        print("peer-deliveries=0", flush=True)
+    if mode == "network-attack":
+        import socket, struct, subprocess
+        socket.getaddrinfo("cache.nixos.org", 443, type=socket.SOCK_STREAM)
+        [route] = json.loads(subprocess.check_output(["${pkgs.iproute2}/bin/ip", "--json", "route", "show", "default"]))
+        interface = route["dev"]
+        gateway = route["gateway"]
+        neighbors = json.loads(subprocess.check_output(["${pkgs.iproute2}/bin/ip", "--json", "neigh", "show", "dev", interface]))
+        gateway_mac = bytes.fromhex(next(n["lladdr"] for n in neighbors if n["dst"] == gateway).replace(":", ""))
+        own_mac = bytes.fromhex(open("/sys/class/net/" + interface + "/address").read().strip().replace(":", ""))
+        subprocess.run(["${pkgs.iproute2}/bin/ip", "neigh", "change", gateway, "dev", interface, "nud", "probe"], check=True)
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            neighbors = json.loads(subprocess.check_output(["${pkgs.iproute2}/bin/ip", "--json", "neigh", "show", "dev", interface]))
+            if any(n["dst"] == gateway and "REACHABLE" in n["state"] for n in neighbors):
+                break
+            if any(n["dst"] == gateway and "FAILED" in n["state"] for n in neighbors):
+                raise AssertionError("gateway unicast ARP probe failed")
+            time.sleep(0.05)
+        else:
+            raise AssertionError("gateway unicast ARP probe did not complete")
+        for target in sys.argv[2:]:
+            sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sender.sendto(b"sower-isolation-probe", (target, 18080))
+            sender.close()
+            try:
+                connection = socket.create_connection((target, 443), timeout=2)
+            except OSError:
+                pass
+            else:
+                connection.close()
+                raise AssertionError("protected TCP connection succeeded: " + target)
+        try:
+            connection = socket.create_connection(("8.8.4.4", 18080), timeout=2)
+        except OSError:
+            pass
+        else:
+            connection.close()
+            raise AssertionError("DNAT widened the authorized transport port")
+        # An otherwise public destination must not be reachable using a forged source.
+        packet = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
+        payload = b"sower-source-spoof"
+        header = struct.pack("!BBHHHBBH4s4s", 0x45, 0, 28 + len(payload), 0, 0, 64, 17, 0,
+                             socket.inet_aton("8.8.8.8"), socket.inet_aton("1.1.1.1"))
+        packet.sendto(header + struct.pack("!HHHH", 18080, 53, 8 + len(payload), 0) + payload,
+                      ("1.1.1.1", 53))
+        packet.close()
+        # AF_PACKET bypasses the guest's IPv6 stack (which may be absent).
+        source = socket.inet_pton(socket.AF_INET6, "2001:4860:4860::8844")
+        destination = socket.inet_pton(socket.AF_INET6, "2001:4860:4860::8888")
+        udp = struct.pack("!HHHH", 18080, 18080, 8 + len(payload), 0) + payload
+        pseudo = source + destination + struct.pack("!I3xB", len(udp), 17) + udp
+        if len(pseudo) % 2:
+            pseudo += b"\0"
+        checksum = sum(struct.unpack("!%dH" % (len(pseudo) // 2), pseudo))
+        while checksum >> 16:
+            checksum = (checksum & 65535) + (checksum >> 16)
+        udp = udp[:6] + struct.pack("!H", (~checksum & 65535) or 65535) + udp[8:]
+        ethernet = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
+        ethernet.bind((interface, 0))
+        ethernet.send(gateway_mac + own_mac + b"\x86\xdd" +
+                      struct.pack("!IHBB", 6 << 28, len(udp), 17, 64) + source + destination + udp)
+        ethernet.close()
+        print("protected TCP/UDP, source spoof, and IPv6 probes sent", flush=True)
     if mode == "signal":
         import signal
         os.kill(os.getpid(), signal.SIGTERM)
@@ -48,7 +124,11 @@ let
     inherit system;
     modules = [
       ({ ... }: {
-        environment.systemPackages = [ pkgs.python3 ];
+        environment.systemPackages = [
+          pkgs.python3
+          pkgs.curl
+          pkgs.iproute2
+        ];
         environment.etc."sower/probe.py".source = probe;
         environment.etc."sower/image-marker".text = "sower-custom-image\n";
         systemd.services.image-ready = {
@@ -524,6 +604,169 @@ let
     :ets.delete(managed_ids)
     IO.puts("real image scenarios passed; ready_ms=#{result.ready_ms} elapsed_ms=#{result.elapsed_ms}")
   '';
+  networkScenario = pkgs.writeText "image-network-scenario.exs" ''
+    {:ok, _} = Application.ensure_all_started(:cloud_hypervisor)
+    alias Garden.{Image, VM}
+    alias Garden.VM.Manager
+    {:ok, image} = Image.load("${custom}")
+    root = System.get_env("SOWER_NETWORK_ROOT") || "/var/lib/sower-garden/image-network-scenarios"
+    File.mkdir_p!(root)
+    parent = self()
+    output = fn stream, bytes -> send(parent, {stream, bytes}) end
+    {:ok, supervisor} = VM.Supervisor.start_link(
+      budgets: [vms: 2, cpus: 2, memory: 5 * 1024 * 1024 * 1024,
+        scratch_bytes: 8 * 1024 * 1024 * 1024], result_limit: 20)
+    options = [image: image, owner: self(), network: :full, resource_directory: root,
+      cpus: 1, memory: 2 * 1024 * 1024 * 1024, scratch_bytes: 4 * 1024 * 1024 * 1024,
+      deadline_ms: 600_000, on_output: output]
+    ensure = fn condition -> if not condition, do: raise("network lifecycle assertion failed") end
+    collect = fn collect, acc ->
+      receive do
+        {:stdout, bytes} -> collect.(collect, acc <> bytes)
+        {:stderr, bytes} -> IO.binwrite(:stderr, bytes); collect.(collect, acc)
+      after 0 -> acc end
+    end
+    run = fn command ->
+      {:ok, id} = Manager.start(Keyword.put(options, :command, command))
+      {:ok, result} = Manager.await(id)
+      stdout = collect.(collect, "")
+      IO.binwrite(stdout)
+      ensure.(result.code == 0)
+      IO.puts("managed-exit=#{result.code}")
+      {:ok, status} = Manager.status(id)
+      ensure.(status.phase == :finished and status.cleanup == :ok)
+      stdout
+    end
+    blocked = %VM.Command{path: "/run/current-system/sw/bin/bash",
+      args: ["-c", "echo network-live; exec curl --silent --show-error --connect-timeout 300 https://93.184.216.34"],
+      env: %{"PATH" => "/run/current-system/sw/bin"}}
+    live = fn overrides ->
+      {:ok, id} = Manager.start(Keyword.merge(Keyword.put(options, :command, blocked), overrides))
+      receive do
+        {:stdout, bytes} -> ensure.(bytes == "network-live\n")
+        after 90_000 -> raise "network lifecycle guest did not start"
+      end
+      {:ok, status} = Manager.status(id)
+      native = File.read!("/proc/#{status.os_pid}/status")
+      [_, uid] = Regex.run(~r/^Uid:\s+(\d+)/m, native)
+      [_, capabilities] = Regex.run(~r/^CapEff:\s+([0-9a-f]+)/m, native)
+      ensure.(uid != "0" and String.to_integer(capabilities, 16) == 0)
+      id
+    end
+    if System.get_env("SOWER_NETWORK_EXPECT_FAILURE") do
+      {:ok, id} = Manager.start(Keyword.put(options, :command, blocked))
+      {:error, {:cleanup_unconfirmed, _, _, _}} = Manager.await(id)
+      {:ok, status} = Manager.status(id)
+      ensure.(status.phase == :retained and is_nil(status.vmm) and is_nil(status.os_pid))
+      IO.puts("interrupted provision retained without launching a VMM")
+      System.halt(0)
+    end
+    if hold = System.get_env("SOWER_NETWORK_HOLD") do
+      id = live.([])
+      {:ok, status} = Manager.status(id)
+      File.write!(hold, Jason.encode!(%{beam: System.pid(), vmm: status.os_pid}))
+      Process.sleep(:infinity)
+    end
+    run.(%VM.Command{path: "/run/current-system/sw/bin/bash", args: ["-o", "errexit", "-o", "nounset", "-c", """
+      curl --fail --location --max-time 120 https://github.com/NixOS/nix-installer/releases/download/2.35.2/nix-installer-x86_64-linux --output /tmp/nix-installer
+      test "$(head --bytes 4 /tmp/nix-installer | od --address-radix=n --format=x1 | tr --delete ' \\n')" = 7f454c46
+      nix config show --json | python3 -c 'import json,sys; c=json.load(sys.stdin); assert "https://cache.nixos.org/" in [v.rstrip("/") + "/" for v in c["substituters"]["value"]]; assert "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=" in c["trusted-public-keys"]["value"]; assert c["require-sigs"]["value"] is True; print("signed-public-cache=verified")'
+      printf 'release-bytes='
+      wc --bytes < /tmp/nix-installer
+      """], env: %{"PATH" => "/run/current-system/sw/bin"}})
+    cowsay_ref = System.get_env("SOWER_COWSAY_REF") ||
+      "github:nixos/nixpkgs/44a91898084f46797b5fac650c7e8c9ac38c43d4#cowsay"
+    cowsay = run.(%VM.Command{path: "/run/current-system/sw/bin/nix",
+      args: ["run", cowsay_ref,
+        "--", "hello from sower"], env: %{"PATH" => "/run/current-system/sw/bin"}})
+    ensure.(cowsay =~ "< hello from sower >")
+    {:ok, peer} = Manager.start(Keyword.merge(options,
+      command: %VM.Command{path: "${pkgs.python3}/bin/python3",
+        args: ["/etc/sower/probe.py", "network-peer"]},
+      on_output: fn stream, bytes -> send(parent, {:peer, stream, bytes}) end))
+    peer_address = receive do
+      {:peer, :stdout, bytes} ->
+        ["peer-address=" <> address] = String.split(bytes, "\n", trim: true)
+        String.trim(address)
+      after 90_000 -> raise "peer listener did not become ready"
+    end
+    attack = run.(%VM.Command{path: "${pkgs.python3}/bin/python3",
+      args: ["/etc/sower/probe.py", "network-attack",
+        "127.0.0.1", "192.168.50.1", "169.254.169.254", "93.184.216.34", peer_address]})
+    ensure.(attack =~ "probes sent")
+    {:ok, peer_result} = Manager.await(peer)
+    ensure.(peer_result.code == 0)
+    receive do
+      {:peer, :stdout, bytes} -> ensure.(bytes == "peer-deliveries=0\n")
+      after 5_000 -> raise "missing peer delivery observation"
+    end
+    cancelled = live.([])
+    :ok = Manager.cancel(cancelled)
+    {:error, :cancelled} = Manager.await(cancelled)
+    timed = live.(deadline_ms: 30_000)
+    {:error, :timeout} = Manager.await(timed)
+    owner = spawn(fn -> receive do :stop -> :ok end end)
+    orphan = live.(owner: owner)
+    Process.exit(owner, :kill)
+    {:error, :owner_down} = Manager.await(orphan)
+    crashed = live.([])
+    {:ok, crashed_status} = Manager.status(crashed)
+    {_, 0} = System.cmd("kill", ["--signal", "KILL", Integer.to_string(crashed_status.os_pid)])
+    {:error, _} = Manager.await(crashed)
+    retired = live.([])
+    {:ok, retired_status} = Manager.status(retired)
+    Process.exit(retired_status.execution, :kill)
+    {:error, :owner_down} = Manager.await(retired)
+    {:ok, failed_boot} = Manager.start(Keyword.merge(options,
+      command: blocked, hypervisor: "/nonexistent/sower-hypervisor"))
+    {:error, _} = Manager.await(failed_boot)
+    Enum.each([peer, cancelled, timed, orphan, crashed, retired, failed_boot], fn id ->
+      {:ok, status} = Manager.status(id)
+      ensure.(status.phase == :finished and status.cleanup == :ok)
+    end)
+    :ok = Manager.shutdown()
+    :ok = Supervisor.stop(supervisor, :normal, :infinity)
+    ensure.(File.ls!(root) == [])
+    IO.puts("real network scenarios passed")
+  '';
+  networkRunner = pkgs.writeShellApplication {
+    name = "image-network-scenario";
+    runtimeInputs = [
+      beamPackages.elixir
+      pkgs.cloud-hypervisor
+      pkgs.e2fsprogs
+      pkgs.coreutils
+      pkgs.findutils
+    ];
+    text = ''
+      args=()
+      while IFS= read -r directory; do
+        args+=(-pa "$directory")
+      done < <(find ${garden} -type d -name ebin)
+      exec elixir "''${args[@]}" ${networkScenario}
+    '';
+  };
+  protectedListener = pkgs.writeText "protected-listener.py" ''
+    import selectors, socket
+    selector = selectors.DefaultSelector()
+    for kind, port in ((socket.SOCK_STREAM, 443), (socket.SOCK_STREAM, 18080), (socket.SOCK_DGRAM, 18080)):
+        listener = socket.socket(socket.AF_INET, kind)
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener.bind(("0.0.0.0", port))
+        if kind == socket.SOCK_STREAM:
+            listener.listen()
+        selector.register(listener, selectors.EVENT_READ, kind)
+    open("/tmp/protected-deliveries", "w").close()
+    while True:
+        for key, _ in selector.select():
+            if key.data == socket.SOCK_STREAM:
+                connection, source = key.fileobj.accept()
+                connection.close()
+            else:
+                _, source = key.fileobj.recvfrom(4096)
+            with open("/tmp/protected-deliveries", "a") as log:
+                log.write(repr(source) + "\n")
+  '';
   runner = pkgs.writeShellApplication {
     name = "image-scenario";
     runtimeInputs = [
@@ -545,27 +788,150 @@ let
 in
 pkgs.testers.runNixOSTest {
   name = "sower-image";
-  nodes.machine = { ... }: {
-    boot.kernelModules = [
-      "kvm-intel"
-      "kvm-amd"
+  nodes.machine =
+    { config, lib, ... }:
+    let
+      cleanup =
+        instance:
+        "+${lib.getExe config.services.sower.activator.package} activator --network-policy ${config.services.sower.activator.network.policyFile} --network-cleanup --network-instance ${instance}";
+    in
+    {
+      imports = [ ../nixos/module.nix ];
+      services.sower.activator = {
+        enable = true;
+        package = flake.packages.${system}.activator;
+        network = {
+          enable = true;
+          dnsResolver = "1.1.1.1";
+          protectedDestinations = [ "93.184.216.34/32" ];
+          gardenUnits = [
+            "sower-garden.service"
+            "sower-network-peer.service"
+          ];
+        };
+      };
+      environment.etc."sower-network-test-policy.json".source =
+        config.services.sower.activator.network.policyFile;
+      services.sower.garden = {
+        enable = true;
+        package = garden;
+      };
+      systemd.services.sower-garden = {
+        wantedBy = lib.mkForce [ ];
+        environment.SOWER_NETWORK_ROOT = "/var/lib/sower-garden/image-network-scenarios";
+        serviceConfig = {
+          Type = lib.mkForce "oneshot";
+          WatchdogSec = lib.mkForce 0;
+          Restart = lib.mkForce "no";
+          TimeoutStartSec = 1800;
+          ExecStart = lib.mkForce "${networkRunner}/bin/image-network-scenario";
+          StandardOutput = "journal";
+          StandardError = "journal";
+        };
+      };
+      systemd.services.sower-network-peer = {
+        after = [ "sower-activator.socket" ];
+        inherit (config.systemd.services.sower-garden) path;
+        environment = builtins.removeAttrs config.systemd.services.sower-garden.environment [ "PATH" ] // {
+          SOWER_NETWORK_ROOT = "/var/lib/sower-garden/peer";
+          SOWER_NETWORK_HOLD = "/var/lib/sower-garden/peer-marker.json";
+        };
+        serviceConfig = config.systemd.services.sower-garden.serviceConfig // {
+          Type = "exec";
+          ExecStartPre = [ (cleanup "sower-network-peer.service") ];
+          ExecStopPost = [ (cleanup "sower-network-peer.service") ];
+          StandardOutput = "journal";
+          StandardError = "journal";
+        };
+      };
+      virtualisation.vlans = [
+        1
+        2
+      ];
+      virtualisation.restrictNetwork = false;
+      networking.interfaces.eth2.ipv4.addresses = [
+        {
+          address = "192.168.50.1";
+          prefixLength = 24;
+        }
+      ];
+      networking.interfaces.eth2.ipv4.routes = [
+        {
+          address = "93.184.216.34";
+          prefixLength = 32;
+          via = "192.168.50.2";
+        }
+        {
+          address = "169.254.169.254";
+          prefixLength = 32;
+          via = "192.168.50.2";
+        }
+      ];
+      networking.firewall.allowedTCPPorts = [
+        443
+        18080
+      ];
+      networking.firewall.allowedUDPPorts = [ 18080 ];
+      systemd.services.protected-listener = {
+        wantedBy = [ "multi-user.target" ];
+        serviceConfig.ExecStart = "${pkgs.python3}/bin/python3 ${protectedListener}";
+      };
+      boot.kernelModules = [
+        "kvm-intel"
+        "kvm-amd"
+      ];
+      boot.extraModprobeConfig = ''
+        options kvm_intel nested=1
+        options kvm_amd nested=1
+      '';
+      virtualisation.qemu.options = [
+        "-cpu host"
+        "-enable-kvm"
+      ];
+      virtualisation.memorySize = 6144;
+      virtualisation.diskSize = 16384;
+      virtualisation.cores = 4;
+      virtualisation.additionalPaths = [
+        stock
+        custom
+        garden
+      ];
+      environment.systemPackages = [
+        runner
+        networkRunner
+        pkgs.tcpdump
+        pkgs.iproute2
+        pkgs.nftables
+      ];
+    };
+  nodes.protected = { ... }: {
+    virtualisation.vlans = [
+      1
+      2
     ];
-    boot.extraModprobeConfig = ''
-      options kvm_intel nested=1
-      options kvm_amd nested=1
-    '';
-    virtualisation.qemu.options = [
-      "-cpu host"
-      "-enable-kvm"
+    networking.interfaces.eth2.ipv4.addresses = [
+      {
+        address = "192.168.50.2";
+        prefixLength = 24;
+      }
+      {
+        address = "93.184.216.34";
+        prefixLength = 32;
+      }
+      {
+        address = "169.254.169.254";
+        prefixLength = 32;
+      }
     ];
-    virtualisation.memorySize = 4096;
-    virtualisation.cores = 4;
-    virtualisation.additionalPaths = [
-      stock
-      custom
-      garden
+    networking.firewall.allowedTCPPorts = [
+      443
+      18080
     ];
-    environment.systemPackages = [ runner ];
+    networking.firewall.allowedUDPPorts = [ 18080 ];
+    systemd.services.protected-listener = {
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig.ExecStart = "${pkgs.python3}/bin/python3 ${protectedListener}";
+    };
   };
   testScript = ''
     start_all()
@@ -575,5 +941,109 @@ pkgs.testers.runNixOSTest {
     machine.succeed("test -z \"$(find /tmp/image-scenarios -mindepth 1 -print -quit)\"")
     machine.succeed("! pgrep --full '[c]loud-hypervisor'")
     machine.succeed("test -z \"$(find /tmp -maxdepth 1 -type d -name 'cloud-hypervisor-*' -print -quit)\"")
+    machine.wait_for_unit("protected-listener.service")
+    protected.wait_for_unit("protected-listener.service")
+    # Positive control establishes that the protected service is real and routed.
+    machine.succeed("${pkgs.python3}/bin/python3 -c 'import socket; socket.create_connection((\"93.184.216.34\",443),3).close()'")
+    protected.wait_until_succeeds("test -s /tmp/protected-deliveries")
+    protected.succeed(": > /tmp/protected-deliveries")
+    machine.succeed("${pkgs.python3}/bin/python3 -c 'import socket; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.sendto(b\"positive-control\",(\"192.168.50.1\",18080))'")
+    machine.wait_until_succeeds("test -s /tmp/protected-deliveries")
+    machine.succeed(": > /tmp/protected-deliveries")
+    machine.succeed("ip --oneline link show > /tmp/network-links-before")
+    import json
+    tables_before = {tuple((t["table"]["family"], t["table"]["name"])) for t in json.loads(machine.succeed("nft --json list tables"))["nftables"] if "table" in t}
+    machine.succeed("""nft 'table ip sower_test_dnat { chain test_prerouting { type nat hook prerouting priority dstnat; policy accept; iifname "swnt*" ip daddr 93.184.216.34 tcp dport 443 dnat to 1.1.1.1:443; iifname "swnt*" ip daddr 8.8.4.4 tcp dport 18080 dnat to 1.1.1.1:443; }; }'""")
+    machine.succeed("systemd-run --unit=sower-egress-observer ${pkgs.tcpdump}/bin/tcpdump --packet-buffered --interface eth0 -w /tmp/sower-egress.pcap 'src host 8.8.8.8 or (ip6 and udp port 18080) or (dst host 1.1.1.1 and tcp dst port 443)'")
+    machine.wait_until_succeeds("test -s /tmp/sower-egress.pcap", timeout=10)
+    result, output = machine.execute("systemctl start sower-garden.service", timeout=1800)
+    print(machine.succeed("journalctl --unit=sower-garden.service --no-pager"))
+    assert result == 0, output + machine.succeed("journalctl --unit=sower-garden.service --no-pager")
+    machine.succeed("test -z \"$(find /var/lib/sower-garden/image-network-scenarios -mindepth 1 -print -quit)\"")
+
+    from typing import Any
+
+    def leases() -> list[dict[str, Any]]:
+        paths = machine.succeed("find /run/sower-network -name '*.json' -print").splitlines()
+        return [json.loads(machine.succeed(f"cat {path}")) for path in paths]
+
+    machine.succeed("mkdir --parents /run/systemd/system/sower-garden.service.d; printf '%s\\n' '[Service]' 'Environment=SOWER_NETWORK_HOLD=/var/lib/sower-garden/hold.json' > /run/systemd/system/sower-garden.service.d/10-hold.conf; systemctl daemon-reload")
+    machine.succeed("systemctl start --no-block sower-garden.service sower-network-peer.service")
+    machine.wait_until_succeeds("test -s /var/lib/sower-garden/hold.json -a -s /var/lib/sower-garden/peer-marker.json", timeout=90)
+    concurrent = leases()
+    assert len(concurrent) == 2, concurrent
+    assert concurrent[0]["address"] != concurrent[1]["address"], concurrent
+    peer = next(lease for lease in concurrent if lease["instance"] == "sower-network-peer.service")
+    peer_table = "sower_network_" + peer["lease"]
+    peer_policy = json.loads(machine.succeed(f"nft --json list table inet {peer_table}"))
+    machine.wait_until_succeeds("! pgrep --full '[s]ower activator'", timeout=15)
+    machine.succeed("systemctl stop sower-garden.service")
+    assert leases() == [peer], leases()
+    machine.succeed(f"ip link show dev {peer['tap']}")
+    assert json.loads(machine.succeed(f"nft --json list table inet {peer_table}")) == peer_policy
+    retained = machine.fail("${
+      flake.packages.${system}.activator
+    }/bin/sower activator --network-policy \"$(readlink --canonicalize /etc/sower-network-test-policy.json)\" --network-cleanup --network-instance sower-network-peer.service 2>&1")
+    print(retained)
+    assert leases()[0]["phase"] == "quarantined", leases()
+    machine.succeed("systemctl stop sower-network-peer.service")
+    assert leases() == [], leases()
+    machine.succeed("rm --recursive --force /var/lib/sower-garden/image-network-scenarios/sower-vm-* /var/lib/sower-garden/peer/sower-vm-*")
+
+    machine.succeed("rm --force /var/lib/sower-garden/hold.json; printf '%s\\n' '[Service]' 'Environment=SOWER_NETWORK_EXPECT_FAILURE=1' > /run/systemd/system/sower-garden.service.d/30-interrupt.conf; systemctl daemon-reload")
+    machine.succeed("udevadm control --stop-exec-queue")
+    try:
+        machine.succeed("systemctl start --no-block sower-garden.service")
+        machine.wait_until_succeeds("test -d /sys/class/net/swnt0000 && test -n \"$(cat /sys/class/net/swnt0000/ifalias)\"", timeout=15)
+        [interrupted] = leases()
+        assert interrupted["phase"] == "allocated", interrupted
+        link = json.loads(machine.succeed("ip --json link show dev swnt0000"))[0]
+        assert "UP" not in link["flags"], link
+        [worker] = [line.split()[0] for line in machine.succeed("systemctl list-units --type=service --state=running --plain --no-legend 'sower-activator@*.service'").splitlines()]
+        machine.succeed(f"systemctl kill --kill-whom=all --signal=KILL {worker}")
+        machine.wait_until_succeeds("test \"$(systemctl show --property=ActiveState --value sower-garden.service)\" = inactive", timeout=30)
+        print(machine.succeed("journalctl --unit=sower-garden.service --no-pager --lines=30"))
+        machine.succeed("! pgrep --full '[c]loud-hypervisor'")
+        assert leases() == [], leases()
+    finally:
+        machine.succeed("udevadm control --start-exec-queue; rm --force /run/systemd/system/sower-garden.service.d/30-interrupt.conf; systemctl daemon-reload")
+    machine.succeed("rm --recursive --force /var/lib/sower-garden/image-network-scenarios/sower-vm-*")
+
+    for failure in ("garden-owner", "service-stop", "startup-reconcile"):
+        machine.succeed("rm --force /var/lib/sower-garden/hold.json; systemctl reset-failed sower-garden.service; systemctl start --no-block sower-garden.service")
+        machine.wait_until_succeeds("test -s /var/lib/sower-garden/hold.json", timeout=90)
+        owner = json.loads(machine.succeed("cat /var/lib/sower-garden/hold.json"))
+        machine.succeed(f"test -d /proc/{owner['vmm']}")
+        [old] = leases()
+        if failure == "startup-reconcile":
+            machine.succeed("printf '%s\\n' '[Service]' 'ExecStopPost=' > /run/systemd/system/sower-garden.service.d/20-no-post.conf; systemctl daemon-reload")
+        if failure == "service-stop":
+            machine.succeed("systemctl stop sower-garden.service")
+        else:
+            machine.succeed("systemctl kill --kill-whom=main --signal=KILL sower-garden.service")
+            machine.wait_until_succeeds("test \"$(systemctl show --property=ActiveState --value sower-garden.service)\" = failed", timeout=60)
+        machine.wait_until_succeeds("! pgrep --full '[c]loud-hypervisor'", timeout=60)
+        if failure == "startup-reconcile":
+            assert leases() == [old], leases()
+            machine.succeed("rm --force /run/systemd/system/sower-garden.service.d/20-no-post.conf /var/lib/sower-garden/hold.json; systemctl daemon-reload; systemctl reset-failed sower-garden.service; systemctl start --no-block sower-garden.service")
+            machine.wait_until_succeeds("test -s /var/lib/sower-garden/hold.json", timeout=90)
+            [fresh] = leases()
+            assert fresh["lease"] != old["lease"], (old, fresh)
+            machine.fail(f"nft list table inet sower_network_{old['lease']}")
+            machine.succeed("systemctl stop sower-garden.service")
+        assert leases() == [], leases()
+        machine.succeed("rm --recursive --force /var/lib/sower-garden/image-network-scenarios/sower-vm-*")
+    machine.succeed("systemctl stop sower-egress-observer")
+    captured = machine.succeed("${pkgs.tcpdump}/bin/tcpdump -n -r /tmp/sower-egress.pcap 2>/dev/null")
+    assert captured == "", captured
+    machine.succeed("test ! -s /tmp/protected-deliveries")
+    protected.succeed("test ! -s /tmp/protected-deliveries")
+    machine.succeed("nft delete table ip sower_test_dnat")
+    machine.succeed("ip --oneline link show > /tmp/network-links-after; diff --unified /tmp/network-links-before /tmp/network-links-after")
+    tables_after = {tuple((t["table"]["family"], t["table"]["name"])) for t in json.loads(machine.succeed("nft --json list tables"))["nftables"] if "table" in t}
+    assert tables_after == tables_before, (tables_before, tables_after)
+    assert leases() == [], leases()
+    machine.succeed("test -z \"$(find /var/lib/sower-garden/image-network-scenarios -mindepth 1 -print -quit)\"")
+    machine.succeed("! pgrep --full '[c]loud-hypervisor'")
   '';
 }

@@ -2,7 +2,7 @@ defmodule CloudHypervisor.ConfigTest do
   use ExUnit.Case, async: true
 
   alias CloudHypervisor.{CLI, Config, Launch}
-  alias CloudHypervisor.Config.{CPUs, Disk, LandlockRule, Output, RNG, Vsock}
+  alias CloudHypervisor.Config.{CPUs, Disk, LandlockRule, Net, Output, RNG, Vsock}
 
   test "omits optional settings rather than replacing native defaults" do
     config = %Config{kernel: "/kernel"}
@@ -22,6 +22,10 @@ defmodule CloudHypervisor.ConfigTest do
       disks: [
         %Disk{path: "/root image", image_type: :raw, readonly: false},
         %Disk{path: "/data", readonly: true}
+      ],
+      net: [
+        %Net{tap: "sow-tap0", mac: "02:00:00:00:00:01"},
+        %Net{tap: "sow-tap1", mac: "02:00:00:00:00:02"}
       ],
       serial: %Output{mode: :file, file: "/serial output"},
       console: %Output{mode: :off},
@@ -45,6 +49,10 @@ defmodule CloudHypervisor.ConfigTest do
              "disks" => [
                %{"path" => "/root image", "image_type" => "Raw", "readonly" => false},
                %{"path" => "/data", "readonly" => true}
+             ],
+             "net" => [
+               %{"tap" => "sow-tap0", "mac" => "02:00:00:00:00:01"},
+               %{"tap" => "sow-tap1", "mac" => "02:00:00:00:00:02"}
              ],
              "serial" => %{"mode" => "File", "file" => "/serial output"},
              "console" => %{"mode" => "Off"},
@@ -75,6 +83,9 @@ defmodule CloudHypervisor.ConfigTest do
                 "--disk",
                 "path=/root image,readonly=off,image_type=raw",
                 "path=/data,readonly=on",
+                "--net",
+                "tap=sow-tap0,mac=02:00:00:00:00:01",
+                "tap=sow-tap1,mac=02:00:00:00:00:02",
                 "--serial",
                 "file=/serial output",
                 "--console",

@@ -114,8 +114,11 @@ let
         PTP_1588_CLOCK_KVM = off;
 
         NETDEVICES = on;
+        NET = on;
+        INET = on;
+        PACKET = on;
         ETHERNET = off;
-        VIRTIO_NET = off;
+        VIRTIO_NET = on;
         VIRTIO_INPUT = off;
         VIRTIO_BALLOON = off;
         VIRTIO_FS = off;

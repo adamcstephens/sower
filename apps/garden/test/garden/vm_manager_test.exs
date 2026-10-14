@@ -70,6 +70,54 @@ defmodule Garden.VM.ManagerTest do
      options: options}
   end
 
+  test "network admission rejects unsupported modes and images without static configuration",
+       context do
+    assert {:error, {:invalid_option, :network}} =
+             Manager.start(
+               Keyword.put(context.options, :network, :unfiltered),
+               context.names.manager
+             )
+
+    assert {:error, :unsupported_network_config} =
+             Manager.start(
+               Keyword.put(context.options, :network, :full),
+               context.names.manager
+             )
+
+    assert {:ok, []} = Manager.list(context.names.manager)
+    assert {:ok, []} = File.ls(context.options[:resource_directory]) |> without_formatter()
+  end
+
+  test "missing network provisioner fails closed and releases the reservation", context do
+    Supervisor.stop(context.supervisor, :normal, :infinity)
+    budgets = [vms: 1, cpus: 1, memory: 1, scratch_bytes: 8 * 1024 * 1024]
+
+    {:ok, supervisor} =
+      VM.Supervisor.start_link(Keyword.put(context.supervisor_options, :budgets, budgets))
+
+    Process.unlink(supervisor)
+
+    options =
+      Keyword.merge(context.options,
+        image: %{context.options[:image] | network_config: :static},
+        network: :full,
+        activator_socket: "/tmp/sower-absent-#{System.unique_integer([:positive])}.sock",
+        mkfs: "mkfs.ext4",
+        scratch_bytes: 8 * 1024 * 1024
+      )
+
+    {:ok, id} = Manager.start(options, context.names.manager)
+    assert {:error, {:network_connect, :enoent}} = Manager.await(id, context.names.manager)
+
+    assert {:ok, %VM.Status{phase: :finished, cleanup: :ok, vmm: nil, os_pid: nil}} =
+             Manager.status(id, context.names.manager)
+
+    assert {:ok, []} = File.ls(context.options[:resource_directory]) |> without_formatter()
+
+    {:ok, next} = Manager.start(context.options, context.names.manager)
+    cancel_clean(next, context.names.manager)
+  end
+
   test "listing includes active executions and retained records after controller retirement",
        context do
     assert {:ok, []} = Manager.list(context.names.manager)

@@ -14,6 +14,7 @@ let
     inherit system;
     contract = 1;
     vsock_port = 5000;
+    network_config = "static";
   };
   imageModule = import ./module.nix;
   evaluate =

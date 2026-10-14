@@ -57,6 +57,7 @@ defmodule Garden.Application do
 
   defp vm_options(%SowerClient.Config{} = config) do
     [
+      activator_socket: config.activator_socket,
       budgets: [
         vms: config.vm_capacity.vms,
         cpus: config.vm_capacity.cpus,

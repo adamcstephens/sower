@@ -12,6 +12,7 @@ defmodule Garden.VM.Guard do
     field :vmm, pid()
     field :formatter, pid()
     field :io, pid()
+    field :network, Garden.VM.Network.t()
     field :outcome, term()
     field :cleanup_error, term()
     field :started, integer(), enforce: true
@@ -175,13 +176,47 @@ defmodule Garden.VM.Guard do
   end
 
   defp launch(%__MODULE__{} = state) do
+    case Garden.VM.Network.provision(state.options) do
+      {:ok, network} ->
+        admit_launch(%{state | network: network})
+
+      {:error, {:network_provision_unconfirmed, _} = reason} ->
+        finish(state, {:error, reason}, :unconfirmed)
+
+      {:error, reason} ->
+        finish(state, {:error, reason}, :ok)
+    end
+  end
+
+  defp admit_launch(%__MODULE__{} = state) do
+    receive do
+      {:finish, result} ->
+        stop(state, result)
+
+      :deadline ->
+        stop(state, {:error, :timeout})
+
+      {:DOWN, ref, :process, _pid, _reason}
+      when ref == state.server_monitor or ref == state.owner_monitor or
+             ref == state.ledger_monitor ->
+        stop(state, {:error, :owner_down})
+    after
+      0 ->
+        if System.monotonic_time(:millisecond) - state.started >=
+             Keyword.get(state.options, :deadline_ms, 60_000),
+           do: stop(state, {:error, :timeout}),
+           else: launch_vm(state)
+    end
+  end
+
+  defp launch_vm(%__MODULE__{} = state) do
     image = state.options[:image]
     cpus = Keyword.get(state.options, :cpus, 1)
 
     config = %Config{
       kernel: image.kernel,
       initramfs: image.initrd,
-      cmdline: image.cmdline,
+      cmdline: image.cmdline <> Garden.VM.Network.cmdline(state.network),
       cpus: %Config.CPUs{boot_vcpus: cpus, max_vcpus: cpus},
       memory: Keyword.get(state.options, :memory, 512 * 1024 * 1024),
       disks: [
@@ -192,6 +227,7 @@ defmodule Garden.VM.Guard do
           image_type: :raw
         }
       ],
+      net: Garden.VM.Network.devices(state.network),
       serial: %Config.Output{mode: :file, file: Path.join(state.directory, "serial.log")},
       console: %Config.Output{mode: :off},
       rng: %Config.RNG{src: "/dev/urandom"},
@@ -201,6 +237,7 @@ defmodule Garden.VM.Guard do
     case CloudHypervisor.Process.start_link(
            config: config,
            owner: self(),
+           before_stop: fn -> Garden.VM.Network.revoke(state.network) end,
            launch: %Launch{
              executable: Keyword.get(state.options, :hypervisor, "cloud-hypervisor")
            },
@@ -250,6 +287,7 @@ defmodule Garden.VM.Guard do
   defp stop(%__MODULE__{} = state, result) do
     notify_status(state, phase: :stopping)
     if state.io, do: Process.exit(state.io, :kill)
+    revocation = Garden.VM.Network.revoke(state.network)
     guard = self()
     vmm = state.vmm
 
@@ -283,7 +321,7 @@ defmodule Garden.VM.Guard do
     end)
 
     Process.send_after(self(), :cleanup_deadline, 10_000)
-    await_stop(%{state | outcome: result})
+    await_stop(%{state | outcome: result, cleanup_error: revocation_error(revocation)})
   end
 
   defp await_stop(%__MODULE__{} = state) do
@@ -309,7 +347,20 @@ defmodule Garden.VM.Guard do
 
   defp finish(%__MODULE__{} = state, result, certification) do
     if state.io, do: Process.exit(state.io, :kill)
-    cleanup = if certification == :ok, do: remove_known(state.directory), else: certification
+
+    network_cleanup =
+      case Garden.VM.Network.revoke(state.network) do
+        :ok when certification == :ok -> Garden.VM.Network.release(state.network)
+        result -> result
+      end
+
+    cleanup =
+      cond do
+        certification != :ok -> certification
+        state.cleanup_error != nil -> state.cleanup_error
+        network_cleanup != :ok -> network_cleanup
+        true -> remove_known(state.directory)
+      end
 
     result =
       if cleanup == :ok,
@@ -337,6 +388,9 @@ defmodule Garden.VM.Guard do
 
     send(state.server, {:vm_finished, result, cleanup})
   end
+
+  defp revocation_error(:ok), do: nil
+  defp revocation_error(error), do: error
 
   defp register(%__MODULE__{} = state) do
     if state.options[:ledger] do

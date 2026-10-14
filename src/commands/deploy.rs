@@ -175,6 +175,9 @@ fn deploy_sudo(args: &DeployArgs) -> Result<()> {
         mode: "switch".to_owned(),
         reason: String::new(),
         seeds: Vec::new(),
+        network_action: None,
+        execution_id: None,
+        lease: None,
     };
     tracing::warn!("Sudo deployment bypasses garden policy and server reporting");
     sudo::run(

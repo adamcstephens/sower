@@ -3,8 +3,9 @@ defmodule CloudHypervisor do
   Isolated Cloud Hypervisor library.
 
   `CloudHypervisor.Config` is the shared typed direct-boot VM contract, including
-  byte-valued memory, CPU counts, local disks, serial/console, RNG, vsock device,
-  and Landlock rules. `CloudHypervisor.Launch` keeps executable selection and
+  byte-valued memory, CPU counts, local disks, TAP/MAC network devices,
+  serial/console, RNG, vsock device, and Landlock rules.
+  `CloudHypervisor.Launch` keeps executable selection and
   VMM-wide settings separate.
 
   `CloudHypervisor.CLI.command/2` renders launch and VM configuration as native

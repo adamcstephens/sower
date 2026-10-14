@@ -58,7 +58,8 @@ defmodule SowerClient do
       SowerClient.SeedMeta,
       SowerClient.SeedManifest,
       SowerClient.SeedTag,
-      SowerClient.Config.VMCapacity
+      SowerClient.Config.VMCapacity,
+      SowerClient.Activator.NetworkLease
     ])
     |> OpenApiSpex.resolve_schema_modules()
   end
@@ -159,5 +160,24 @@ defmodule SowerClient.Config.VMCapacity do
       memory: %Schema{type: :integer, minimum: 1, default: 512 * 1024 * 1024},
       scratch_bytes: %Schema{type: :integer, minimum: 1, default: 4 * 1024 * 1024 * 1024}
     }
+  })
+end
+
+defmodule SowerClient.Activator.NetworkLease do
+  use SowerClient.Schema
+
+  OpenApiSpex.schema(%{
+    title: "ActivatorNetworkLease",
+    type: :object,
+    additionalProperties: false,
+    properties: %{
+      lease: %Schema{type: :string},
+      tap: %Schema{type: :string},
+      mac: %Schema{type: :string},
+      address: %Schema{type: :string},
+      gateway: %Schema{type: :string},
+      dns: %Schema{type: :string}
+    },
+    required: [:lease, :tap, :mac, :address, :gateway, :dns]
   })
 end

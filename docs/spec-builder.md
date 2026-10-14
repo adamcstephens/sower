@@ -255,6 +255,52 @@ controllers exit. Filter statuses by `phase == :running` for running VMs.
 Output callbacks retain the local launcher's `(stream, bytes)` interface;
 callers capture their job/step identity in the callback.
 
+Local callers opt into IPv4 public egress with `network: :full`; the default
+`network: :none` still supplies no NIC. The operator must enable
+`services.sower.activator.network.enable` and configure its public DNS resolver
+and protected destination addresses. Garden uses short-lived requests on the
+existing `/run/sower-activator/activator.sock` Accept=true socket, with
+`type="network"` and `network_action` of `provision`, `revoke`, `release`, or
+`cleanup`; `execution_id` and `lease` identify the relevant operation.
+Responses use the normal `id`/`type`/`data`/`exit_code` envelope. Provision emits
+one `output` whose `data` is JSON containing `lease`, `tap`, `mac`, `address`,
+`gateway`, and `dns`; `complete` with exit code zero certifies success.
+Errors emit `error` and a nonzero completion. Activation behavior is unchanged.
+The privileged activator authenticates the peer's system service cgroup
+against `network.gardenUnits` (default `["sower-garden.service"]`), derives the
+instance, and records its owner identity. Garden and Cloud Hypervisor remain
+unprivileged. Local socket overrides use `:activator_socket`.
+Static address, gateway, DNS, and MAC kernel parameters configure the image
+before its vsock executor reports readiness. The guest retains the standard
+`cache.nixos.org` substituter and signing key with signature verification.
+This direct public substitution is the local network baseline, not the future
+credentialed work-store proxy.
+Images advertise `"network_config": "static"` in additive boot metadata, loaded
+as `network_config: :static` in Elixir. This declares support for Garden-supplied
+static addressing, gateway, and DNS; it does not enable networking. Images
+without this declaration remain usable with `none`; `full` rejects them before
+admission. Older Gardens ignore the additive metadata field.
+
+The guard revokes network connectivity before stopping the VMM and releases
+the lease after certified teardown. Network cleanup failures retain admission
+accounting; `full` never falls back to `none`. Independent executions operate
+concurrently. A short host-wide `flock` protects allocation records; execution
+operations use bounded, stable hashed lock files (colliding hashes serialize).
+No host commands run under the allocation lock. Execution-owned nftables
+tables avoid shared policy rebuilds. Root-only runtime JSON lives beneath
+`network.stateDirectory` (default `/run/sower-network`). There is no separate
+network daemon, lifetime socket, reaper, or durable lease journal.
+The Garden service uses `KillMode=control-group`: no VMM survives its stop.
+Root-privileged `ExecStartPre` reconciliation runs before admission, and
+`ExecStopPost` cleanup runs after cgroup termination, using the same generated
+policy and explicit service instance. Other configured Garden units must
+install equivalent hooks. Request-scoped activator services are not bound to
+Garden's lifetime because activation itself may restart Garden.
+Networking-enabled Garden units default to no cgroup memory ceiling, rather
+than the BEAM-only 200 MiB limit: guest memory is charged to the same cgroup.
+Operators may set an explicit aggregate `MemoryMax`; networking-disabled
+deployments retain the 200 MiB default.
+
 Garden configuration sets `vm_capacity` with positive integer `vms`,
 `cpus`, `memory` (bytes), and `scratch_bytes`. Defaults admit one VM,
 one CPU, 512 MiB memory, and 4 GiB scratch. Reservations cover startup,
@@ -422,9 +468,10 @@ without a guest.
 
 ## Network Policy
 
-These are required implementation contracts, not a claim that networking
-is implemented. Cloud-hypervisor remains the single execution backend.
-Its choice does not depend on all setup being rootless.
+These are required implementation contracts. The Garden-local public IPv4
+path described above does not implement private endpoint authorization or
+server dispatch. Cloud-hypervisor remains the single execution backend;
+its choice does not depend on all setup being rootless.
 
 ### Modes and topology
 
@@ -586,6 +633,14 @@ operator-controlled fixture configuration, not repository code. There
 is no degraded, container-backed, root-run VMM, or unfiltered networking
 mode for development or tests.
 
+The local image/network scenario runs with
+`nix build --option sandbox false .#checks.x86_64-linux.image`.
+It needs nested KVM and real public DNS/HTTPS access: the guest downloads the
+GitHub installer asset without executing it and runs cowsay through ordinary
+signed substitution. The permanent scenario pins its nixpkgs revision.
+The driver’s `image-network-scenario` command accepts `SOWER_COWSAY_REF` for the
+manual floating-ref baseline; its default remains the pinned revision.
+
 ### Implementation acceptance
 
 The following scenarios are required before the corresponding execution
@@ -635,9 +690,12 @@ verification:
 4. **Filtered networking, secrets, and user code.** Scoped activator
    setup, routed TAPs, nftables, endpoint authorization, crash-safe
    teardown, and the network acceptance scenarios must land before any
-   `full` execution is admitted. Secret injection and `check`/`effect`
-   step kinds land in the pipeline engine; private checks require the
-   approved endpoint path, not a temporary unrestricted mode.
+   server-dispatched `full` execution is admitted. Local image VMs have
+   the public-web/DNS-only path described above; dispatch and private
+   endpoint authorization remain separate. Secret injection and
+   `check`/`effect` step kinds land in the pipeline engine; private
+   checks require the approved endpoint path, not a temporary
+   unrestricted mode.
 5. **Seed-trust integration.** Ephemeral signing on builders
    (spec-seed-trust.md phases 4–5), signing separation enforced.
 

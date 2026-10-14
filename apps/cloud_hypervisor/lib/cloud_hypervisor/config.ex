@@ -10,7 +10,11 @@ defmodule CloudHypervisor.Config do
   Disks are local image paths. `image_type: :raw` forces raw interpretation;
   omission permits CH autodetection. `readonly` is optional and uses CLI
   `on|off` versus JSON booleans. CLI devices/rules are multiple values after
-  one flag; API devices/rules are arrays. No network devices are configured.
+  one flag; API devices/rules are arrays. Network devices attach to existing
+  TAPs with an explicit guest MAC; host addresses and routes stay host-managed.
+  TAPs must already be up and owned by the VMM user, with a single queue pair
+  (not multiqueue) and vnet headers. This avoids privileged host configuration;
+  access to `/dev/net/tun` and the TAP's network namespace is still required.
 
   Serial and virtio-console share `Output`. Both support `:off`, `:null`,
   `:tty`, `:pty`, and `:file`; only serial supports `:socket`. File/socket
@@ -40,6 +44,11 @@ defmodule CloudHypervisor.Config do
     field :image_type, :raw | nil
   end
 
+  typedstruct module: Net do
+    field :tap, String.t(), enforce: true
+    field :mac, String.t(), enforce: true
+  end
+
   typedstruct module: Output do
     field :mode, :off | :null | :tty | :pty | :file | :socket, enforce: true
     field :file, String.t()
@@ -67,6 +76,7 @@ defmodule CloudHypervisor.Config do
     field :cpus, CPUs.t()
     field :memory, pos_integer()
     field :disks, [Disk.t()], default: []
+    field :net, [Net.t()], default: []
     field :serial, Output.t()
     field :console, Output.t()
     field :rng, RNG.t()
@@ -90,6 +100,7 @@ defmodule CloudHypervisor.Config do
       {"cpus", cpus(config.cpus)},
       {"memory", memory(config.memory)},
       {"disks", Enum.map(config.disks, &disk/1)},
+      {"net", Enum.map(config.net, &net/1)},
       {"serial", output(config.serial)},
       {"console", output(config.console)},
       {"rng", rng(config.rng)},
@@ -115,6 +126,7 @@ defmodule CloudHypervisor.Config do
         {"image_type", image_type(disk.image_type)}
       ])
 
+  defp net(%Net{} = net), do: %{"tap" => net.tap, "mac" => net.mac}
   defp image_type(nil), do: nil
   defp image_type(:raw), do: "Raw"
   defp output(nil), do: nil

@@ -12,7 +12,22 @@ const VALID_MODES: &[&str] = &["switch", "boot", "test", "dry-activate"];
 
 pub type SharedWriter = Arc<Mutex<dyn Write + Send>>;
 
-pub fn run<R: BufRead>(mut reader: R, writer: SharedWriter, slot: &CallbackSlot) -> Result<()> {
+pub(super) struct NetworkContext<'a> {
+    pub policy: &'a std::path::Path,
+    pub peer: super::peercred::PeerCredentials,
+    pub activation_authorized: bool,
+}
+
+pub fn run<R: BufRead>(reader: R, writer: SharedWriter, slot: &CallbackSlot) -> Result<()> {
+    run_with_network(reader, writer, slot, None)
+}
+
+pub(super) fn run_with_network<R: BufRead>(
+    mut reader: R,
+    writer: SharedWriter,
+    slot: &CallbackSlot,
+    network: Option<NetworkContext<'_>>,
+) -> Result<()> {
     let send = |resp: &Response| send_response(&writer, resp);
 
     let mut req = match read_request(&mut reader) {
@@ -23,6 +38,39 @@ pub fn run<R: BufRead>(mut reader: R, writer: SharedWriter, slot: &CallbackSlot)
             return Ok(());
         }
     };
+
+    if req.kind == "network" {
+        let result = (|| -> Result<Option<String>> {
+            if req.id.is_empty() {
+                return Err(anyhow!("missing request ID"));
+            }
+            let context = network.as_ref().ok_or_else(|| {
+                anyhow!("network requests require an authorized socket and network policy")
+            })?;
+            super::network::request(context.policy, context.peer, &req)
+        })();
+        let exit_code = match result {
+            Ok(output) => {
+                if let Some(output) = output {
+                    send(&Response::output(&req.id, output));
+                }
+                0
+            }
+            Err(error) => {
+                send(&Response::error(&req.id, format!("{error:#}")));
+                1
+            }
+        };
+        send(&Response::complete(&req.id, exit_code));
+        return Ok(());
+    }
+    if network
+        .as_ref()
+        .is_some_and(|context| !context.activation_authorized)
+    {
+        send(&Response::error("", "unauthorized"));
+        return Ok(());
+    }
 
     tracing::info!(
         "Received request id={} type={} path={} mode={} reason={}",
@@ -145,6 +193,9 @@ mod tests {
             mode: String::new(),
             reason: String::new(),
             seeds: Vec::new(),
+            network_action: None,
+            execution_id: None,
+            lease: None,
         }
     }
 

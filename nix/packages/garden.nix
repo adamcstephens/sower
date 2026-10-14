@@ -2,6 +2,7 @@
   bashNonInteractive,
   beamPackages,
   callPackages,
+  e2fsprogs,
   getent,
   lib,
   version,
@@ -51,6 +52,7 @@ beamPackages.mixRelease {
 
   doCheck = true;
   nativeCheckInputs = [
+    e2fsprogs
     getent
   ];
   checkPhase = ''

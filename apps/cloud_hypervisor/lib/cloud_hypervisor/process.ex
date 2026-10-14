@@ -6,6 +6,11 @@ defmodule CloudHypervisor.Process do
   (the default) or `:api`, `owner: pid` (the caller by default), and a positive
   `readiness_timeout` in milliseconds (5,000 by default). The child is temporary.
   An explicit owner is monitored even when a supervisor starts the server.
+  Optional `before_stop: fn -> :ok | {:error, reason} end` runs synchronously
+  once before this server initiates native teardown, including startup failure,
+  owner death, and termination. It must be bounded and must not call this server.
+  Failure does not prevent teardown, but prevents successful cleanup certification.
+  It cannot precede spontaneous native exit or untrappable lifecycle-server death.
 
   `client/1` returns `{:ok, %API{}}`. `status/1` returns a `Status` struct.
   `await_ready/1` returns `{:ok, status}` only after the API is responsive and
@@ -88,6 +93,8 @@ defmodule CloudHypervisor.Process do
     field :owner_dead, boolean(), default: false
     field :runner, pid()
     field :cleanup_error, String.t()
+    field :before_stop, (-> term())
+    field :before_stop_error, String.t()
     field :deadline, integer(), enforce: true
     field :readiness_timer, reference()
     field :shutdown_timer, reference()
@@ -102,7 +109,7 @@ defmodule CloudHypervisor.Process do
     options = Keyword.put_new(options, :owner, self())
 
     case validate(options) do
-      {:ok, _launch, _config, _mode, _owner, _timeout} = settings ->
+      {:ok, _launch, _config, _mode, _owner, _timeout, _before_stop} = settings ->
         GenServer.start_link(__MODULE__, settings, Keyword.take(options, [:name]))
 
       {:error, reason} ->
@@ -127,7 +134,7 @@ defmodule CloudHypervisor.Process do
     do: GenServer.call(server, {:stop, mode}, @call_timeout)
 
   @impl GenServer
-  def init({:ok, launch, config, mode, owner, timeout}) do
+  def init({:ok, launch, config, mode, owner, timeout, before_stop}) do
     BEAM.flag(:trap_exit, true)
 
     with {:ok, cleanup_owner, directory} <- Cleanup.prepare(&execution_directory/0) do
@@ -144,6 +151,7 @@ defmodule CloudHypervisor.Process do
         client: client,
         owner: owner,
         owner_monitor: owner_monitor,
+        before_stop: before_stop,
         deadline: now() + timeout
       }
 
@@ -163,6 +171,14 @@ defmodule CloudHypervisor.Process do
 
         {:error, reason} ->
           state = %{state | status: %{status | phase: :failed, error: reason}}
+          state = before_stop(state)
+
+          reason =
+            if state.before_stop_error,
+              do: {:cleanup_failed, state.before_stop_error},
+              else: reason
+
+          state = %{state | status: %{state.status | error: reason}}
 
           state =
             receive do
@@ -286,6 +302,7 @@ defmodule CloudHypervisor.Process do
     cancel_timer(state.shutdown_timer)
 
     if state.runner != nil do
+      state = before_stop(state)
       deadline = now() + @cleanup_timeout
 
       try do
@@ -311,17 +328,38 @@ defmodule CloudHypervisor.Process do
     mode = Keyword.get(options, :mode, :cli)
     owner = Keyword.get(options, :owner)
     timeout = Keyword.get(options, :readiness_timeout, 5_000)
+    before_stop = Keyword.get(options, :before_stop)
 
     cond do
-      not match?(%Launch{}, launch) -> {:error, {:invalid_option, :launch}}
-      not match?(%Config{}, config) -> {:error, {:invalid_option, :config}}
-      mode not in [:cli, :api] -> {:error, {:invalid_option, :mode}}
-      not is_pid(owner) -> {:error, {:invalid_option, :owner}}
-      not is_integer(timeout) or timeout <= 0 -> {:error, {:invalid_option, :readiness_timeout}}
-      not is_nil(launch.api_socket) -> {:error, {:caller_socket, :api_socket}}
-      not is_nil(get_in(config.vsock.socket)) -> {:error, {:caller_socket, :vsock}}
-      get_in(config.console.mode) == :socket -> {:error, {:invalid_option, :console}}
-      true -> {:ok, launch, config, mode, owner, timeout}
+      not match?(%Launch{}, launch) ->
+        {:error, {:invalid_option, :launch}}
+
+      not match?(%Config{}, config) ->
+        {:error, {:invalid_option, :config}}
+
+      mode not in [:cli, :api] ->
+        {:error, {:invalid_option, :mode}}
+
+      not is_pid(owner) ->
+        {:error, {:invalid_option, :owner}}
+
+      not is_integer(timeout) or timeout <= 0 ->
+        {:error, {:invalid_option, :readiness_timeout}}
+
+      not is_nil(before_stop) and not is_function(before_stop, 0) ->
+        {:error, {:invalid_option, :before_stop}}
+
+      not is_nil(launch.api_socket) ->
+        {:error, {:caller_socket, :api_socket}}
+
+      not is_nil(get_in(config.vsock.socket)) ->
+        {:error, {:caller_socket, :vsock}}
+
+      get_in(config.console.mode) == :socket ->
+        {:error, {:invalid_option, :console}}
+
+      true ->
+        {:ok, launch, config, mode, owner, timeout, before_stop}
     end
   end
 
@@ -450,6 +488,7 @@ defmodule CloudHypervisor.Process do
   defp begin_stop(%State{} = state, mode, reason) do
     cancel_timer(state.readiness_timer)
     cancel_request(state)
+    state = before_stop(state)
     error = if state.startup_result == nil, do: reason, else: state.status.error
 
     state = %{
@@ -478,6 +517,7 @@ defmodule CloudHypervisor.Process do
   defp force_stop(%State{} = state) do
     cancel_timer(state.shutdown_timer)
     cancel_request(state)
+    state = before_stop(state)
     Rexec.kill_tree(state.runner, :sigkill)
     timer = BEAM.send_after(self(), :shutdown_timeout, @cleanup_timeout)
     %{state | stop_stage: :force, shutdown_timer: timer, request: nil}
@@ -487,17 +527,18 @@ defmodule CloudHypervisor.Process do
     cancel_timer(state.readiness_timer)
     cancel_timer(state.shutdown_timer)
     cancel_request(state)
+    state = before_stop(state)
 
     {outcome, cleanup_error} =
       case completion(reason) do
-        {:ok, outcome} when state.cleanup_error == nil ->
+        {:ok, outcome} when state.cleanup_error == nil and state.before_stop_error == nil ->
           {outcome, nil}
 
         {:ok, _outcome} ->
-          {nil, state.cleanup_error}
+          {nil, state.cleanup_error || state.before_stop_error}
 
         {:error, message} ->
-          {nil, state.cleanup_error || message}
+          {nil, state.cleanup_error || state.before_stop_error || message}
       end
 
     error =
@@ -531,6 +572,7 @@ defmodule CloudHypervisor.Process do
   end
 
   defp cleanup_failed(%State{cleanup_error: nil} = state, message) do
+    state = before_stop(state)
     cancel_timer(state.readiness_timer)
     cancel_timer(state.shutdown_timer)
     cancel_request(state)
@@ -553,6 +595,25 @@ defmodule CloudHypervisor.Process do
   end
 
   defp cleanup_failed(%State{} = state, _message), do: state
+
+  defp before_stop(%State{before_stop: nil} = state), do: state
+
+  defp before_stop(%State{} = state) do
+    result =
+      try do
+        state.before_stop.()
+      catch
+        kind, reason -> {:error, {kind, reason}}
+      end
+
+    error =
+      case result do
+        :ok -> nil
+        other -> "Before-stop cleanup failed: #{inspect(other)}"
+      end
+
+    %{state | before_stop: nil, before_stop_error: error}
+  end
 
   defp completion(reason), do: Cleanup.completion(reason)
 
@@ -593,19 +654,20 @@ defmodule CloudHypervisor.Process do
 
       {:EXIT, runner, reason} when runner == state.runner ->
         case completion(reason) do
-          {:ok, _outcome} when state.cleanup_error == nil ->
+          {:ok, _outcome} when state.cleanup_error == nil and state.before_stop_error == nil ->
             :ok
 
           {:ok, _outcome} ->
-            {:error, state.cleanup_error}
+            {:error, state.cleanup_error || state.before_stop_error}
 
           {:error, message} ->
-            {:error, state.cleanup_error || message}
+            {:error, state.cleanup_error || state.before_stop_error || message}
         end
     after
       max(0, deadline - now()) ->
         {:error,
          state.cleanup_error ||
+           state.before_stop_error ||
            "Rexec did not confirm complete process-tree cleanup before the shutdown deadline"}
     end
   end

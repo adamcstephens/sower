@@ -13,7 +13,7 @@ defmodule SowerClient.Config do
   require OpenApiSpex
 
   @config_file_env "SOWER_CONFIG_FILE"
-  @path_setting_keys ["state_directory", "admin_socket"]
+  @path_setting_keys ["state_directory", "admin_socket", "activator_socket"]
   @env_var_pattern ~r/\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\})/
 
   OpenApiSpex.schema(%{
@@ -28,6 +28,11 @@ defmodule SowerClient.Config do
       admin_socket: %Schema{
         type: :string,
         description: "Unix socket path for garden admin commands (garden-only)"
+      },
+      activator_socket: %Schema{
+        type: :string,
+        default: "/run/sower-activator/activator.sock",
+        description: "Unix socket path for privileged activator requests (garden-only)"
       },
       caches: %Schema{
         type: :array,

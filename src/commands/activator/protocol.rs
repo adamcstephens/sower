@@ -13,6 +13,12 @@ pub struct Request {
     pub reason: String,
     #[serde(default)]
     pub seeds: Vec<SeedRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub network_action: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lease: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

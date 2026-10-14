@@ -1,6 +1,6 @@
 defmodule Garden.VM do
   @moduledoc """
-  Local no-NIC command execution in an image produced by mkImage.
+  Local image command execution with optional host-isolated networking.
 
   Load metadata with `Garden.Image.load/1`, then start a caller-supervised execution with
   `start_link(image: image, command: %Command{}, ...)`. `status/1` remains
@@ -8,6 +8,10 @@ defmodule Garden.VM do
   independent teardown. `run/3` is the synchronous convenience boundary.
   `on_output` receives `(stream, bytes)` in the I/O worker, applying bounded
   backpressure without blocking cancellation or the execution deadline.
+  `network: :none` is the default and supplies no NIC. `network: :full` requires
+  the operator-enabled activator network requests; its execution-scoped lease
+  owns a routed TAP and host-enforced public-egress policy. `:activator_socket`
+  selects the local activator socket. No privileged fallback is used.
   This is development orchestration, not a production sandbox.
   """
   use TypedStruct

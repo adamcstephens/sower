@@ -13,6 +13,7 @@ defmodule Garden.Image do
     field :system, String.t(), default: "x86_64-linux"
     field :contract, integer(), default: 1
     field :vsock_port, integer(), default: 5000
+    field :network_config, :static | nil
   end
 
   def load(path) do
@@ -26,7 +27,12 @@ defmodule Garden.Image do
          kernel: metadata["kernel"],
          initrd: metadata["initrd"],
          root: metadata["root"],
-         cmdline: metadata["cmdline"]
+         cmdline: metadata["cmdline"],
+         network_config:
+           case metadata["network_config"] do
+             "static" -> :static
+             _ -> nil
+           end
        }}
     else
       {:error, reason} -> {:error, reason}

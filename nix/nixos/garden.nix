@@ -23,6 +23,7 @@ let
     // (lib.optionalAttrs activatorCfg.enable { activator_socket = activatorCfg.socketPath; });
 
   jsonConfig = json.generate "sower-client.json" gardenSettings;
+  networkCleanup = "+${lib.getExe activatorCfg.package} activator --network-policy ${activatorCfg.network.policyFile} --network-cleanup --network-instance sower-garden.service";
 
   # TODO re-enable services support
   manageServices = false;
@@ -159,6 +160,13 @@ in
       ]
       ++ lib.optionals activatorCfg.enable [
         activatorCfg.package
+      ]
+      ++ lib.optionals activatorCfg.network.enable [
+        pkgs.iproute2
+        pkgs.nftables
+        pkgs.conntrack-tools
+        config.systemd.package
+        pkgs.coreutils
       ];
 
       environment = {
@@ -189,6 +197,7 @@ in
       serviceConfig = {
         Type = "notify";
         WatchdogSec = "10s";
+        KillMode = "control-group";
 
         # automatic recovery is preferred
         Restart = lib.mkDefault "always";
@@ -236,11 +245,27 @@ in
           "AF_UNIX"
           "AF_INET"
           "AF_INET6"
-        ];
-        SupplementaryGroups = lib.optionals activatorCfg.enable [ activatorCfg.socketGroup ];
+        ]
+        ++ lib.optionals activatorCfg.network.enable [ "AF_NETLINK" ];
+        SupplementaryGroups =
+          lib.optionals activatorCfg.enable [ activatorCfg.socketGroup ]
+          ++ lib.optionals activatorCfg.network.enable [ "kvm" ];
         User = "sower-garden";
         Group = "sower-garden";
-        BindPaths = lib.optionals activatorCfg.enable [ activatorCfg.socketPath ];
+        BindPaths =
+          lib.optionals activatorCfg.enable [ activatorCfg.socketPath ]
+          ++ lib.optionals activatorCfg.network.enable [
+            "/dev/kvm"
+            "/dev/net/tun"
+          ];
+        DeviceAllow = lib.optionals activatorCfg.network.enable [
+          "/dev/kvm rw"
+          "/dev/net/tun rw"
+        ];
+        ReadWritePaths = lib.optionals activatorCfg.network.enable [
+          activatorCfg.network.stateDirectory
+          "/run/sower-network-ownership"
+        ];
         UMask = "0077";
 
         StateDirectory = "sower-garden";
@@ -252,16 +277,19 @@ in
         RuntimeDirectory = "sower-garden";
         RuntimeDirectoryMode = "0750";
 
-        ExecStartPre = lib.optionals cfg.distribution [
-          (lib.getExe secretsScript)
-        ];
+        ExecStartPre =
+          lib.optionals cfg.distribution [
+            (lib.getExe secretsScript)
+          ]
+          ++ lib.optionals activatorCfg.network.enable [ networkCleanup ];
+        ExecStopPost = lib.optionals activatorCfg.network.enable [ networkCleanup ];
         ExecStart = if cfg.distribution then lib.getExe startScript else "${lib.getExe cfg.package} start";
         # SIGHUP triggers Garden.SignalHandler; the garden restarts itself at
         # end of the deployment in progress.
         ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
 
         MemoryAccounting = true;
-        MemoryMax = "200M";
+        MemoryMax = lib.mkDefault (if activatorCfg.network.enable then "infinity" else "200M");
       };
     };
 

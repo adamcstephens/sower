@@ -12,6 +12,9 @@ use handler::SharedWriter;
 mod activate;
 mod handler;
 mod log_tee;
+mod network;
+mod network_host;
+mod network_policy;
 mod peercred;
 pub(crate) mod protocol;
 mod services;
@@ -26,6 +29,18 @@ pub struct ActivatorArgs {
     /// Enable debug logging
     #[arg(long)]
     debug: bool,
+
+    /// Immutable, root-owned JSON network policy
+    #[arg(long)]
+    network_policy: Option<std::path::PathBuf>,
+
+    /// Revoke and reconcile owned network resources without admitting clients
+    #[arg(long, requires = "network_policy")]
+    network_cleanup: bool,
+
+    /// Configured garden system service to clean up
+    #[arg(long, requires = "network_cleanup")]
+    network_instance: Option<String>,
 }
 
 pub fn run(args: ActivatorArgs) -> Result<()> {
@@ -33,6 +48,16 @@ pub fn run(args: ActivatorArgs) -> Result<()> {
     init_tracing(args.debug, slot.clone());
 
     let allowed_gids = parse_gids(&args.allowed_gids)?;
+    if args.network_cleanup {
+        return network::cleanup(
+            args.network_policy
+                .as_deref()
+                .context("network policy is required")?,
+            args.network_instance
+                .as_deref()
+                .context("network instance is required")?,
+        );
+    }
 
     let fd0 = unsafe { BorrowedFd::borrow_raw(0) };
     let stat = rustix::fs::fstat(fd0).context("fstat fd 0")?;
@@ -40,13 +65,17 @@ pub fn run(args: ActivatorArgs) -> Result<()> {
         rustix::fs::FileType::from_raw_mode(stat.st_mode) == rustix::fs::FileType::Socket;
 
     if is_socket {
-        run_socket(&allowed_gids, &slot)
+        run_socket(&allowed_gids, &slot, args.network_policy.as_deref())
     } else {
         run_pipe(&slot)
     }
 }
 
-fn run_socket(allowed_gids: &[u32], slot: &log_tee::CallbackSlot) -> Result<()> {
+fn run_socket(
+    allowed_gids: &[u32],
+    slot: &log_tee::CallbackSlot,
+    policy: Option<&std::path::Path>,
+) -> Result<()> {
     if !rustix::process::geteuid().is_root() {
         return Err(anyhow!("activator must be run as root in socket mode"));
     }
@@ -75,7 +104,10 @@ fn run_socket(allowed_gids: &[u32], slot: &log_tee::CallbackSlot) -> Result<()> 
         "Connection from peer"
     );
 
-    if !peercred::is_authorized(&creds, allowed_gids) {
+    let activation_authorized = peercred::is_authorized(&creds, allowed_gids);
+    let network_authorized = policy.is_some()
+        && peercred::is_authorized_socket(std::os::fd::AsFd::as_fd(&conn), &creds, allowed_gids)?;
+    if !activation_authorized && !network_authorized {
         tracing::warn!(
             uid = creds.uid,
             gid = creds.gid,
@@ -86,7 +118,16 @@ fn run_socket(allowed_gids: &[u32], slot: &log_tee::CallbackSlot) -> Result<()> 
     }
 
     let reader = BufReader::new(conn);
-    handler::run(reader, writer, slot)
+    let network = if network_authorized {
+        Some(handler::NetworkContext {
+            policy: policy.context("network policy is required")?,
+            peer: creds,
+            activation_authorized,
+        })
+    } else {
+        None
+    };
+    handler::run_with_network(reader, writer, slot, network)
 }
 
 fn run_pipe(slot: &log_tee::CallbackSlot) -> Result<()> {

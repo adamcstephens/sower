@@ -57,6 +57,21 @@ defmodule CloudHypervisor.ProcessTest do
     assert {:error, {:stopped, :force}} = VMM.await_ready(pid)
   end
 
+  test "a failing before-stop cleanup still reaps the tree but never certifies success" do
+    {:ok, pid} =
+      start(executable("printf 'running\\n'; exec sleep 60"),
+        before_stop: fn -> {:error, :revoke_failed} end
+      )
+
+    assert output(pid, :stdout) == "running\n"
+    os_pid = VMM.status(pid).os_pid
+    assert {:error, {:cleanup_failed, message}} = VMM.stop(pid, :force)
+    assert message =~ "revoke_failed"
+    refute File.exists?("/proc/#{os_pid}")
+    assert %VMM.Status{phase: :failed, outcome: nil} = VMM.status(pid)
+    assert {:error, {:cleanup_failed, ^message}} = VMM.stop(pid, :force)
+  end
+
   test "graceful stop escalates a signal-ignoring child and its escaped descendants" do
     executable =
       executable(
@@ -407,9 +422,26 @@ defmodule CloudHypervisor.ProcessTest do
 
   test "an API boot rejection kills and reaps before failed readiness returns" do
     executable = executable("exec sleep 60")
-    {:ok, pid} = start(executable, mode: :api)
+    owner = self()
+    reference = make_ref()
+
+    before_stop = fn ->
+      send(owner, {:before_stop, reference, self()})
+
+      receive do
+        {:continue_stop, ^reference} -> :ok
+      after
+        @timeout -> {:error, :callback_timeout}
+      end
+    end
+
+    {:ok, pid} = start(executable, mode: :api, before_stop: before_stop)
     {:ok, client} = VMM.client(pid)
+    os_pid = VMM.status(pid).os_pid
     server = api_server(client, 500)
+    assert_receive {:before_stop, ^reference, callback}, @timeout
+    assert File.exists?("/proc/#{os_pid}")
+    send(callback, {:continue_stop, reference})
 
     assert {:error, {:startup, :boot, %API.Error{kind: :http, status: 500}}} =
              VMM.await_ready(pid)
@@ -419,6 +451,8 @@ defmodule CloudHypervisor.ProcessTest do
     refute File.exists?(VMM.status(pid).directory)
     refute_receive {:cloud_hypervisor, ^pid, {:ready, _}}
     Task.await(server, @timeout)
+    assert {:ok, {:signal, 9}} = VMM.stop(pid, :force)
+    refute_receive {:before_stop, ^reference, _}
   end
 
   test "owner death stays responsive while a readiness HTTP response is stalled" do

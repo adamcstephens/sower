@@ -160,6 +160,111 @@ defmodule Garden.ActivatorClientTest do
     end
   end
 
+  describe "network/2" do
+    test "successful provision exposes static guest configuration" do
+      {socket_path, server_pid} =
+        start_mock_server(fn request_line, socket ->
+          request = Jason.decode!(request_line)
+
+          send_response(socket, %{
+            id: request["id"],
+            type: "output",
+            data:
+              Jason.encode!(%{
+                lease: "lease-1",
+                tap: "tap-1",
+                mac: "02:00:00:00:00:01",
+                address: "10.254.0.2/30",
+                gateway: "10.254.0.1",
+                dns: "1.1.1.1"
+              })
+          })
+
+          send_response(socket, %{id: request["id"], type: "complete", exit_code: 0})
+        end)
+
+      on_exit(fn ->
+        stop_mock_server(server_pid)
+        File.rm_rf!(Path.dirname(socket_path))
+      end)
+
+      assert {:ok, network} =
+               Garden.VM.Network.provision(
+                 network: :full,
+                 activator_socket: socket_path,
+                 execution_id: "execution-1"
+               )
+
+      assert [%CloudHypervisor.Config.Net{tap: "tap-1", mac: "02:00:00:00:00:01"}] =
+               Garden.VM.Network.devices(network)
+
+      assert Garden.VM.Network.cmdline(network) ==
+               " sower.network.address=10.254.0.2/30 sower.network.gateway=10.254.0.1" <>
+                 " sower.network.dns=1.1.1.1 sower.network.mac=02:00:00:00:00:01"
+    end
+
+    test "provision requires successful completion before accepting lease data" do
+      {socket_path, server_pid} =
+        start_mock_server(fn request_line, socket ->
+          request = Jason.decode!(request_line)
+
+          send_response(socket, %{
+            id: request["id"],
+            type: "output",
+            data:
+              Jason.encode!(%{
+                lease: "lease-1",
+                tap: "tap-1",
+                mac: "02:00:00:00:00:01",
+                address: "10.254.0.2/30",
+                gateway: "10.254.0.1",
+                dns: "1.1.1.1"
+              })
+          })
+
+          send_response(socket, %{id: request["id"], type: "error", data: "policy failed"})
+          send_response(socket, %{id: request["id"], type: "complete", exit_code: 1})
+        end)
+
+      on_exit(fn ->
+        stop_mock_server(server_pid)
+        File.rm_rf!(Path.dirname(socket_path))
+      end)
+
+      assert {:error, {:activation_failed, 1, [_, "policy failed"]}} =
+               ActivatorClient.network(:provision,
+                 socket_path: socket_path,
+                 execution_id: "execution-1"
+               )
+    end
+
+    test "incomplete provision data cannot become a network lease" do
+      {socket_path, server_pid} =
+        start_mock_server(fn request_line, socket ->
+          request = Jason.decode!(request_line)
+
+          send_response(socket, %{
+            id: request["id"],
+            type: "output",
+            data: Jason.encode!(%{lease: "lease-1"})
+          })
+
+          send_response(socket, %{id: request["id"], type: "complete", exit_code: 0})
+        end)
+
+      on_exit(fn ->
+        stop_mock_server(server_pid)
+        File.rm_rf!(Path.dirname(socket_path))
+      end)
+
+      assert {:error, {:network_protocol, _}} =
+               ActivatorClient.network(:provision,
+                 socket_path: socket_path,
+                 execution_id: "execution-1"
+               )
+    end
+  end
+
   # Helper functions for mock server
 
   defp start_mock_server(handler) do

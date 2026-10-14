@@ -19,6 +19,7 @@ defmodule Garden.VM.Ledger do
     field :budgets, keyword(), enforce: true
     field :result_limit, non_neg_integer(), default: 128
     field :shutdown_ms, pos_integer(), default: 15_000
+    field :activator_socket, String.t(), default: "/run/sower-activator/activator.sock"
     field :entries, map(), default: %{}
     field :clean_order, term(), default: {[], []}
     field :manager, pid()
@@ -57,6 +58,8 @@ defmodule Garden.VM.Ledger do
         | budgets: budgets,
           result_limit: limit,
           shutdown_ms: deadline,
+          activator_socket:
+            Keyword.get(options, :activator_socket) || "/run/sower-activator/activator.sock",
           parent: Keyword.fetch!(options, :parent)
       }
 
@@ -127,7 +130,13 @@ defmodule Garden.VM.Ledger do
   def handle_call({:start, options}, _from, %__MODULE__{} = state) do
     options =
       Keyword.merge(
-        [cpus: 1, memory: 536_870_912, scratch_bytes: 4_294_967_296, deadline_ms: 60_000],
+        [
+          cpus: 1,
+          memory: 536_870_912,
+          scratch_bytes: 4_294_967_296,
+          deadline_ms: 60_000,
+          activator_socket: state.activator_socket
+        ],
         options
       )
 
