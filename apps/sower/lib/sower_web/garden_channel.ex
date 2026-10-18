@@ -75,7 +75,7 @@ defmodule SowerWeb.GardenChannel do
 
         send(self(), :track_presence)
         send(self(), :reconcile_deployments)
-        {:ok, %{conn_sid: conn_sid, pending_deployments: true}, socket}
+        {:ok, %{conn_sid: conn_sid, pending_deployments: true, deployment_logs: true}, socket}
 
       :error ->
         {:error, %{reason: "unauthorized"}}
@@ -167,6 +167,16 @@ defmodule SowerWeb.GardenChannel do
 
   handle_schema(SowerClient.Orchestration.SeedDeploymentResult, fn req, socket ->
     Sower.Orchestration.SeedDeployment.record_seed_result(req, socket.assigns.garden)
+  end)
+
+  handle_schema(SowerClient.Orchestration.SeedDeploymentLog, fn req, socket ->
+    case socket.assigns do
+      %{garden: %Orchestration.Garden{} = garden} ->
+        Orchestration.DeploymentLog.record(req, garden)
+
+      _ ->
+        {:error, :unauthorized}
+    end
   end)
 
   handle_schema(SowerClient.Orchestration.GardenSeedsReport, fn report, socket ->

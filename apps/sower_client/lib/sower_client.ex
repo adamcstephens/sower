@@ -47,6 +47,7 @@ defmodule SowerClient do
       SowerClient.Orchestration.DeploymentInfo.SeedInfo,
       SowerClient.Orchestration.DirectDeployment,
       SowerClient.Orchestration.SeedDeployment,
+      SowerClient.Orchestration.SeedDeploymentLog,
       SowerClient.Orchestration.SeedDeploymentResult,
       SowerClient.Orchestration.SeedDeploymentStatus,
       SowerClient.Orchestration.Subscription,
@@ -62,6 +63,40 @@ defmodule SowerClient do
       SowerClient.Activator.NetworkLease
     ])
     |> OpenApiSpex.resolve_schema_modules()
+  end
+end
+
+defmodule SowerClient.Orchestration.SeedDeploymentLog do
+  use SowerClient.Schema
+  use SowerClient.ChannelMessage, event: "deployment:seed_log"
+
+  OpenApiSpex.schema(%{
+    title: "SeedDeploymentLog",
+    type: :object,
+    additionalProperties: false,
+    properties: %{
+      deployment_sid: %Schema{type: :string},
+      seed_sid: %Schema{type: :string},
+      sequence: %Schema{type: :integer, minimum: 1},
+      output: %Schema{
+        type: :string,
+        maxLength: 16_384,
+        description: "UTF-8 output, at most 16384 bytes",
+        "x-validate": __MODULE__.OutputBytes
+      }
+    },
+    required: [:deployment_sid, :seed_sid, :sequence, :output]
+  })
+
+  defmodule OutputBytes do
+    alias OpenApiSpex.Cast
+
+    def cast(%Cast{value: value} = ctx)
+        when is_binary(value) and byte_size(value) <= 16_384 do
+      Cast.cast(%{ctx | schema: %{ctx.schema | "x-validate": nil}})
+    end
+
+    def cast(%Cast{} = ctx), do: Cast.error(ctx, {:invalid_type, :string})
   end
 end
 

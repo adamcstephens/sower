@@ -86,16 +86,36 @@ defmodule Garden.Deployer do
   end
 
   defp upgrade_with_actions(%Deployment{} = deployment, opts) do
+    logs =
+      Map.new(deployment.seed_deployments, fn seed_deploy ->
+        {seed_deploy.seed.sid,
+         Garden.DeploymentLog.start(deployment.sid, seed_deploy.seed.sid,
+           send_fun: Keyword.get(opts, :send_log_fun, &Socket.send_deployment_log/1)
+         )}
+      end)
+
+    try do
+      do_upgrade_with_actions(deployment, opts, logs)
+    after
+      Enum.each(logs, fn {_sid, log} -> Garden.DeploymentLog.stop(log) end)
+    end
+  end
+
+  defp do_upgrade_with_actions(%Deployment{} = deployment, opts, logs) do
     async_stream_fun = Keyword.get(opts, :async_stream_fun, &async_stream/2)
-    realize_seed_fun = Keyword.get(opts, :realize_seed_fun, &realize_seed/1)
+    realize_seed_fun = Keyword.get(opts, :realize_seed_fun, &realize_seed/2)
 
     find_subscription_fun =
       Keyword.get(opts, :find_subscription_fun, &find_subscription/1)
 
-    activate_seed_fun = Keyword.get(opts, :activate_seed_fun, &Garden.Seed.activate/2)
+    activate_seed_fun = Keyword.get(opts, :activate_seed_fun, &Garden.Seed.activate/3)
 
-    report_seed_result_fun =
-      Keyword.get(opts, :report_seed_result_fun, &report_seed_result/4)
+    report_result = Keyword.get(opts, :report_seed_result_fun, &report_seed_result/4)
+
+    report_seed_result_fun = fn deployment, seed, result, output ->
+      Garden.DeploymentLog.flush(Map.fetch!(logs, seed.sid))
+      report_result.(deployment, seed, result, output)
+    end
 
     report_seed_status_fun =
       Keyword.get(opts, :report_seed_status_fun, &report_seed_status/3)
@@ -113,7 +133,15 @@ defmodule Garden.Deployer do
 
       downloading_line = decision_line("downloading #{seed.name} (#{seed.seed_type})")
       report_seed_status_fun.(deployment, seed, :downloading)
-      {downloading_line, realize_seed_fun.(seed_deploy)}
+      on_output = &Garden.DeploymentLog.output(Map.fetch!(logs, seed.sid), &1)
+
+      realized =
+        if is_function(realize_seed_fun, 2),
+          do: realize_seed_fun.(seed_deploy, on_output),
+          else: realize_seed_fun.(seed_deploy)
+
+      Garden.DeploymentLog.flush(Map.fetch!(logs, seed.sid))
+      {downloading_line, realized}
     end)
     |> async_stream_fun.(fn
       {:ok, {downloading_line, {:ok, %SeedDeployment{seed: seed} = seed_deploy, download_output}}} ->
@@ -167,7 +195,12 @@ defmodule Garden.Deployer do
               )
 
               report_seed_status_fun.(deployment, seed, :activating)
-              result = activate_seed_fun.(seed, mode)
+              on_output = &Garden.DeploymentLog.output(Map.fetch!(logs, seed.sid), &1)
+
+              result =
+                if is_function(activate_seed_fun, 3),
+                  do: activate_seed_fun.(seed, mode, on_output),
+                  else: activate_seed_fun.(seed, mode)
 
               case result do
                 {:ok, output} ->
@@ -259,10 +292,14 @@ defmodule Garden.Deployer do
     |> Enum.to_list()
   end
 
-  defp realize_seed(%SeedDeployment{seed: seed} = seed_deploy) do
+  defp realize_seed(%SeedDeployment{seed: seed} = seed_deploy, on_output) do
     case System.cmd("nix-store", ["--realize", seed.artifact],
            stderr_to_stdout: true,
-           into: [],
+           into: %Garden.OutputCollector{
+             on_output: fn line ->
+               if filter_realize_output([line]) != [], do: on_output.(line)
+             end
+           },
            lines: 1024
          ) do
       {output, 0} ->

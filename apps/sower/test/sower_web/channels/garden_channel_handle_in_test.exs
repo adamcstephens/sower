@@ -189,6 +189,74 @@ defmodule SowerWeb.GardenChannelHandleInTest do
     end
   end
 
+  describe "deployment:seed_log" do
+    test "buffers and publishes chunks for the authenticated deployment owner" do
+      %{socket: socket, garden: garden} = connect_and_join_garden()
+      seed = seed_fixture()
+      deployment = deployment_fixture(%{garden_id: garden.id, seeds: [seed]})
+      on_exit(fn -> Sower.Orchestration.DeploymentLog.delete_for_deployment(deployment) end)
+      Phoenix.PubSub.subscribe(Sower.PubSub, "deployment:#{deployment.sid}")
+
+      ref =
+        push(socket, "deployment:seed_log", %{
+          "deployment_sid" => deployment.sid,
+          "seed_sid" => seed.sid,
+          "sequence" => 1,
+          "output" => "building\n"
+        })
+
+      assert_reply ref, :ok, %{}, 1_000
+      assert_receive {:seed_deployment_log, chunk}
+      assert chunk.seed_sid == seed.sid
+      assert chunk.sequence == 1
+      assert chunk.output == "building\n"
+    end
+
+    @tag :capture_log
+    test "rejects a deployment owned by another garden" do
+      %{socket: socket} = connect_and_join_garden()
+      other_garden = garden_fixture(%{sid: SowerClient.Sid.generate("grdn")})
+      seed = seed_fixture()
+      deployment = deployment_fixture(%{garden_id: other_garden.id, seeds: [seed]})
+
+      ref =
+        push(socket, "deployment:seed_log", %{
+          "deployment_sid" => deployment.sid,
+          "seed_sid" => seed.sid,
+          "sequence" => 1,
+          "output" => "not mine"
+        })
+
+      assert_reply ref, :error, :unauthorized, 1_000
+      assert Sower.Orchestration.DeploymentLog.list(deployment) == []
+    end
+
+    @tag :capture_log
+    test "rejects log messages on the lobby channel" do
+      user = user_fixture()
+      Sower.Repo.put_org_id(user.org_id)
+      %{boruta_token: token} = create_garden_with_oauth()
+
+      {:ok, socket} =
+        connect(SowerWeb.GardenSocket, %{},
+          connect_info: %{x_headers: [{"x-auth-token", "boruta:#{token}"}]}
+        )
+
+      {:ok, _reply, socket} =
+        subscribe_and_join(socket, SowerWeb.GardenChannel, "garden:lobby", %{})
+
+      ref =
+        push(socket, "deployment:seed_log", %{
+          "deployment_sid" => "unknown",
+          "seed_sid" => "unknown",
+          "sequence" => 1,
+          "output" => "untrusted"
+        })
+
+      assert_reply ref, :error, :unauthorized, 1_000
+    end
+  end
+
   describe "deployment:seed_status" do
     test "updates seed deployment state" do
       %{socket: socket, garden: garden} = connect_and_join_garden()
