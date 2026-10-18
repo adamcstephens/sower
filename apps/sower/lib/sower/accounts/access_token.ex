@@ -122,7 +122,7 @@ defmodule Sower.Accounts.AccessToken do
           end
 
         rand = :crypto.strong_rand_bytes(48) |> Base.encode64()
-        hash = Argon2.hash_password(rand)
+        hash = Argon2.hash_pwd_salt(rand)
 
         token = "sower_" <> sid <> "_" <> rand
 
@@ -181,7 +181,7 @@ defmodule Sower.Accounts.AccessToken do
   end
 
   defp verify_token(hash_to_check, access_token) do
-    if Argon2.verify_password(hash_to_check, access_token.token_hash) do
+    if Argon2.verify_pass(hash_to_check, access_token.token_hash) do
       :ok
     else
       {:error, "Invalid token: Hash Verify Failure"}

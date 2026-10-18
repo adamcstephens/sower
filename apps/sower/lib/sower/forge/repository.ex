@@ -10,7 +10,7 @@ defmodule Sower.Forge.Repository do
     field :repo, :string
     field :url, :string
     field :webhook_id, :string
-    field :webhook_secret, Sower.Vault.Binary
+    field :webhook_secret, Fields.Encrypted
     field :org_id, Ecto.UUID
 
     belongs_to :forge, Sower.Forge.Connection, foreign_key: :forge_id

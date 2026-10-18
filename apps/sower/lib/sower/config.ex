@@ -227,6 +227,13 @@ defmodule Sower.Config do
 
     json_config |> Enum.map(fn {k, v} -> put_config(k, v) end)
 
+    config :fields,
+           :encryption_keys,
+           json_config
+           |> Keyword.fetch!(:database)
+           |> Keyword.fetch!(:encryption_key)
+           |> Base.encode64()
+
     # load some non-app namespaced configs
     %URI{scheme: scheme, host: host, port: port} = URI.parse(public_url)
 

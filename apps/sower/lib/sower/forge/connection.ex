@@ -9,8 +9,8 @@ defmodule Sower.Forge.Connection do
     field :name, :string
     field :type, Ecto.Enum, values: [:forgejo]
     field :url, :string
-    field :client_id, Sower.Vault.Binary
-    field :client_secret, Sower.Vault.Binary
+    field :client_id, Fields.Encrypted
+    field :client_secret, Fields.Encrypted
     field :org_id, Ecto.UUID
 
     has_many :repositories, Sower.Forge.Repository, foreign_key: :forge_id

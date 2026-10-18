@@ -27,10 +27,10 @@ defmodule Sower.MixProject do
 
   defp deps do
     [
-      {:argon2id_elixir, "~> 1.1"},
+      {:argon2_elixir, "~> 4.1.0"},
       {:bandit, "~> 1.0"},
       {:boruta, "~> 2.3"},
-      {:cloak_ecto, "~> 1.3.0"},
+      {:fields, "~> 2.12"},
       {:cuid2_ex, "~> 0.2.0"},
       {:oban, "~> 2.21"},
       {:ecto_sql, "~> 3.11"},

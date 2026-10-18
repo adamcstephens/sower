@@ -187,26 +187,27 @@ let
     with self;
     {
 
-      argon2id_elixir =
+      argon2_elixir =
         let
-          version = "1.1.3";
+          version = "4.1.3";
           drv = buildMix {
             inherit version;
-            name = "argon2id_elixir";
+            name = "argon2_elixir";
             appConfigPath = ../../config;
 
             src = fetchHex {
               inherit version;
-              pkg = "argon2id_elixir";
-              sha256 = "87ba6dec1580c0d4209741724f2821e330a8514ccfb9ed67564113f0382267de";
+              pkg = "argon2_elixir";
+              sha256 = "7c295b8d8e0eaf6f43641698f962526cdf87c6feb7d14bd21e599271b510608c";
             };
 
             beamDeps = [
-              rustler
+              comeonin
+              elixir_make
             ];
           };
         in
-        drv;
+        drv.override (workarounds.elixirMake { } drv);
 
       bandit =
         let
@@ -288,45 +289,19 @@ let
         in
         drv.override (workarounds.elixirMake { } drv);
 
-      cloak =
+      comeonin =
         let
-          version = "1.1.4";
+          version = "5.5.1";
           drv = buildMix {
             inherit version;
-            name = "cloak";
+            name = "comeonin";
             appConfigPath = ../../config;
 
             src = fetchHex {
               inherit version;
-              pkg = "cloak";
-              sha256 = "92b20527b9aba3d939fab0dd32ce592ff86361547cfdc87d74edce6f980eb3d7";
+              pkg = "comeonin";
+              sha256 = "65aac8f19938145377cee73973f192c5645873dcf550a8a6b18187d17c13ccdb";
             };
-
-            beamDeps = [
-              jason
-            ];
-          };
-        in
-        drv;
-
-      cloak_ecto =
-        let
-          version = "1.3.0";
-          drv = buildMix {
-            inherit version;
-            name = "cloak_ecto";
-            appConfigPath = ../../config;
-
-            src = fetchHex {
-              inherit version;
-              pkg = "cloak_ecto";
-              sha256 = "314beb0c123b8a800418ca1d51065b27ba3b15f085977e65c0f7b2adab2de1cc";
-            };
-
-            beamDeps = [
-              cloak
-              ecto
-            ];
           };
         in
         drv;
@@ -505,6 +480,23 @@ let
         in
         drv;
 
+      envar =
+        let
+          version = "1.1.0";
+          drv = buildMix {
+            inherit version;
+            name = "envar";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "envar";
+              sha256 = "97028ab4a040a5c19e613fdf46a41cf51c6e848d99077e525b338e21d2993320";
+            };
+          };
+        in
+        drv;
+
       esbuild =
         let
           version = "0.10.0";
@@ -666,6 +658,30 @@ let
 
             beamDeps = [
               file_system
+            ];
+          };
+        in
+        drv;
+
+      fields =
+        let
+          version = "2.12.0";
+          drv = buildMix {
+            inherit version;
+            name = "fields";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "fields";
+              sha256 = "6174a777fa37207470f925488e44ccc1a4974da672e6bfcc05441c8b83c2d844";
+            };
+
+            beamDeps = [
+              argon2_elixir
+              ecto
+              envar
+              html_sanitize_ex
             ];
           };
         in
@@ -861,6 +877,27 @@ let
               pkg = "hpax";
               sha256 = "afc7cb142ebcc2d01ce7816190b98ce5dd49e799111b24249f3443d730f377ca";
             };
+          };
+        in
+        drv;
+
+      html_sanitize_ex =
+        let
+          version = "1.5.6";
+          drv = buildMix {
+            inherit version;
+            name = "html_sanitize_ex";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "html_sanitize_ex";
+              sha256 = "b7592ad4a6d8d509b84e2dd3b2e4db4ed61315da711c8d98c68d4e9546c40df4";
+            };
+
+            beamDeps = [
+              mochiweb
+            ];
           };
         in
         drv;
@@ -1119,6 +1156,22 @@ let
             beamDeps = [
               file_system
             ];
+          };
+        in
+        drv;
+
+      mochiweb =
+        let
+          version = "3.5.0";
+          drv = buildRebar3 {
+            inherit version;
+            name = "mochiweb";
+
+            src = fetchHex {
+              inherit version;
+              pkg = "mochiweb";
+              sha256 = "c35df2787fffd009ab2f2470768ad1cdc993eab2c68cd7ddf75171c1462265d6";
+            };
           };
         in
         drv;
@@ -1759,28 +1812,6 @@ let
         in
         drv;
 
-      rustler =
-        let
-          version = "0.36.2";
-          drv = buildMix {
-            inherit version;
-            name = "rustler";
-            appConfigPath = ../../config;
-
-            src = fetchHex {
-              inherit version;
-              pkg = "rustler";
-              sha256 = "93832a6dbc1166739a19cd0c25e110e4cf891f16795deb9361dfcae95f6c88fe";
-            };
-
-            beamDeps = [
-              jason
-              toml
-            ];
-          };
-        in
-        drv;
-
       secure_random =
         let
           version = "0.5.1";
@@ -2056,23 +2087,6 @@ let
             beamDeps = [
               telemetry
             ];
-          };
-        in
-        drv;
-
-      toml =
-        let
-          version = "0.7.0";
-          drv = buildMix {
-            inherit version;
-            name = "toml";
-            appConfigPath = ../../config;
-
-            src = fetchHex {
-              inherit version;
-              pkg = "toml";
-              sha256 = "0690246a2478c1defd100b0c9b89b4ea280a22be9a7b313a8a058a2408a2fa70";
-            };
           };
         in
         drv;
