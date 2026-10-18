@@ -38,6 +38,10 @@ defmodule Sower.Orchestration.DeploymentPubSub do
     {:ok, deployment}
   end
 
+  def broadcast_seed_deployment_log(%Sower.Orchestration.DeploymentLog{} = chunk) do
+    broadcast("deployment:#{chunk.deployment_sid}", {:seed_deployment_log, chunk})
+  end
+
   defp broadcast(topic, message) do
     case Phoenix.PubSub.broadcast(Sower.PubSub, topic, message) do
       :ok ->

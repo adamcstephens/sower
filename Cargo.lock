@@ -1605,7 +1605,7 @@ dependencies = [
 
 [[package]]
 name = "sower"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1630,7 +1630,7 @@ dependencies = [
 
 [[package]]
 name = "sower-guest"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "rustix",
  "serde_json",

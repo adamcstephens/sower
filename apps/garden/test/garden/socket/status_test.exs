@@ -1,6 +1,20 @@
 defmodule Garden.Socket.StatusTest do
   use ExUnit.Case, async: true
 
+  test "does not send deployment output to servers without log streaming support" do
+    socket = Slipstream.new_socket()
+
+    chunk = %SowerClient.Orchestration.SeedDeploymentLog{
+      deployment_sid: "deployment",
+      seed_sid: "seed",
+      sequence: 1,
+      output: "realizing\n"
+    }
+
+    assert {:reply, {:error, :unsupported}, ^socket} =
+             Garden.Socket.handle_call({:deployment_log, chunk}, {self(), make_ref()}, socket)
+  end
+
   test "does not request pending deployments from a server without the capability" do
     socket = Slipstream.new_socket()
 

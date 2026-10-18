@@ -15,6 +15,26 @@ defmodule Garden.Socket do
     GenServer.cast(__MODULE__, {:deployment_request, sub, force?})
   end
 
+  def send_deployment_log(%SowerClient.Orchestration.SeedDeploymentLog{} = chunk) do
+    case GenServer.whereis(__MODULE__) do
+      nil ->
+        {:error, :not_running}
+
+      pid ->
+        case Process.info(pid, :message_queue_len) do
+          {:message_queue_len, count} when count < 16 ->
+            try do
+              GenServer.call(pid, {:deployment_log, chunk}, 100)
+            catch
+              :exit, _ -> {:error, :disconnected}
+            end
+
+          _ ->
+            {:error, :busy}
+        end
+    end
+  end
+
   @doc """
   Read the inflight deployments, keyed by deployment sid.
 
@@ -61,6 +81,30 @@ defmodule Garden.Socket do
       nil -> {:error, :not_running}
       _pid -> GenServer.call(__MODULE__, :reregister, 30_000)
     end
+  end
+
+  @impl Slipstream
+  def handle_call(
+        {:deployment_log, chunk},
+        _from,
+        %{assigns: %{deployment_logs_supported: true}} = socket
+      ) do
+    result =
+      case Map.get(socket.assigns, :private_topic) do
+        topic when is_binary(topic) ->
+          if joined?(socket, topic),
+            do: push_message(socket, chunk),
+            else: {:error, :disconnected}
+
+        _ ->
+          {:error, :disconnected}
+      end
+
+    {:reply, result, socket}
+  end
+
+  def handle_call({:deployment_log, _chunk}, _from, socket) do
+    {:reply, {:error, :unsupported}, socket}
   end
 
   @impl Slipstream
@@ -518,6 +562,7 @@ defmodule Garden.Socket do
       socket
       |> assign(:conn_sid, conn_sid)
       |> assign(:pending_deployments_supported, Map.get(reply, "pending_deployments", false))
+      |> assign(:deployment_logs_supported, Map.get(reply, "deployment_logs", false))
 
     {:ok, socket}
   end

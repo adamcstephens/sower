@@ -178,10 +178,31 @@ defmodule Sower.Orchestration.Deployment do
 
   def update_deployment(%__MODULE__{} = deployment, attrs) do
     result =
-      deployment
-      |> Repo.preload([:seeds, :subscriptions])
-      |> changeset(attrs)
-      |> Repo.update()
+      Repo.transaction(fn ->
+        locked =
+          from(d in __MODULE__, where: d.id == ^deployment.id, lock: "FOR UPDATE")
+          |> Repo.one!()
+          |> Repo.preload([:seeds, :subscriptions])
+
+        changeset = changeset(locked, attrs)
+
+        if locked.state in [:completed, :stale, :canceled] and
+             get_field(changeset, :state) in [:created, :dispatched, :acknowledged] do
+          Repo.rollback(:deployment_terminal)
+        end
+
+        case Repo.update(changeset) do
+          {:ok, updated} ->
+            if updated.state in [:completed, :stale, :canceled] do
+              Orchestration.DeploymentLog.delete_for_deployment(updated)
+            end
+
+            updated
+
+          {:error, changeset} ->
+            Repo.rollback(changeset)
+        end
+      end)
 
     case result do
       {:ok, updated_deployment} ->
