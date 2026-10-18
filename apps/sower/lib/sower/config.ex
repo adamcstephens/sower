@@ -15,6 +15,7 @@ defmodule Sower.Config do
     type: :object,
     required: [:database],
     properties: %{
+      execution_queue_wait_ms: %Schema{type: :integer, minimum: 1, maximum: 86_400_000},
       auth: %Schema{
         type: :object,
         required: [:oidc_base_url, :oidc_client_id],

@@ -6,6 +6,10 @@ defmodule Garden.VM.Manager do
   results are retained in completion order up to `result_limit`; failed cleanup
   is never evicted and never releases its reservation. Recovery closes admission
   and drains previous guards without replaying commands.
+
+  `capacity/1` reads admission budgets and availability from the same ledger.
+  An optional `result_recipient` receives `{:vm_terminal, id, status}` after
+  certified completion, even when the bounded result cache evicts that ID.
   """
   use GenServer
 
@@ -17,6 +21,7 @@ defmodule Garden.VM.Manager do
   def status(id, server \\ __MODULE__), do: call(server, {:status, id})
   def cancel(id, server \\ __MODULE__), do: call(server, {:cancel, id})
   def await(id, server \\ __MODULE__), do: call(server, {:await, id})
+  def capacity(server \\ __MODULE__), do: call(server, :capacity)
   def shutdown(server \\ __MODULE__), do: call(server, :shutdown)
 
   defp call(server, request) do

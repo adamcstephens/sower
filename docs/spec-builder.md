@@ -298,8 +298,8 @@ install equivalent hooks. Request-scoped activator services are not bound to
 Garden's lifetime because activation itself may restart Garden.
 Networking-enabled Garden units default to no cgroup memory ceiling, rather
 than the BEAM-only 200 MiB limit: guest memory is charged to the same cgroup.
-Operators may set an explicit aggregate `MemoryMax`; networking-disabled
-deployments retain the 200 MiB default.
+Operators may set an explicit aggregate `MemoryMax`; non-builder,
+networking-disabled deployments retain the 200 MiB default.
 
 Garden configuration sets `vm_capacity` with positive integer `vms`,
 `cpus`, `memory` (bytes), and `scratch_bytes`. Defaults admit one VM,
@@ -320,7 +320,7 @@ commands. Orderly shutdown closes admission first and waits up to
 `vm_shutdown_ms` (default 15,000) for cleanup; incomplete cleanup is
 reported explicitly. A whole-BEAM crash still requires host-enforced
 containment and startup reconciliation, which this local manager does not
-provide. Server dispatch and production sandbox integration remain separate.
+provide. Production sandbox integration remains separate.
 
 ## Nix Store Strategy
 
@@ -376,6 +376,144 @@ mid-run. Storage is not endorsement — whether a work-store path may be
 activated anywhere is the signing layer's question (spec-seed-trust.md).
 
 ## Dispatch
+
+### Standalone stock-image execution
+
+The public API is `POST /api/v1/executions`, `GET /api/v1/executions`,
+`GET /api/v1/executions/:sid`, `GET /api/v1/executions/:sid/logs?after=N`,
+and `POST /api/v1/executions/:sid/cancel`. Submission requires
+`execution:create`, observation requires `execution:read`, and cancellation
+requires `execution:cancel`. Deployment permissions grant none of these.
+Every operation and candidate builder is scoped to the authenticated token's
+organization. The submitting token SID is retained as `actor_sid`.
+
+Submission is a registered `ExecutionRequest`, with no garden, builder, image,
+pipeline, or caller-owned run selector:
+
+```json
+{
+  "system": "x86_64-linux",
+  "path": "/run/current-system/sw/bin/nix",
+  "args": ["run", "nixpkgs#cowsay", "--", "hello from sower"],
+  "env": {"PATH": "/run/current-system/sw/bin"},
+  "stdin": {},
+  "cpus": 2,
+  "memory": 4294967296,
+  "scratch_bytes": 8589934592,
+  "network": "full",
+  "timeout_ms": 600000
+}
+```
+
+`path` is absolute; `args` excludes argv[0]. Arguments and environment values
+are literal, not shell-expanded. `stdin` is a JSON value, not a host path.
+Memory and scratch are bytes. The encoded v1 guest command frame is limited
+to 65,536 bytes. Unsupported fields, networks, systems, embedded NULs and
+invalid environment names are rejected. Defaults are two CPUs, 4 GiB RAM,
+8 GiB scratch, no network, and a 300,000 ms execution timeout.
+
+The server returns HTTP 202 with a durable execution `sid`, a distinct,
+server-owned `run_sid`, and `state: "queued"`. Each standalone run owns just
+this execution; its assignment is its pin. No pipeline definition, output
+store, or run-close/artifact operation is needed. This slice resolves only
+the garden's own packaged stock image. The request's flattened command
+fields become the existing `Garden.VM.Command` and v1 execute frame, not a
+second guest execution protocol.
+
+The CLI uses the normal endpoint/token/config-file settings:
+
+```console
+sower execution submit --request request.json
+sower execution submit --request request.json --detach
+sower execution status exec_example
+sower execution list
+sower execution logs exec_example --follow --after 0
+sower execution cancel exec_example
+```
+
+Submission follows by default; detached submission prints only the SID.
+Follow writes binary stdout/stderr to their corresponding local streams.
+Guest exit codes are preserved; signals return 128 + signal, capped at 255.
+Orchestration and uncertified-cleanup failures exit 1. Ending an observer or
+detaching never cancels a command. Cancellation is explicit and asynchronous.
+
+Gardens opt in with `builder: true`; KVM alone is not authority. Configure
+`vm_capacity` large enough for the workload: the local manager's conservative
+512 MiB default does not admit the 4 GiB default submission. Full networking
+also requires `builder_network: true` and enabled activator networking.
+NixOS builder services expose KVM and lift the BEAM-only memory ceiling even
+for network-disabled execution. Other service instances need the same
+containment and network cleanup hooks described above.
+
+The authenticated private garden join supplies an execution-session fence.
+Only opted-in gardens advertise `execution:capability`, including systems,
+guest-contract range, networks, ledger budgets and availability. Old servers
+without the join capability and old/non-builder gardens continue their normal
+deployment protocol. No execution message is pushed to an ineligible garden.
+`execution:dispatch` carries `sid`, `run_sid`, `session`, `attempt`, and the
+registered request. `execution:cancel` carries the assignment identity;
+`execution:event` carries that identity and an increasing sequence.
+
+### Queue, custody and observation
+
+The database owns queued requests, actor/run scope, assignment, cursors and
+outcomes. Dispatch wakes on enqueue, capability changes and lifecycle events,
+with a periodic recovery sweep. Older compatible work goes first; incompatible
+older requests do not block later work. Choose uniformly at random from
+connected, opted-in, compatible builders in the same org with available VM,
+CPU, memory and scratch dimensions. A database transaction advisory lock
+serializes selection, assignment and reservation across dispatcher instances;
+claims commit before channel delivery. The local manager remains the final
+atomic admission authority.
+
+A certified preaccept capacity refusal can requeue the unchanged command.
+Assignment attempt numbers fence its delayed messages. Lost acceptance,
+disconnect and restart ambiguity never permit reassignment or command replay.
+Before starting the manager, the garden synchronously persists the SID,
+run/request fingerprint and assignment in disk custody. Duplicate dispatch
+returns the known event/result; conflicting content is reported without
+launching a second VM. An uncertain prior identity fails closed. Terminal
+custody is independent of socket lifetime and the manager's bounded cache.
+Reconnect reconciles terminal custody and cancellation before advertising
+new capacity, without reviving authoritative terminal server state.
+
+States are `queued`, `dispatching`, `accepted`, `running`, `cancelling`, then
+`succeeded`, `failed` or `cancelled`. Accepted is not guest-ready: running is
+reported only after readiness is known. A guest exit is not completion until
+the manager reports teardown. Results preserve code versus signal, error
+category/detail, and cleanup certification/error. Failed cleanup retains
+capacity locally and remains observable.
+Only an actual manager teardown certificate, or its durable terminal record,
+can reconcile prior cleanup. A fresh manager's empty capacity report is not
+such a certificate. Certified reconciliation releases retained server accounting
+without changing the original terminal state, exit outcome, or diagnostic;
+uncertain/incomplete prior teardown remains retained across reconnect/restart.
+
+Queued cancellation allocates nothing. Accepted cancellation persists before
+signalling the assigned garden; completion/cancellation races have one terminal
+outcome. Server configuration `execution_queue_wait_ms` is finite and positive
+(default 3,600,000 ms; maximum 86,400,000 ms). Queue residence, including a
+preaccept refusal, does not consume or reset the VM timeout. That timeout starts
+at local admission and includes startup. Queue expiry is `queue_timeout`;
+the VM deadline is `execution_timeout`. An assignment without a lifecycle
+result by its timeout plus 60 seconds fails as `orchestration_timeout` and is
+cancelled, never retried. A lost builder/session fails its assignments, and
+the garden revokes their ownership and cancels them through the manager.
+
+Observation polls committed history strictly after a cursor, up to 128 events
+per page, then continues from the returned cursor. Repeated event sequences
+are deduplicated. Stream identity and bytes are retained as base64; stdout is
+never interpreted as protocol. A garden sends at most one 65,536-byte log frame
+per acknowledged transfer, applying backpressure independently of VM deadlines
+and teardown. Retain a prefix of at most 16 MiB of combined stream bytes per
+execution; later bytes are discarded and counted in `dropped_log_bytes`.
+Metadata, terminal results and custody identities have no automatic expiry.
+The cursor advances across discarded bytes, and status/result are present
+alongside history, so truncation cannot hide a terminal outcome or strand a
+follower. Result delivery is not rejected behind a missing log sequence.
+
+### Broader run orchestration
+
 
 The server owns a queue of executions and assigns each to a connected
 builder matching `system` with a free slot, sufficient memory, and work
@@ -641,6 +779,13 @@ signed substitution. The permanent scenario pins its nixpkgs revision.
 The driver’s `image-network-scenario` command accepts `SOWER_COWSAY_REF` for the
 manual floating-ref baseline; its default remains the pinned revision.
 
+The standalone API/CLI execution scenario runs with
+`nix build --option sandbox false .#checks.x86_64-linux.execution`.
+It uses a disposable server, database and two authenticated builders with
+the packaged stock image. The same nested-KVM and public DNS/HTTPS
+prerequisites apply; Nix's default build sandbox isolates the test from
+the external network.
+
 ### Implementation acceptance
 
 The following scenarios are required before the corresponding execution
@@ -793,12 +938,6 @@ verification:
   allocation are prior art. Pinning sharpens this: a pinned run's later
   executions queue behind their own builder rather than spilling to a
   free one, so a mis-sized builder stalls a run instead of a slot.
-- **Event-stream bounds.** An untrusted guest can emit `log` and `item`
-  events without limit, and the spec states no size cap, truncation, or
-  backpressure — a host-protection gap, not hygiene. Relatedly, a
-  builder disconnecting fails the execution, which makes a transient
-  channel blip kill a two-hour build; logs are sequence-numbered, which
-  gestures at resume, but no reconnect window is specified.
 - **Image on miss.** Pre-warm subscriptions cover the happy
   path, and the stock image is always local. When dispatch would name an
   image a builder has not staged, is that a placement

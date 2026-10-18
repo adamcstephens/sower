@@ -3,6 +3,9 @@ defmodule SowerClient do
   # Changes to these can break old gardens that haven't upgraded.
   # Used by contract evolution tests and baseline generation.
   @server_pushed_schema_titles [
+    "ExecutionDispatch",
+    "ExecutionCancel",
+    "ExecutionAcknowledgement",
     "Deployment",
     "OAuthCredentials",
     "SeedDeployment",
@@ -24,6 +27,15 @@ defmodule SowerClient do
       components: %OpenApiSpex.Components{schemas: %{}}
     }
     |> OpenApiSpex.add_schemas([
+      SowerClient.Execution.Request,
+      SowerClient.Execution.Capability,
+      SowerClient.Execution.Acknowledgement,
+      SowerClient.Execution.Dispatch,
+      SowerClient.Execution.Event,
+      SowerClient.Execution.Result,
+      SowerClient.Execution.Cancel,
+      SowerClient.Execution.Info,
+      SowerClient.Execution.History,
       SowerClient.Admin.Deploy,
       SowerClient.Admin.Reload,
       SowerClient.Admin.Reregister,

@@ -15,9 +15,11 @@ defmodule Garden.Application do
     client_children =
       if config && config.endpoint do
         [
+          if(config.builder, do: Garden.Executions),
           Garden.Scheduler,
           {Garden.Socket, []}
         ]
+        |> Enum.reject(&is_nil/1)
       else
         []
       end

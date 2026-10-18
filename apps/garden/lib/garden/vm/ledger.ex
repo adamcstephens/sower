@@ -12,6 +12,7 @@ defmodule Garden.VM.Ledger do
     field :resources, keyword(), enforce: true
     field :reserved, boolean(), default: true
     field :waiters, [GenServer.from()], default: []
+    field :result_recipient, pid()
   end
 
   typedstruct do
@@ -146,7 +147,13 @@ defmodule Garden.VM.Ledger do
          :ok <- capacity(state, resources) do
       id = System.unique_integer([:positive, :monotonic])
       status = %VM.Status{execution_id: id, owner: options[:owner]}
-      entry = %Entry{status: status, resources: resources}
+
+      entry = %Entry{
+        status: status,
+        resources: resources,
+        result_recipient: options[:result_recipient]
+      }
+
       state = persist(%{state | entries: Map.put(state.entries, id, entry)})
 
       options =
@@ -172,6 +179,26 @@ defmodule Garden.VM.Ledger do
     else
       {:error, reason} -> reply({:error, reason}, state)
     end
+  end
+
+  def handle_call(:capacity, _from, %__MODULE__{} = state) do
+    used =
+      Enum.reduce(state.entries, Map.new(@dimensions, &{&1, 0}), fn {_id, entry}, used ->
+        if entry.reserved do
+          Map.new(used, fn {dimension, value} ->
+            {dimension, value + entry.resources[dimension]}
+          end)
+        else
+          used
+        end
+      end)
+
+    available =
+      Map.new(state.budgets, fn {dimension, budget} ->
+        {dimension, if(state.mode == :open, do: budget - used[dimension], else: 0)}
+      end)
+
+    {:reply, {:ok, %{budgets: Map.new(state.budgets), available: available}}, state}
   end
 
   def handle_call(:list, _from, %__MODULE__{} = state) do
@@ -380,6 +407,7 @@ defmodule Garden.VM.Ledger do
               else: state
 
           state = state |> evict() |> persist()
+          if entry.result_recipient, do: send(entry.result_recipient, {:vm_terminal, id, status})
           Enum.each(waiters, &GenServer.reply(&1, result))
           settle(state)
         else

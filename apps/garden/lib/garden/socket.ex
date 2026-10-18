@@ -10,6 +10,8 @@ defmodule Garden.Socket do
   alias SowerClient.Orchestration.GardenReport
   alias SowerClient.Orchestration.SeedDeploymentStatus
 
+  def execution_event(event), do: GenServer.call(__MODULE__, {:execution_event, event}, 10_000)
+
   def deploy(%SowerClient.Orchestration.Subscription{} = sub, opts \\ []) do
     force? = Keyword.get(opts, :force, false)
     GenServer.cast(__MODULE__, {:deployment_request, sub, force?})
@@ -143,6 +145,18 @@ defmodule Garden.Socket do
         Logger.error(msg: "Operator re-registration failed", reason: inspect(reason))
         {:reply, err, socket}
     end
+  end
+
+  def handle_call({:execution_event, event}, _from, socket) do
+    result =
+      with {:ok, ref} <- push(socket, private_channel(socket), "execution:event", event),
+           {:ok, reply} <- await_reply(ref, 5_000) do
+        {:ok, reply}
+      else
+        {:error, reason} -> {:error, reason}
+      end
+
+    {:reply, result, socket}
   end
 
   def handle_call(message, from, socket), do: super(message, from, socket)
@@ -291,8 +305,22 @@ defmodule Garden.Socket do
   end
 
   def handle_disconnect(reason, socket) do
+    if Garden.Config.get().builder, do: Garden.Executions.disconnect()
     Logger.warning(msg: "Disconnected from server socket", reason: inspect(reason))
     {:ok, schedule_reconnect(socket)}
+  end
+
+  @impl Slipstream
+  def handle_topic_close(topic, reason, socket) do
+    socket =
+      if topic == private_channel(socket) and Garden.Config.get().builder do
+        Garden.Executions.disconnect()
+        assign(socket, :execution_session, nil)
+      else
+        socket
+      end
+
+    if reason == :left, do: {:ok, socket}, else: rejoin(socket, topic)
   end
 
   defp invalidate_cached_token do
@@ -309,6 +337,8 @@ defmodule Garden.Socket do
   end
 
   defp schedule_reconnect(socket) do
+    if Garden.Config.get().builder, do: Garden.Executions.disconnect()
+    socket = assign(socket, :execution_session, nil)
     counter = Map.get(socket.assigns, :reconnect_counter, 0)
 
     backoff_times =
@@ -558,9 +588,14 @@ defmodule Garden.Socket do
     cast(:report_seeds)
     cast(:report_garden)
 
+    if Garden.Config.get().builder && reply["execution_session"] do
+      Garden.Executions.connect(reply["execution_session"])
+    end
+
     socket =
       socket
       |> assign(:conn_sid, conn_sid)
+      |> assign(:execution_session, reply["execution_session"])
       |> assign(:pending_deployments_supported, Map.get(reply, "pending_deployments", false))
       |> assign(:deployment_logs_supported, Map.get(reply, "deployment_logs", false))
 
@@ -570,6 +605,16 @@ defmodule Garden.Socket do
   @impl Slipstream
   def handle_message(topic, "ping", %{"ref" => ref}, socket) do
     {:ok, _ref} = push(socket, topic, "pong", %{ref: ref})
+    {:noreply, socket}
+  end
+
+  def handle_message("garden:" <> _sid, "execution:dispatch", payload, socket) do
+    if Garden.Config.get().builder, do: Garden.Executions.dispatch(payload)
+    {:noreply, socket}
+  end
+
+  def handle_message("garden:" <> _sid, "execution:cancel", payload, socket) do
+    if Garden.Config.get().builder, do: Garden.Executions.cancel(payload)
     {:noreply, socket}
   end
 
@@ -650,6 +695,67 @@ defmodule Garden.Socket do
   end
 
   @impl Slipstream
+  def handle_info({:builder_ready, session}, socket) do
+    image =
+      case Garden.Executions.stock_image() do
+        {:ok, image} ->
+          image
+
+        {:error, reason} ->
+          Logger.warning(
+            msg: "Stock image unavailable; builder admission disabled",
+            error: inspect(reason)
+          )
+
+          nil
+      end
+
+    send(self(), {:report_builder, session})
+    {:noreply, assign(socket, :execution_image, image)}
+  end
+
+  def handle_info({:builder_failed, session}, socket) do
+    if Map.get(socket.assigns, :execution_session) == session do
+      Garden.Executions.disconnect()
+      {:noreply, socket |> assign(:execution_session, nil) |> disconnect()}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info({:report_builder, session}, socket) do
+    if Garden.Config.get().builder and Map.get(socket.assigns, :execution_session) == session do
+      image = Map.get(socket.assigns, :execution_image)
+
+      with {:ok, capacity} <- Garden.VM.Manager.capacity(),
+           report = %{
+             session: session,
+             enabled: not is_nil(image),
+             systems: if(image, do: [image.system], else: []),
+             contract_min: 1,
+             contract_max: 1,
+             networks:
+               if(Garden.Config.get().builder_network and get_in(image.network_config) == :static,
+                 do: ["none", "full"],
+                 else: ["none"]
+               ),
+             budgets: capacity.budgets,
+             available: capacity.available
+           },
+           {:ok, ref} <- push(socket, private_channel(socket), "execution:capability", report),
+           {:ok, _reply} <- await_reply(ref, 2_000) do
+        Process.send_after(self(), {:report_builder, session}, 1_000)
+        {:noreply, socket}
+      else
+        {:error, _reason} ->
+          Garden.Executions.disconnect()
+          {:noreply, socket |> assign(:execution_session, nil) |> disconnect()}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
   def handle_info({:run_deployment, sid}, socket) do
     case Lifecycle.lookup_deployment(sid, socket.assigns.active_deployments) do
       :not_found ->

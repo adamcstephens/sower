@@ -125,6 +125,11 @@ defmodule SowerWeb.Router do
     get "/seeds/latest", SeedController, :latest
     get "/seeds/:sid", SeedController, :get
     post "/seeds", SeedController, :create
+    post "/executions", ExecutionController, :create
+    get "/executions", ExecutionController, :index
+    get "/executions/:sid", ExecutionController, :get
+    get "/executions/:sid/logs", ExecutionController, :logs
+    post "/executions/:sid/cancel", ExecutionController, :cancel
 
     get "/deployments/:sid", DeploymentController, :get
     post "/deployments", DeploymentController, :create

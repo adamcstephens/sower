@@ -164,6 +164,355 @@
         "x-struct": "Elixir.SowerClient.Orchestration.DirectDeployment",
         "x-validate": null
       },
+      "ExecutionEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt": {
+            "minimum": 1,
+            "type": "integer",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "bytes": {
+            "description": "Base64-encoded binary stream bytes",
+            "maxLength": 87384,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "kind": {
+            "enum": [
+              "accepted",
+              "running",
+              "log",
+              "result",
+              "refused",
+              "conflict"
+            ],
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "result": {
+            "$ref": "#/components/schemas/ExecutionResult"
+          },
+          "sequence": {
+            "minimum": 1,
+            "type": "integer",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "session": {
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "sid": {
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "stream": {
+            "enum": [
+              "stdout",
+              "stderr"
+            ],
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          }
+        },
+        "required": [
+          "sid",
+          "session",
+          "attempt",
+          "sequence",
+          "kind"
+        ],
+        "title": "ExecutionEvent",
+        "type": "object",
+        "x-struct": "Elixir.SowerClient.Execution.Event",
+        "x-validate": null
+      },
+      "ExecutionHistory": {
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "minimum": 0,
+            "type": "integer",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/ExecutionEvent"
+            },
+            "type": "array",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "execution": {
+            "$ref": "#/components/schemas/ExecutionInfo"
+          }
+        },
+        "required": [
+          "events",
+          "cursor",
+          "execution"
+        ],
+        "title": "ExecutionHistory",
+        "type": "object",
+        "x-struct": "Elixir.SowerClient.Execution.History",
+        "x-validate": null
+      },
+      "ExecutionInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "actor_sid": {
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "cursor": {
+            "minimum": 0,
+            "type": "integer",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "dropped_log_bytes": {
+            "default": 0,
+            "minimum": 0,
+            "type": "integer",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "garden_sid": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "inserted_at": {
+            "format": "date-time",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "queue_reason": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "request": {
+            "$ref": "#/components/schemas/ExecutionRequest"
+          },
+          "result": {
+            "$ref": "#/components/schemas/ExecutionResult"
+          },
+          "run_sid": {
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "sid": {
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "state": {
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          }
+        },
+        "required": [
+          "sid",
+          "run_sid",
+          "state",
+          "actor_sid",
+          "request",
+          "cursor"
+        ],
+        "title": "ExecutionInfo",
+        "type": "object",
+        "x-struct": "Elixir.SowerClient.Execution.Info",
+        "x-validate": null
+      },
+      "ExecutionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "args": {
+            "default": [],
+            "items": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            },
+            "maxItems": 1024,
+            "type": "array",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "cpus": {
+            "default": 2,
+            "maximum": 256,
+            "minimum": 1,
+            "type": "integer",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "env": {
+            "additionalProperties": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            },
+            "default": {},
+            "type": "object",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "memory": {
+            "default": 4294967296,
+            "minimum": 134217728,
+            "type": "integer",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "network": {
+            "default": "none",
+            "enum": [
+              "none",
+              "full"
+            ],
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "path": {
+            "description": "Absolute guest executable path",
+            "maxLength": 4096,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "scratch_bytes": {
+            "default": 8589934592,
+            "minimum": 1048576,
+            "type": "integer",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "stdin": {
+            "description": "JSON value delivered literally on stdin",
+            "nullable": true,
+            "x-struct": null,
+            "x-validate": null
+          },
+          "system": {
+            "enum": [
+              "x86_64-linux"
+            ],
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "timeout_ms": {
+            "default": 300000,
+            "maximum": 86400000,
+            "minimum": 1,
+            "type": "integer",
+            "x-struct": null,
+            "x-validate": null
+          }
+        },
+        "required": [
+          "system",
+          "path",
+          "stdin"
+        ],
+        "title": "ExecutionRequest",
+        "type": "object",
+        "x-struct": "Elixir.SowerClient.Execution.Request",
+        "x-validate": "Elixir.SowerClient.Execution.Request.LiteralCommand"
+      },
+      "ExecutionResult": {
+        "additionalProperties": false,
+        "properties": {
+          "cleanup": {
+            "enum": [
+              "complete",
+              "incomplete",
+              "unknown"
+            ],
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "cleanup_error": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "code": {
+            "maximum": 255,
+            "minimum": 0,
+            "nullable": true,
+            "type": "integer",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "detail": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "elapsed_ms": {
+            "minimum": 0,
+            "nullable": true,
+            "type": "integer",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "error": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "ready_ms": {
+            "minimum": 0,
+            "nullable": true,
+            "type": "integer",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "signal": {
+            "maximum": 64,
+            "minimum": 1,
+            "nullable": true,
+            "type": "integer",
+            "x-struct": null,
+            "x-validate": null
+          }
+        },
+        "required": [
+          "cleanup"
+        ],
+        "title": "ExecutionResult",
+        "type": "object",
+        "x-struct": "Elixir.SowerClient.Execution.Result",
+        "x-validate": null
+      },
       "GardenRegistration": {
         "description": "HTTP registration request for a new garden",
         "properties": {
@@ -644,6 +993,325 @@
           }
         },
         "summary": "Get a deployment",
+        "tags": []
+      }
+    },
+    "/api/v1/executions": {
+      "get": {
+        "callbacks": {},
+        "operationId": "ListExecutions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ExecutionInfo"
+                  },
+                  "type": "array",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Executions"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Forbidden"
+          }
+        },
+        "summary": "List the latest 100 org executions",
+        "tags": []
+      },
+      "post": {
+        "callbacks": {},
+        "operationId": "NewExecution",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecutionRequest"
+              }
+            }
+          },
+          "description": "Execution",
+          "required": false
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionInfo"
+                }
+              }
+            },
+            "description": "Queued execution"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Forbidden"
+          }
+        },
+        "summary": "Queue a stock-image execution",
+        "tags": []
+      }
+    },
+    "/api/v1/executions/{sid}": {
+      "get": {
+        "callbacks": {},
+        "operationId": "GetExecution",
+        "parameters": [
+          {
+            "description": "",
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionInfo"
+                }
+              }
+            },
+            "description": "Execution"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Not found"
+          }
+        },
+        "summary": "Inspect an execution",
+        "tags": []
+      }
+    },
+    "/api/v1/executions/{sid}/cancel": {
+      "post": {
+        "callbacks": {},
+        "operationId": "CancelExecution",
+        "parameters": [
+          {
+            "description": "",
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionInfo"
+                }
+              }
+            },
+            "description": "Execution"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Not found"
+          }
+        },
+        "summary": "Request cancellation; teardown is asynchronous",
+        "tags": []
+      }
+    },
+    "/api/v1/executions/{sid}/logs": {
+      "get": {
+        "callbacks": {},
+        "operationId": "GetExecutionLogs",
+        "parameters": [
+          {
+            "description": "",
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "minimum": 0,
+              "type": "integer",
+              "x-struct": null,
+              "x-validate": null
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionHistory"
+                }
+              }
+            },
+            "description": "Execution history"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Not found"
+          }
+        },
+        "summary": "Read ordered events after a cursor; poll to follow",
         "tags": []
       }
     },

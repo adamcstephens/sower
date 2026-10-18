@@ -35,3 +35,4 @@ config :garden, Garden.Socket,
   reconnect_after_msec: [200, 500, 1_000, 2_000]
 
 config :sower, Sower.Orchestration.StaleDeploymentFinalizer, interval_ms: 0
+config :sower, Sower.Executions.Dispatcher, interval_ms: 0

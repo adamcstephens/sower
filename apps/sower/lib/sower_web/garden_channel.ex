@@ -67,15 +67,30 @@ defmodule SowerWeb.GardenChannel do
 
     case authorize_private_join(topic_sid, params, access_token) do
       {:ok, garden} ->
+        Sower.Executions.connect(garden)
+
         socket =
           assign(socket,
             garden: garden,
-            direct_override: Map.get(params, "direct_override") == true
+            direct_override: Map.get(params, "direct_override") == true,
+            execution_session: Base.url_encode64(:crypto.strong_rand_bytes(24), padding: false)
           )
+
+        Phoenix.PubSub.subscribe(
+          Sower.PubSub,
+          "execution:session:" <> socket.assigns.execution_session
+        )
 
         send(self(), :track_presence)
         send(self(), :reconcile_deployments)
-        {:ok, %{conn_sid: conn_sid, pending_deployments: true, deployment_logs: true}, socket}
+
+        {:ok,
+         %{
+           conn_sid: conn_sid,
+           pending_deployments: true,
+           deployment_logs: true,
+           execution_session: socket.assigns.execution_session
+         }, socket}
 
       :error ->
         {:error, %{reason: "unauthorized"}}
@@ -99,6 +114,37 @@ defmodule SowerWeb.GardenChannel do
 
   def handle_in("pong", %{"ref" => _ref}, socket) do
     {:reply, :ok, socket}
+  end
+
+  def handle_in("execution:capability", payload, socket) do
+    with {:ok, report} <- SowerClient.Execution.Capability.cast(payload),
+         true <- report.session == socket.assigns.execution_session,
+         :ok <-
+           Sower.Executions.capability(
+             socket.assigns.garden,
+             report,
+             Map.get(socket.assigns, :execution_registered, false)
+           ) do
+      reply = %SowerClient.Execution.Acknowledgement{session: report.session, sequence: 0}
+      {:reply, {:ok, reply}, assign(socket, :execution_registered, true)}
+    else
+      _ -> {:reply, {:error, %{error: "invalid capability"}}, socket}
+    end
+  end
+
+  def handle_in("execution:event", payload, socket) do
+    with {:ok, event} <- SowerClient.Execution.Event.cast(payload),
+         true <- event.session == socket.assigns.execution_session or event.kind == "result",
+         :ok <- Sower.Executions.event(socket.assigns.garden, event) do
+      reply = %SowerClient.Execution.Acknowledgement{
+        session: event.session,
+        sequence: event.sequence
+      }
+
+      {:reply, {:ok, reply}, socket}
+    else
+      _ -> {:reply, {:error, %{error: "invalid execution event"}}, socket}
+    end
   end
 
   handle_schema(SowerClient.Seed, &Sower.Orchestration.Seed.get_by_request/1)
@@ -212,12 +258,29 @@ defmodule SowerWeb.GardenChannel do
     {:noreply, socket}
   end
 
+  def handle_info({:execution_dispatch, payload}, socket) do
+    push(socket, "execution:dispatch", payload)
+    {:noreply, socket}
+  end
+
+  def handle_info({:execution_cancel, payload}, socket) do
+    push(socket, "execution:cancel", payload)
+    {:noreply, socket}
+  end
+
   def handle_info(:ping, socket) do
     ref = SowerClient.Sid.generate()
     Logger.debug(msg: "Sending ping", ref: ref, component: :server, topic: socket.topic)
     push(socket, "ping", %{ref: ref})
     {:noreply, socket}
   end
+
+  @impl Phoenix.Channel
+  def terminate(_reason, %{assigns: %{garden: garden, execution_session: session}}) do
+    Sower.Executions.disconnect(garden.id, session)
+  end
+
+  def terminate(_reason, _socket), do: :ok
 
   # provide a standard way of casting the schemas and handling the errors
   defp handle_message(payload, schema, socket, fun) do

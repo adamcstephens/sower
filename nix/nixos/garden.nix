@@ -7,6 +7,8 @@
 let
   cfg = config.services.sower.garden;
   activatorCfg = config.services.sower.activator;
+  builderEnabled = cfg.settings.builder or false;
+  vmEnabled = builderEnabled || activatorCfg.network.enable;
   json = pkgs.formats.json { };
   jsonType = json.type;
 
@@ -117,6 +119,11 @@ in
 
   config = lib.mkIf cfg.enable {
     assertions = [
+      {
+        assertion =
+          !(cfg.settings.builder_network or false) || (builderEnabled && activatorCfg.network.enable);
+        message = "builder_network requires builder opt-in and services.sower.activator.network.enable";
+      }
       {
         assertion = activatorCfg.enable || !config.security.sudo-rs.enable;
         message = "sudo-rs is not supported";
@@ -248,20 +255,16 @@ in
         ]
         ++ lib.optionals activatorCfg.network.enable [ "AF_NETLINK" ];
         SupplementaryGroups =
-          lib.optionals activatorCfg.enable [ activatorCfg.socketGroup ]
-          ++ lib.optionals activatorCfg.network.enable [ "kvm" ];
+          lib.optionals activatorCfg.enable [ activatorCfg.socketGroup ] ++ lib.optionals vmEnabled [ "kvm" ];
         User = "sower-garden";
         Group = "sower-garden";
         BindPaths =
           lib.optionals activatorCfg.enable [ activatorCfg.socketPath ]
-          ++ lib.optionals activatorCfg.network.enable [
-            "/dev/kvm"
-            "/dev/net/tun"
-          ];
-        DeviceAllow = lib.optionals activatorCfg.network.enable [
-          "/dev/kvm rw"
-          "/dev/net/tun rw"
-        ];
+          ++ lib.optionals vmEnabled [ "/dev/kvm" ]
+          ++ lib.optionals activatorCfg.network.enable [ "/dev/net/tun" ];
+        DeviceAllow =
+          lib.optionals vmEnabled [ "/dev/kvm rw" ]
+          ++ lib.optionals activatorCfg.network.enable [ "/dev/net/tun rw" ];
         ReadWritePaths = lib.optionals activatorCfg.network.enable [
           activatorCfg.network.stateDirectory
           "/run/sower-network-ownership"
@@ -289,7 +292,7 @@ in
         ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
 
         MemoryAccounting = true;
-        MemoryMax = lib.mkDefault (if activatorCfg.network.enable then "infinity" else "200M");
+        MemoryMax = lib.mkDefault (if vmEnabled then "infinity" else "200M");
       };
     };
 

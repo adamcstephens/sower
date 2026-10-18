@@ -24,6 +24,9 @@ enum Command {
     /// Build, register and deploy one configuration onto one host.
     Deploy(commands::deploy::DeployArgs),
 
+    /// Submit and observe server-dispatched stock-image executions.
+    Execution(commands::execution::ExecutionArgs),
+
     /// Manage seeds against a Sower server.
     Seed(commands::seed::SeedArgs),
 
@@ -73,6 +76,10 @@ fn run(command: Command) -> Result<()> {
         Command::Deploy(args) => {
             init_default_tracing();
             commands::deploy::run(args)
+        }
+        Command::Execution(args) => {
+            init_default_tracing();
+            commands::execution::run(args)
         }
         Command::Seed(args) => {
             init_default_tracing();

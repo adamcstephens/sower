@@ -2,9 +2,11 @@
   bashNonInteractive,
   beamPackages,
   callPackages,
+  cloud-hypervisor,
   e2fsprogs,
   getent,
   lib,
+  makeWrapper,
   version,
   tzdata,
   stockImage ? null,
@@ -32,7 +34,7 @@ beamPackages.mixRelease {
 
   # https://github.com/NixOS/nixpkgs/pull/558236
   buildInputs = [ bashNonInteractive ];
-
+  nativeBuildInputs = [ makeWrapper ];
 
   postPatch = ''
     substituteInPlace apps/garden/test/garden/vm_manager_test.exs \
@@ -48,6 +50,12 @@ beamPackages.mixRelease {
   + lib.optionalString (stockImage != null) ''
     mkdir --parents "$out/share/sower"
     ln --symbolic ${stockImage} "$out/share/sower/image"
+    wrapProgram $out/bin/sower-garden --prefix PATH : ${
+      lib.makeBinPath [
+        cloud-hypervisor
+        e2fsprogs
+      ]
+    }
   '';
 
   doCheck = true;

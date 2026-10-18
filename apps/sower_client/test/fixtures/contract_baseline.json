@@ -22,6 +22,65 @@
     },
     "required": []
   },
+  "ExecutionAcknowledgement": {
+    "properties": {
+      "sequence": {
+        "type": "integer"
+      },
+      "session": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "sequence",
+      "session"
+    ]
+  },
+  "ExecutionCancel": {
+    "properties": {
+      "attempt": {
+        "type": "integer"
+      },
+      "session": {
+        "type": "string"
+      },
+      "sid": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "attempt",
+      "session",
+      "sid"
+    ]
+  },
+  "ExecutionDispatch": {
+    "properties": {
+      "attempt": {
+        "type": "integer"
+      },
+      "request": {
+        "ref": "ExecutionRequest",
+        "type": "object"
+      },
+      "run_sid": {
+        "type": "string"
+      },
+      "session": {
+        "type": "string"
+      },
+      "sid": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "attempt",
+      "request",
+      "run_sid",
+      "session",
+      "sid"
+    ]
+  },
   "OAuthCredentials": {
     "properties": {
       "client_id": {
@@ -98,6 +157,10 @@
       "action": {
         "nullable": true,
         "type": "string"
+      },
+      "override": {
+        "has_default": true,
+        "type": "boolean"
       },
       "seed": {
         "ref": "Seed",

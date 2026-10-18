@@ -15,6 +15,9 @@
         services = pkgs.callPackage ./services.nix {
           flake = self;
         };
+        ${if pkgs.stdenv.hostPlatform.system == "x86_64-linux" then "execution" else null} =
+          pkgs.callPackage ./execution.nix
+            { flake = self; };
         ${if pkgs.stdenv.hostPlatform.system == "x86_64-linux" then "image" else null} =
           pkgs.callPackage ./image.nix
             {

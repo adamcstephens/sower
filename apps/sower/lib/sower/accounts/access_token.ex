@@ -25,6 +25,9 @@ defmodule Sower.Accounts.AccessToken do
     embeds_many :permissions, Permission, on_replace: :delete do
       field :role, Ecto.Enum,
         values: [
+          :"execution:create",
+          :"execution:read",
+          :"execution:cancel",
           :"seed:read",
           :"seed:write",
           :"nix-cache:read",
