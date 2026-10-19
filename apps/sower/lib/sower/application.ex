@@ -21,7 +21,7 @@ defmodule Sower.Application do
       {Oban, oban_config()},
       {Task.Supervisor, name: Sower.TaskSupervisor},
       Sower.Orchestration.StaleDeploymentFinalizer,
-      Sower.Executions.Dispatcher,
+      Sower.Orchestration.Executions.Dispatcher,
       SowerWeb.Endpoint,
       :systemd.ready()
     ]

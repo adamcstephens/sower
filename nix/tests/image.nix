@@ -801,7 +801,6 @@ pkgs.testers.runNixOSTest {
         enable = true;
         package = flake.packages.${system}.activator;
         network = {
-          enable = true;
           dnsResolver = "1.1.1.1";
           protectedDestinations = [ "93.184.216.34/32" ];
           gardenUnits = [
@@ -815,6 +814,7 @@ pkgs.testers.runNixOSTest {
       services.sower.garden = {
         enable = true;
         package = garden;
+        settings.builder.enable = true;
       };
       systemd.services.sower-garden = {
         wantedBy = lib.mkForce [ ];
@@ -977,7 +977,9 @@ pkgs.testers.runNixOSTest {
     peer_table = "sower_network_" + peer["lease"]
     peer_policy = json.loads(machine.succeed(f"nft --json list table inet {peer_table}"))
     machine.wait_until_succeeds("! pgrep --full '[s]ower activator'", timeout=15)
-    machine.succeed("systemctl stop sower-garden.service")
+    # Leave reconciliation to ExecStopPost rather than racing graceful owner cleanup.
+    machine.succeed("systemctl kill --kill-whom=all --signal=KILL sower-garden.service")
+    machine.wait_until_succeeds("test \"$(systemctl show --property=ActiveState --value sower-garden.service)\" = failed", timeout=30)
     assert leases() == [peer], leases()
     machine.succeed(f"ip link show dev {peer['tap']}")
     assert json.loads(machine.succeed(f"nft --json list table inet {peer_table}")) == peer_policy
@@ -986,7 +988,8 @@ pkgs.testers.runNixOSTest {
     }/bin/sower activator --network-policy \"$(readlink --canonicalize /etc/sower-network-test-policy.json)\" --network-cleanup --network-instance sower-network-peer.service 2>&1")
     print(retained)
     assert leases()[0]["phase"] == "quarantined", leases()
-    machine.succeed("systemctl stop sower-network-peer.service")
+    machine.succeed("systemctl kill --kill-whom=all --signal=KILL sower-network-peer.service")
+    machine.wait_until_succeeds("test \"$(systemctl show --property=ActiveState --value sower-network-peer.service)\" = failed", timeout=30)
     assert leases() == [], leases()
     machine.succeed("rm --recursive --force /var/lib/sower-garden/image-network-scenarios/sower-vm-* /var/lib/sower-garden/peer/sower-vm-*")
 

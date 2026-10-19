@@ -41,21 +41,21 @@ defmodule Sower.Authorization.Permissions do
          %Sower.Accounts.AccessToken.Permission{role: :"execution:create"},
          org_id
        ),
-       do: create(permit, Sower.Executions.Execution, org_id: org_id)
+       do: create(permit, Sower.Orchestration.Execution, org_id: org_id)
 
   defp check_role_perm(
          permit,
          %Sower.Accounts.AccessToken.Permission{role: :"execution:read"},
          org_id
        ),
-       do: read(permit, Sower.Executions.Execution, org_id: org_id)
+       do: read(permit, Sower.Orchestration.Execution, org_id: org_id)
 
   defp check_role_perm(
          permit,
          %Sower.Accounts.AccessToken.Permission{role: :"execution:cancel"},
          org_id
        ),
-       do: update(permit, Sower.Executions.Execution, org_id: org_id)
+       do: update(permit, Sower.Orchestration.Execution, org_id: org_id)
 
   defp check_role_perm(
          %Permit.Permissions{} = permit,

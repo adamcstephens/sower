@@ -3,9 +3,9 @@ defmodule SowerWeb.Api.ExecutionController do
   use OpenApiSpex.ControllerSpecs
   import Sower.Authorization
   alias OpenApiSpex.Schema
-  alias Sower.Executions
-  alias Sower.Executions.Execution
-  alias SowerClient.Execution.{History, Info, Request}
+  alias Sower.Orchestration.Executions
+  alias Sower.Orchestration.Execution
+  alias SowerClient.Orchestration.Execution.{History, Info, Request}
 
   plug OpenApiSpex.Plug.CastAndValidate, json_render_error_v2: true
   @error %Schema{type: :object, properties: %{error: %Schema{type: :string}}}

@@ -231,7 +231,7 @@
         ],
         "title": "ExecutionEvent",
         "type": "object",
-        "x-struct": "Elixir.SowerClient.Execution.Event",
+        "x-struct": "Elixir.SowerClient.Orchestration.Execution.Event",
         "x-validate": null
       },
       "ExecutionHistory": {
@@ -262,7 +262,7 @@
         ],
         "title": "ExecutionHistory",
         "type": "object",
-        "x-struct": "Elixir.SowerClient.Execution.History",
+        "x-struct": "Elixir.SowerClient.Orchestration.Execution.History",
         "x-validate": null
       },
       "ExecutionInfo": {
@@ -342,7 +342,7 @@
         ],
         "title": "ExecutionInfo",
         "type": "object",
-        "x-struct": "Elixir.SowerClient.Execution.Info",
+        "x-struct": "Elixir.SowerClient.Orchestration.Execution.Info",
         "x-validate": null
       },
       "ExecutionRequest": {
@@ -440,8 +440,8 @@
         ],
         "title": "ExecutionRequest",
         "type": "object",
-        "x-struct": "Elixir.SowerClient.Execution.Request",
-        "x-validate": "Elixir.SowerClient.Execution.Request.LiteralCommand"
+        "x-struct": "Elixir.SowerClient.Orchestration.Execution.Request",
+        "x-validate": "Elixir.SowerClient.Orchestration.Execution.Request.LiteralCommand"
       },
       "ExecutionResult": {
         "additionalProperties": false,
@@ -510,7 +510,7 @@
         ],
         "title": "ExecutionResult",
         "type": "object",
-        "x-struct": "Elixir.SowerClient.Execution.Result",
+        "x-struct": "Elixir.SowerClient.Orchestration.Execution.Result",
         "x-validate": null
       },
       "GardenRegistration": {

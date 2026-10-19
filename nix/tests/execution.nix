@@ -82,7 +82,6 @@ pkgs.testers.runNixOSTest {
       activator = {
         package = activator;
         network = {
-          enable = true;
           gardenUnits = [
             "sower-garden.service"
             "sower-garden2.service"
@@ -97,8 +96,7 @@ pkgs.testers.runNixOSTest {
           name = "first-builder";
           endpoint = "http://localhost:4000";
           access_token_file = "/run/sower/test_token";
-          builder = true;
-          builder_network = true;
+          builder.enable = true;
           vm_result_limit = 0;
           vm_capacity = {
             vms = 1;
@@ -206,7 +204,7 @@ pkgs.testers.runNixOSTest {
         machine.succeed("! ip --oneline link show | grep 'swnt'")
         machine.succeed("! nft list tables | grep 'sower_network_'")
 
-    machine.wait_until_succeeds("sower-server rpc 'IO.puts(Sower.Repo.aggregate(Sower.Executions.Builder, :count, skip_org_id: true))' | grep '^2$'", timeout=60)
+    machine.wait_until_succeeds("sower-server rpc 'IO.puts(Sower.Repo.aggregate(Sower.Orchestration.Executions.Builder, :count, skip_org_id: true))' | grep '^2$'", timeout=60)
 
     with subtest("real stock-image Nix cowsay through CLI, API and two connected builders"):
         sid = submit(request(path="/run/current-system/sw/bin/nix",
@@ -297,25 +295,25 @@ pkgs.testers.runNixOSTest {
 
     with subtest("concurrent queued claims reserve two builders once without oversubscription"):
         machine.succeed("systemctl start sower-garden2.service")
-        machine.wait_until_succeeds("sower-server rpc 'IO.puts(Sower.Repo.aggregate(Sower.Executions.Builder, :count, skip_org_id: true))' | grep '^2$'", timeout=60)
-        rpc(':sys.suspend(Sower.Executions.Dispatcher)')
+        machine.wait_until_succeeds("sower-server rpc 'IO.puts(Sower.Repo.aggregate(Sower.Orchestration.Executions.Builder, :count, skip_org_id: true))' | grep '^2$'", timeout=60)
+        rpc(':sys.suspend(Sower.Orchestration.Executions.Dispatcher)')
         try:
             sid = submit(request("printf unique-invocation; sleep 90", memory=536870912, scratch_bytes=1073741824))
             peer = submit(request("printf peer-invocation; sleep 90", memory=536870912, scratch_bytes=1073741824))
             queued = submit(request("printf must-not-run", memory=536870912, scratch_bytes=1073741824))
             assert all(state(value)["state"] == "queued" for value in [sid, peer, queued])
-            rpc('1..16 |> Task.async_stream(fn _ -> Sower.Executions.dispatch() end, max_concurrency: 16, timeout: 30000) |> Enum.each(fn {:ok, :ok} -> :ok end)')
+            rpc('1..16 |> Task.async_stream(fn _ -> Sower.Orchestration.Executions.dispatch() end, max_concurrency: 16, timeout: 30000) |> Enum.each(fn {:ok, :ok} -> :ok end)')
         finally:
-            rpc(':sys.resume(Sower.Executions.Dispatcher)')
+            rpc(':sys.resume(Sower.Orchestration.Executions.Dispatcher)')
         first = wait_state(sid, ["running"])
         second = wait_state(peer, ["running"])
         assert first["garden_sid"] != second["garden_sid"]
         assert state(queued)["state"] == "queued" and state(queued).get("garden_sid") is None
         machine.succeed(cli + "cancel " + queued)
         for value in [sid, peer]:
-            observed = rpc('e = Sower.Repo.get_by!(Sower.Executions.Execution, [sid: "' + value + '"], skip_org_id: true); IO.puts(e.attempt)')
+            observed = rpc('e = Sower.Repo.get_by!(Sower.Orchestration.Execution, [sid: "' + value + '"], skip_org_id: true); IO.puts(e.attempt)')
             assert "1" in observed.splitlines(), observed
-        expression = ('e = Sower.Repo.get_by!(Sower.Executions.Execution, [sid: "' + sid + '"], skip_org_id: true); '
+        expression = ('e = Sower.Repo.get_by!(Sower.Orchestration.Execution, [sid: "' + sid + '"], skip_org_id: true); '
             'p = %{sid: e.sid, run_sid: e.run_sid, session: e.session, attempt: e.attempt, request: e.request}; ')
         rpc(expression + 'Enum.each(1..5, fn _ -> Phoenix.PubSub.broadcast(Sower.PubSub, "execution:session:" <> e.session, {:execution_dispatch, p}) end)')
         rpc(expression + 'p = %{p | request: Map.put(p.request, "args", ["-c", "printf conflicting-invocation"])}; '

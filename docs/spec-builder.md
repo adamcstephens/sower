@@ -445,6 +445,14 @@ NixOS builder services expose KVM and lift the BEAM-only memory ceiling even
 for network-disabled execution. Other service instances need the same
 containment and network cleanup hooks described above.
 
+On NixOS, opt in with
+`services.sower.garden.settings.builder.enable = true`. The module grants
+VM permissions and defaults activator networking on from that flag, deriving
+the serialized `builder` and `builder_network` capability settings. Set
+`services.sower.activator.network.enable = false` explicitly for a
+network-disabled builder. Enabling activator networking alone does not grant
+a normal garden VM permissions.
+
 The authenticated private garden join supplies an execution-session fence.
 Only opted-in gardens advertise `execution:capability`, including systems,
 guest-contract range, networks, ledger budgets and availability. Old servers

@@ -128,7 +128,7 @@ defmodule Garden.Executions do
   end
 
   def handle_cast({:dispatch, payload}, %__MODULE__{} = state) do
-    with {:ok, request} <- SowerClient.Execution.Dispatch.cast(payload),
+    with {:ok, request} <- SowerClient.Orchestration.Execution.Dispatch.cast(payload),
          true <- request.session == state.session,
          true <- Garden.Config.get().builder,
          true <- request.request.network != "full" or Garden.Config.get().builder_network do
@@ -204,7 +204,7 @@ defmodule Garden.Executions do
 
   defp start_request(
          %__MODULE__{} = state,
-         %SowerClient.Execution.Dispatch{} = request,
+         %SowerClient.Orchestration.Execution.Dispatch{} = request,
          fingerprint
        ) do
     record = %Record{fingerprint: fingerprint, session: request.session, attempt: request.attempt}
@@ -252,7 +252,7 @@ defmodule Garden.Executions do
   defp emit(service, sid, kind, attrs \\ %{}),
     do: GenServer.call(service, {:event, sid, kind, attrs}, :infinity)
 
-  defp run(service, sid, %SowerClient.Execution.Request{} = request) do
+  defp run(service, sid, %SowerClient.Orchestration.Execution.Request{} = request) do
     service_ref = Process.monitor(service)
 
     command = %Garden.VM.Command{

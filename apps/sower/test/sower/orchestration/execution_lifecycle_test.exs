@@ -1,9 +1,10 @@
-defmodule Sower.ExecutionLifecycleTest do
+defmodule Sower.Orchestration.ExecutionLifecycleTest do
   use Sower.DataCase, async: false
   import Sower.AccountsFixtures
   import Sower.OrchestrationFixtures
-  alias Sower.Executions
-  alias Sower.Executions.{Builder, Execution}
+  alias Sower.Orchestration.Executions
+  alias Sower.Orchestration.Execution
+  alias Sower.Orchestration.Executions.Builder
 
   setup do
     org = organization_fixture()
@@ -12,7 +13,7 @@ defmodule Sower.ExecutionLifecycleTest do
     token = %Sower.Accounts.AccessToken{org_id: org.org_id, sid: "actor"}
 
     request =
-      SowerClient.Execution.Request.cast!(%{
+      SowerClient.Orchestration.Execution.Request.cast!(%{
         system: "x86_64-linux",
         path: "/bin/true",
         stdin: %{},
@@ -26,7 +27,7 @@ defmodule Sower.ExecutionLifecycleTest do
 
   defp capability(garden, session \\ "session") do
     report =
-      SowerClient.Execution.Capability.cast!(%{
+      SowerClient.Orchestration.Execution.Capability.cast!(%{
         session: session,
         enabled: true,
         systems: ["x86_64-linux"],
@@ -41,7 +42,7 @@ defmodule Sower.ExecutionLifecycleTest do
   end
 
   defp event(execution, kind, sequence, attrs \\ %{}) do
-    SowerClient.Execution.Event.cast!(
+    SowerClient.Orchestration.Execution.Event.cast!(
       Map.merge(
         %{
           sid: execution.sid,

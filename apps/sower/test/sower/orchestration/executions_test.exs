@@ -1,7 +1,7 @@
-defmodule Sower.ExecutionsTest do
+defmodule Sower.Orchestration.ExecutionsTest do
   use ExUnit.Case, async: true
 
-  alias Sower.Executions
+  alias Sower.Orchestration.Executions
 
   test "placement filters authority, contract, system, network and every resource before random choice" do
     request = %{

@@ -1,4 +1,4 @@
-defmodule SowerClient.Execution.Acknowledgement do
+defmodule SowerClient.Orchestration.Execution.Acknowledgement do
   use SowerClient.Schema
 
   OpenApiSpex.schema(%{
@@ -13,7 +13,7 @@ defmodule SowerClient.Execution.Acknowledgement do
   })
 end
 
-defmodule SowerClient.Execution.Request do
+defmodule SowerClient.Orchestration.Execution.Request do
   use SowerClient.Schema
 
   OpenApiSpex.schema(%{
@@ -72,7 +72,7 @@ defmodule SowerClient.Execution.Request do
   end
 end
 
-defmodule SowerClient.Execution.Capability do
+defmodule SowerClient.Orchestration.Execution.Capability do
   use SowerClient.Schema
 
   OpenApiSpex.schema(%{
@@ -111,7 +111,7 @@ defmodule SowerClient.Execution.Capability do
   })
 end
 
-defmodule SowerClient.Execution.Dispatch do
+defmodule SowerClient.Orchestration.Execution.Dispatch do
   use SowerClient.Schema
 
   OpenApiSpex.schema(%{
@@ -123,13 +123,13 @@ defmodule SowerClient.Execution.Dispatch do
       session: %Schema{type: :string},
       run_sid: %Schema{type: :string},
       attempt: %Schema{type: :integer, minimum: 1},
-      request: SowerClient.Execution.Request
+      request: SowerClient.Orchestration.Execution.Request
     },
     required: [:sid, :run_sid, :session, :attempt, :request]
   })
 end
 
-defmodule SowerClient.Execution.Result do
+defmodule SowerClient.Orchestration.Execution.Result do
   use SowerClient.Schema
 
   OpenApiSpex.schema(%{
@@ -150,7 +150,7 @@ defmodule SowerClient.Execution.Result do
   })
 end
 
-defmodule SowerClient.Execution.Event do
+defmodule SowerClient.Orchestration.Execution.Event do
   use SowerClient.Schema
 
   OpenApiSpex.schema(%{
@@ -172,13 +172,13 @@ defmodule SowerClient.Execution.Event do
         description: "Base64-encoded binary stream bytes",
         maxLength: 87384
       },
-      result: SowerClient.Execution.Result
+      result: SowerClient.Orchestration.Execution.Result
     },
     required: [:sid, :session, :attempt, :sequence, :kind]
   })
 end
 
-defmodule SowerClient.Execution.Cancel do
+defmodule SowerClient.Orchestration.Execution.Cancel do
   use SowerClient.Schema
 
   OpenApiSpex.schema(%{
@@ -194,7 +194,7 @@ defmodule SowerClient.Execution.Cancel do
   })
 end
 
-defmodule SowerClient.Execution.Info do
+defmodule SowerClient.Orchestration.Execution.Info do
   use SowerClient.Schema
 
   OpenApiSpex.schema(%{
@@ -208,8 +208,8 @@ defmodule SowerClient.Execution.Info do
       actor_sid: %Schema{type: :string},
       garden_sid: %Schema{type: :string, nullable: true},
       queue_reason: %Schema{type: :string, nullable: true},
-      request: SowerClient.Execution.Request,
-      result: SowerClient.Execution.Result,
+      request: SowerClient.Orchestration.Execution.Request,
+      result: SowerClient.Orchestration.Execution.Result,
       inserted_at: %Schema{type: :string, format: :"date-time"},
       updated_at: %Schema{type: :string, format: :"date-time"},
       cursor: %Schema{type: :integer, minimum: 0},
@@ -219,7 +219,7 @@ defmodule SowerClient.Execution.Info do
   })
 end
 
-defmodule SowerClient.Execution.History do
+defmodule SowerClient.Orchestration.Execution.History do
   use SowerClient.Schema
 
   OpenApiSpex.schema(%{
@@ -227,9 +227,9 @@ defmodule SowerClient.Execution.History do
     type: :object,
     additionalProperties: false,
     properties: %{
-      events: %Schema{type: :array, items: SowerClient.Execution.Event},
+      events: %Schema{type: :array, items: SowerClient.Orchestration.Execution.Event},
       cursor: %Schema{type: :integer, minimum: 0},
-      execution: SowerClient.Execution.Info
+      execution: SowerClient.Orchestration.Execution.Info
     },
     required: [:events, :cursor, :execution]
   })

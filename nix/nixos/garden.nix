@@ -7,8 +7,8 @@
 let
   cfg = config.services.sower.garden;
   activatorCfg = config.services.sower.activator;
-  builderEnabled = cfg.settings.builder or false;
-  vmEnabled = builderEnabled || activatorCfg.network.enable;
+  builderEnabled = cfg.settings.builder.enable;
+  builderNetworkEnabled = builderEnabled && activatorCfg.network.enable;
   json = pkgs.formats.json { };
   jsonType = json.type;
 
@@ -18,9 +18,16 @@ let
 
   # Build garden settings, optionally including activator socket path
   gardenSettings =
-    cfg.settings
+    builtins.removeAttrs cfg.settings [
+      "builder"
+      "builder_network"
+    ]
     // {
       admin_socket = adminSocketPath;
+    }
+    // lib.optionalAttrs builderEnabled {
+      builder = true;
+      builder_network = builderNetworkEnabled;
     }
     // (lib.optionalAttrs activatorCfg.enable { activator_socket = activatorCfg.socketPath; });
 
@@ -91,7 +98,7 @@ in
         type = lib.types.submodule {
           freeformType = jsonType;
 
-          options = { };
+          options.builder.enable = lib.mkEnableOption "isolated builder command execution";
         };
         description = "Sower client (garden and cli) configuration file";
         default = { };
@@ -120,11 +127,6 @@ in
   config = lib.mkIf cfg.enable {
     assertions = [
       {
-        assertion =
-          !(cfg.settings.builder_network or false) || (builderEnabled && activatorCfg.network.enable);
-        message = "builder_network requires builder opt-in and services.sower.activator.network.enable";
-      }
-      {
         assertion = activatorCfg.enable || !config.security.sudo-rs.enable;
         message = "sudo-rs is not supported";
       }
@@ -142,6 +144,7 @@ in
 
     services.sower.activator = {
       enable = lib.mkDefault true;
+      network.enable = lib.mkDefault builderEnabled;
       allowedGroups = [ "sower-garden" ];
     };
 
@@ -168,7 +171,7 @@ in
       ++ lib.optionals activatorCfg.enable [
         activatorCfg.package
       ]
-      ++ lib.optionals activatorCfg.network.enable [
+      ++ lib.optionals builderNetworkEnabled [
         pkgs.iproute2
         pkgs.nftables
         pkgs.conntrack-tools
@@ -253,19 +256,20 @@ in
           "AF_INET"
           "AF_INET6"
         ]
-        ++ lib.optionals activatorCfg.network.enable [ "AF_NETLINK" ];
+        ++ lib.optionals builderNetworkEnabled [ "AF_NETLINK" ];
         SupplementaryGroups =
-          lib.optionals activatorCfg.enable [ activatorCfg.socketGroup ] ++ lib.optionals vmEnabled [ "kvm" ];
+          lib.optionals activatorCfg.enable [ activatorCfg.socketGroup ]
+          ++ lib.optionals builderEnabled [ "kvm" ];
         User = "sower-garden";
         Group = "sower-garden";
         BindPaths =
           lib.optionals activatorCfg.enable [ activatorCfg.socketPath ]
-          ++ lib.optionals vmEnabled [ "/dev/kvm" ]
-          ++ lib.optionals activatorCfg.network.enable [ "/dev/net/tun" ];
+          ++ lib.optionals builderEnabled [ "/dev/kvm" ]
+          ++ lib.optionals builderNetworkEnabled [ "/dev/net/tun" ];
         DeviceAllow =
-          lib.optionals vmEnabled [ "/dev/kvm rw" ]
-          ++ lib.optionals activatorCfg.network.enable [ "/dev/net/tun rw" ];
-        ReadWritePaths = lib.optionals activatorCfg.network.enable [
+          lib.optionals builderEnabled [ "/dev/kvm rw" ]
+          ++ lib.optionals builderNetworkEnabled [ "/dev/net/tun rw" ];
+        ReadWritePaths = lib.optionals builderNetworkEnabled [
           activatorCfg.network.stateDirectory
           "/run/sower-network-ownership"
         ];
@@ -284,15 +288,15 @@ in
           lib.optionals cfg.distribution [
             (lib.getExe secretsScript)
           ]
-          ++ lib.optionals activatorCfg.network.enable [ networkCleanup ];
-        ExecStopPost = lib.optionals activatorCfg.network.enable [ networkCleanup ];
+          ++ lib.optionals builderNetworkEnabled [ networkCleanup ];
+        ExecStopPost = lib.optionals builderNetworkEnabled [ networkCleanup ];
         ExecStart = if cfg.distribution then lib.getExe startScript else "${lib.getExe cfg.package} start";
         # SIGHUP triggers Garden.SignalHandler; the garden restarts itself at
         # end of the deployment in progress.
         ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
 
         MemoryAccounting = true;
-        MemoryMax = lib.mkDefault (if vmEnabled then "infinity" else "200M");
+        MemoryMax = lib.mkDefault (if builderEnabled then "infinity" else "200M");
       };
     };
 

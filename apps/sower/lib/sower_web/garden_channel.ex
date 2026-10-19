@@ -67,7 +67,7 @@ defmodule SowerWeb.GardenChannel do
 
     case authorize_private_join(topic_sid, params, access_token) do
       {:ok, garden} ->
-        Sower.Executions.connect(garden)
+        Sower.Orchestration.Executions.connect(garden)
 
         socket =
           assign(socket,
@@ -117,15 +117,19 @@ defmodule SowerWeb.GardenChannel do
   end
 
   def handle_in("execution:capability", payload, socket) do
-    with {:ok, report} <- SowerClient.Execution.Capability.cast(payload),
+    with {:ok, report} <- SowerClient.Orchestration.Execution.Capability.cast(payload),
          true <- report.session == socket.assigns.execution_session,
          :ok <-
-           Sower.Executions.capability(
+           Sower.Orchestration.Executions.capability(
              socket.assigns.garden,
              report,
              Map.get(socket.assigns, :execution_registered, false)
            ) do
-      reply = %SowerClient.Execution.Acknowledgement{session: report.session, sequence: 0}
+      reply = %SowerClient.Orchestration.Execution.Acknowledgement{
+        session: report.session,
+        sequence: 0
+      }
+
       {:reply, {:ok, reply}, assign(socket, :execution_registered, true)}
     else
       _ -> {:reply, {:error, %{error: "invalid capability"}}, socket}
@@ -133,10 +137,10 @@ defmodule SowerWeb.GardenChannel do
   end
 
   def handle_in("execution:event", payload, socket) do
-    with {:ok, event} <- SowerClient.Execution.Event.cast(payload),
+    with {:ok, event} <- SowerClient.Orchestration.Execution.Event.cast(payload),
          true <- event.session == socket.assigns.execution_session or event.kind == "result",
-         :ok <- Sower.Executions.event(socket.assigns.garden, event) do
-      reply = %SowerClient.Execution.Acknowledgement{
+         :ok <- Sower.Orchestration.Executions.event(socket.assigns.garden, event) do
+      reply = %SowerClient.Orchestration.Execution.Acknowledgement{
         session: event.session,
         sequence: event.sequence
       }
@@ -277,7 +281,7 @@ defmodule SowerWeb.GardenChannel do
 
   @impl Phoenix.Channel
   def terminate(_reason, %{assigns: %{garden: garden, execution_session: session}}) do
-    Sower.Executions.disconnect(garden.id, session)
+    Sower.Orchestration.Executions.disconnect(garden.id, session)
   end
 
   def terminate(_reason, _socket), do: :ok

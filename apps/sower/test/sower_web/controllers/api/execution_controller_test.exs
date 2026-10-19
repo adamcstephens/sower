@@ -1,7 +1,7 @@
 defmodule SowerWeb.Api.ExecutionControllerTest do
   use SowerWeb.ConnCase, async: true
   alias Sower.Accounts.AccessToken
-  alias Sower.Executions
+  alias Sower.Orchestration.Executions
 
   setup do
     user = Sower.AccountsFixtures.user_fixture()

@@ -1,8 +1,9 @@
-defmodule Sower.Executions do
+defmodule Sower.Orchestration.Executions do
   @moduledoc "Durable, org-scoped stock-image executions; accepted commands are never replayed."
   import Ecto.Query, except: [update: 2]
   alias Sower.Repo
-  alias Sower.Executions.{Builder, Event, Execution}
+  alias Sower.Orchestration.Execution
+  alias Sower.Orchestration.Executions.{Builder, Event}
   @active ["dispatching", "accepted", "running", "cancelling"]
   @dimensions ["vms", "cpus", "memory", "scratch_bytes"]
   @log_limit 16 * 1024 * 1024
@@ -23,7 +24,10 @@ defmodule Sower.Executions do
   defp amount(_request, "vms"), do: 1
   defp amount(request, dimension), do: Map.fetch!(request, dimension)
 
-  def submit(%SowerClient.Execution.Request{} = request, %Sower.Accounts.AccessToken{} = token) do
+  def submit(
+        %SowerClient.Orchestration.Execution.Request{} = request,
+        %Sower.Accounts.AccessToken{} = token
+      ) do
     attrs = request |> Jason.encode!() |> Jason.decode!()
 
     execution = %Execution{
@@ -141,7 +145,7 @@ defmodule Sower.Executions do
 
   def capability(
         %Sower.Orchestration.Garden{} = garden,
-        %SowerClient.Execution.Capability{} = report,
+        %SowerClient.Orchestration.Execution.Capability{} = report,
         registered \\ false
       ) do
     capability = report |> Jason.encode!() |> Jason.decode!()
@@ -194,7 +198,10 @@ defmodule Sower.Executions do
     wake()
   end
 
-  def event(%Sower.Orchestration.Garden{} = garden, %SowerClient.Execution.Event{} = event) do
+  def event(
+        %Sower.Orchestration.Garden{} = garden,
+        %SowerClient.Orchestration.Execution.Event{} = event
+      ) do
     locked(fn ->
       execution = Repo.one(from e in Execution, where: e.sid == ^event.sid, lock: "FOR UPDATE")
 
@@ -226,9 +233,9 @@ defmodule Sower.Executions do
     end
   end
 
-  defp reconcile_terminal(%Execution{} = execution, %SowerClient.Execution.Event{
+  defp reconcile_terminal(%Execution{} = execution, %SowerClient.Orchestration.Execution.Event{
          kind: "result",
-         result: %SowerClient.Execution.Result{cleanup: "complete"}
+         result: %SowerClient.Orchestration.Execution.Result{cleanup: "complete"}
        }) do
     if execution.cancel_pending do
       update(execution,
@@ -240,9 +247,12 @@ defmodule Sower.Executions do
     :ok
   end
 
-  defp reconcile_terminal(%Execution{}, %SowerClient.Execution.Event{}), do: :ok
+  defp reconcile_terminal(%Execution{}, %SowerClient.Orchestration.Execution.Event{}), do: :ok
 
-  defp apply_event(%Execution{} = execution, %SowerClient.Execution.Event{kind: "log"} = event) do
+  defp apply_event(
+         %Execution{} = execution,
+         %SowerClient.Orchestration.Execution.Event{kind: "log"} = event
+       ) do
     with {:ok, bytes} <- Base.decode64(event.bytes || ""),
          true <- byte_size(bytes) <= 65536,
          true <- event.stream in ["stdout", "stderr"] do
@@ -266,7 +276,7 @@ defmodule Sower.Executions do
     end
   end
 
-  defp apply_event(%Execution{} = execution, %SowerClient.Execution.Event{} = event) do
+  defp apply_event(%Execution{} = execution, %SowerClient.Orchestration.Execution.Event{} = event) do
     case {execution.state, event.kind} do
       {_, "conflict"} ->
         record(execution, event)
@@ -294,10 +304,15 @@ defmodule Sower.Executions do
 
         state =
           case event.result do
-            %SowerClient.Execution.Result{code: 0, signal: nil, error: nil, cleanup: "complete"} ->
+            %SowerClient.Orchestration.Execution.Result{
+              code: 0,
+              signal: nil,
+              error: nil,
+              cleanup: "complete"
+            } ->
               "succeeded"
 
-            %SowerClient.Execution.Result{error: "cancelled", cleanup: "complete"} ->
+            %SowerClient.Orchestration.Execution.Result{error: "cancelled", cleanup: "complete"} ->
               "cancelled"
 
             _ ->
@@ -338,7 +353,7 @@ defmodule Sower.Executions do
     end
   end
 
-  defp record(%Execution{} = execution, %SowerClient.Execution.Event{} = event) do
+  defp record(%Execution{} = execution, %SowerClient.Orchestration.Execution.Event{} = event) do
     Repo.insert!(%Event{
       execution_id: execution.id,
       org_id: execution.org_id,
@@ -499,12 +514,12 @@ defmodule Sower.Executions do
   end
 
   def wake do
-    if pid = Process.whereis(Sower.Executions.Dispatcher), do: send(pid, :dispatch)
+    if pid = Process.whereis(Sower.Orchestration.Executions.Dispatcher), do: send(pid, :dispatch)
     :ok
   end
 end
 
-defmodule Sower.Executions.Dispatcher do
+defmodule Sower.Orchestration.Executions.Dispatcher do
   use GenServer
   def start_link(options), do: GenServer.start_link(__MODULE__, options, name: __MODULE__)
   @impl GenServer
@@ -523,7 +538,7 @@ defmodule Sower.Executions.Dispatcher do
   def handle_info(:dispatch, 0), do: {:noreply, 0}
 
   def handle_info(:dispatch, state) do
-    Sower.Executions.dispatch()
+    Sower.Orchestration.Executions.dispatch()
     {:noreply, state}
   end
 end

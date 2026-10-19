@@ -1,4 +1,4 @@
-defmodule Sower.Executions.Execution do
+defmodule Sower.Orchestration.Execution do
   use Sower.Schema
 
   schema "executions" do
@@ -23,7 +23,7 @@ defmodule Sower.Executions.Execution do
   end
 end
 
-defmodule Sower.Executions.Builder do
+defmodule Sower.Orchestration.Executions.Builder do
   use Sower.Schema
   @primary_key false
   schema "execution_builders" do
@@ -35,11 +35,11 @@ defmodule Sower.Executions.Builder do
   end
 end
 
-defmodule Sower.Executions.Event do
+defmodule Sower.Orchestration.Executions.Event do
   use Sower.Schema
 
   schema "execution_events" do
-    belongs_to :execution, Sower.Executions.Execution
+    belongs_to :execution, Sower.Orchestration.Execution
     field :org_id, Ecto.UUID
     field :sequence, :integer
     field :payload, :map

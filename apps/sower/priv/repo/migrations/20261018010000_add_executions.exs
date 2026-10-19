@@ -12,6 +12,7 @@ defmodule Sower.Repo.Migrations.AddExecutions do
 
     create table(:executions) do
       add :sid, :string, null: false
+      add :run_sid, :string, null: false
       add :org_id, :uuid, null: false
       add :actor_sid, :string, null: false
       add :request, :map, null: false
@@ -21,13 +22,17 @@ defmodule Sower.Repo.Migrations.AddExecutions do
       add :session, :string
       add :attempt, :integer, null: false, default: 0
       add :queue_expires_at, :utc_datetime_usec, null: false
+      add :deadline_at, :utc_datetime_usec
+      add :cancel_pending, :boolean, null: false, default: false
       add :result, :map
       add :cursor, :bigint, null: false, default: 0
       add :log_bytes, :bigint, null: false, default: 0
+      add :dropped_log_bytes, :bigint, null: false, default: 0
       timestamps(type: :utc_datetime_usec)
     end
 
     create unique_index(:executions, [:sid])
+    create unique_index(:executions, [:run_sid])
     create index(:executions, [:state, :inserted_at])
     create index(:executions, [:org_id, :sid])
 
