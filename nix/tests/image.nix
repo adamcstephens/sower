@@ -967,7 +967,8 @@ pkgs.testers.runNixOSTest {
         paths = machine.succeed("find /run/sower-network -name '*.json' -print").splitlines()
         return [json.loads(machine.succeed(f"cat {path}")) for path in paths]
 
-    machine.succeed("mkdir --parents /run/systemd/system/sower-garden.service.d; printf '%s\\n' '[Service]' 'Environment=SOWER_NETWORK_HOLD=/var/lib/sower-garden/hold.json' > /run/systemd/system/sower-garden.service.d/10-hold.conf; systemctl daemon-reload")
+    # Use systemd's stop ordering without graceful owner cleanup racing ExecStopPost.
+    machine.succeed("mkdir --parents /run/systemd/system/sower-garden.service.d /run/systemd/system/sower-network-peer.service.d; printf '%s\\n' '[Service]' 'KillSignal=SIGKILL' 'Environment=SOWER_NETWORK_HOLD=/var/lib/sower-garden/hold.json' > /run/systemd/system/sower-garden.service.d/10-hold.conf; printf '%s\\n' '[Service]' 'KillSignal=SIGKILL' > /run/systemd/system/sower-network-peer.service.d/10-kill.conf; systemctl daemon-reload")
     machine.succeed("systemctl start --no-block sower-garden.service sower-network-peer.service")
     machine.wait_until_succeeds("test -s /var/lib/sower-garden/hold.json -a -s /var/lib/sower-garden/peer-marker.json", timeout=90)
     concurrent = leases()
@@ -977,9 +978,7 @@ pkgs.testers.runNixOSTest {
     peer_table = "sower_network_" + peer["lease"]
     peer_policy = json.loads(machine.succeed(f"nft --json list table inet {peer_table}"))
     machine.wait_until_succeeds("! pgrep --full '[s]ower activator'", timeout=15)
-    # Leave reconciliation to ExecStopPost rather than racing graceful owner cleanup.
-    machine.succeed("systemctl kill --kill-whom=all --signal=KILL sower-garden.service")
-    machine.wait_until_succeeds("test \"$(systemctl show --property=ActiveState --value sower-garden.service)\" = failed", timeout=30)
+    machine.succeed("systemctl stop sower-garden.service")
     assert leases() == [peer], leases()
     machine.succeed(f"ip link show dev {peer['tap']}")
     assert json.loads(machine.succeed(f"nft --json list table inet {peer_table}")) == peer_policy
@@ -988,8 +987,7 @@ pkgs.testers.runNixOSTest {
     }/bin/sower activator --network-policy \"$(readlink --canonicalize /etc/sower-network-test-policy.json)\" --network-cleanup --network-instance sower-network-peer.service 2>&1")
     print(retained)
     assert leases()[0]["phase"] == "quarantined", leases()
-    machine.succeed("systemctl kill --kill-whom=all --signal=KILL sower-network-peer.service")
-    machine.wait_until_succeeds("test \"$(systemctl show --property=ActiveState --value sower-network-peer.service)\" = failed", timeout=30)
+    machine.succeed("systemctl stop sower-network-peer.service")
     assert leases() == [], leases()
     machine.succeed("rm --recursive --force /var/lib/sower-garden/image-network-scenarios/sower-vm-* /var/lib/sower-garden/peer/sower-vm-*")
 
