@@ -145,7 +145,14 @@ defmodule Garden.VM.Ledger do
     with :ok <- VM.Execution.validate_options(options),
          :ok <- capacity(state, resources) do
       id = System.unique_integer([:positive, :monotonic])
-      status = %VM.Status{execution_id: id, owner: options[:owner]}
+
+      status = %VM.Status{
+        execution_id: id,
+        owner: options[:owner],
+        persistent: options[:command] == nil,
+        phase: if(options[:command], do: :starting, else: :booting)
+      }
+
       entry = %Entry{status: status, resources: resources}
       state = persist(%{state | entries: Map.put(state.entries, id, entry)})
 
@@ -191,6 +198,22 @@ defmodule Garden.VM.Ledger do
       end
 
     reply(result, state)
+  end
+
+  def handle_call({:stop, id}, from, %__MODULE__{} = state) do
+    case Map.fetch(state.entries, id) do
+      {:ok, entry} ->
+        if active?(entry) do
+          cancel_entry(entry, :ok)
+          entry = %{entry | waiters: [from | entry.waiters]}
+          noreply(%{state | entries: Map.put(state.entries, id, entry)})
+        else
+          reply(if(entry.status.cleanup == :ok, do: :ok, else: entry.status.result), state)
+        end
+
+      :error ->
+        reply({:error, :not_found}, state)
+    end
   end
 
   def handle_call({:cancel, id}, _from, %__MODULE__{} = state) do
@@ -365,7 +388,12 @@ defmodule Garden.VM.Ledger do
         if active?(entry) do
           status = %{
             entry.status
-            | phase: if(cleanup == :ok, do: :finished, else: :retained),
+            | phase:
+                cond do
+                  cleanup != :ok -> :retained
+                  entry.status.persistent -> :stopped
+                  true -> :finished
+                end,
               result: result,
               cleanup: cleanup
           }
@@ -436,14 +464,14 @@ defmodule Garden.VM.Ledger do
     end
   end
 
-  defp active?(%Entry{} = entry), do: entry.status.phase not in [:finished, :retained]
+  defp active?(%Entry{} = entry), do: entry.status.phase not in [:finished, :stopped, :retained]
   defp recovery_mode(%__MODULE__{mode: :shutdown}), do: :shutdown
   defp recovery_mode(%__MODULE__{}), do: :recovering
 
   defp cancel_entry(%Entry{} = entry, result \\ {:error, :cancelled}) do
     cond do
       entry.status.guard -> send(entry.status.guard, {:finish, result})
-      entry.status.execution -> GenServer.cast(entry.status.execution, :cancel)
+      entry.status.execution -> GenServer.cast(entry.status.execution, {:finish, result})
       true -> :ok
     end
   end

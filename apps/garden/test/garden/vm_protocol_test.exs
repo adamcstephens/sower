@@ -36,8 +36,8 @@ defmodule Garden.VM.ProtocolTest do
   end
 
   test "rejects unsupported guest event versions" do
-    assert {:error, {:unsupported_event_version, 2}} =
-             Garden.VM.Protocol.decode_frame(metadata(%{"type" => "ready", "version" => 2}))
+    assert {:error, {:unsupported_event_version, 3}} =
+             Garden.VM.Protocol.decode_frame(metadata(%{"type" => "ready", "version" => 3}))
   end
 
   test "rejects terminal events that ambiguously contain both exit code and signal" do

@@ -680,6 +680,14 @@ through the daemon while ordinary processes retain NixOS's read-only store
 view. Guest-internal store paths are contained in the image, not duplicated
 as loose host dependencies.
 
+New images emit guest contract 2, allowing a Garden-owned VM to remain alive
+between serial commands. Scratch and the store overlay belong to VM lifetime,
+not command lifetime; command completion does not release them. Disposable
+execution still boots, executes once, and stops with certified cleanup.
+Garden accepts older contract-1 images only through that disposable path;
+persistent boot requires contract 2. Commands are never automatically replayed,
+and uncertain teardown retains owned resources rather than claiming release.
+
 From the project development shell:
 
 ```sh

@@ -12,7 +12,7 @@ let
   };
   imageIdentity = {
     inherit system;
-    contract = 1;
+    contract = 2;
     vsock_port = 5000;
     network_config = "static";
   };

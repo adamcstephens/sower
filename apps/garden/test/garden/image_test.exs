@@ -4,9 +4,17 @@ defmodule Garden.ImageTest do
   @moduletag :tmp_dir
 
   test "rejects an unsupported executor contract before resolving boot artifacts", %{tmp_dir: dir} do
-    write_manifest(dir, %{"contract" => 2})
+    write_manifest(dir, %{"contract" => 3})
 
-    assert {:error, {:unsupported_contract, 2}} = Garden.Image.load(dir)
+    assert {:error, {:unsupported_contract, 3}} = Garden.Image.load(dir)
+  end
+
+  for contract <- [1, 2] do
+    test "accepts contract #{contract} before resolving boot artifacts", %{tmp_dir: dir} do
+      write_manifest(dir, %{"contract" => unquote(contract)})
+
+      assert {:error, {:invalid_boot_artifact, "kernel"}} = Garden.Image.load(dir)
+    end
   end
 
   test "rejects an unsupported architecture before resolving boot artifacts", %{tmp_dir: dir} do

@@ -44,7 +44,18 @@ fn main() -> io::Result<()> {
         return Err(io::Error::last_os_error());
     }
     listen(&listener, 1)?;
-    let connection = accept_with(&listener, SocketFlags::CLOEXEC)?;
-    drop(listener);
-    sower_guest::serve_connection(connection)
+    loop {
+        let connection = match accept_with(&listener, SocketFlags::CLOEXEC) {
+            Ok(connection) => connection,
+            Err(error)
+                if error == rustix::io::Errno::INTR || error == rustix::io::Errno::CONNABORTED =>
+            {
+                continue;
+            }
+            Err(error) => return Err(error.into()),
+        };
+        // A connection-local failure is recoverable only after the runtime has
+        // certified cleanup. Err is deliberately fatal: never reuse uncertainty.
+        sower_guest::serve_connection(connection)?;
+    }
 }

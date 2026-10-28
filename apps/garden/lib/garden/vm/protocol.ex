@@ -25,11 +25,13 @@ defmodule Garden.VM.Protocol do
     end
   end
 
-  def execute(%Garden.VM.Command{} = command) do
+  def execute(command, version \\ 1)
+
+  def execute(%Garden.VM.Command{} = command, version) do
     with {:ok, payload} <-
            Jason.encode(%{
              "type" => "execute",
-             "version" => 1,
+             "version" => version,
              "path" => command.path,
              "args" => command.args,
              "env" => command.env,
@@ -41,6 +43,11 @@ defmodule Garden.VM.Protocol do
       false -> {:error, :request_too_large}
       {:error, reason} -> {:error, reason}
     end
+  end
+
+  def cancel do
+    payload = Jason.encode!(%{"type" => "cancel", "version" => 2})
+    <<1, byte_size(payload)::unsigned-big-32, payload::binary>>
   end
 
   def recv(socket) do
@@ -62,10 +69,10 @@ defmodule Garden.VM.Protocol do
 
   defp event(1, bytes) do
     case Jason.decode(bytes) do
-      {:ok, %{"version" => version}} when version != 1 ->
+      {:ok, %{"version" => version}} when version not in [1, 2] ->
         {:error, {:unsupported_event_version, version}}
 
-      {:ok, %{"version" => 1} = metadata} ->
+      {:ok, %{"version" => version} = metadata} when version in [1, 2] ->
         metadata(metadata)
 
       {:ok, _} ->
@@ -76,6 +83,7 @@ defmodule Garden.VM.Protocol do
     end
   end
 
+  defp metadata(%{"type" => "ready", "contract" => 2}), do: {:ok, {:ready, 2}}
   defp metadata(%{"type" => "ready"}), do: {:ok, :ready}
 
   defp metadata(%{"type" => "exited", "code" => code, "signal" => nil})

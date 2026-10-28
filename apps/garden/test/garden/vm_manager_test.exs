@@ -70,6 +70,34 @@ defmodule Garden.VM.ManagerTest do
      options: options}
   end
 
+  test "owned boot reserves capacity without a command and stop waits for cleanup", context do
+    options = Keyword.delete(context.options, :command)
+    image = %{options[:image] | contract: 2}
+    {:ok, first} = Manager.boot(image, options, context.names.manager)
+    status = ready(first, context.names.manager)
+    assert status.persistent
+    assert status.phase == :booting
+
+    {:error, :vm_unavailable} =
+      Manager.execute(first, %VM.Command{path: "/bin/true"}, [], context.names.manager)
+
+    {:ok, second} = Manager.boot(image, options, context.names.manager)
+    second_status = ready(second, context.names.manager)
+
+    assert {:error, {:capacity_exhausted, :vms}} =
+             Manager.boot(image, options, context.names.manager)
+
+    File.rm!(Path.join(status.directory, "scratch.ext4.ready"))
+    assert :ok = Manager.stop(first, context.names.manager)
+
+    assert {:ok, %VM.Status{phase: :stopped, cleanup: :ok}} =
+             Manager.status(first, context.names.manager)
+
+    refute File.exists?(status.directory)
+    File.rm!(Path.join(second_status.directory, "scratch.ext4.ready"))
+    assert :ok = Manager.stop(second, context.names.manager)
+  end
+
   test "network admission rejects unsupported modes and images without static configuration",
        context do
     assert {:error, {:invalid_option, :network}} =

@@ -1,33 +1,183 @@
 defmodule Garden.VM.IO do
   @moduledoc false
+  use TypedStruct
   alias Garden.VM.Protocol
+
+  typedstruct do
+    field :guard, pid(), enforce: true
+    field :path, String.t(), enforce: true
+    field :contract, integer(), enforce: true
+    field :socket, port()
+    field :command, pid()
+    field :callback, function()
+    field :worker, pid()
+    field :buffer, binary(), default: <<>>
+    field :cancelled, term()
+    field :started, integer()
+    field :ready_ms, integer()
+  end
 
   def output(:stdout, bytes), do: IO.binwrite(:stdio, bytes)
   def output(:stderr, bytes), do: IO.binwrite(:standard_error, bytes)
 
-  def run(guard, vmm, %Garden.VM.Command{} = command, callback, started) do
-    result =
-      with {:ok, status} <- CloudHypervisor.Process.await_ready(vmm),
-           {:ok, socket} <- connect(Path.join(status.directory, "vsock.sock")) do
-        try do
-          with {:ok, :ready, <<>>} <- Protocol.recv(socket),
-               {:ok, frame} <- Protocol.execute(command),
-               :ok <- :gen_tcp.send(socket, frame) do
-            ready = System.monotonic_time(:millisecond) - started
-            send(guard, {:guest_ready, ready})
-            drain(socket, callback, ready, started)
-          else
-            {:error, reason} -> {:error, reason}
-            event -> {:error, {:unexpected_ready_event, event}}
-          end
-        after
-          :gen_tcp.close(socket)
-        end
-      else
-        {:error, reason} -> {:error, reason}
-      end
+  def run(guard, vmm, contract, started) do
+    Process.flag(:trap_exit, true)
 
-    send(guard, {:finish, result})
+    with {:ok, status} <- CloudHypervisor.Process.await_ready(vmm),
+         {:ok, socket} <- connect(Path.join(status.directory, "vsock.sock")),
+         :ok <- ready(socket, contract) do
+      elapsed = System.monotonic_time(:millisecond) - started
+      send(guard, {:guest_ready, elapsed})
+
+      idle(%__MODULE__{
+        guard: guard,
+        path: Path.join(status.directory, "vsock.sock"),
+        contract: contract,
+        socket: socket,
+        ready_ms: elapsed
+      })
+    else
+      {:error, reason} -> send(guard, {:finish, {:error, reason}})
+    end
+  end
+
+  defp idle(%__MODULE__{} = state) do
+    receive do
+      {:execute, command, request, callback} ->
+        state = %{
+          state
+          | command: command,
+            callback: callback,
+            started: System.monotonic_time(:millisecond),
+            cancelled: nil,
+            buffer: <<>>
+        }
+
+        with {:ok, socket} <- connection(state),
+             {:ok, frame} <- Protocol.execute(request, state.contract),
+             :ok <- :gen_tcp.send(socket, frame),
+             :ok <- :inet.setopts(socket, active: :once) do
+          receive_output(%{state | socket: socket})
+        else
+          {:error, reason} -> send(state.guard, {:finish, {:error, {:guest_connection, reason}}})
+        end
+    end
+  end
+
+  defp connection(%__MODULE__{socket: socket}) when not is_nil(socket), do: {:ok, socket}
+
+  defp connection(%__MODULE__{} = state) do
+    with {:ok, socket} <- connect(state.path),
+         :ok <- ready(socket, state.contract) do
+      {:ok, socket}
+    else
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp ready(socket, contract) do
+    case Protocol.recv(socket) do
+      {:ok, {:ready, 2}, <<>>} when contract == 2 -> :ok
+      {:ok, :ready, <<>>} when contract == 1 -> :ok
+      {:ok, {:ready, 2}, <<>>} when contract == 1 -> :ok
+      event -> {:error, {:unexpected_ready_event, event}}
+    end
+  end
+
+  defp receive_output(%__MODULE__{} = state) do
+    receive do
+      {:tcp, socket, bytes} when socket == state.socket ->
+        consume(%{state | buffer: state.buffer <> bytes})
+
+      {:tcp_closed, socket} when socket == state.socket ->
+        send(state.guard, {:finish, {:error, :guest_disconnected}})
+
+      {:tcp_error, socket, reason} when socket == state.socket ->
+        send(state.guard, {:finish, {:error, {:guest_connection, reason}}})
+
+      {:output_done, worker} when worker == state.worker ->
+        consume(%{state | worker: nil})
+
+      {:EXIT, worker, _reason} when worker == state.worker ->
+        send(state.guard, {:cancel_command, state.command, :output_consumer_down})
+        receive_output(%{state | worker: nil})
+
+      {:cancel, command, reason} when command == state.command ->
+        cancel(state, reason)
+
+      _ ->
+        receive_output(state)
+    end
+  end
+
+  defp cancel(%__MODULE__{cancelled: reason} = state, _new) when not is_nil(reason),
+    do: receive_output(state)
+
+  defp cancel(%__MODULE__{} = state, reason) do
+    if state.worker, do: Process.exit(state.worker, :kill)
+
+    if state.contract == 2 do
+      case :gen_tcp.send(state.socket, Protocol.cancel()) do
+        :ok -> consume(%{state | worker: nil, cancelled: reason})
+        {:error, error} -> send(state.guard, {:finish, {:error, {:cancel_unconfirmed, error}}})
+      end
+    else
+      send(state.guard, {:finish, {:error, reason}})
+    end
+  end
+
+  defp consume(%__MODULE__{worker: worker} = state) when not is_nil(worker),
+    do: receive_output(state)
+
+  defp consume(%__MODULE__{} = state) do
+    case Protocol.decode_frame(state.buffer) do
+      :more ->
+        :ok = :inet.setopts(state.socket, active: :once)
+        receive_output(state)
+
+      {:ok, {stream, bytes}, rest} when stream in [:stdout, :stderr] ->
+        if state.cancelled do
+          consume(%{state | buffer: rest})
+        else
+          io = self()
+          callback = state.callback
+
+          worker =
+            spawn_link(fn ->
+              callback.(stream, bytes)
+              send(io, {:output_done, self()})
+            end)
+
+          receive_output(%{state | buffer: rest, worker: worker})
+        end
+
+      {:ok, {:exited, code, signal}, _rest} ->
+        result =
+          if state.cancelled,
+            do: {:error, state.cancelled},
+            else:
+              {:ok,
+               %Garden.VM.Result{
+                 code: code,
+                 signal: signal,
+                 ready_ms: state.ready_ms,
+                 elapsed_ms: System.monotonic_time(:millisecond) - state.started
+               }}
+
+        completed(state, result)
+
+      {:ok, {:guest_error, message}, _rest} ->
+        completed(state, {:error, {:guest, message}})
+
+      event ->
+        send(state.guard, {:finish, {:error, {:guest_protocol, event}}})
+    end
+  end
+
+  defp completed(%__MODULE__{} = state, result) do
+    :gen_tcp.close(state.socket)
+    send(state.guard, {:command_finished, state.command, result})
+    idle(%{state | socket: nil, command: nil, callback: nil, buffer: <<>>})
   end
 
   defp connect(path) do
@@ -49,13 +199,9 @@ defmodule Garden.VM.IO do
             Process.sleep(25)
             connect(path)
 
-          {:error, reason} ->
+          error ->
             :gen_tcp.close(socket)
-            {:error, {:bridge, reason}}
-
-          false ->
-            :gen_tcp.close(socket)
-            {:error, :invalid_bridge_handshake}
+            {:error, {:bridge, error}}
         end
 
       {:error, reason} when reason in [:enoent, :econnrefused] ->
@@ -64,32 +210,6 @@ defmodule Garden.VM.IO do
 
       {:error, reason} ->
         {:error, {:bridge, reason}}
-    end
-  end
-
-  defp drain(socket, callback, ready, started) do
-    case Protocol.recv(socket) do
-      {:ok, {stream, bytes}, <<>>} when stream in [:stdout, :stderr] ->
-        callback.(stream, bytes)
-        drain(socket, callback, ready, started)
-
-      {:ok, {:exited, code, signal}, <<>>} ->
-        {:ok,
-         %Garden.VM.Result{
-           code: code,
-           signal: signal,
-           ready_ms: ready,
-           elapsed_ms: System.monotonic_time(:millisecond) - started
-         }}
-
-      {:ok, {:guest_error, message}, <<>>} ->
-        {:error, {:guest, message}}
-
-      {:ok, event, <<>>} ->
-        {:error, {:unexpected_guest_event, event}}
-
-      {:error, reason} ->
-        {:error, {:guest_protocol, reason}}
     end
   end
 end

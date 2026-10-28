@@ -27,6 +27,7 @@ defmodule Garden.Image do
          kernel: metadata["kernel"],
          initrd: metadata["initrd"],
          root: metadata["root"],
+         contract: metadata["contract"],
          cmdline: metadata["cmdline"],
          network_config:
            case metadata["network_config"] do
@@ -39,7 +40,7 @@ defmodule Garden.Image do
     end
   end
 
-  defp supported(%{"contract" => contract}) when contract != 1,
+  defp supported(%{"contract" => contract}) when contract not in [1, 2],
     do: {:error, {:unsupported_contract, contract}}
 
   defp supported(%{"system" => system}) when system != "x86_64-linux",
@@ -51,7 +52,7 @@ defmodule Garden.Image do
   defp supported(%{
          "version" => 1,
          "system" => "x86_64-linux",
-         "contract" => 1,
+         "contract" => contract,
          "vsock_port" => 5000,
          "scratch" => %{
            "device" => "/dev/vdb",
@@ -60,7 +61,7 @@ defmodule Garden.Image do
          },
          "cmdline" => cmdline
        })
-       when is_binary(cmdline), do: :ok
+       when contract in [1, 2] and is_binary(cmdline), do: :ok
 
   defp supported(_), do: {:error, :invalid_boot_metadata}
 

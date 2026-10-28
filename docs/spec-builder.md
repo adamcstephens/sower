@@ -203,19 +203,17 @@ Programs that emit items (eval; later, checks enriching items) write
 JSON lines to a runtime-provided descriptor, which the runtime forwards
 as `item` events — application stdout stays log, never protocol.
 
-The guest runtime receives the command over vsock after boot, injects
-nothing into its environment beyond `command.env`, and reports exit
-status. VMs are ephemeral: booted per execution, destroyed after,
-nothing surviving but exported paths and the event stream.
+The guest runtime receives commands over vsock after boot, injects
+nothing into their environment beyond `command.env`, and reports exit
+status. Disposable execution remains the default composition: boot, await
+readiness, execute one command, await its result, then stop the VM and await
+certified cleanup. A persistent VM instead remains available after command
+completion, retaining its scratch disk and guest state until explicitly
+stopped or its VM owner is lost. Commands are serial within a VM; independent
+VMs may execute concurrently. Commands are never automatically replayed.
 
-That lifecycle is the default, not a constraint. Interactive access to
-a live guest — an SSH or console session a user opens to troubleshoot a
-failing run — is an affordance the isolation model should keep open
-rather than design out. Brokered host-side over vsock as another
-service, it needs no NIC, no in-guest credential, and no change to
-network policy, and the server gates who reaches it. What it does need
-is a guest that outlives its command, so holding a VM open past exit is
-a lifecycle question to leave room for.
+Keeping a VM alive does not introduce interactive access. Brokered SSH or
+console access remains a separate service and authorization decision.
 
 ### Local command protocol
 
@@ -228,30 +226,51 @@ length, and at most 65,536 payload bytes. Kind 1 is JSON metadata; kinds 2
 and 3 carry raw stdout and stderr. Ordering is preserved within each output
 stream, without a cross-stream ordering guarantee.
 
-The guest sends `{"type":"ready","version":1}`. One execute request carries
+The guest sends `{"type":"ready","version":1,"contract":2}`. The version-1
+ready envelope preserves legacy protocol compatibility; the contract marker
+advertises the persistent command surface. One execute request carries
 `type`, `version`, `path`, `args`, `env`, and `stdin`; `args` excludes argv[0].
+Contract-2 commands use execute version 2 and terminal metadata version 2.
 The executor launches the absolute path directly with only the supplied
 environment, writes JSON stdin, closes it, and drains both output pipes.
 An `exited` event contains either an integer `code` or an integer `signal`,
 with the other field null. Request/spawn failures return an `error` event,
 never a fabricated exit status.
 
-`Garden.VM` supervises local execution and streams output outside its
-lifecycle process. An independent guard survives owner/controller death
-and reclaims scratch and known files only after confirmed VM teardown.
-Deadlines and cancellation do not depend on a responsive guest or output
-consumer. Uncertain cleanup or unexpected files retain resources and fail.
-The image marker's contract 1 describes this implemented command surface,
-not the complete future builder services.
+Each command uses a separate connection. While it runs, the host may send
+`{"type":"cancel","version":2}`; the guest kills and reaps the command tree
+before reporting its actual exit code or signal. Disconnect also cancels and
+reaps the command tree. The guest accepts the next connection only after
+cleanup, so readiness on that connection certifies the previous command is
+gone. A stalled output consumer cannot block host-side cancellation.
+
+`Garden.VM` supervises VM lifetime independently from command execution and
+streams output outside its lifecycle process. An independent guard survives
+owner/controller death and reclaims scratch and known files only after
+confirmed VM teardown. Uncertain cleanup or unexpected files retain resources
+and fail. New images declare contract 2; Garden still accepts contract-1
+images for disposable execution only. Persistent boot rejects contract 1
+before allocation. Older Gardens reject contract-2 images explicitly rather
+than silently treating them as disposable contract-1 images.
 
 ### Garden-local admission
 
-`Garden.VM.Manager.start/1` admits a VM command with an explicit
-process owner and returns an execution ID. `status/1`, `cancel/1`, and
-`await/1` use that ID independently of the temporary controller lifetime.
-`list/0` returns `{:ok, statuses}` from the ledger, ordered by execution ID.
-It includes active executions and retained terminal records even after their
-controllers exit. Filter statuses by `phase == :running` for running VMs.
+The local API separates VM admission from command admission. `boot/1` admits
+a VM with an explicit VM owner and returns its handle; `await_ready/1` waits
+for guest readiness. `execute/2` starts a command in a ready VM and returns
+a command handle. `command_status/1`, `await_command/1`, and
+`cancel_command/1` address that command, not VM lifetime. A command owner
+loss cancels its command; VM owner loss stops the entire VM. Only one command
+may be active per VM; a busy VM rejects another execution rather than queuing
+or replacing it. Command completion or cancellation leaves the VM running.
+
+`status/1` observes the VM and `stop/1` terminates it, including any active
+command, with certified resource cleanup. The disposable `run` API composes
+boot/readiness/execute/await-command/stop and returns only after cleanup;
+contract-1 images retain their legacy disposable path. Existing
+`Garden.VM.Manager.start/1`, `await/1`, and `cancel/1` remain disposable
+entry points. Manager IDs and `list/0` expose ledger state independently of
+temporary controller lifetime, including retained terminal records.
 Output callbacks retain the local launcher's `(stream, bytes)` interface;
 callers capture their job/step identity in the callback.
 
@@ -303,16 +322,18 @@ deployments retain the 200 MiB default.
 
 Garden configuration sets `vm_capacity` with positive integer `vms`,
 `cpus`, `memory` (bytes), and `scratch_bytes`. Defaults admit one VM,
-one CPU, 512 MiB memory, and 4 GiB scratch. Reservations cover startup,
-execution, and stopping; these are admission budgets, not hard host
-isolation. Oversized requests return `request_exceeds_capacity`; requests
+one CPU, 512 MiB memory, and 4 GiB scratch. Reservations cover the entire VM
+lifetime, including startup, idle time between commands, execution, and
+stopping; these are admission budgets, not hard host isolation.
+Oversized requests return `request_exceeds_capacity`; requests
 that exceed currently available resources return `capacity_exhausted`,
 both with the exhausted dimension. Neither case queues or allocates a VM.
 
 Only certified native teardown and successful owned-file cleanup release
-a reservation. Cleanup failures retain their ID, result, directory, and
-reservation indefinitely. Clean terminal results are retained up to
-`vm_result_limit` (default 128); oldest results are evicted first, after
+a reservation. Cleanup failures retain their VM ID, command results,
+directory, and reservation indefinitely; a terminal command result is not
+evidence that VM resources were released. Clean terminal results are retained
+up to `vm_result_limit` (default 128); oldest results are evicted first, after
 recording the result and retiring its controller.
 
 Recovery closes admission and drains existing executions without replaying

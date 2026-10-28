@@ -17,10 +17,20 @@ defmodule Garden.VM.Guard do
     field :cleanup_error, term()
     field :started, integer(), enforce: true
     field :options, keyword(), enforce: true
+    field :boot_timer, reference()
+    field :command, pid()
+    field :cancel_timer, reference()
   end
 
   def run(server, options) do
     Process.flag(:trap_exit, true)
+
+    options =
+      Keyword.put_new(
+        options,
+        :boot_deadline_ms,
+        if(options[:command], do: Keyword.get(options, :deadline_ms, 60_000), else: 60_000)
+      )
 
     state = %__MODULE__{
       server: server,
@@ -49,7 +59,15 @@ defmodule Garden.VM.Guard do
 
   defp allocate(%__MODULE__{} = state) do
     options = state.options
-    Process.send_after(self(), :deadline, Keyword.get(options, :deadline_ms, 60_000))
+
+    timer =
+      Process.send_after(
+        self(),
+        :deadline,
+        Keyword.get(options, :boot_deadline_ms, Keyword.get(options, :deadline_ms, 60_000))
+      )
+
+    state = %{state | boot_timer: timer}
 
     directory =
       Path.join(
@@ -143,7 +161,7 @@ defmodule Garden.VM.Guard do
       {:finish, result} ->
         stop(state, result)
 
-      :deadline ->
+      :deadline when state.boot_timer != nil ->
         stop(state, {:error, :timeout})
 
       :cleanup_deadline ->
@@ -158,8 +176,41 @@ defmodule Garden.VM.Guard do
         stop(state, {:error, {:io_down, reason}})
 
       {:guest_ready, _ready} ->
-        notify_status(state, phase: :running)
-        loop(state)
+        Process.cancel_timer(state.boot_timer)
+        notify_status(state, phase: :ready)
+        loop(%{state | boot_timer: nil})
+
+      {:execute, command, request, callback} when state.command == nil ->
+        send(state.io, {:execute, command, request, callback})
+
+        notify_status(state,
+          phase: if(state.options[:command], do: :running, else: :running_command)
+        )
+
+        loop(%{state | command: command})
+
+      {:cancel_command, command, reason} when command == state.command ->
+        send(state.io, {:cancel, command, reason})
+
+        timer =
+          state.cancel_timer || Process.send_after(self(), {:cancel_deadline, command}, 5_000)
+
+        loop(%{state | cancel_timer: timer})
+
+      {:cancel_deadline, command} when command == state.command ->
+        stop(state, {:error, :command_cleanup_unconfirmed})
+
+      {:command_finished, command, result} when command == state.command ->
+        if state.cancel_timer, do: Process.cancel_timer(state.cancel_timer)
+        send(state.server, {:command_finished, command, result})
+        state = %{state | command: nil, cancel_timer: nil}
+
+        if state.options[:command] do
+          stop(state, result)
+        else
+          notify_status(state, phase: :ready)
+          loop(state)
+        end
 
       {:cloud_hypervisor, vmm, {:exited, outcome}} when vmm == state.vmm ->
         stop(state, {:error, {:vmm_exited, outcome}})
@@ -203,7 +254,11 @@ defmodule Garden.VM.Guard do
     after
       0 ->
         if System.monotonic_time(:millisecond) - state.started >=
-             Keyword.get(state.options, :deadline_ms, 60_000),
+             Keyword.get(
+               state.options,
+               :boot_deadline_ms,
+               Keyword.get(state.options, :deadline_ms, 60_000)
+             ),
            do: stop(state, {:error, :timeout}),
            else: launch_vm(state)
     end
@@ -241,7 +296,12 @@ defmodule Garden.VM.Guard do
            launch: %Launch{
              executable: Keyword.get(state.options, :hypervisor, "cloud-hypervisor")
            },
-           readiness_timeout: Keyword.get(state.options, :deadline_ms, 60_000)
+           readiness_timeout:
+             Keyword.get(
+               state.options,
+               :boot_deadline_ms,
+               Keyword.get(state.options, :deadline_ms, 60_000)
+             )
          ) do
       {:ok, vmm} ->
         status = CloudHypervisor.Process.status(vmm)
@@ -253,8 +313,7 @@ defmodule Garden.VM.Guard do
             Garden.VM.IO.run(
               guard,
               vmm,
-              state.options[:command],
-              Keyword.get(state.options, :on_output, &Garden.VM.IO.output/2),
+              state.options[:image].contract,
               state.started
             )
           end)
