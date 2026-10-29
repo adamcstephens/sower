@@ -64,7 +64,7 @@ pub struct DeployArgs {
         long,
         requires = "copy_to",
         conflicts_with_all = [
-            "seed", "to", "name", "tags", "action", "force",
+            "seed", "to", "name", "tags", "force",
             "override_policy", "reason", "no_wait"
         ]
     )]
@@ -87,6 +87,7 @@ pub struct DeployArgs {
     /// Without --override, the garden's direct policy must permit it.
     /// Restart does not require --override; policy windows and confirmation still apply.
     /// Required explicitly when overriding policy.
+    /// With --sudo: stage copies only, activate switches, restart boots then reboots.
     #[arg(long)]
     action: Option<DeployAction>,
 
@@ -166,13 +167,23 @@ fn validate(args: &DeployArgs) -> Result<()> {
 }
 
 fn deploy_sudo(args: &DeployArgs) -> Result<()> {
-    let endpoint = args.connection.endpoint()?;
+    let action = args.action.unwrap_or(DeployAction::Activate);
     let prepared = prepare_artifact(args)?;
-    let request = Request {
+    if action == DeployAction::Stage {
+        tracing::info!("Closure copied; no activation requested");
+        return Ok(());
+    }
+    let endpoint = args.connection.endpoint()?;
+    let mut request = Request {
         id: "sudo-deploy".to_owned(),
         kind: prepared.seed_type.as_str().to_owned(),
         path: prepared.artifact,
-        mode: "switch".to_owned(),
+        mode: if action == DeployAction::Restart {
+            "boot"
+        } else {
+            "switch"
+        }
+        .to_owned(),
         reason: String::new(),
         seeds: Vec::new(),
         network_action: None,
@@ -185,6 +196,17 @@ fn deploy_sudo(args: &DeployArgs) -> Result<()> {
         &serde_json::to_string(&request)?,
         endpoint.as_deref(),
     )?;
+    if action == DeployAction::Restart {
+        request.id = "sudo-reboot".to_owned();
+        request.kind = "reboot".to_owned();
+        request.path.clear();
+        request.mode.clear();
+        sudo::run(
+            args.copy_to.as_deref().expect("required by clap"),
+            &serde_json::to_string(&request)?,
+            endpoint.as_deref(),
+        )?;
+    }
     tracing::info!(
         "Activation succeeded; garden health and pending server deployments are unchanged"
     );
@@ -284,6 +306,9 @@ fn prepare_artifact(args: &DeployArgs) -> Result<PreparedArtifact> {
 
     if args.sudo && !matches!(seed_type, SeedType::Nixos | SeedType::HomeManager) {
         bail!("--sudo supports nixos and home-manager activation");
+    }
+    if args.sudo && args.action == Some(DeployAction::Restart) && !matches!(seed_type, SeedType::Nixos) {
+        bail!("--sudo --action restart requires a nixos seed");
     }
     crate::commands::seed::precheck(Path::new(&artifact), seed_type)
         .context("pre-check artifact")?;

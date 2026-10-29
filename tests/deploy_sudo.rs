@@ -163,10 +163,18 @@ exit 0
             .expect("run sower deploy")
     }
 
+    fn requests(&self) -> Vec<serde_json::Value> {
+        fs::read_to_string(self.root.join("requests"))
+            .expect("remote activator received requests")
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect()
+    }
+
     fn request(&self) -> serde_json::Value {
-        let requests = fs::read_to_string(self.root.join("requests"))
-            .expect("remote activator received a request");
-        serde_json::from_str(&requests).expect("one JSON activation request")
+        let requests = self.requests();
+        assert_eq!(requests.len(), 1);
+        requests.into_iter().next().unwrap()
     }
 }
 
@@ -283,6 +291,108 @@ fn sudo_deploy_uses_existing_remote_sower_without_server_credentials() {
     assert_eq!(request["type"], "nixos");
     assert_eq!(request["path"], fixture.artifact.to_str().unwrap());
     assert_eq!(request["mode"], "switch");
+}
+
+#[test]
+fn sudo_explicit_activate_switches_without_rebooting() {
+    let fixture = Fixture::new("{\"id\":\"sudo-deploy\",\"type\":\"complete\",\"exit_code\":0}\n");
+    let out = fixture
+        .command()
+        .arg("--path")
+        .arg(&fixture.artifact)
+        .args(["--copy-to", "ssh://host", "--sudo", "--action", "activate"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(fixture.request()["mode"], "switch");
+}
+
+#[test]
+fn sudo_stage_copies_without_connecting_or_activating() {
+    let fixture = Fixture::new("");
+    let out = fixture
+        .command()
+        .arg("--path")
+        .arg(&fixture.artifact)
+        .args(["--copy-to", "ssh://host", "--sudo", "--action", "stage"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(fixture.root.join("nix-args").exists());
+    assert!(!fixture.root.join("ssh-used").exists());
+}
+
+#[test]
+fn sudo_restart_reboots_only_after_successful_boot_activation() {
+    for exit_code in [0, 41] {
+        let fixture = Fixture::new("");
+        fixture.executable(
+            "sower",
+            &format!(
+                r#"#!/usr/bin/env sh
+set -eu
+IFS= read -r request
+printf '%s\n' "$request" >> "$SOWER_TEST_ROOT/requests"
+case "$request" in
+    *'"type":"reboot"'*) printf '%s\n' '{{"id":"sudo-reboot","type":"complete","exit_code":0}}' ;;
+    *) printf '%s\n' '{{"id":"sudo-deploy","type":"complete","exit_code":{exit_code}}}' ;;
+esac
+"#
+            ),
+        );
+        let out = fixture
+            .command()
+            .arg("--path")
+            .arg(&fixture.artifact)
+            .args(["--copy-to", "ssh://host", "--sudo", "--action", "restart"])
+            .output()
+            .unwrap();
+        assert_eq!(
+            out.status.success(),
+            exit_code == 0,
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let requests = fixture.requests();
+        assert_eq!(requests[0]["type"], "nixos");
+        assert_eq!(requests[0]["mode"], "boot");
+        assert_eq!(requests.len(), if exit_code == 0 { 2 } else { 1 });
+        if exit_code == 0 {
+            assert_eq!(requests[1]["type"], "reboot");
+        }
+    }
+}
+
+#[test]
+fn sudo_home_manager_restart_is_rejected_before_copying() {
+    let fixture = Fixture::new("");
+    let out = fixture
+        .command()
+        .arg("--path")
+        .arg(&fixture.artifact)
+        .args([
+            "--copy-to",
+            "ssh://host",
+            "--sudo",
+            "--type",
+            "home-manager",
+            "--action",
+            "restart",
+        ])
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("restart requires a nixos seed"));
+    assert!(!fixture.root.join("nix-args").exists());
+    assert!(!fixture.root.join("ssh-used").exists());
 }
 
 #[test]
