@@ -6,7 +6,6 @@ bootstrap: dev-services dev-client
     [ -f dev-client.json ] || cp ./dev-client-example.json ./dev-client.json
     [ -f dev-server.json ] || cp ./dev-server-example.json ./dev-server.json
     mix deps.get
-    mix deps.compile
     mix ecto.create
     mix ecto.migrate
     mix assets.build
@@ -89,7 +88,7 @@ doctor:
 
     echo "dependencies:"
     check_path deps "mix deps.get"
-    check_path _build "mix deps.compile"
+    check_path _build "nix develop / direnv reload"
 
     echo "services:"
     if pg_isready --quiet; then
@@ -128,7 +127,7 @@ format-rust:
 
 mix-nix-lock:
     mix deps.get
-    mix deps.nix --output nix/packages/deps.nix --env prod --env test
+    elixir bin/mix-nix-lock.exs
 
 mix-clean:
     mix deps.clean --unused --unlock
@@ -204,10 +203,9 @@ update-elixir:
     mix deps.get
     mix hex.outdated
     mix hex.audit
-    pushd apps/sower; MIX_ENV=test mix boruta.gen.migration; popd
     just mix-clean
-    just mix-nix-lock
-    jj commit -m 'chore: update elixir deps' apps/*/mix.exs mix.exs mix.lock nix/packages/deps.nix
+    nix develop --command bash -c 'pushd apps/sower && MIX_ENV=test mix boruta.gen.migration && popd'
+    jj commit --message 'chore: update elixir deps' apps/*/mix.exs mix.exs mix.lock nix/packages/deps.nix nix/packages/deps-envs.json
 
 update-npins:
     npins -d nix/tests/npins update

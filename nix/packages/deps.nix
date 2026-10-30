@@ -289,6 +289,23 @@ let
         in
         drv.override (workarounds.elixirMake { } drv);
 
+      circular_buffer =
+        let
+          version = "1.1.0";
+          drv = buildMix {
+            inherit version;
+            name = "circular_buffer";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "circular_buffer";
+              sha256 = "0daa0a4fcb3a7ffabc8576bdbf64c99adc6d4b37eab1185179140769ba58f571";
+            };
+          };
+        in
+        drv;
+
       comeonin =
         let
           version = "5.5.1";
@@ -399,6 +416,50 @@ let
         in
         drv;
 
+      deps_nix =
+        let
+          version = "3.1.1";
+          drv = buildMix {
+            inherit version;
+            name = "deps_nix";
+            appConfigPath = ../../config;
+
+            src = fetchFromGitHub {
+              owner = "code-supply";
+              repo = "deps_nix";
+              rev = "8ecd7ff6ab480fb8ee10768d60c7bb8e08978c29";
+              hash = "sha256-i3pMoWrKzBRZo77xFcCmjck4BngChPO8xPNTokuSVIk=";
+            };
+
+            beamDeps = [
+              ex_nar
+              mint
+            ];
+          };
+        in
+        drv;
+
+      dialyxir =
+        let
+          version = "1.4.8";
+          drv = buildMix {
+            inherit version;
+            name = "dialyxir";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "dialyxir";
+              sha256 = "cbd5a851571e5dfeb32aaf2e840bfa98b7864cb3071bf2ef5d95d1276b12e072";
+            };
+
+            beamDeps = [
+              erlex
+            ];
+          };
+        in
+        drv;
+
       ecto =
         let
           version = "3.14.2";
@@ -492,6 +553,23 @@ let
               inherit version;
               pkg = "envar";
               sha256 = "97028ab4a040a5c19e613fdf46a41cf51c6e848d99077e525b338e21d2993320";
+            };
+          };
+        in
+        drv;
+
+      erlex =
+        let
+          version = "0.2.9";
+          drv = buildMix {
+            inherit version;
+            name = "erlex";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "erlex";
+              sha256 = "8cfffc0ec7159e6d73de2ab28a588064de80f88b2798d5cbe4482cbbc200178b";
             };
           };
         in
@@ -621,6 +699,23 @@ let
             beamDeps = [
               decimal
             ];
+          };
+        in
+        drv;
+
+      ex_nar =
+        let
+          version = "0.3.0";
+          drv = buildMix {
+            inherit version;
+            name = "ex_nar";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "ex_nar";
+              sha256 = "cbb42d047764feac6c411efddcadc31866e9a998dd6e2bc1eb428cec1c49fdcd";
+            };
           };
         in
         drv;
@@ -1053,6 +1148,30 @@ let
 
             beamDeps = [
               libcluster
+            ];
+          };
+        in
+        drv;
+
+      live_debugger =
+        let
+          version = "1.0.3";
+          drv = buildMix {
+            inherit version;
+            name = "live_debugger";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "live_debugger";
+              sha256 = "4ddcde2132383d25e40b40a168e6376edc17bcf9d12cb240cb61032c6b40bb7d";
+            };
+
+            beamDeps = [
+              file_system
+              igniter
+              phoenix
+              phoenix_live_view
             ];
           };
         in
@@ -1573,6 +1692,28 @@ let
         in
         drv;
 
+      phoenix_live_reload =
+        let
+          version = "1.7.0";
+          drv = buildMix {
+            inherit version;
+            name = "phoenix_live_reload";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "phoenix_live_reload";
+              sha256 = "dc9f44271aa6fc4ab7797f2aa374ba096ef2c87520586280eb095626b7387a68";
+            };
+
+            beamDeps = [
+              file_system
+              phoenix
+            ];
+          };
+        in
+        drv;
+
       phoenix_live_view =
         let
           version = "1.2.12";
@@ -1939,7 +2080,7 @@ let
 
       systemd =
         let
-          version = "0.6.2+build.155.ref62723b2";
+          version = "0.0.0";
           drv = buildRebar3 {
             inherit version;
             name = "systemd";
@@ -2086,6 +2227,32 @@ let
 
             beamDeps = [
               telemetry
+            ];
+          };
+        in
+        drv;
+
+      tidewave =
+        let
+          version = "0.9.1";
+          drv = buildMix {
+            inherit version;
+            name = "tidewave";
+            appConfigPath = ../../config;
+
+            src = fetchHex {
+              inherit version;
+              pkg = "tidewave";
+              sha256 = "dc8db03332b35084fd5b5fbe4fcb196c077bbe9cfdf883dcf6a5750a9bc19bb2";
+            };
+
+            beamDeps = [
+              circular_buffer
+              igniter
+              jason
+              phoenix_live_reload
+              plug
+              websock_adapter
             ];
           };
         in

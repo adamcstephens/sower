@@ -15,6 +15,7 @@ beamPackages.mixRelease {
     fileset = lib.fileset.unions [
       ../../.formatter.exs
       ../../apps
+      ../../bin
       ../../config
       ../../mix.exs
       ../../mix.lock

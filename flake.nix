@@ -38,6 +38,10 @@
             );
 
             craneLib = inputs.crane.mkLib pkgs;
+
+            devMixDeps = pkgs.callPackage ./nix/packages/dev-mix-deps.nix {
+              inherit beamPackages;
+            };
           in
           {
             _module.args = {
@@ -53,6 +57,12 @@
               };
 
               default = pkgs.mkShell {
+                nativeBuildInputs = [ beamPackages.mixBuildDirHook ];
+
+                shellHook = ''
+                  source ${./nix/flake/mix-dev-shell.sh}
+                '';
+
                 packages = [
                   # elixir
                   beamPackages.erlang
@@ -89,6 +99,7 @@
                 ];
 
                 env = {
+                  SOWER_MIX_DEPS = devMixDeps;
                   # prevent mix from trying to download binaries
                   TAILWIND_PATH = lib.getExe pkgs.tailwindcss_3;
                   ESBUILD_PATH = lib.getExe pkgs.esbuild;
