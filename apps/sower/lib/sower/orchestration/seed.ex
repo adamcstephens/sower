@@ -459,8 +459,15 @@ defmodule Sower.Orchestration.Seed do
                {"user", user_name} -> user_name
                _ -> nil
              end) do
-          nil -> name
-          user_name -> "#{user_name}@#{garden.name}"
+          nil ->
+            name
+
+          user_name ->
+            prefix = "#{user_name}@"
+
+            if String.starts_with?(garden.name, prefix),
+              do: garden.name,
+              else: prefix <> garden.name
         end
       else
         name

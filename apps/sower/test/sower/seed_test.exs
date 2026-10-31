@@ -362,6 +362,33 @@ defmodule Sower.SeedTest do
       assert Enum.any?(seed.tags, fn tag -> tag.key == "garden_source" end)
     end
 
+    for {garden_name, expected_name} <- [
+          {"deck", "alice@deck"},
+          {"alice@deck", "alice@deck"},
+          {"alice2@deck", "alice@alice2@deck"}
+        ] do
+      test "names home-manager seeds from garden #{garden_name}" do
+        garden = garden_fixture(%{name: unquote(garden_name)})
+
+        generation = %SowerClient.Orchestration.GardenSeedGeneration{
+          path: "/nix/store/#{unique_hash()}-home-manager-generation",
+          link: "/home/alice/.local/state/nix/profiles/home-manager-5-link",
+          created: DateTime.to_iso8601(DateTime.utc_now()),
+          generation_number: 5,
+          is_current: true
+        }
+
+        profile = %SowerClient.Orchestration.GardenSeedProfile{
+          profile_path: "/home/alice/.local/state/nix/profiles/home-manager",
+          tags: [{"user", "alice"}],
+          generations: [generation]
+        }
+
+        assert {:ok, seed} = Seed.find_or_register(garden, generation, profile)
+        assert seed.name == unquote(expected_name)
+      end
+    end
+
     test "determines seed_type from home-manager profile path" do
       garden = garden_fixture()
       artifact = "/nix/store/#{unique_hash()}-home-manager-generation"
@@ -382,6 +409,7 @@ defmodule Sower.SeedTest do
 
       assert {:ok, seed} = Seed.find_or_register(garden, generation, profile)
       assert seed.seed_type == "home-manager"
+      assert seed.name == "home-manager-generation"
     end
   end
 
