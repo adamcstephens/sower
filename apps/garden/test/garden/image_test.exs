@@ -23,6 +23,31 @@ defmodule Garden.ImageTest do
     assert {:error, {:unsupported_system, "aarch64-linux"}} = Garden.Image.load(dir)
   end
 
+  test "translates resolved artifacts and runtime policy into manager-owned configuration" do
+    image = %Garden.Image{
+      directory: "/nix/store/image",
+      kernel: "/nix/store/kernel",
+      initrd: "/nix/store/initrd",
+      root: "/nix/store/root.erofs",
+      cmdline: "console=ttyS0",
+      contract: 2,
+      network_config: :static
+    }
+
+    assert %VMManager.Config{
+             id: "builder",
+             kernel: "/nix/store/kernel",
+             initrd: "/nix/store/initrd",
+             root: "/nix/store/root.erofs",
+             cmdline: "console=ttyS0",
+             contract: 2,
+             vsock_port: 5000,
+             network_config: :static,
+             cpus: 2,
+             network: :full
+           } = Garden.Image.vm_config(image, "builder", cpus: 2, network: :full)
+  end
+
   defp write_manifest(dir, overrides) do
     manifest =
       Map.merge(

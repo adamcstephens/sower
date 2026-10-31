@@ -1,0 +1,28 @@
+defmodule VMManager.Application do
+  use Application
+
+  @impl Application
+  def start(_type, _arguments) do
+    options = Application.get_all_env(:vm_manager)
+
+    state_home =
+      System.get_env("XDG_STATE_HOME") || Path.join(System.user_home!(), ".local/state")
+
+    options = Keyword.put_new(options, :state_directory, Path.join(state_home, "vm-manager"))
+
+    options =
+      case System.get_env("VM_MANAGER_BOOT_ID_FILE") do
+        nil -> options
+        path -> Keyword.put_new(options, :boot_id_file, path)
+      end
+
+    Supervisor.start_link(
+      [
+        {Registry, keys: :unique, name: VMManager.Registry},
+        {VMManager.Supervisor, Keyword.put(options, :name, VMManager.Supervisor)}
+      ],
+      strategy: :one_for_one,
+      name: VMManager.ApplicationSupervisor
+    )
+  end
+end

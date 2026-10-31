@@ -1,0 +1,220 @@
+defmodule VMManager.AttachmentTest do
+  use ExUnit.Case, async: true
+
+  for {scenario, state, id, device_tree} <- [
+        {"another VM", "Running", "other", nil},
+        {"an allocated Created VM", "Created", "expected", %{"devices" => []}}
+      ] do
+    test "an endpoint serving #{scenario} is retained without mutation or path cleanup" do
+      native_state = unquote(state)
+      native_id = unquote(id)
+      device_tree = unquote(Macro.escape(device_tree))
+      directory = Path.join(System.tmp_dir!(), "vm-attach-#{System.unique_integer([:positive])}")
+      File.mkdir!(directory)
+      control = Path.join(directory, "control.sock")
+      guest = Path.join(directory, "guest.sock")
+      marker = Path.join(directory, "external-data")
+      File.write!(marker, "keep")
+
+      {:ok, listener} =
+        :gen_tcp.listen(
+          0,
+          [:binary, active: false, packet: :line, ifaddr: {:local, control}]
+        )
+
+      on_exit(fn ->
+        :gen_tcp.close(listener)
+        File.rm_rf!(directory)
+      end)
+
+      parent = self()
+
+      {server, monitor} =
+        spawn_monitor(fn ->
+          {:ok, socket} = :gen_tcp.accept(listener)
+          assert {:ok, "GET /api/v1/vm.info HTTP/1.1\r\n"} = :gen_tcp.recv(socket, 0, 1_000)
+          headers(socket)
+
+          body =
+            Jason.encode!(%{
+              "state" => native_state,
+              "device_tree" => device_tree,
+              "memory_actual_size" => 536_870_912,
+              "config" => %{
+                "payload" => %{
+                  "kernel" => "/kernel",
+                  "initramfs" => "/initrd",
+                  "cmdline" => "sower.vm.id=#{native_id}"
+                },
+                "cpus" => %{"boot_vcpus" => 1},
+                "memory" => %{"size" => 536_870_912},
+                "disks" => [%{"path" => "/root"}],
+                "vsock" => %{"socket" => guest},
+                "net" => []
+              }
+            })
+
+          :ok =
+            :gen_tcp.send(
+              socket,
+              [
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: ",
+                to_string(byte_size(body)),
+                "\r\nconnection: close\r\n\r\n",
+                body
+              ]
+            )
+
+          :gen_tcp.close(socket)
+          send(parent, :identity_observed)
+          assert {:error, :timeout} = :gen_tcp.accept(listener, 100)
+        end)
+
+      config = %VMManager.Config{
+        id: "expected",
+        kernel: "/kernel",
+        initrd: "/initrd",
+        root: "/root",
+        mode: :attach,
+        control_endpoint: control,
+        guest_endpoint: guest
+      }
+
+      {:ok, execution} = VMManager.Execution.start_link(VMManager.Config.to_options(config))
+      on_exit(fn -> if Process.alive?(execution), do: GenServer.stop(execution) end)
+
+      assert {:error,
+              {:cleanup_unconfirmed, {:error, {:attachment, :runtime_identity_mismatch}},
+               :unconfirmed, nil}} =
+               GenServer.call(execution, :await, 1_000)
+
+      assert_receive :identity_observed
+      assert_receive {:DOWN, ^monitor, :process, ^server, :normal}, 1_000
+      assert File.read!(marker) == "keep"
+      assert File.exists?(control)
+
+      assert %VMManager.Status{phase: :retained, cleanup: :unconfirmed} =
+               GenServer.call(execution, :status)
+    end
+  end
+
+  test "boots the existing Created VM and certifies shutdown by observing Created again" do
+    directory = Path.join(System.tmp_dir!(), "vm-created-#{System.unique_integer([:positive])}")
+    File.mkdir!(directory)
+    control = Path.join(directory, "control.sock")
+    guest = Path.join(directory, "guest.sock")
+
+    {:ok, listener} =
+      :gen_tcp.listen(0, [:binary, active: false, packet: :line, ifaddr: {:local, control}])
+
+    {:ok, bridge} =
+      :gen_tcp.listen(0, [:binary, active: false, packet: :line, ifaddr: {:local, guest}])
+
+    on_exit(fn ->
+      :gen_tcp.close(listener)
+      :gen_tcp.close(bridge)
+      File.rm_rf!(directory)
+    end)
+
+    config = %VMManager.Config{
+      id: "existing",
+      kernel: "/kernel",
+      initrd: "/initrd",
+      root: "/root",
+      mode: :attach,
+      control_endpoint: control,
+      guest_endpoint: guest
+    }
+
+    native_config = %{
+      "payload" => %{
+        "kernel" => config.kernel,
+        "initramfs" => config.initrd,
+        "cmdline" => "sower.vm.id=existing"
+      },
+      "cpus" => %{"boot_vcpus" => config.cpus},
+      "memory" => %{"size" => config.memory},
+      "disks" => [%{"path" => config.root}],
+      "vsock" => %{"socket" => guest},
+      "net" => []
+    }
+
+    info = fn state ->
+      Jason.encode!(%{
+        "state" => state,
+        "device_tree" => nil,
+        "config" => native_config,
+        "memory_actual_size" => config.memory
+      })
+    end
+
+    allocated_created =
+      Jason.encode!(%{
+        "state" => "Created",
+        "device_tree" => %{"devices" => []},
+        "config" => native_config,
+        "memory_actual_size" => config.memory
+      })
+
+    server =
+      Task.async(fn ->
+        {:ok, socket} = :gen_tcp.accept(listener, 1_000)
+
+        for {method, endpoint, status, body} <- [
+              {"GET", "vm.info", 200, info.("Created")},
+              {"PUT", "vm.boot", 204, ""},
+              {"GET", "vm.info", 200, info.("Running")},
+              {"GET", "vm.info", 200, info.("Running")},
+              {"PUT", "vm.shutdown", 204, ""},
+              {"GET", "vm.info", 200, allocated_created},
+              {"GET", "vm.info", 200, info.("Created")}
+            ] do
+          assert {:ok, line} = :gen_tcp.recv(socket, 0, 5_000)
+          assert line == "#{method} /api/v1/#{endpoint} HTTP/1.1\r\n"
+          headers(socket)
+
+          :ok =
+            :gen_tcp.send(socket, [
+              "HTTP/1.1 #{status} OK\r\ncontent-type: application/json\r\ncontent-length: ",
+              to_string(byte_size(body)),
+              "\r\n\r\n",
+              body
+            ])
+        end
+
+        :gen_tcp.close(socket)
+      end)
+
+    guest_task =
+      Task.async(fn ->
+        {:ok, socket} = :gen_tcp.accept(bridge, 5_000)
+        assert {:ok, "CONNECT 5000\n"} = :gen_tcp.recv(socket, 0, 1_000)
+        :ok = :gen_tcp.send(socket, "OK 5000\n")
+        :ok = :inet.setopts(socket, packet: :raw)
+        ready = Jason.encode!(%{"type" => "ready", "version" => 2, "contract" => 2})
+        :ok = :gen_tcp.send(socket, <<1, byte_size(ready)::unsigned-big-32, ready::binary>>)
+        assert {:error, :closed} = :gen_tcp.recv(socket, 0, 5_000)
+      end)
+
+    {:ok, execution} = VMManager.Execution.start_link(VMManager.Config.to_options(config))
+    on_exit(fn -> if Process.alive?(execution), do: GenServer.stop(execution) end)
+
+    assert {:ok, %VMManager.Status{phase: :ready}} =
+             GenServer.call(execution, :await_ready, 5_000)
+
+    assert :ok = GenServer.call(execution, :stop, 5_000)
+    assert %VMManager.Status{phase: :stopped, cleanup: :ok} = GenServer.call(execution, :status)
+    Task.await(server)
+    Task.await(guest_task)
+    assert File.exists?(control)
+    assert File.exists?(guest)
+    assert File.dir?(directory)
+  end
+
+  defp headers(socket) do
+    case :gen_tcp.recv(socket, 0, 1_000) do
+      {:ok, "\r\n"} -> :ok
+      {:ok, _} -> headers(socket)
+    end
+  end
+end

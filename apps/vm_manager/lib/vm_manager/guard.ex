@@ -1,4 +1,4 @@
-defmodule Garden.VM.Guard do
+defmodule VMManager.Guard do
   @moduledoc false
   use TypedStruct
   alias CloudHypervisor.{Config, Launch}
@@ -6,13 +6,11 @@ defmodule Garden.VM.Guard do
   typedstruct do
     field :server, pid(), enforce: true
     field :server_monitor, reference(), enforce: true
-    field :owner_monitor, reference(), enforce: true
-    field :ledger_monitor, reference()
     field :directory, String.t()
     field :vmm, pid()
     field :formatter, pid()
     field :io, pid()
-    field :network, Garden.VM.Network.t()
+    field :network, VMManager.Network.t()
     field :outcome, term()
     field :cleanup_error, term()
     field :started, integer(), enforce: true
@@ -20,6 +18,7 @@ defmodule Garden.VM.Guard do
     field :boot_timer, reference()
     field :command, pid()
     field :cancel_timer, reference()
+    field :attached, boolean(), default: false
   end
 
   def run(server, options) do
@@ -35,26 +34,108 @@ defmodule Garden.VM.Guard do
     state = %__MODULE__{
       server: server,
       server_monitor: Process.monitor(server),
-      owner_monitor: Process.monitor(options[:owner]),
       options: options,
       started: System.monotonic_time(:millisecond)
     }
 
-    state =
-      if options[:ledger] do
-        ledger = GenServer.whereis(options[:ledger])
-        %{state | ledger_monitor: Process.monitor(ledger || self())}
-      else
-        state
-      end
+    if options[:mode] == :attach, do: attach(state), else: allocate(state)
+  end
 
-    registration = register(state)
+  defp attach(%__MODULE__{} = state) do
+    config = state.options[:config]
+    client = %CloudHypervisor.API{socket: config.control_endpoint}
 
-    if registration != :ok do
-      finish(state, {:error, :owner_down}, :ok)
+    deadline = state.started + config.boot_deadline_ms
+
+    with {:ok, info} <- CloudHypervisor.API.info(client),
+         :ok <- matching_runtime(info, config),
+         :ok <- boot_attached(client, info, deadline) do
+      timer =
+        Process.send_after(
+          self(),
+          :deadline,
+          max(0, deadline - System.monotonic_time(:millisecond))
+        )
+
+      {io, _monitor} = start_io(state, config.guest_endpoint)
+      loop(%{state | io: io, boot_timer: timer, attached: true, network: config.network_lease})
     else
-      allocate(state)
+      {:error, reason} -> finish(state, {:error, {:attachment, reason}}, :unconfirmed)
     end
+  end
+
+  defp matching_runtime(%CloudHypervisor.API.Info{} = info, config) do
+    actual = info.config
+    payload = actual["payload"] || %{}
+    roots = Enum.map(actual["disks"] || [], & &1["path"])
+
+    if (info.state == "Running" or stopped?(info)) and
+         "sower.vm.id=#{config.id}" in String.split(payload["cmdline"] || "") and
+         payload["kernel"] == config.kernel and payload["initramfs"] == config.initrd and
+         config.root in roots and
+         get_in(actual, ["cpus", "boot_vcpus"]) == config.cpus and
+         get_in(actual, ["memory", "size"]) == config.memory and
+         get_in(actual, ["vsock", "socket"]) == config.guest_endpoint and
+         Enum.all?(config.disks, &(&1.path in roots)) and
+         matching_network?(actual["net"] || [], config) do
+      :ok
+    else
+      {:error, :runtime_identity_mismatch}
+    end
+  end
+
+  defp matching_network?([], %{network: :none, network_lease: nil}), do: true
+
+  defp matching_network?([net], %{network: :full, network_lease: %VMManager.Network{} = lease}),
+    do: net["tap"] == lease.tap and net["mac"] == lease.mac
+
+  defp matching_network?(_, _), do: false
+
+  defp stopped?(%CloudHypervisor.API.Info{state: "Created", device_tree: nil}), do: true
+  defp stopped?(%CloudHypervisor.API.Info{}), do: false
+
+  defp boot_attached(_client, %CloudHypervisor.API.Info{state: "Running"}, _deadline), do: :ok
+
+  defp boot_attached(
+         client,
+         %CloudHypervisor.API.Info{state: "Created", device_tree: nil},
+         deadline
+       ) do
+    with :ok <- CloudHypervisor.API.boot(client),
+         :ok <- await_state(client, "Running", deadline) do
+      :ok
+    else
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp await_state(client, expected, deadline) do
+    remaining = deadline - System.monotonic_time(:millisecond)
+
+    if remaining <= 0 do
+      {:error, :state_timeout}
+    else
+      case CloudHypervisor.API.info(%{client | request_timeout: min(client.timeout, remaining)}) do
+        {:ok, info} ->
+          if info.state == expected and (expected != "Created" or stopped?(info)) do
+            :ok
+          else
+            Process.sleep(min(25, remaining))
+            await_state(client, expected, deadline)
+          end
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+    end
+  end
+
+  defp start_io(%__MODULE__{} = state, path) do
+    guard = self()
+
+    spawn_monitor(fn ->
+      VMManager.IO.run(guard, path, state.options[:image].contract, state.started)
+    end)
   end
 
   defp allocate(%__MODULE__{} = state) do
@@ -69,18 +150,30 @@ defmodule Garden.VM.Guard do
 
     state = %{state | boot_timer: timer}
 
-    directory =
-      Path.join(
-        Keyword.get(options, :resource_directory, System.tmp_dir!()),
-        "sower-vm-#{System.pid()}-#{System.unique_integer([:positive])}"
-      )
+    base = options[:resource_directory] || System.tmp_dir!()
+    attempt = options[:attempt] || "#{System.pid()}-#{System.unique_integer([:positive])}"
+    directory = runtime_directory(base, attempt)
 
-    case File.mkdir(directory) do
-      :ok ->
-        prepare(%{state | directory: directory})
-
+    with :ok <- prepare_base(options[:resource_directory]),
+         :ok <- File.mkdir(directory) do
+      prepare(%{state | directory: directory})
+    else
       {:error, reason} ->
         finish(state, {:error, {:resource_directory, reason}}, :ok)
+    end
+  end
+
+  defp prepare_base(nil), do: :ok
+
+  defp prepare_base(directory) do
+    with :ok <- File.mkdir_p(Path.dirname(directory)) do
+      case File.mkdir(directory) do
+        :ok -> File.chmod(directory, 0o700)
+        {:error, :eexist} -> :ok
+        {:error, reason} -> {:error, reason}
+      end
+    else
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -168,8 +261,7 @@ defmodule Garden.VM.Guard do
         finish(state, state.outcome, :shutdown_timeout)
 
       {:DOWN, ref, :process, _pid, _reason}
-      when ref == state.server_monitor or ref == state.owner_monitor or
-             ref == state.ledger_monitor ->
+      when ref == state.server_monitor ->
         stop(state, {:error, :owner_down})
 
       {:DOWN, _ref, :process, io, reason} when io == state.io ->
@@ -189,6 +281,12 @@ defmodule Garden.VM.Guard do
 
         loop(%{state | command: command})
 
+      {:guest_reconnecting, command} when command == state.command ->
+        timer =
+          state.cancel_timer || Process.send_after(self(), {:cancel_deadline, command}, 5_000)
+
+        loop(%{state | cancel_timer: timer})
+
       {:cancel_command, command, reason} when command == state.command ->
         send(state.io, {:cancel, command, reason})
 
@@ -205,12 +303,20 @@ defmodule Garden.VM.Guard do
         send(state.server, {:command_finished, command, result})
         state = %{state | command: nil, cancel_timer: nil}
 
-        if state.options[:command] do
+        if state.options[:command] || state.options[:image].contract == 1 do
           stop(state, result)
         else
           notify_status(state, phase: :ready)
           loop(state)
         end
+
+      {:cloud_hypervisor, vmm, {:ready, status}} when vmm == state.vmm ->
+        notify_status(state, vmm: vmm, os_pid: status.os_pid)
+        {io, _monitor} = start_io(state, Path.join(status.directory, "vsock.sock"))
+        loop(%{state | io: io})
+
+      {:cloud_hypervisor, vmm, {:exited, {:exit_status, 0} = outcome}} when vmm == state.vmm ->
+        stop(state, {:ok, {:vmm_exited, outcome}})
 
       {:cloud_hypervisor, vmm, {:exited, outcome}} when vmm == state.vmm ->
         stop(state, {:error, {:vmm_exited, outcome}})
@@ -227,7 +333,7 @@ defmodule Garden.VM.Guard do
   end
 
   defp launch(%__MODULE__{} = state) do
-    case Garden.VM.Network.provision(state.options) do
+    case VMManager.Network.provision(state.options) do
       {:ok, network} ->
         admit_launch(%{state | network: network})
 
@@ -248,8 +354,7 @@ defmodule Garden.VM.Guard do
         stop(state, {:error, :timeout})
 
       {:DOWN, ref, :process, _pid, _reason}
-      when ref == state.server_monitor or ref == state.owner_monitor or
-             ref == state.ledger_monitor ->
+      when ref == state.server_monitor ->
         stop(state, {:error, :owner_down})
     after
       0 ->
@@ -271,18 +376,20 @@ defmodule Garden.VM.Guard do
     config = %Config{
       kernel: image.kernel,
       initramfs: image.initrd,
-      cmdline: image.cmdline <> Garden.VM.Network.cmdline(state.network),
+      cmdline:
+        image.cmdline <> " sower.vm.id=#{image.id}" <> VMManager.Network.cmdline(state.network),
       cpus: %Config.CPUs{boot_vcpus: cpus, max_vcpus: cpus},
       memory: Keyword.get(state.options, :memory, 512 * 1024 * 1024),
-      disks: [
-        %Config.Disk{path: image.root, readonly: true, image_type: :raw},
-        %Config.Disk{
-          path: Path.join(state.directory, "scratch.ext4"),
-          readonly: false,
-          image_type: :raw
-        }
-      ],
-      net: Garden.VM.Network.devices(state.network),
+      disks:
+        [
+          %Config.Disk{path: image.root, readonly: true, image_type: :raw},
+          %Config.Disk{
+            path: Path.join(state.directory, "scratch.ext4"),
+            readonly: false,
+            image_type: :raw
+          }
+        ] ++ image.disks,
+      net: VMManager.Network.devices(state.network),
       serial: %Config.Output{mode: :file, file: Path.join(state.directory, "serial.log")},
       console: %Config.Output{mode: :off},
       rng: %Config.RNG{src: "/dev/urandom"},
@@ -292,7 +399,7 @@ defmodule Garden.VM.Guard do
     case CloudHypervisor.Process.start_link(
            config: config,
            owner: self(),
-           before_stop: fn -> Garden.VM.Network.revoke(state.network) end,
+           before_stop: fn -> VMManager.Network.revoke(state.network) end,
            launch: %Launch{
              executable: Keyword.get(state.options, :hypervisor, "cloud-hypervisor")
            },
@@ -304,26 +411,18 @@ defmodule Garden.VM.Guard do
              )
          ) do
       {:ok, vmm} ->
-        status = CloudHypervisor.Process.status(vmm)
-        notify_status(state, vmm: vmm, os_pid: status.os_pid)
-        guard = self()
-
-        {io, _monitor} =
-          spawn_monitor(fn ->
-            Garden.VM.IO.run(
-              guard,
-              vmm,
-              state.options[:image].contract,
-              state.started
-            )
-          end)
-
-        loop(%{state | vmm: vmm, io: io})
+        loop(%{state | vmm: vmm})
 
       {:error, reason} ->
         finish(state, {:error, {:vmm_startup, reason}}, :unconfirmed)
     end
   end
+
+  defp shutdown_attached(_client, %CloudHypervisor.API.Info{state: "Created", device_tree: nil}),
+    do: :ok
+
+  defp shutdown_attached(client, %CloudHypervisor.API.Info{state: "Running"}),
+    do: CloudHypervisor.API.shutdown(client)
 
   defp stop(%__MODULE__{outcome: outcome} = state, _result) when not is_nil(outcome),
     do: loop(state)
@@ -341,12 +440,31 @@ defmodule Garden.VM.Guard do
     loop(%{state | outcome: result})
   end
 
+  defp stop(%__MODULE__{attached: true} = state, result) do
+    notify_status(state, phase: :stopping)
+    if state.io, do: Process.exit(state.io, :kill)
+    client = %CloudHypervisor.API{socket: state.options[:control_endpoint]}
+
+    cleanup =
+      with {:ok, running} <- CloudHypervisor.API.info(client),
+           :ok <- matching_runtime(running, state.options[:config]),
+           :ok <- VMManager.Network.revoke(state.network),
+           :ok <- shutdown_attached(client, running),
+           :ok <- await_state(client, "Created", System.monotonic_time(:millisecond) + 10_000) do
+        :ok
+      else
+        error -> {:error, {:external_shutdown, error}}
+      end
+
+    finish(state, result, cleanup)
+  end
+
   defp stop(%__MODULE__{vmm: nil} = state, result), do: finish(state, result, :ok)
 
   defp stop(%__MODULE__{} = state, result) do
     notify_status(state, phase: :stopping)
     if state.io, do: Process.exit(state.io, :kill)
-    revocation = Garden.VM.Network.revoke(state.network)
+    revocation = VMManager.Network.revoke(state.network)
     guard = self()
     vmm = state.vmm
 
@@ -408,8 +526,8 @@ defmodule Garden.VM.Guard do
     if state.io, do: Process.exit(state.io, :kill)
 
     network_cleanup =
-      case Garden.VM.Network.revoke(state.network) do
-        :ok when certification == :ok -> Garden.VM.Network.release(state.network)
+      case VMManager.Network.revoke(state.network) do
+        :ok when certification == :ok -> VMManager.Network.release(state.network)
         result -> result
       end
 
@@ -426,23 +544,13 @@ defmodule Garden.VM.Guard do
         do: result,
         else: {:error, {:cleanup_unconfirmed, result, cleanup, state.directory}}
 
-    if state.options[:ledger] do
-      id = state.options[:execution_id]
-
-      :ets.insert(
-        state.options[:ledger_table],
-        {{:terminal, id}, self(), result, cleanup, state.directory}
+    if state.options[:cleanup_path] do
+      VMManager.Store.write_certificate(
+        state.options[:cleanup_path],
+        state.options[:attempt],
+        result,
+        cleanup
       )
-
-      try do
-        GenServer.call(
-          state.options[:ledger],
-          {:finished, id, self(), result, cleanup},
-          :infinity
-        )
-      catch
-        :exit, _reason -> :ok
-      end
     end
 
     send(state.server, {:vm_finished, result, cleanup})
@@ -451,38 +559,14 @@ defmodule Garden.VM.Guard do
   defp revocation_error(:ok), do: nil
   defp revocation_error(error), do: error
 
-  defp register(%__MODULE__{} = state) do
-    if state.options[:ledger] do
-      id = state.options[:execution_id]
-      :ets.insert(state.options[:ledger_table], {{:guard, id}, self()})
-
-      try do
-        GenServer.call(state.options[:ledger], {:guard_started, id, self()}, :infinity)
-      catch
-        :exit, _reason -> {:cancel, {:error, :owner_down}}
-      end
-    else
-      :ok
-    end
-  end
-
   defp notify_status(%__MODULE__{} = state, changes) do
     send(state.server, {:vm_status, changes})
-
-    if state.options[:ledger] do
-      :ets.insert(
-        state.options[:ledger_table],
-        Enum.map(changes, fn {key, value} ->
-          {{:status, state.options[:execution_id], key}, value}
-        end)
-      )
-
-      GenServer.cast(
-        state.options[:ledger],
-        {:status, state.options[:execution_id], self(), changes}
-      )
-    end
   end
+
+  def runtime_directory(base, attempt), do: Path.join(base, "sower-vm-" <> attempt)
+
+  def cleanup_runtime(_base, nil), do: :ok
+  def cleanup_runtime(base, attempt), do: remove_known(runtime_directory(base, attempt))
 
   defp remove_known(nil), do: :ok
 

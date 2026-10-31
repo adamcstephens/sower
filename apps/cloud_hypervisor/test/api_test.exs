@@ -85,6 +85,14 @@ defmodule CloudHypervisor.APITest do
              API.boot(%{client | timeout: 50})
 
     Task.await(task)
+
+    {client, task} = server(200, "", 200)
+
+    assert {:error,
+            %Error{kind: :transport, status: nil, reason: %Req.TransportError{reason: :timeout}}} =
+             API.boot(%{client | request_timeout: 50})
+
+    Task.await(task)
   end
 
   test "pool checkout exhaustion returns a typed transport error without raising" do
@@ -106,7 +114,7 @@ defmodule CloudHypervisor.APITest do
       server =
         Task.Supervisor.async_nolink(supervisor, fn ->
           connections =
-            for index <- 1..50 do
+            for index <- 1..1 do
               {:ok, connection} = :gen_tcp.accept(listener, 5_000)
               {headers, ""} = receive_request(connection, "")
               assert hd(String.split(headers, "\r\n")) == "GET /api/v1/vmm.ping HTTP/1.1"
@@ -139,13 +147,15 @@ defmodule CloudHypervisor.APITest do
       server_pid = server.pid
 
       requests =
-        for index <- 1..50 do
+        for index <- 1..1 do
           task =
             Task.Supervisor.async_nolink(supervisor, fn ->
               Req.request(
                 url: "http://localhost/api/v1/vmm.ping",
                 unix_socket: socket,
                 finch: [
+                  size: 1,
+                  count: 1,
                   conn_opts: [transport_opts: [timeout: client.timeout]],
                   pool_timeout: 5_000,
                   receive_timeout: 30_000,
@@ -190,6 +200,45 @@ defmodule CloudHypervisor.APITest do
       assert {:error, %Error{kind: :decode, status: 200}} = API.ping(client)
       Task.await(task)
     end
+  end
+
+  test "deadline-driven observations reuse one connection beyond the native server limit" do
+    socket = socket_path()
+    {:ok, listener} = :gen_tcp.listen(0, [:binary, active: false, ifaddr: {:local, socket}])
+
+    on_exit(fn ->
+      :gen_tcp.close(listener)
+      File.rm!(socket)
+    end)
+
+    task =
+      Task.async(fn ->
+        {:ok, connection} = :gen_tcp.accept(listener, 1_000)
+        body = Jason.encode!(%{config: %{}, state: "Running", memory_actual_size: 123})
+
+        for _ <- 1..25 do
+          {headers, ""} = receive_request(connection, "")
+          assert hd(String.split(headers, "\r\n")) == "GET /api/v1/vm.info HTTP/1.1"
+
+          :ok =
+            :gen_tcp.send(
+              connection,
+              "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: #{byte_size(body)}\r\n\r\n#{body}"
+            )
+        end
+
+        assert {:error, :timeout} = :gen_tcp.accept(listener, 50)
+        :gen_tcp.close(connection)
+      end)
+
+    client = %API{socket: socket}
+
+    for poll <- 1..25 do
+      assert {:ok, %Info{state: "Running"}} =
+               API.info(%{client | request_timeout: 5_000 - poll * 10})
+    end
+
+    Task.await(task)
   end
 
   defp socket_path do

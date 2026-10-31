@@ -10,7 +10,7 @@ defmodule SowerUmbrella.MixProject do
       releases: [
         garden: [
           version: version,
-          applications: [garden: :permanent],
+          applications: [vm_manager: :permanent, garden: :permanent],
           runtime_config_path: "config/runtime_garden.exs",
           include_executables_for: [:unix]
         ],
