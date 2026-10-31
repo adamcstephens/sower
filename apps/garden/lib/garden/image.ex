@@ -40,6 +40,26 @@ defmodule Garden.Image do
     end
   end
 
+  def vm_config(%__MODULE__{} = image, id, options \\ []) do
+    struct!(
+      VMManager.Config,
+      Keyword.merge(
+        [
+          id: id,
+          kernel: image.kernel,
+          initrd: image.initrd,
+          root: image.root,
+          cmdline: image.cmdline,
+          system: image.system,
+          contract: image.contract,
+          vsock_port: image.vsock_port,
+          network_config: image.network_config
+        ],
+        options
+      )
+    )
+  end
+
   defp supported(%{"contract" => contract}) when contract not in [1, 2],
     do: {:error, {:unsupported_contract, contract}}
 

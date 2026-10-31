@@ -189,16 +189,16 @@ defmodule Garden.ActivatorClientTest do
       end)
 
       assert {:ok, network} =
-               Garden.VM.Network.provision(
+               VMManager.Network.provision(
                  network: :full,
                  activator_socket: socket_path,
                  execution_id: "execution-1"
                )
 
       assert [%CloudHypervisor.Config.Net{tap: "tap-1", mac: "02:00:00:00:00:01"}] =
-               Garden.VM.Network.devices(network)
+               VMManager.Network.devices(network)
 
-      assert Garden.VM.Network.cmdline(network) ==
+      assert VMManager.Network.cmdline(network) ==
                " sower.network.address=10.254.0.2/30 sower.network.gateway=10.254.0.1" <>
                  " sower.network.dns=1.1.1.1 sower.network.mac=02:00:00:00:00:01"
     end

@@ -174,6 +174,7 @@ in
         RELEASE_MODE = "interactive";
 
         SOWER_CONFIG_FILE = "/etc/sower/client.json";
+        VM_MANAGER_BOOT_ID_FILE = "%d/vm-manager-boot-id";
       }
       // lib.optionalAttrs (!cfg.distribution) {
         RELEASE_DISTRIBUTION = "none";
@@ -206,7 +207,7 @@ in
         RestartMaxDelaySec = "120s";
         RestartSteps = "7";
 
-        LoadCredential = cfg.credentials;
+        LoadCredential = cfg.credentials ++ [ "vm-manager-boot-id:/proc/sys/kernel/random/boot_id" ];
 
         # DynamicUser = true;
         NoNewPrivileges = true;

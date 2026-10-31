@@ -52,8 +52,6 @@ defmodule SowerClient.Config do
         example: "https://my.sower.dev"
       },
       vm_capacity: SowerClient.Config.VMCapacity,
-      vm_result_limit: %Schema{type: :integer, minimum: 0, default: 128},
-      vm_shutdown_ms: %Schema{type: :integer, minimum: 1, default: 15_000},
       name: %Schema{
         type: :string,
         description: "Garden name (garden-only)"

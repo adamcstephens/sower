@@ -1,4 +1,4 @@
-defmodule Garden.VM.Protocol do
+defmodule VMManager.Protocol do
   @moduledoc false
   @maximum 65_536
 
@@ -27,7 +27,7 @@ defmodule Garden.VM.Protocol do
 
   def execute(command, version \\ 1)
 
-  def execute(%Garden.VM.Command{} = command, version) do
+  def execute(%VMManager.Command{} = command, version) do
     with {:ok, payload} <-
            Jason.encode(%{
              "type" => "execute",

@@ -1,4 +1,4 @@
-defmodule Garden.VM.CommandExecution do
+defmodule VMManager.CommandExecution do
   @moduledoc false
   use GenServer
   use TypedStruct
@@ -10,7 +10,7 @@ defmodule Garden.VM.CommandExecution do
     field :caller_alive, boolean(), default: true
     field :retain, boolean(), enforce: true
     field :timer, reference(), enforce: true
-    field :status, Garden.VM.CommandStatus.t(), default: %Garden.VM.CommandStatus{}
+    field :status, VMManager.CommandStatus.t(), default: %VMManager.CommandStatus{}
     field :waiters, [GenServer.from()], default: []
   end
 
@@ -35,7 +35,7 @@ defmodule Garden.VM.CommandExecution do
   def handle_call(
         :await,
         from,
-        %__MODULE__{status: %Garden.VM.CommandStatus{phase: :running}} = state
+        %__MODULE__{status: %VMManager.CommandStatus{phase: :running}} = state
       ) do
     {:noreply, %{state | waiters: [from | state.waiters]}}
   end
@@ -70,7 +70,7 @@ defmodule Garden.VM.CommandExecution do
     end
   end
 
-  defp complete(%__MODULE__{status: %Garden.VM.CommandStatus{phase: :finished}} = state, _result),
+  defp complete(%__MODULE__{status: %VMManager.CommandStatus{phase: :finished}} = state, _result),
     do: {:noreply, state}
 
   defp complete(%__MODULE__{} = state, result) do
@@ -81,7 +81,7 @@ defmodule Garden.VM.CommandExecution do
     state = %{
       state
       | waiters: [],
-        status: %Garden.VM.CommandStatus{phase: :finished, result: result}
+        status: %VMManager.CommandStatus{phase: :finished, result: result}
     }
 
     if state.caller_alive and state.retain, do: {:noreply, state}, else: {:stop, :normal, state}

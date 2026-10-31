@@ -412,7 +412,7 @@ defmodule CloudHypervisor.Process do
         do: @grace_timeout,
         else: max(1, min(state.client.timeout, state.deadline - now()))
 
-    client = %{state.client | timeout: timeout}
+    client = %{state.client | request_timeout: timeout}
     config = state.config
 
     {pid, monitor} =

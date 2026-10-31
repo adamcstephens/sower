@@ -1,22 +1,25 @@
-defmodule Garden.VM.Execution do
+defmodule VMManager.Execution do
   @moduledoc false
   use GenServer
   use TypedStruct
-  alias Garden.{Image, VM}
+  alias VMManager.Config, as: Image
+  alias VMManager, as: VM
 
   typedstruct do
     field :guard, pid(), enforce: true
     field :status, VM.Status.t(), default: %VM.Status{}
     field :waiters, [GenServer.from()], default: []
     field :ready_waiters, [GenServer.from()], default: []
-    field :managed, boolean(), default: false
     field :command_monitor, reference()
     field :command, pid()
     field :options, keyword(), enforce: true
   end
 
   def start_link(options) do
-    options = Keyword.put_new(options, :owner, self())
+    options =
+      options
+      |> Keyword.put_new(:owner, self())
+      |> Keyword.put_new(:image, options[:config])
 
     with :ok <- validate_options(options) do
       GenServer.start_link(__MODULE__, options, Keyword.take(options, [:name]))
@@ -39,7 +42,7 @@ defmodule Garden.VM.Execution do
 
   def validate_command_options(%VM.Command{} = command, options) do
     with :ok <- VM.validate_command(command),
-         {:ok, _frame} <- Garden.VM.Protocol.execute(command),
+         {:ok, _frame} <- VMManager.Protocol.execute(command),
          true <-
            is_integer(Keyword.get(options, :deadline_ms, 60_000)) and
              Keyword.get(options, :deadline_ms, 60_000) > 0,
@@ -57,9 +60,7 @@ defmodule Garden.VM.Execution do
         validate_command_options(command, options)
 
       nil ->
-        if options[:image].contract == 2,
-          do: :ok,
-          else: {:error, :persistent_guest_contract_required}
+        :ok
 
       _ ->
         {:error, :invalid_execution}
@@ -73,20 +74,19 @@ defmodule Garden.VM.Execution do
   def init(options) do
     server = self()
 
-    if options[:ledger],
-      do: :ets.insert(options[:ledger_table], {{:execution, options[:execution_id]}, server})
-
     guard = spawn(fn -> VM.Guard.run(server, options) end)
     Process.monitor(guard)
 
     {:ok,
      %__MODULE__{
        guard: guard,
-       managed: Keyword.has_key?(options, :ledger),
        options: options,
        status: %VM.Status{
+         id: options[:execution_id],
+         config: options[:config],
+         cleanup: :pending,
          phase: :booting,
-         persistent: options[:command] == nil,
+         persistent: options[:command] == nil and options[:image].contract == 2,
          owner: options[:owner],
          execution: server,
          execution_id: options[:execution_id],
@@ -127,7 +127,7 @@ defmodule Garden.VM.Execution do
 
   def handle_call({:execute, command, options}, {caller, _tag}, %__MODULE__{} = state) do
     cond do
-      not state.status.persistent ->
+      state.options[:command] != nil ->
         {:reply, {:error, :disposable_vm}, state}
 
       state.command != nil ->
@@ -195,7 +195,11 @@ defmodule Garden.VM.Execution do
   def handle_info({:command_finished, command, result}, %__MODULE__{command: command} = state) do
     Process.demonitor(state.command_monitor, [:flush])
     send(command, {:command_finished, result})
-    phase = if state.status.phase == :stopping, do: :stopping, else: :ready
+
+    phase =
+      if state.status.phase == :stopping or not state.status.persistent,
+        do: :stopping,
+        else: :ready
 
     {:noreply,
      %{state | command: nil, command_monitor: nil, status: %{state.status | phase: phase}}}
@@ -208,7 +212,11 @@ defmodule Garden.VM.Execution do
       do:
         send(
           state.command,
-          {:command_finished, if(result == :ok, do: {:error, :vm_stopped}, else: result)}
+          {:command_finished,
+           if(result == :ok or match?({:ok, _}, result),
+             do: {:error, :vm_stopped},
+             else: result
+           )}
         )
 
     phase =
@@ -232,7 +240,7 @@ defmodule Garden.VM.Execution do
     end)
 
     state = %{state | waiters: [], ready_waiters: []}
-    if state.managed, do: {:stop, :normal, state}, else: {:noreply, state}
+    {:noreply, state}
   end
 
   def handle_info(
@@ -256,7 +264,7 @@ defmodule Garden.VM.Execution do
         self(),
         caller,
         Keyword.get(options, :deadline_ms, 60_000),
-        state.status.persistent
+        state.options[:command] == nil
       )
 
     send(

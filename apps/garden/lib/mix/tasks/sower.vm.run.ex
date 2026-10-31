@@ -7,13 +7,13 @@ defmodule Mix.Tasks.Sower.Vm.Run do
   @impl Mix.Task
   def run(arguments) do
     case Garden.VM.CLI.main(arguments) do
-      {:ok, %Garden.VM.Result{code: 0}} ->
+      {:ok, %VMManager.Result{code: 0}} ->
         :ok
 
-      {:ok, %Garden.VM.Result{code: code, signal: nil}} ->
+      {:ok, %VMManager.Result{code: code, signal: nil}} ->
         System.halt(code)
 
-      {:ok, %Garden.VM.Result{code: nil, signal: signal}} ->
+      {:ok, %VMManager.Result{code: nil, signal: signal}} ->
         System.halt(128 + signal)
 
       {:error, reason} ->

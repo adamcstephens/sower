@@ -4,6 +4,8 @@ defmodule CloudHypervisor.API do
 
   Construct `%CloudHypervisor.API{socket: "/path/to/vmm.sock"}` per VMM.
   `timeout` bounds connection, pool wait, and response waits in milliseconds.
+  `request_timeout`, when set, overrides pool and response budgets without
+  changing connection options or the connection pool identity.
   Requests never retry or follow redirects. Mutations return `:ok`; reads
   return `{:ok, %Ping{}}` or `{:ok, %Info{}}`. Failures return `{:error, %Error{}}`.
   Pool-checkout timeouts are transport errors with
@@ -22,6 +24,7 @@ defmodule CloudHypervisor.API do
   typedstruct do
     field :socket, String.t(), enforce: true
     field :timeout, pos_integer(), default: 5_000
+    field :request_timeout, pos_integer()
   end
 
   typedstruct module: Ping do
@@ -57,16 +60,20 @@ defmodule CloudHypervisor.API do
   def shutdown_vmm(%__MODULE__{} = client), do: request(client, :put, "vmm.shutdown", :empty)
 
   defp request(%__MODULE__{} = client, method, endpoint, result, options \\ []) do
+    request_timeout = client.request_timeout || client.timeout
+
     case Req.request(
            [
              method: method,
              url: "http://localhost/api/v1/" <> endpoint,
              unix_socket: client.socket,
              finch: [
+               size: 1,
+               count: 1,
                conn_opts: [transport_opts: [timeout: client.timeout]],
-               pool_timeout: client.timeout,
-               receive_timeout: client.timeout,
-               request_timeout: client.timeout
+               pool_timeout: request_timeout,
+               receive_timeout: request_timeout,
+               request_timeout: request_timeout
              ],
              retry: false,
              redirect: false,

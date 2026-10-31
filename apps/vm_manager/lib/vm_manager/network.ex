@@ -1,4 +1,4 @@
-defmodule Garden.VM.Network do
+defmodule VMManager.Network do
   @moduledoc false
   use TypedStruct
 
@@ -26,7 +26,7 @@ defmodule Garden.VM.Network do
             Keyword.get(options, :execution_id, "local-#{System.unique_integer([:positive])}")
           )
 
-        case Garden.ActivatorClient.network(:provision,
+        case VMManager.ActivatorClient.network(:provision,
                socket_path: socket_path,
                execution_id: execution_id
              ) do
@@ -60,7 +60,10 @@ defmodule Garden.VM.Network do
   def release(%__MODULE__{} = network), do: operation(network, :release)
 
   defp operation(%__MODULE__{} = network, action) do
-    Garden.ActivatorClient.network(action, socket_path: network.socket_path, lease: network.lease)
+    VMManager.ActivatorClient.network(action,
+      socket_path: network.socket_path,
+      lease: network.lease
+    )
   end
 
   def devices(nil), do: []
