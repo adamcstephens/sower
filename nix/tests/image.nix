@@ -150,6 +150,28 @@ let
       })
     ];
   };
+  agentless = flake.lib.mkImage {
+    inherit system;
+    modules = [
+      ({ ... }: {
+        boot.initrd.systemd.targets.agentless = {
+          unitConfig.DefaultDependencies = false;
+          requires = [ "agentless-ready.service" ];
+          after = [ "agentless-ready.service" ];
+        };
+        boot.initrd.systemd.services.agentless-ready = {
+          unitConfig.DefaultDependencies = false;
+          requires = [ "systemd-udevd.service" ];
+          after = [ "systemd-udevd.service" ];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+          };
+          script = "printf 'sower-agentless-userspace-ready\\n' > /dev/ttyS0";
+        };
+      })
+    ];
+  };
   scenario = pkgs.writeText "image-scenario.exs" ''
     alias Garden.Image
     alias VMManager, as: VM
@@ -223,6 +245,88 @@ let
       clean.()
       result
     end
+    external_disk = "/tmp/image-agentless.raw"
+    File.write!(external_disk, "external-disk-contents")
+    {_, 0} = System.cmd("truncate", ["--size", "16M", external_disk])
+    agentless_config = %VM.Config{
+      id: "agentless-image",
+      kernel: "${agentless}/kernel",
+      initrd: "${agentless}/initrd",
+      cmdline: "console=ttyS0 rd.systemd.unit=agentless.target",
+      serial: %CloudHypervisor.Config.Output{mode: :file, file: "serial.log"},
+      disks: [%CloudHypervisor.Config.Disk{
+        path: external_disk, readonly: false, image_type: :raw
+      }],
+      runtime_directory: root,
+      mkfs: "${pkgs.coreutils}/bin/false"
+    }
+    {:ok, "agentless-image"} = VM.define(agentless_config)
+    :ok = VM.subscribe("agentless-image")
+    :ok = VM.start("agentless-image")
+    {:ok, %VM.Status{running: true, phase: :running} = agentless} =
+      VM.await_running("agentless-image")
+    serial_ready = fn status ->
+      until.(fn ->
+        case File.read(Path.join(status.directory, "serial.log")) do
+          {:ok, log} -> String.contains?(log, "sower-agentless-userspace-ready")
+          {:error, _} -> false
+        end
+      end)
+    end
+    serial_ready.(agentless)
+    receive_running = fn receive_running ->
+      receive do
+        {:vm_manager, "agentless-image", %VM.Status{running: true}} -> :ok
+        {:vm_manager, "agentless-image", %VM.Status{}} -> receive_running.(receive_running)
+      after 30_000 -> raise "missing agentless running notification"
+      end
+    end
+    receive_running.(receive_running)
+    {:error, :guest_agent_disabled} = VM.await_ready("agentless-image")
+    {:error, :guest_agent_disabled} =
+      VM.execute("agentless-image", %VM.Command{path: "/bin/true"})
+    {:ok, listed} = VM.list()
+    ensure.(Enum.any?(listed, &(&1.id == "agentless-image")))
+    {:ok, observed} = VM.status("agentless-image")
+    ensure.(observed.os_pid == agentless.os_pid)
+    old_manager = Process.whereis(VMManager.Manager)
+    Process.exit(old_manager, :kill)
+    until.(fn ->
+      manager = Process.whereis(VMManager.Manager)
+      manager != nil and manager != old_manager
+    end)
+    {:ok, reconnected} = VM.await_running("agentless-image")
+    ensure.(reconnected.os_pid == agentless.os_pid)
+    :ok = Application.stop(:vm_manager)
+    until.(fn -> not File.exists?("/proc/#{agentless.os_pid}") end)
+    {:ok, _} = Application.ensure_all_started(:vm_manager)
+    {:ok, restored_agentless} = VM.await_running("agentless-image")
+    ensure.(restored_agentless.id == "agentless-image")
+    ensure.(restored_agentless.os_pid != agentless.os_pid)
+    serial_ready.(restored_agentless)
+    retire.("agentless-image")
+    ensure.(File.read!(external_disk) |> String.starts_with?("external-disk-contents"))
+    clean.()
+    {_, 0} = System.cmd("${pkgs.iproute2}/bin/ip", ["tuntap", "add", "dev", "sower-ext-test", "mode", "tap"])
+    external_network = %VM.Network{
+      ownership: :external,
+      devices: [%CloudHypervisor.Config.Net{tap: "sower-ext-test", mac: "02:00:00:00:00:42"}]
+    }
+    network_config = %{agentless_config | id: "agentless-network", network: external_network}
+    {:ok, "agentless-network"} = VM.define(network_config)
+    :ok = VM.start("agentless-network")
+    {:ok, %VM.Status{running: true}} = VM.await_running("agentless-network")
+    retire.("agentless-network")
+    {_, 0} = System.cmd("${pkgs.iproute2}/bin/ip", ["link", "show", "dev", "sower-ext-test"])
+    failed_config = %{network_config | id: "agentless-network-failure", hypervisor: "/nonexistent/sower-hypervisor"}
+    {:ok, "agentless-network-failure"} = VM.define(failed_config)
+    :ok = VM.start("agentless-network-failure")
+    {:error, _} = VM.await_running("agentless-network-failure")
+    retire.("agentless-network-failure")
+    {_, 0} = System.cmd("${pkgs.iproute2}/bin/ip", ["link", "show", "dev", "sower-ext-test"])
+    {_, 0} = System.cmd("${pkgs.iproute2}/bin/ip", ["link", "delete", "dev", "sower-ext-test"])
+    :ok = File.rm(external_disk)
+    clean.()
     for {overrides, expected} <- [
       {[hypervisor: "/nonexistent/sower-hypervisor"], :vmm_failed},
       {[mkfs: "${pkgs.coreutils}/bin/false"], :mkfs}
@@ -449,7 +553,9 @@ let
     Application.put_env(:vm_manager, :budgets,
       [vms: 2, cpus: 2, memory: 5 * 1024 * 1024 * 1024,
        scratch_bytes: 8 * 1024 * 1024 * 1024])
-    Application.put_env(:vm_manager, :activator_socket, "/run/sower-activator/activator.sock")
+    :ok = Application.load(:garden)
+    Code.ensure_loaded!(Garden.VM.Network)
+    Code.ensure_loaded!(Garden.ActivatorClient)
     {:ok, _} = Application.ensure_all_started(:vm_manager)
     parent = self()
     output = fn stream, bytes -> send(parent, {stream, bytes}) end
@@ -639,6 +745,7 @@ let
     [phase] = System.argv()
     external = String.starts_with?(phase, "attach-")
     id = cond do
+      String.starts_with?(phase, "agentless-") -> "agentless-restoration"
       external -> "external-restoration"
       String.starts_with?(phase, "graceful-") -> "graceful-restoration"
       true -> "host-restoration"
@@ -646,8 +753,58 @@ let
     state = "/var/lib/image-restoration/" <> id
     File.mkdir_p!(state)
     Application.put_env(:vm_manager, :state_directory, state)
+    :ok = Application.load(:garden)
+    Code.ensure_loaded!(Garden.VM.Network)
+    Code.ensure_loaded!(Garden.ActivatorClient)
     {:ok, _} = Application.ensure_all_started(:vm_manager)
     {:ok, image} = Image.load("${custom}")
+    if String.starts_with?(phase, "agentless-") do
+      if phase == "agentless-prepare" do
+        File.mkdir_p!("/run/image-restoration")
+        disk = "/var/lib/image-restoration/agentless.raw"
+        File.write!(disk, "agentless-host-restoration")
+        {_, 0} = System.cmd("truncate", ["--size", "16M", disk])
+        config = %VM.Config{
+          id: id,
+          kernel: "${agentless}/kernel",
+          initrd: "${agentless}/initrd",
+          cmdline: "console=ttyS0 rd.systemd.unit=agentless.target",
+          serial: %Config.Output{mode: :file, file: "serial.log"},
+          disks: [%Config.Disk{path: disk, readonly: false, image_type: :raw}],
+          runtime_directory: "/run/image-restoration",
+          mkfs: "${pkgs.coreutils}/bin/false"
+        }
+        {:ok, ^id} = VM.define(config)
+        :ok = VM.start(id)
+      end
+      {:ok, %VM.Status{running: true} = agentless} = VM.await_running(id)
+      deadline = System.monotonic_time(:millisecond) + 30_000
+      wait_serial = fn wait_serial ->
+        case File.read(Path.join(agentless.directory, "serial.log")) do
+          {:ok, log} ->
+            unless String.contains?(log, "sower-agentless-userspace-ready") do
+              if System.monotonic_time(:millisecond) >= deadline, do: raise("missing agentless userspace marker")
+              Process.sleep(20)
+              wait_serial.(wait_serial)
+            end
+          {:error, _} ->
+            if System.monotonic_time(:millisecond) >= deadline, do: raise("missing agentless serial log")
+            Process.sleep(20)
+            wait_serial.(wait_serial)
+        end
+      end
+      wait_serial.(wait_serial)
+      {:error, :guest_agent_disabled} = VM.await_ready(id)
+      if phase == "agentless-restore" do
+        :ok = VM.stop(id)
+        {:ok, %VM.Status{cleanup: :ok}} = VM.status(id)
+        :ok = VM.remove(id)
+        true = String.starts_with?(File.read!("/var/lib/image-restoration/agentless.raw"), "agentless-host-restoration")
+        :ok = File.rm("/var/lib/image-restoration/agentless.raw")
+      end
+      IO.puts("agentless restoration phase passed: " <> phase)
+      System.halt(0)
+    end
     control = "/run/image-external/control.sock"
     guest = "/run/image-external/guest.sock"
     api = %API{socket: control}
@@ -670,13 +827,25 @@ let
     if phase in ["prepare", "graceful-prepare", "attach-prepare"] do
       overrides =
         if external do
-          [mode: :attach, control_endpoint: control, guest_endpoint: guest]
+          [mode: :attach, control_endpoint: control, vsock: %Config.Vsock{cid: 3, socket: guest}]
         else
           File.mkdir_p!("/run/image-restoration")
           [runtime_directory: "/run/image-restoration"]
         end
-      {:ok, ^id} = VM.define(Image.vm_config(image, id,
-        Keyword.merge([scratch_bytes: 1024 * 1024 * 1024, boot_deadline_ms: 90_000], overrides)))
+      config = Image.vm_config(image, id,
+        Keyword.merge([scratch_bytes: 1024 * 1024 * 1024, boot_deadline_ms: 90_000], overrides))
+      config =
+        if external do
+          %{config |
+            serial: %Config.Output{mode: :off},
+            disks: [
+              %Config.Disk{path: image.root, readonly: true, image_type: :raw},
+              %Config.Disk{path: scratch, readonly: false, image_type: :raw}
+            ]}
+        else
+          config
+        end
+      {:ok, ^id} = VM.define(config)
       :ok = VM.start(id)
     end
     {:ok, _status} = VM.await_ready(id)
@@ -964,11 +1133,13 @@ pkgs.testers.runNixOSTest {
     machine.succeed("! pgrep --full '[c]loud-hypervisor'")
     machine.succeed("image-restoration-scenario graceful-restore", timeout=120)
     machine.succeed("image-restoration-scenario prepare", timeout=120)
+    machine.succeed("image-restoration-scenario agentless-prepare", timeout=120)
     machine.reboot()
     machine.wait_for_shutdown()
     machine.start()
     machine.wait_for_unit("multi-user.target")
     machine.succeed("image-restoration-scenario restore", timeout=120)
+    machine.succeed("image-restoration-scenario agentless-restore", timeout=120)
     machine.succeed("mkdir --parents /run/image-external /var/lib/image-restoration; truncate --size 1G /var/lib/image-restoration/external.ext4; ${pkgs.e2fsprogs}/bin/mkfs.ext4 -q -F -L sower-scratch /var/lib/image-restoration/external.ext4")
     machine.succeed("systemd-run --unit=image-external ${pkgs.cloud-hypervisor}/bin/cloud-hypervisor --api-socket /run/image-external/control.sock")
     machine.wait_until_succeeds("test -S /run/image-external/control.sock")

@@ -1,4 +1,4 @@
-defmodule VMManager.Protocol do
+defmodule VMManager.Guest.Protocol do
   @moduledoc false
   @maximum 65_536
 

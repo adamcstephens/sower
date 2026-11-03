@@ -3,78 +3,85 @@ defmodule VMManager.Network do
   use TypedStruct
 
   typedstruct do
-    field :socket_path, String.t(), enforce: true
-    field :lease, String.t(), enforce: true
-    field :tap, String.t(), enforce: true
-    field :mac, String.t(), enforce: true
-    field :address, String.t(), enforce: true
-    field :gateway, String.t(), enforce: true
-    field :dns, String.t(), enforce: true
+    field :ownership, :external | :managed, default: :external
+    field :devices, [CloudHypervisor.Config.Net.t()], default: []
+    field :provider, module()
+    field :options, term(), default: []
+    field :lease, term()
+    field :cmdline, String.t(), default: ""
   end
 
-  def provision(options) do
-    case Keyword.get(options, :network, :none) do
-      :none ->
-        {:ok, nil}
+  def valid?(nil), do: true
 
-      :full ->
-        socket_path =
-          Keyword.get(options, :activator_socket, "/run/sower-activator/activator.sock")
-
-        execution_id =
-          to_string(
-            Keyword.get(options, :execution_id, "local-#{System.unique_integer([:positive])}")
-          )
-
-        case VMManager.ActivatorClient.network(:provision,
-               socket_path: socket_path,
-               execution_id: execution_id
-             ) do
-          {:ok, lease} ->
-            {:ok,
-             %__MODULE__{
-               socket_path: socket_path,
-               lease: lease.lease,
-               tap: lease.tap,
-               mac: lease.mac,
-               address: lease.address,
-               gateway: lease.gateway,
-               dns: lease.dns
-             }}
-
-          {:error, :socket_not_found} ->
-            {:error, {:network_connect, :enoent}}
-
-          {:error, :connection_refused} ->
-            {:error, {:network_connect, :econnrefused}}
-
-          {:error, reason} ->
-            {:error, {:network_provision_unconfirmed, reason}}
-        end
-    end
+  def valid?(%__MODULE__{} = network) do
+    is_list(network.devices) and
+      Enum.all?(network.devices, &is_struct(&1, CloudHypervisor.Config.Net)) and
+      is_binary(network.cmdline) and serializable?(network.options) and
+      valid_custody?(network)
   end
 
-  def revoke(nil), do: :ok
-  def revoke(%__MODULE__{} = network), do: operation(network, :revoke)
-  def release(nil), do: :ok
-  def release(%__MODULE__{} = network), do: operation(network, :release)
+  def valid?(_), do: false
 
-  defp operation(%__MODULE__{} = network, action) do
-    VMManager.ActivatorClient.network(action,
-      socket_path: network.socket_path,
-      lease: network.lease
-    )
+  defp valid_custody?(%__MODULE__{ownership: :external} = network),
+    do: is_nil(network.provider) and is_nil(network.lease)
+
+  defp valid_custody?(%__MODULE__{ownership: :managed} = network) do
+    is_atom(network.provider) and not is_nil(network.provider) and
+      Code.ensure_loaded?(network.provider) and
+      function_exported?(network.provider, :provision, 2) and
+      function_exported?(network.provider, :revoke, 2) and
+      function_exported?(network.provider, :release, 2) and
+      serializable?(network.lease) and
+      (not is_nil(network.lease) or (network.devices == [] and network.cmdline == ""))
+  end
+
+  defp valid_custody?(%__MODULE__{}), do: false
+
+  defp serializable?(value) when is_atom(value) or is_binary(value) or is_number(value),
+    do: true
+
+  defp serializable?([]), do: true
+  defp serializable?([head | tail]), do: serializable?(head) and serializable?(tail)
+
+  defp serializable?(value) when is_tuple(value),
+    do: value |> Tuple.to_list() |> Enum.all?(&serializable?/1)
+
+  defp serializable?(value) when is_map(value),
+    do: Enum.all?(value, fn {key, item} -> serializable?(key) and serializable?(item) end)
+
+  defp serializable?(_), do: false
+
+  def provision(%VMManager.Config{network: nil}), do: {:ok, nil}
+
+  def provision(%VMManager.Config{network: %__MODULE__{ownership: :external} = network}),
+    do: {:ok, network}
+
+  def provision(%VMManager.Config{network: %__MODULE__{lease: lease} = network})
+      when not is_nil(lease),
+      do: {:ok, network}
+
+  def provision(%VMManager.Config{} = config) do
+    network = config.network
+    network.provider.provision(config.id, network.options)
   end
 
   def devices(nil), do: []
-
-  def devices(%__MODULE__{} = network),
-    do: [%CloudHypervisor.Config.Net{tap: network.tap, mac: network.mac}]
+  def devices(%__MODULE__{} = network), do: network.devices
 
   def cmdline(nil), do: ""
+  def cmdline(%__MODULE__{} = network), do: network.cmdline
 
-  def cmdline(%__MODULE__{} = network) do
-    " sower.network.address=#{network.address} sower.network.gateway=#{network.gateway}" <>
-      " sower.network.dns=#{network.dns} sower.network.mac=#{network.mac}"
-  end
+  def revoke(nil), do: :ok
+  def revoke(%__MODULE__{ownership: :external}), do: :ok
+  def revoke(%__MODULE__{lease: nil}), do: :ok
+
+  def revoke(%__MODULE__{} = network),
+    do: network.provider.revoke(network.lease, network.options)
+
+  def release(nil), do: :ok
+  def release(%__MODULE__{ownership: :external}), do: :ok
+  def release(%__MODULE__{lease: nil}), do: :ok
+
+  def release(%__MODULE__{} = network),
+    do: network.provider.release(network.lease, network.options)
 end

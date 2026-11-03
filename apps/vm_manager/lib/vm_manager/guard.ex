@@ -1,7 +1,7 @@
 defmodule VMManager.Guard do
   @moduledoc false
   use TypedStruct
-  alias CloudHypervisor.{Config, Launch}
+  alias CloudHypervisor.Launch
 
   typedstruct do
     field :server, pid(), enforce: true
@@ -16,20 +16,14 @@ defmodule VMManager.Guard do
     field :started, integer(), enforce: true
     field :options, keyword(), enforce: true
     field :boot_timer, reference()
-    field :command, pid()
-    field :cancel_timer, reference()
+    field :formatters, [[String.t()]], default: []
     field :attached, boolean(), default: false
   end
 
   def run(server, options) do
     Process.flag(:trap_exit, true)
 
-    options =
-      Keyword.put_new(
-        options,
-        :boot_deadline_ms,
-        if(options[:command], do: Keyword.get(options, :deadline_ms, 60_000), else: 60_000)
-      )
+    options = Keyword.put_new(options, :boot_deadline_ms, 60_000)
 
     state = %__MODULE__{
       server: server,
@@ -45,51 +39,60 @@ defmodule VMManager.Guard do
     config = state.options[:config]
     client = %CloudHypervisor.API{socket: config.control_endpoint}
 
-    deadline = state.started + config.boot_deadline_ms
-
     with {:ok, info} <- CloudHypervisor.API.info(client),
-         :ok <- matching_runtime(info, config),
-         :ok <- boot_attached(client, info, deadline) do
-      timer =
-        Process.send_after(
-          self(),
-          :deadline,
-          max(0, deadline - System.monotonic_time(:millisecond))
-        )
+         :ok <- matching_runtime(info, state) do
+      state = %{state | attached: true, network: state.options[:network] || config.network}
 
-      {io, _monitor} = start_io(state, config.guest_endpoint)
-      loop(%{state | io: io, boot_timer: timer, attached: true, network: config.network_lease})
+      case checkpoint_network(state) do
+        :ok ->
+          admit_attachment(state, client, info, state.started + config.boot_deadline_ms)
+
+        {:error, reason} ->
+          stop(state, {:error, reason})
+      end
     else
       {:error, reason} -> finish(state, {:error, {:attachment, reason}}, :unconfirmed)
     end
   end
 
-  defp matching_runtime(%CloudHypervisor.API.Info{} = info, config) do
-    actual = info.config
-    payload = actual["payload"] || %{}
-    roots = Enum.map(actual["disks"] || [], & &1["path"])
+  defp admit_attachment(%__MODULE__{} = state, client, info, deadline) do
+    receive do
+      {:finish, result} ->
+        stop(state, result)
 
-    if (info.state == "Running" or stopped?(info)) and
-         "sower.vm.id=#{config.id}" in String.split(payload["cmdline"] || "") and
-         payload["kernel"] == config.kernel and payload["initramfs"] == config.initrd and
-         config.root in roots and
-         get_in(actual, ["cpus", "boot_vcpus"]) == config.cpus and
-         get_in(actual, ["memory", "size"]) == config.memory and
-         get_in(actual, ["vsock", "socket"]) == config.guest_endpoint and
-         Enum.all?(config.disks, &(&1.path in roots)) and
-         matching_network?(actual["net"] || [], config) do
-      :ok
-    else
-      {:error, :runtime_identity_mismatch}
+      {:DOWN, ref, :process, _pid, _reason} when ref == state.server_monitor ->
+        stop(state, {:error, :owner_down})
+    after
+      0 ->
+        with true <- System.monotonic_time(:millisecond) < deadline,
+             :ok <- boot_attached(client, info, deadline) do
+          timer =
+            Process.send_after(
+              self(),
+              :deadline,
+              max(0, deadline - System.monotonic_time(:millisecond))
+            )
+
+          config = state.options[:config]
+
+          running(%{state | boot_timer: timer}, get_in(config.vsock.socket))
+        else
+          false -> stop(state, {:error, :timeout})
+          {:error, reason} -> stop(state, {:error, {:attachment, reason}})
+        end
     end
   end
 
-  defp matching_network?([], %{network: :none, network_lease: nil}), do: true
-
-  defp matching_network?([net], %{network: :full, network_lease: %VMManager.Network{} = lease}),
-    do: net["tap"] == lease.tap and net["mac"] == lease.mac
-
-  defp matching_network?(_, _), do: false
+  defp matching_runtime(%CloudHypervisor.API.Info{} = info, %__MODULE__{} = state) do
+    if VMManager.Machine.matches?(
+         info,
+         state.options[:config],
+         state.directory,
+         state.network || state.options[:network] || state.options[:config].network
+       ),
+       do: :ok,
+       else: {:error, :runtime_identity_mismatch}
+  end
 
   defp stopped?(%CloudHypervisor.API.Info{state: "Created", device_tree: nil}), do: true
   defp stopped?(%CloudHypervisor.API.Info{}), do: false
@@ -130,12 +133,22 @@ defmodule VMManager.Guard do
     end
   end
 
-  defp start_io(%__MODULE__{} = state, path) do
-    guard = self()
+  defp running(%__MODULE__{} = state, path) do
+    config = state.options[:config]
 
-    spawn_monitor(fn ->
-      VMManager.IO.run(guard, path, state.options[:image].contract, state.started)
-    end)
+    if config.guest == :none do
+      if state.boot_timer, do: Process.cancel_timer(state.boot_timer)
+      notify_status(state, running: true, phase: :running)
+      loop(%{state | boot_timer: nil})
+    else
+      notify_status(state, running: true)
+
+      {:ok, session} =
+        VMManager.Guest.Session.start(self(), state.server, path, state.options, state.started)
+
+      Process.monitor(session)
+      loop(%{state | io: session})
+    end
   end
 
   defp allocate(%__MODULE__{} = state) do
@@ -145,7 +158,7 @@ defmodule VMManager.Guard do
       Process.send_after(
         self(),
         :deadline,
-        Keyword.get(options, :boot_deadline_ms, Keyword.get(options, :deadline_ms, 60_000))
+        options[:boot_deadline_ms]
       )
 
     state = %{state | boot_timer: timer}
@@ -178,53 +191,22 @@ defmodule VMManager.Guard do
   end
 
   defp prepare(%__MODULE__{} = state) do
-    directory = state.directory
-    options = state.options
-    notify_status(state, directory: directory)
+    notify_status(state, directory: state.directory)
 
-    with :ok <- File.chmod(directory, 0o700),
-         :ok <-
-           sparse(
-             Path.join(directory, "scratch.ext4"),
-             Keyword.get(options, :scratch_bytes, 4 * 1024 * 1024 * 1024)
-           ) do
-      start_formatter(state)
+    with :ok <- File.chmod(state.directory, 0o700),
+         {:ok, formatters} <- VMManager.Storage.prepare(state.options[:config], state.directory) do
+      start_formatter(%{state | formatters: formatters})
     else
-      {:error, reason} -> finish(state, {:error, {:scratch_startup, reason}}, :ok)
+      {:error, reason} -> finish(state, {:error, {:storage_startup, reason}}, :ok)
     end
   end
 
-  defp start_formatter(%__MODULE__{} = state) do
-    case Rexec.run_link(
-           [
-             Keyword.get(state.options, :mkfs, "mkfs.ext4"),
-             "-q",
-             "-F",
-             "-L",
-             "sower-scratch",
-             Path.join(state.directory, "scratch.ext4")
-           ],
-           owner: self()
-         ) do
-      {:ok, formatter, _os_pid} -> loop(%{state | formatter: formatter})
-      {:error, reason} -> finish(state, {:error, {:scratch_startup, reason}}, :unconfirmed)
-    end
-  end
+  defp start_formatter(%__MODULE__{formatters: []} = state), do: launch(state)
 
-  defp sparse(path, size) do
-    with {:ok, file} <- :file.open(String.to_charlist(path), [:write, :binary, :exclusive]) do
-      result =
-        with {:ok, _} <- :file.position(file, size - 1),
-             :ok <- :file.write(file, <<0>>) do
-          :ok
-        else
-          {:error, reason} -> {:error, reason}
-        end
-
-      :file.close(file)
-      result
-    else
-      {:error, reason} -> {:error, reason}
+  defp start_formatter(%__MODULE__{formatters: [command | rest]} = state) do
+    case Rexec.run_link(command, owner: self()) do
+      {:ok, formatter, _os_pid} -> loop(%{state | formatter: formatter, formatters: rest})
+      {:error, reason} -> finish(state, {:error, {:storage_startup, reason}}, :unconfirmed)
     end
   end
 
@@ -235,7 +217,7 @@ defmodule VMManager.Guard do
           {:ok, {:exit_status, 0}} when state.cleanup_error == nil ->
             if state.outcome,
               do: finish(state, state.outcome, :ok),
-              else: launch(%{state | formatter: nil})
+              else: start_formatter(%{state | formatter: nil})
 
           {:ok, _} when state.cleanup_error == nil ->
             finish(state, state.outcome || {:error, {:mkfs, reason}}, :ok)
@@ -268,52 +250,15 @@ defmodule VMManager.Guard do
         stop(state, {:error, {:io_down, reason}})
 
       {:guest_ready, _ready} ->
-        Process.cancel_timer(state.boot_timer)
-        notify_status(state, phase: :ready)
+        if state.boot_timer, do: Process.cancel_timer(state.boot_timer)
         loop(%{state | boot_timer: nil})
-
-      {:execute, command, request, callback} when state.command == nil ->
-        send(state.io, {:execute, command, request, callback})
-
-        notify_status(state,
-          phase: if(state.options[:command], do: :running, else: :running_command)
-        )
-
-        loop(%{state | command: command})
-
-      {:guest_reconnecting, command} when command == state.command ->
-        timer =
-          state.cancel_timer || Process.send_after(self(), {:cancel_deadline, command}, 5_000)
-
-        loop(%{state | cancel_timer: timer})
-
-      {:cancel_command, command, reason} when command == state.command ->
-        send(state.io, {:cancel, command, reason})
-
-        timer =
-          state.cancel_timer || Process.send_after(self(), {:cancel_deadline, command}, 5_000)
-
-        loop(%{state | cancel_timer: timer})
-
-      {:cancel_deadline, command} when command == state.command ->
-        stop(state, {:error, :command_cleanup_unconfirmed})
-
-      {:command_finished, command, result} when command == state.command ->
-        if state.cancel_timer, do: Process.cancel_timer(state.cancel_timer)
-        send(state.server, {:command_finished, command, result})
-        state = %{state | command: nil, cancel_timer: nil}
-
-        if state.options[:command] || state.options[:image].contract == 1 do
-          stop(state, result)
-        else
-          notify_status(state, phase: :ready)
-          loop(state)
-        end
 
       {:cloud_hypervisor, vmm, {:ready, status}} when vmm == state.vmm ->
         notify_status(state, vmm: vmm, os_pid: status.os_pid)
-        {io, _monitor} = start_io(state, Path.join(status.directory, "vsock.sock"))
-        loop(%{state | io: io})
+
+        path = Path.join(status.directory, "vsock.sock")
+
+        running(%{state | vmm: vmm}, path)
 
       {:cloud_hypervisor, vmm, {:exited, {:exit_status, 0} = outcome}} when vmm == state.vmm ->
         stop(state, {:ok, {:vmm_exited, outcome}})
@@ -333,15 +278,39 @@ defmodule VMManager.Guard do
   end
 
   defp launch(%__MODULE__{} = state) do
-    case VMManager.Network.provision(state.options) do
+    case VMManager.Network.provision(state.options[:config]) do
       {:ok, network} ->
-        admit_launch(%{state | network: network})
+        state = %{state | network: network}
+
+        case checkpoint_network(state) do
+          :ok -> admit_launch(state)
+          {:error, reason} -> finish(state, {:error, reason}, :ok)
+        end
 
       {:error, {:network_provision_unconfirmed, _} = reason} ->
         finish(state, {:error, reason}, :unconfirmed)
 
       {:error, reason} ->
         finish(state, {:error, reason}, :ok)
+    end
+  end
+
+  defp checkpoint_network(%__MODULE__{} = state) do
+    case state.options[:manager] do
+      nil ->
+        :ok
+
+      manager ->
+        try do
+          GenServer.call(
+            manager,
+            {:checkpoint_network, state.options[:execution_id], state.options[:attempt],
+             state.network},
+            :infinity
+          )
+        catch
+          :exit, reason -> {:error, {:network_checkpoint, reason}}
+        end
     end
   end
 
@@ -358,43 +327,14 @@ defmodule VMManager.Guard do
         stop(state, {:error, :owner_down})
     after
       0 ->
-        if System.monotonic_time(:millisecond) - state.started >=
-             Keyword.get(
-               state.options,
-               :boot_deadline_ms,
-               Keyword.get(state.options, :deadline_ms, 60_000)
-             ),
-           do: stop(state, {:error, :timeout}),
-           else: launch_vm(state)
+        if System.monotonic_time(:millisecond) - state.started >= state.options[:boot_deadline_ms],
+          do: stop(state, {:error, :timeout}),
+          else: launch_vm(state)
     end
   end
 
   defp launch_vm(%__MODULE__{} = state) do
-    image = state.options[:image]
-    cpus = Keyword.get(state.options, :cpus, 1)
-
-    config = %Config{
-      kernel: image.kernel,
-      initramfs: image.initrd,
-      cmdline:
-        image.cmdline <> " sower.vm.id=#{image.id}" <> VMManager.Network.cmdline(state.network),
-      cpus: %Config.CPUs{boot_vcpus: cpus, max_vcpus: cpus},
-      memory: Keyword.get(state.options, :memory, 512 * 1024 * 1024),
-      disks:
-        [
-          %Config.Disk{path: image.root, readonly: true, image_type: :raw},
-          %Config.Disk{
-            path: Path.join(state.directory, "scratch.ext4"),
-            readonly: false,
-            image_type: :raw
-          }
-        ] ++ image.disks,
-      net: VMManager.Network.devices(state.network),
-      serial: %Config.Output{mode: :file, file: Path.join(state.directory, "serial.log")},
-      console: %Config.Output{mode: :off},
-      rng: %Config.RNG{src: "/dev/urandom"},
-      vsock: %Config.Vsock{cid: 3, socket: nil}
-    }
+    config = VMManager.Machine.build(state.options[:config], state.directory, state.network)
 
     case CloudHypervisor.Process.start_link(
            config: config,
@@ -403,12 +343,7 @@ defmodule VMManager.Guard do
            launch: %Launch{
              executable: Keyword.get(state.options, :hypervisor, "cloud-hypervisor")
            },
-           readiness_timeout:
-             Keyword.get(
-               state.options,
-               :boot_deadline_ms,
-               Keyword.get(state.options, :deadline_ms, 60_000)
-             )
+           readiness_timeout: state.options[:boot_deadline_ms]
          ) do
       {:ok, vmm} ->
         loop(%{state | vmm: vmm})
@@ -442,12 +377,12 @@ defmodule VMManager.Guard do
 
   defp stop(%__MODULE__{attached: true} = state, result) do
     notify_status(state, phase: :stopping)
-    if state.io, do: Process.exit(state.io, :kill)
+    stop_session(state.io)
     client = %CloudHypervisor.API{socket: state.options[:control_endpoint]}
 
     cleanup =
       with {:ok, running} <- CloudHypervisor.API.info(client),
-           :ok <- matching_runtime(running, state.options[:config]),
+           :ok <- matching_runtime(running, state),
            :ok <- VMManager.Network.revoke(state.network),
            :ok <- shutdown_attached(client, running),
            :ok <- await_state(client, "Created", System.monotonic_time(:millisecond) + 10_000) do
@@ -463,7 +398,7 @@ defmodule VMManager.Guard do
 
   defp stop(%__MODULE__{} = state, result) do
     notify_status(state, phase: :stopping)
-    if state.io, do: Process.exit(state.io, :kill)
+    stop_session(state.io)
     revocation = VMManager.Network.revoke(state.network)
     guard = self()
     vmm = state.vmm
@@ -523,7 +458,7 @@ defmodule VMManager.Guard do
   end
 
   defp finish(%__MODULE__{} = state, result, certification) do
-    if state.io, do: Process.exit(state.io, :kill)
+    stop_session(state.io)
 
     network_cleanup =
       case VMManager.Network.revoke(state.network) do
@@ -536,7 +471,7 @@ defmodule VMManager.Guard do
         certification != :ok -> certification
         state.cleanup_error != nil -> state.cleanup_error
         network_cleanup != :ok -> network_cleanup
-        true -> remove_known(state.directory)
+        true -> VMManager.Storage.cleanup(state.options[:config], state.directory)
       end
 
     result =
@@ -553,6 +488,14 @@ defmodule VMManager.Guard do
       )
     end
 
+    if state.io do
+      try do
+        GenServer.call(state.io, {:finish, result})
+      catch
+        :exit, _ -> :ok
+      end
+    end
+
     send(state.server, {:vm_finished, result, cleanup})
   end
 
@@ -563,29 +506,15 @@ defmodule VMManager.Guard do
     send(state.server, {:vm_status, changes})
   end
 
-  def runtime_directory(base, attempt), do: Path.join(base, "sower-vm-" <> attempt)
+  defp stop_session(nil), do: :ok
 
-  def cleanup_runtime(_base, nil), do: :ok
-  def cleanup_runtime(base, attempt), do: remove_known(runtime_directory(base, attempt))
-
-  defp remove_known(nil), do: :ok
-
-  defp remove_known(directory) do
-    with {:ok, files} <- File.ls(directory),
-         [] <- files -- ["scratch.ext4", "serial.log"],
-         :ok <-
-           Enum.reduce_while(files, :ok, fn file, :ok ->
-             case File.rm(Path.join(directory, file)) do
-               :ok -> {:cont, :ok}
-               {:error, reason} -> {:halt, {:error, reason}}
-             end
-           end),
-         :ok <- File.rmdir(directory) do
-      :ok
-    else
-      {:error, :enoent} -> :ok
-      {:error, reason} -> {:error, reason}
-      unexpected -> {:error, {:unexpected_files, unexpected}}
+  defp stop_session(session) do
+    try do
+      GenServer.call(session, :quiesce)
+    catch
+      :exit, _ -> :ok
     end
   end
+
+  def runtime_directory(base, attempt), do: Path.join(base, "sower-vm-" <> attempt)
 end

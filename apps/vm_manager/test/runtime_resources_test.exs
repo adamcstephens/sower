@@ -21,10 +21,11 @@ defmodule VMManager.RuntimeResourcesTest do
         id: "missing-base",
         kernel: "/kernel",
         initrd: "/initrd",
-        root: "/root",
+        disks: [
+          %VMManager.Storage.EphemeralDisk{name: "scratch.ext4", bytes: 1024, filesystem: :ext4}
+        ],
         runtime_directory: base,
-        mkfs: formatter,
-        scratch_bytes: 1024
+        mkfs: formatter
       }
 
       attempt_directory = VMManager.Guard.runtime_directory(base, "persisted-attempt")
@@ -62,19 +63,28 @@ defmodule VMManager.RuntimeResourcesTest do
     File.write!(serial, "serial")
     File.write!(unknown, "retain")
 
-    assert {:error, {:unexpected_files, ["unexpected"]}} =
-             VMManager.Guard.cleanup_runtime(base, "persisted-attempt")
+    config = %VMManager.Config{
+      id: "reboot",
+      kernel: "/kernel",
+      disks: [
+        %VMManager.Storage.EphemeralDisk{name: "scratch.ext4", bytes: 1024, filesystem: :ext4}
+      ],
+      serial: %CloudHypervisor.Config.Output{mode: :file, file: "serial.log"}
+    }
+
+    assert {:error, :unowned_storage} =
+             VMManager.Storage.cleanup(config, attempt)
 
     assert File.read!(scratch) == "ephemeral"
     assert File.read!(serial) == "serial"
     assert File.read!(unknown) == "retain"
     File.rm!(unknown)
-    assert :ok = VMManager.Guard.cleanup_runtime(base, "persisted-attempt")
+    assert :ok = VMManager.Storage.cleanup(config, attempt)
     refute File.exists?(attempt)
     assert File.read!(persistent) == "persistent data"
     assert File.dir?(base)
-    assert :ok = VMManager.Guard.cleanup_runtime(base, "persisted-attempt")
-    assert :ok = VMManager.Guard.cleanup_runtime(base, nil)
+    assert :ok = VMManager.Storage.cleanup(config, attempt)
+    assert :ok = VMManager.Storage.cleanup(config, nil)
   end
 
   defp prepare_base_fixture(_base, false), do: :ok

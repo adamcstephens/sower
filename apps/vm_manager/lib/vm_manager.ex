@@ -26,6 +26,7 @@ defmodule VMManager do
     field :desired, atom(), default: :stopped
     field :failure, term()
     field :phase, atom(), default: :stopped
+    field :running, boolean(), default: false
     field :directory, String.t()
     field :vmm, pid()
     field :os_pid, pos_integer()
@@ -61,20 +62,34 @@ defmodule VMManager do
   def subscribe(id, server \\ VMManager.Manager),
     do: GenServer.call(server, {:subscribe, id, self()})
 
+  def await_running(id, server \\ VMManager.Manager),
+    do: with_runtime(id, server, &GenServer.call(&1, :await_running, :infinity), false)
+
   def await_ready(id, server \\ VMManager.Manager),
-    do: with_runtime(id, server, &GenServer.call(&1, :await_ready, :infinity))
+    do: with_runtime(id, server, &GenServer.call(&1, :await_ready, :infinity), true)
 
   def execute(id, %Command{} = command, options \\ [], server \\ VMManager.Manager),
-    do: with_runtime(id, server, &GenServer.call(&1, {:execute, command, options}, :infinity))
+    do:
+      with_runtime(id, server, &GenServer.call(&1, {:execute, command, options}, :infinity), true)
 
   def command_status(command), do: GenServer.call(command, :status)
   def await_command(command), do: GenServer.call(command, :await, :infinity)
   def cancel_command(command), do: GenServer.call(command, :cancel)
 
-  defp with_runtime(id, server, fun) do
+  defp with_runtime(id, server, fun, requires_guest) do
+    result = status(id, server)
+
+    if requires_guest and match?({:ok, %Status{config: %VMManager.Config{guest: :none}}}, result) do
+      {:error, :guest_agent_disabled}
+    else
+      call_runtime(result, fun)
+    end
+  end
+
+  defp call_runtime(result, fun) do
     with {:ok, %Status{execution: execution, phase: phase}}
          when is_pid(execution) and phase not in [:stopped, :finished, :retained, :failed] <-
-           status(id, server) do
+           result do
       try do
         fun.(execution)
       catch

@@ -1,12 +1,13 @@
-defmodule VMManager.IO do
+defmodule VMManager.Guest.IO do
   @moduledoc false
   use TypedStruct
-  alias VMManager.Protocol
+  alias VMManager.Guest.Protocol
 
   typedstruct do
     field :guard, pid(), enforce: true
     field :path, String.t(), enforce: true
     field :contract, integer(), enforce: true
+    field :vsock_port, pos_integer(), default: 5000
     field :socket, port()
     field :command, pid()
     field :callback, function()
@@ -20,10 +21,10 @@ defmodule VMManager.IO do
   def output(:stdout, bytes), do: IO.binwrite(:stdio, bytes)
   def output(:stderr, bytes), do: IO.binwrite(:standard_error, bytes)
 
-  def run(guard, path, contract, started) when is_binary(path) do
+  def run(guard, path, contract, started, vsock_port) when is_binary(path) do
     Process.flag(:trap_exit, true)
 
-    with {:ok, socket} <- connect(path),
+    with {:ok, socket} <- connect(path, vsock_port),
          :ok <- ready(socket, contract) do
       elapsed = System.monotonic_time(:millisecond) - started
       send(guard, {:guest_ready, elapsed})
@@ -32,6 +33,7 @@ defmodule VMManager.IO do
         guard: guard,
         path: path,
         contract: contract,
+        vsock_port: vsock_port,
         socket: socket,
         ready_ms: elapsed
       })
@@ -66,7 +68,7 @@ defmodule VMManager.IO do
   defp connection(%__MODULE__{socket: socket}) when not is_nil(socket), do: {:ok, socket}
 
   defp connection(%__MODULE__{} = state) do
-    with {:ok, socket} <- connect(state.path),
+    with {:ok, socket} <- connect(state.path, state.vsock_port),
          :ok <- ready(socket, state.contract) do
       {:ok, socket}
     else
@@ -197,7 +199,7 @@ defmodule VMManager.IO do
     idle(%{state | socket: nil, command: nil, callback: nil, buffer: <<>>})
   end
 
-  defp connect(path) do
+  defp connect(path, vsock_port) do
     case :gen_tcp.connect(
            {:local, String.to_charlist(path)},
            0,
@@ -205,7 +207,7 @@ defmodule VMManager.IO do
            1_000
          ) do
       {:ok, socket} ->
-        with :ok <- :gen_tcp.send(socket, "CONNECT 5000\n"),
+        with :ok <- :gen_tcp.send(socket, "CONNECT #{vsock_port}\n"),
              {:ok, line} <- :gen_tcp.recv(socket, 0, 1_000),
              true <- Regex.match?(~r/\AOK [0-9]+\n\z/, line),
              :ok <- :inet.setopts(socket, packet: :raw) do
@@ -214,7 +216,7 @@ defmodule VMManager.IO do
           {:error, reason} when reason in [:closed, :econnrefused, :timeout] ->
             :gen_tcp.close(socket)
             Process.sleep(25)
-            connect(path)
+            connect(path, vsock_port)
 
           error ->
             :gen_tcp.close(socket)
@@ -223,7 +225,7 @@ defmodule VMManager.IO do
 
       {:error, reason} when reason in [:enoent, :econnrefused] ->
         Process.sleep(25)
-        connect(path)
+        connect(path, vsock_port)
 
       {:error, reason} ->
         {:error, {:bridge, reason}}
