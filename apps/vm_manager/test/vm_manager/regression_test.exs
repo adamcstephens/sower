@@ -255,24 +255,8 @@ defmodule VMManager.RegressionTest do
           unfiltered: {:invalid_option, :network},
           full: :unsupported_network_config
         ] do
-      id = define(context, "network-#{mode}", network: mode)
-      assert :ok = VMManager.start(id, context.manager)
-
-      eventually(fn ->
-        case VMManager.status(id, context.manager) do
-          {:ok,
-           %Status{
-             phase: :failed,
-             cleanup: :ok,
-             result: {:error, {:launch_failed, ^reason}},
-             failure: {:vm_failed, {:error, {:launch_failed, ^reason}}}
-           }} ->
-            true
-
-          _ ->
-            false
-        end
-      end)
+      config = %{context.config | id: "network-#{mode}", network: mode}
+      assert {:error, ^reason} = VMManager.define(config, context.manager)
     end
 
     assert {:ok, []} = File.ls(context.config.runtime_directory)

@@ -29,8 +29,8 @@ defmodule VMManager.Execution do
   end
 
   def validate_options(options) do
-    with %Image{system: "x86_64-linux", contract: contract, vsock_port: 5000}
-         when contract in [1, 2] <- Keyword.get(options, :image),
+    with %Image{} = image <- Keyword.get(options, :image),
+         :ok <- Image.validate(image),
          :ok <- validate_initial_command(options),
          :ok <- validate(options) do
       :ok
@@ -295,19 +295,11 @@ defmodule VMManager.Execution do
 
   defp validate(options) do
     cond do
-      Keyword.get(options, :network, :none) not in [:none, :full] ->
-        {:error, {:invalid_option, :network}}
-
-      Keyword.get(options, :network, :none) == :full and options[:image].network_config != :static ->
-        {:error, :unsupported_network_config}
-
       not is_pid(options[:owner]) ->
         {:error, {:invalid_option, :owner}}
 
-      not Enum.all?([:cpus, :memory, :scratch_bytes, :deadline_ms, :boot_deadline_ms], fn key ->
-        value = Keyword.get(options, key, 1)
-        is_integer(value) and value > 0
-      end) ->
+      not (is_integer(Keyword.get(options, :deadline_ms, 1)) and
+               Keyword.get(options, :deadline_ms, 1) > 0) ->
         {:error, :invalid_resource_option}
 
       not is_function(Keyword.get(options, :on_output, &VM.IO.output/2), 2) ->
