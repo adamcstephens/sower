@@ -132,6 +132,42 @@ defmodule VMManager.PersistenceTest do
     assert_receive {:DOWN, ^monitor, :process, ^worker, :normal}
   end
 
+  test "unsupported declarations cannot be defined or replace a durable definition", %{
+    directory: directory,
+    config: config
+  } do
+    {:ok, manager} = Manager.start_link(state_directory: directory)
+    assert {:ok, config.id} == VMManager.define(config, manager)
+    assert {:ok, original} = Store.load(directory)
+
+    for {changes, reason} <- [
+          {[system: "aarch64-linux"], :unsupported_system},
+          {[contract: 3], :unsupported_contract},
+          {[vsock_port: 5001], :unsupported_vsock_port},
+          {[network: :unfiltered], {:invalid_option, :network}},
+          {[network: :full, network_config: nil], :unsupported_network_config},
+          {[network: :full, network_config: :dhcp], :unsupported_network_config},
+          {[scratch_bytes: 0], :invalid_resources}
+        ] do
+      invalid = struct!(config, changes)
+      new = %{invalid | id: "invalid-vm"}
+
+      assert {:error, ^reason} = VMManager.define(new, manager)
+      assert {:error, ^reason} = VMManager.update(config.id, invalid, manager)
+
+      assert {:error, ^reason} =
+               invalid
+               |> Config.to_options()
+               |> Keyword.put(:owner, self())
+               |> VMManager.Execution.validate_options()
+
+      assert {:ok, ^original} = Store.load(directory)
+      assert {:ok, %VMManager.Status{config: ^config}} = VMManager.status(config.id, manager)
+    end
+
+    GenServer.stop(manager)
+  end
+
   test "complete definitions and stopped intent survive manager replacement", %{
     directory: directory,
     config: config

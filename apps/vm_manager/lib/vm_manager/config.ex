@@ -21,7 +21,6 @@ defmodule VMManager.Config do
     field :runtime_directory, String.t()
     field :control_endpoint, String.t()
     field :guest_endpoint, String.t()
-    field :runtime_identity, String.t()
     field :mode, atom(), default: :launch
     field :persistent_disks, [String.t()], default: []
     field :restart, atom(), default: :never
@@ -40,6 +39,21 @@ defmodule VMManager.Config do
       not Enum.all?([config.kernel, config.initrd, config.root], &is_binary/1) ->
         {:error, :invalid_boot_artifacts}
 
+      config.system != "x86_64-linux" ->
+        {:error, :unsupported_system}
+
+      config.contract not in [1, 2] ->
+        {:error, :unsupported_contract}
+
+      config.vsock_port != 5000 ->
+        {:error, :unsupported_vsock_port}
+
+      config.network not in [:none, :full] ->
+        {:error, {:invalid_option, :network}}
+
+      config.network == :full and config.network_config != :static ->
+        {:error, :unsupported_network_config}
+
       config.restart not in [:never, :on_failure, :always] ->
         {:error, :invalid_restart_policy}
 
@@ -54,13 +68,19 @@ defmodule VMManager.Config do
         {:error, :unexpected_network_lease}
 
       not Enum.all?(
-        [config.cpus, config.memory, config.boot_deadline_ms, config.restart_window_ms],
+        [
+          config.cpus,
+          config.memory,
+          config.scratch_bytes,
+          config.boot_deadline_ms,
+          config.restart_window_ms
+        ],
         &(is_integer(&1) and &1 > 0)
       ) ->
         {:error, :invalid_resources}
 
       not Enum.all?(
-        [config.scratch_bytes, config.restart_max_attempts, config.restart_delay_ms],
+        [config.restart_max_attempts, config.restart_delay_ms],
         &(is_integer(&1) and &1 >= 0)
       ) ->
         {:error, :invalid_resources}
@@ -76,6 +96,7 @@ defmodule VMManager.Config do
   def to_options(%__MODULE__{} = config) do
     config
     |> Map.from_struct()
+    |> Map.delete(:runtime_identity)
     |> Map.to_list()
     |> Keyword.merge(
       config: config,
