@@ -41,6 +41,21 @@ defmodule Garden.Image do
   end
 
   def vm_config(%__MODULE__{} = image, id, options \\ []) do
+    alias CloudHypervisor.Config, as: Native
+    alias VMManager.Storage.EphemeralDisk
+
+    {scratch_bytes, options} = Keyword.pop(options, :scratch_bytes, 4_294_967_296)
+    {disks, options} = Keyword.pop(options, :disks, [])
+    {network, options} = Keyword.pop(options, :network, :none)
+
+    network =
+      case network do
+        :none -> nil
+        :full when image.network_config == :static -> Garden.VM.Network.request()
+        :full -> raise ArgumentError, "full networking requires static network image support"
+        network -> network
+      end
+
     struct!(
       VMManager.Config,
       Keyword.merge(
@@ -48,12 +63,27 @@ defmodule Garden.Image do
           id: id,
           kernel: image.kernel,
           initrd: image.initrd,
-          root: image.root,
           cmdline: image.cmdline,
           system: image.system,
-          contract: image.contract,
-          vsock_port: image.vsock_port,
-          network_config: image.network_config
+          guest: %VMManager.Config.SowerGuest{
+            contract: image.contract,
+            vsock_port: image.vsock_port
+          },
+          disks:
+            [
+              %Native.Disk{path: image.root, readonly: true, image_type: :raw},
+              %EphemeralDisk{
+                name: "scratch.ext4",
+                bytes: scratch_bytes,
+                filesystem: :ext4,
+                label: "sower-scratch"
+              }
+            ] ++ disks,
+          network: network,
+          serial: %Native.Output{mode: :file, file: "serial.log"},
+          console: %Native.Output{mode: :off},
+          rng: %Native.RNG{src: "/dev/urandom"},
+          vsock: %Native.Vsock{cid: 3, socket: nil}
         ],
         options
       )

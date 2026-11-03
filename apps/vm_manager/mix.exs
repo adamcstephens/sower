@@ -13,7 +13,6 @@ defmodule VMManager.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: [
         {:cloud_hypervisor, in_umbrella: true},
-        {:sower_client, in_umbrella: true},
         {:rexec, git: "https://github.com/adamcstephens/rexec.git", branch: "main"},
         {:jason, "~> 1.0"},
         {:typedstruct, "0.5.4",

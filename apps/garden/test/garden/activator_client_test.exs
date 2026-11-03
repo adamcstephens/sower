@@ -165,6 +165,9 @@ defmodule Garden.ActivatorClientTest do
       {socket_path, server_pid} =
         start_mock_server(fn request_line, socket ->
           request = Jason.decode!(request_line)
+          assert request["type"] == "network"
+          assert request["network_action"] == "provision"
+          assert request["execution_id"] == "execution-1"
 
           send_response(socket, %{
             id: request["id"],
@@ -189,11 +192,15 @@ defmodule Garden.ActivatorClientTest do
       end)
 
       assert {:ok, network} =
-               VMManager.Network.provision(
-                 network: :full,
-                 activator_socket: socket_path,
-                 execution_id: "execution-1"
-               )
+               VMManager.Network.provision(%VMManager.Config{
+                 id: "execution-1",
+                 network: Garden.VM.Network.request(socket_path: socket_path)
+               })
+
+      assert network.ownership == :managed
+      assert network.provider == Garden.VM.Network
+      assert network.options == [socket_path: socket_path]
+      assert network.lease == "lease-1"
 
       assert [%CloudHypervisor.Config.Net{tap: "tap-1", mac: "02:00:00:00:00:01"}] =
                VMManager.Network.devices(network)
@@ -262,6 +269,201 @@ defmodule Garden.ActivatorClientTest do
                  socket_path: socket_path,
                  execution_id: "execution-1"
                )
+    end
+  end
+
+  describe "Garden network provider custody" do
+    test "a fresh BEAM restores a stopped managed request and its provider lease" do
+      directory =
+        Path.join(System.tmp_dir!(), "garden-network-cold-#{System.unique_integer([:positive])}")
+
+      on_exit(fn -> File.rm_rf!(directory) end)
+
+      {socket_path, server_pid} =
+        start_mock_server(fn request_line, socket ->
+          request = Jason.decode!(request_line)
+
+          send_response(socket, %{
+            id: request["id"],
+            type: "output",
+            data:
+              Jason.encode!(%{
+                lease: "cold-provider-lease",
+                tap: "cold-tap",
+                mac: "02:00:00:00:00:01",
+                address: "10.254.0.2/30",
+                gateway: "10.254.0.1",
+                dns: "1.1.1.1"
+              })
+          })
+
+          send_response(socket, %{id: request["id"], type: "complete", exit_code: 0})
+        end)
+
+      on_exit(fn ->
+        stop_mock_server(server_pid)
+        File.rm_rf!(Path.dirname(socket_path))
+      end)
+
+      config = %VMManager.Config{
+        id: "cold-managed-network",
+        kernel: "/kernel",
+        network: Garden.VM.Network.request(socket_path: socket_path)
+      }
+
+      assert {:ok, lease} = VMManager.Network.provision(config)
+      assert {:ok, writer} = VMManager.Manager.start_link(state_directory: directory)
+      assert {:ok, "cold-managed-network"} = VMManager.define(config, writer)
+      GenServer.stop(writer)
+      assert {:ok, definitions} = VMManager.Store.load(directory)
+      definition = Map.fetch!(definitions, config.id)
+
+      assert :ok =
+               VMManager.Store.save(directory, %{
+                 config.id => %{definition | network: lease}
+               })
+
+      reader = """
+      Application.load(:garden)
+      Code.ensure_loaded!(Garden.VM.Network)
+      Code.ensure_loaded!(Garden.ActivatorClient)
+      Application.put_env(:vm_manager, :state_directory, System.fetch_env!("GARDEN_COLD_STATE"))
+      {:ok, _applications} = Application.ensure_all_started(:vm_manager)
+      {:ok, [status]} = VMManager.list()
+      "cold-managed-network" = status.id
+      true = String.contains?(inspect(status.config.network), "Garden.VM.Network")
+      true = String.contains?(inspect(status.config.network), System.fetch_env!("GARDEN_COLD_SOCKET"))
+      {:ok, definitions} = VMManager.Store.load(System.fetch_env!("GARDEN_COLD_STATE"))
+      true = String.contains?(inspect(definitions), "cold-provider-lease")
+      true = String.contains?(inspect(definitions), "cold-tap")
+      IO.puts("cold-managed-provider-restored")
+      """
+
+      paths =
+        Enum.flat_map(:code.get_path(), fn path -> ["-pa", Path.expand(List.to_string(path))] end)
+
+      executable = System.find_executable("elixir")
+      assert is_binary(executable)
+
+      {output, code} =
+        System.cmd(executable, ["--erl", "+S 2:2"] ++ paths ++ ["--eval", reader],
+          env: [{"GARDEN_COLD_STATE", directory}, {"GARDEN_COLD_SOCKET", socket_path}],
+          stderr_to_stdout: true
+        )
+
+      assert code == 0, output
+      assert output =~ "cold-managed-provider-restored"
+    end
+
+    test "request captures the configured Garden endpoint in persistable options" do
+      network = Garden.VM.Network.request()
+
+      assert network.options == [
+               socket_path:
+                 Application.get_env(
+                   :garden,
+                   :activator_socket,
+                   "/run/sower-activator/activator.sock"
+                 )
+             ]
+    end
+
+    test "request persists its activator socket and distinguishes failure before connection" do
+      network = Garden.VM.Network.request(socket_path: "/nonexistent/network-activator.sock")
+
+      assert network.options == [socket_path: "/nonexistent/network-activator.sock"]
+      assert network.provider == Garden.VM.Network
+      assert network.ownership == :managed
+      assert network.lease == nil
+      assert VMManager.Network.valid?(network)
+
+      refute VMManager.Network.valid?(%{
+               network
+               | devices: [
+                   %CloudHypervisor.Config.Net{tap: "unleased", mac: "02:00:00:00:00:01"}
+                 ]
+             })
+
+      refute VMManager.Network.valid?(%{network | lease: self()})
+
+      assert {:error, {:network_connect, :enoent}} =
+               VMManager.Network.provision(%VMManager.Config{id: "missing", network: network})
+    end
+
+    test "lost response after provision remains unconfirmed" do
+      {socket_path, server_pid} =
+        start_mock_server(fn request_line, socket ->
+          request = Jason.decode!(request_line)
+          assert request["network_action"] == "provision"
+          assert request["execution_id"] == "uncertain"
+          :gen_tcp.close(socket)
+        end)
+
+      on_exit(fn ->
+        stop_mock_server(server_pid)
+        File.rm_rf!(Path.dirname(socket_path))
+      end)
+
+      assert {:error, {:network_provision_unconfirmed, :connection_closed}} =
+               VMManager.Network.provision(%VMManager.Config{
+                 id: "uncertain",
+                 network: Garden.VM.Network.request(socket_path: socket_path)
+               })
+    end
+
+    for action <- [:revoke, :release] do
+      test "#{action} sends the durable lease token" do
+        action = unquote(action)
+
+        {socket_path, server_pid} =
+          start_mock_server(fn request_line, socket ->
+            request = Jason.decode!(request_line)
+            assert request["type"] == "network"
+            assert request["network_action"] == to_string(action)
+            assert request["lease"] == "durable-lease"
+            send_response(socket, %{id: request["id"], type: "complete", exit_code: 0})
+          end)
+
+        on_exit(fn ->
+          stop_mock_server(server_pid)
+          File.rm_rf!(Path.dirname(socket_path))
+        end)
+
+        network = %VMManager.Network{
+          ownership: :managed,
+          provider: Garden.VM.Network,
+          options: [socket_path: socket_path],
+          lease: "durable-lease"
+        }
+
+        assert :ok = apply(VMManager.Network, action, [network])
+      end
+
+      test "#{action} failure does not certify cleanup" do
+        action = unquote(action)
+
+        {socket_path, server_pid} =
+          start_mock_server(fn request_line, socket ->
+            request = Jason.decode!(request_line)
+            send_response(socket, %{id: request["id"], type: "error", data: "cleanup failed"})
+            send_response(socket, %{id: request["id"], type: "complete", exit_code: 1})
+          end)
+
+        on_exit(fn ->
+          stop_mock_server(server_pid)
+          File.rm_rf!(Path.dirname(socket_path))
+        end)
+
+        network = %VMManager.Network{
+          ownership: :managed,
+          provider: Garden.VM.Network,
+          options: [socket_path: socket_path],
+          lease: "durable-lease"
+        }
+
+        assert {:error, {:activation_failed, 1, ["cleanup failed"]}} =
+                 apply(VMManager.Network, action, [network])
+      end
     end
   end
 

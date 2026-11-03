@@ -256,8 +256,19 @@ same manager boundary.
 
 Garden resolves images and translates their complete boot artifacts into
 `VMManager.Config`. The manager does not load images or read Garden configuration.
+The configuration specifies a kernel, optional initrd, ordered native or
+manager-created ephemeral disks, and optional devices. A native disk remains
+caller-owned; an ephemeral disk is allocated and formatted by the manager.
+Optional serial and console devices use native `CloudHypervisor.Config.Output`
+structs; relative single-filename outputs belong to the manager's attempt
+directory and are cleaned after certified teardown, while absolute paths remain
+caller-owned.
+Garden's image helper supplies the root and scratch layout and Sower guest
+devices; generic callers need neither scratch storage nor the Sower agent.
 `define/1` durably records a configuration under its caller-supplied ID.
-`start/1` persists desired running state, and `await_ready/1` waits for the guest.
+`start/1` persists desired running state, and `await_running/1` waits for the
+hypervisor's Running state. `await_ready/1` waits for the Sower guest handshake
+and returns `{:error, :guest_agent_disabled}` when there is no guest agent.
 Definitions, desired state, resource reservations, and bounded restart accounting
 survive manager and application restarts. Reconciliation reconnects to a matching
 live runtime or restores a desired VM after its runtime is gone.
@@ -276,8 +287,10 @@ The local CLI composes define/start/readiness/execute/await-command/stop/remove
 through the same manager boundary. Output callbacks retain the `(stream, bytes)`
 interface; callers capture their job/step identity in the callback.
 
-Local callers opt into IPv4 public egress with `network: :full`; the default
-`network: :none` still supplies no NIC. The operator must enable
+Generic VM configurations can omit networking or explicitly attach an
+externally managed host network; the manager does not destroy external
+attachments. Garden image callers opt into IPv4 public egress with
+`network: :full`; the default `network: :none` still supplies no NIC. The operator must enable
 `services.sower.activator.network.enable` and configure its public DNS resolver
 and protected destination addresses. Garden uses short-lived requests on the
 existing `/run/sower-activator/activator.sock` Accept=true socket, with
@@ -290,7 +303,8 @@ Errors emit `error` and a nonzero completion. Activation behavior is unchanged.
 The privileged activator authenticates the peer's system service cgroup
 against `network.gardenUnits` (default `["sower-garden.service"]`), derives the
 instance, and records its owner identity. Garden and Cloud Hypervisor remain
-unprivileged. Local socket overrides use `:activator_socket`.
+unprivileged. Local socket overrides use the `socket_path` option to
+`Garden.VM.Network.request/1`.
 Static address, gateway, DNS, and MAC kernel parameters configure the image
 before its vsock executor reports readiness. The guest retains the standard
 `cache.nixos.org` substituter and signing key with signature verification.

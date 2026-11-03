@@ -2,6 +2,9 @@ import Config
 
 if config_env() == :dev do
   if Code.ensure_loaded?(Garden.Config) and Code.ensure_loaded?(Garden.Scheduler) do
+    Code.ensure_loaded!(Garden.VM.Network)
+    Code.ensure_loaded!(Garden.ActivatorClient)
+
     config :garden, Garden.Scheduler, timezone: Garden.Scheduler.get_timezone()
 
     garden =
@@ -11,9 +14,10 @@ if config_env() == :dev do
         state_directory: Path.expand("../_build", __DIR__)
       })
 
+    config :garden, :activator_socket, garden.activator_socket
+
     config :vm_manager,
       state_directory: Path.join(garden.state_directory, "vm-manager"),
-      activator_socket: garden.activator_socket,
       budgets: [
         vms: garden.vm_capacity.vms,
         cpus: garden.vm_capacity.cpus,

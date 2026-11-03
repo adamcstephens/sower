@@ -1,7 +1,7 @@
 defmodule VMManager.Manager do
   use GenServer
   use TypedStruct
-  alias VMManager.{Config, Status, Store}
+  alias VMManager.{Config, Network, Status, Store}
 
   typedstruct module: Definition do
     field :config, Config.t(), enforce: true
@@ -14,6 +14,14 @@ defmodule VMManager.Manager do
     field :attempt, String.t()
     field :beam_identity, String.t()
     field :observed, Status.t()
+    field :network, VMManager.Network.t()
+    field :attachment_lease_consumed, boolean(), default: false
+  end
+
+  typedstruct module: Drain do
+    field :worker, pid(), enforce: true
+    field :monitor, reference(), enforce: true
+    field :waiters, [GenServer.from()], default: []
   end
 
   typedstruct do
@@ -25,9 +33,9 @@ defmodule VMManager.Manager do
     field :statuses, map(), default: %{}
     field :subscribers, map(), default: %{}
     field :stops, map(), default: %{}
-    field :activator_socket, String.t()
     field :boot_id, String.t(), enforce: true
     field :mode, atom(), default: :running
+    field :drain, Drain.t()
   end
 
   def start_link(options),
@@ -50,7 +58,6 @@ defmodule VMManager.Manager do
             memory: 536_870_912,
             scratch_bytes: 4_294_967_296
           ),
-        activator_socket: Keyword.get(options, :activator_socket),
         definitions: definitions,
         boot_id: boot_id
       }
@@ -92,6 +99,18 @@ defmodule VMManager.Manager do
              elem(request, 0) in [:define, :update, :start, :stop, :remove, :delete_storage],
       do: {:reply, {:error, :draining}, state}
 
+  def handle_call({:checkpoint_network, id, attempt, network}, _from, state) do
+    case fetch(state, id) do
+      {:ok, %Definition{attempt: ^attempt, reserved: true} = definition}
+      when not is_nil(attempt) ->
+        proposed = put_definition(state, id, %{definition | network: network})
+        commit_reply(:ok, proposed, state)
+
+      _ ->
+        {:reply, {:error, :stale_attempt}, state}
+    end
+  end
+
   def handle_call({:define, %Config{} = config}, _from, state) do
     with :ok <- Config.validate(config), false <- Map.has_key?(state.definitions, config.id) do
       commit_reply(
@@ -109,8 +128,19 @@ defmodule VMManager.Manager do
     with {:ok, definition} <- fetch(state, id),
          :ok <- stopped(state, id),
          :ok <- Config.validate(config),
+         :ok <- replacement_attachment(definition, config),
          true <- config.id == id do
-      commit_reply(:ok, put_definition(state, id, %{definition | config: config}), state)
+      commit_reply(
+        :ok,
+        put_definition(state, id, %{
+          definition
+          | config: config,
+            network: nil,
+            attachment_lease_consumed: false,
+            failure: nil
+        }),
+        state
+      )
     else
       false -> {:reply, {:error, :identity_mismatch}, state}
       {:error, reason} -> {:reply, {:error, reason}, state}
@@ -238,34 +268,35 @@ defmodule VMManager.Manager do
     end
   end
 
-  def handle_call(:prepare_shutdown, _from, state) do
-    state = %{state | mode: :stopping}
+  def handle_call(:prepare_shutdown, from, %__MODULE__{drain: %Drain{} = drain} = state) do
+    {:noreply, %{state | drain: %{drain | waiters: [from | drain.waiters]}}}
+  end
 
-    {definitions, errors} =
-      Enum.reduce(state.definitions, {%{}, []}, fn {id, definition}, {definitions, errors} ->
-        result =
-          case runtime(state, id) do
-            nil -> if(definition.reserved, do: {:error, :cleanup_uncertain}, else: :ok)
-            pid -> stop_runtime(pid)
-          end
+  def handle_call(:prepare_shutdown, from, %__MODULE__{} = state) do
+    manager = self()
 
-        definition =
-          if(result == :ok,
-            do: %{
-              definition
-              | reserved: false,
-                observed: %{(definition.observed || %Status{}) | phase: :stopped, cleanup: :ok}
-            },
-            else: definition
-          )
-
-        errors = if(result == :ok, do: errors, else: [{id, result} | errors])
-        {Map.put(definitions, id, definition), errors}
+    runtimes =
+      Enum.map(state.definitions, fn {id, definition} ->
+        {id, runtime(state, id), definition.reserved}
       end)
 
-    proposed = %{state | definitions: definitions}
-    result = if(errors == [], do: :ok, else: {:error, {:cleanup_incomplete, errors}})
-    commit_reply(result, proposed, state)
+    {worker, monitor} =
+      spawn_monitor(fn ->
+        results =
+          Enum.map(runtimes, fn {id, pid, reserved} ->
+            result =
+              if pid,
+                do: stop_runtime(pid),
+                else: if(reserved, do: {:error, :cleanup_uncertain}, else: :ok)
+
+            {id, result}
+          end)
+
+        send(manager, {:shutdown_finished, self(), results})
+      end)
+
+    {:noreply,
+     %{state | mode: :stopping, drain: %Drain{worker: worker, monitor: monitor, waiters: [from]}}}
   end
 
   @impl GenServer
@@ -286,6 +317,28 @@ defmodule VMManager.Manager do
   def handle_info(:tick, state) do
     Process.delete(:reconcile_timer)
     handle_info(:reconcile, state)
+  end
+
+  def handle_info(
+        {:shutdown_finished, worker, results},
+        %__MODULE__{drain: %Drain{worker: worker} = drain} = state
+      ) do
+    Process.demonitor(drain.monitor, [:flush])
+    complete_drain(state, results)
+  end
+
+  def handle_info(
+        {:DOWN, monitor, :process, worker, reason},
+        %__MODULE__{drain: %Drain{worker: worker, monitor: monitor} = drain} = state
+      ) do
+    error = {:error, {:shutdown_worker_down, reason}}
+    Enum.each(drain.waiters, &GenServer.reply(&1, error))
+
+    Enum.each(state.stops, fn {_id, waiters} ->
+      Enum.each(waiters, &GenServer.reply(&1, error))
+    end)
+
+    {:noreply, %{state | drain: nil, stops: %{}}}
   end
 
   def handle_info({:DOWN, _ref, :process, pid, _reason}, state) do
@@ -378,6 +431,10 @@ defmodule VMManager.Manager do
     end
   end
 
+  defp launch(state, id, %Definition{attachment_lease_consumed: true}) do
+    publish(state, id, %Status{phase: :stopped, failure: :attachment_lease_consumed})
+  end
+
   defp launch(state, id, definition) do
     case capacity(state, id, definition.config) do
       :ok ->
@@ -417,7 +474,8 @@ defmodule VMManager.Manager do
               |> Keyword.merge(
                 name: {:via, Registry, {VMManager.Registry, {state.identity, id}}},
                 owner: GenServer.whereis(state.supervisor),
-                activator_socket: state.activator_socket,
+                manager: self(),
+                network: definition.network,
                 cleanup_path: certificate_path(state, id),
                 attempt: attempt
               )
@@ -437,18 +495,26 @@ defmodule VMManager.Manager do
   end
 
   defp recover_host(state, id, %Definition{} = definition) do
-    cleanup =
+    directory =
       if definition.config.mode == :launch and definition.attempt != nil do
         base = definition.config.runtime_directory || Path.join(state.directory, "runtimes")
-        VMManager.Guard.cleanup_runtime(base, definition.attempt)
-      else
+        VMManager.Guard.runtime_directory(base, definition.attempt)
+      end
+
+    cleanup =
+      with :ok <- VMManager.Network.revoke(definition.network),
+           :ok <- VMManager.Network.release(definition.network),
+           :ok <- VMManager.Storage.cleanup(definition.config, directory) do
         :ok
+      else
+        error -> error
       end
 
     observed = %{
       (definition.observed || %Status{})
       | phase: if(cleanup == :ok, do: :stopped, else: :retained),
         cleanup: cleanup,
+        running: false,
         failure: if(cleanup == :ok, do: nil, else: {:host_restore_cleanup, cleanup}),
         execution: nil,
         guard: nil,
@@ -456,7 +522,15 @@ defmodule VMManager.Manager do
         vmm: nil
     }
 
-    updated = %{definition | reserved: cleanup != :ok, observed: observed}
+    definition = if cleanup == :ok, do: consume_attachment(definition), else: definition
+
+    updated = %{
+      definition
+      | reserved: cleanup != :ok,
+        observed: observed,
+        network: if(cleanup == :ok, do: nil, else: definition.network)
+    }
+
     proposed = put_definition(state, id, updated)
     result = if updated == definition, do: :ok, else: persist(proposed)
 
@@ -489,7 +563,8 @@ defmodule VMManager.Manager do
 
       waiters = Map.get(state.stops, id, [])
       durable = %{observed | execution: nil, guard: nil, owner: nil, vmm: nil}
-      definition = %{definition | reserved: false, observed: durable}
+      definition = consume_attachment(definition)
+      definition = %{definition | reserved: false, observed: durable, network: nil}
       definition = restart(definition, observed)
       proposed = put_definition(%{state | stops: Map.delete(state.stops, id)}, id, definition)
 
@@ -512,6 +587,9 @@ defmodule VMManager.Manager do
       %{state | stops: Map.delete(state.stops, id)}
     end
   end
+
+  defp restart(%Definition{attachment_lease_consumed: true} = definition, _observed),
+    do: %{definition | failure: :attachment_lease_consumed, retry_at: nil}
 
   defp restart(%Definition{desired: :stopped} = definition, _observed), do: definition
 
@@ -565,6 +643,9 @@ defmodule VMManager.Manager do
       {:error, reason} -> {:reply, {:error, {:durable_store, reason}}, previous}
     end
   end
+
+  defp startable(_state, _id, %Definition{attachment_lease_consumed: true}),
+    do: {:error, :attachment_lease_consumed}
 
   defp startable(state, id, %Definition{} = definition) do
     if definition.reserved and runtime(state, id) == nil,
@@ -630,7 +711,11 @@ defmodule VMManager.Manager do
   end
 
   defp enrich_status(%Status{} = observed, id, %Definition{} = definition) do
-    failure = definition.failure || observed.failure
+    failure =
+      if definition.attachment_lease_consumed,
+        do: :attachment_lease_consumed,
+        else: definition.failure || observed.failure
+
     phase = if failure == :restart_exhausted, do: :failed, else: observed.phase
 
     execution =
@@ -656,13 +741,76 @@ defmodule VMManager.Manager do
          observed.phase in [:stopped, :finished], do: :ok, else: {:error, :vm_not_stopped}
   end
 
+  defp complete_drain(%__MODULE__{drain: %Drain{} = drain} = state, results) do
+    {definitions, errors} =
+      Enum.reduce(results, {state.definitions, []}, fn {id, result}, {definitions, errors} ->
+        definition = Map.fetch!(definitions, id)
+
+        if result == :ok do
+          definition = consume_attachment(definition)
+
+          observed = %{
+            (definition.observed || %Status{})
+            | phase: :stopped,
+              running: false,
+              cleanup: :ok
+          }
+
+          definition = %{definition | reserved: false, network: nil, observed: observed}
+          {Map.put(definitions, id, definition), errors}
+        else
+          {definitions, [{id, result} | errors]}
+        end
+      end)
+
+    previous = %{state | drain: nil, stops: %{}}
+    proposed = %{previous | definitions: definitions}
+
+    {reply, updated} =
+      case persist(proposed) do
+        :ok ->
+          result = if errors == [], do: :ok, else: {:error, {:cleanup_incomplete, errors}}
+          {result, proposed}
+
+        {:error, reason} ->
+          {{:error, {:durable_store, reason}}, previous}
+      end
+
+    Enum.each(drain.waiters, &GenServer.reply(&1, reply))
+
+    Enum.each(state.stops, fn {_id, waiters} ->
+      Enum.each(waiters, &GenServer.reply(&1, reply))
+    end)
+
+    {:noreply, updated}
+  end
+
+  defp consume_attachment(
+         %Definition{
+           reserved: true,
+           config: %Config{mode: :attach, network: %Network{ownership: :managed}}
+         } = definition
+       ),
+       do: %{definition | attachment_lease_consumed: true, failure: :attachment_lease_consumed}
+
+  defp consume_attachment(%Definition{} = definition), do: definition
+
+  defp replacement_attachment(
+         %Definition{
+           attachment_lease_consumed: true,
+           config: %Config{network: %Network{} = previous}
+         },
+         %Config{mode: :attach, network: %Network{ownership: :managed} = network}
+       ) do
+    if network.provider == previous.provider and network.lease == previous.lease,
+      do: {:error, :attachment_lease_consumed},
+      else: :ok
+  end
+
+  defp replacement_attachment(%Definition{}, %Config{}), do: :ok
+
   defp capacity(state, id, %Config{} = config) do
-    resources = [
-      vms: 1,
-      cpus: config.cpus,
-      memory: config.memory,
-      scratch_bytes: config.scratch_bytes
-    ]
+    resources = VMManager.Storage.resources(config)
 
     used =
       Enum.reduce(state.definitions, Map.new(resources, fn {key, _} -> {key, 0} end), fn {other,
@@ -670,12 +818,7 @@ defmodule VMManager.Manager do
                                                                                          totals ->
         if other != id and definition.reserved do
           Enum.reduce(
-            [
-              vms: 1,
-              cpus: definition.config.cpus,
-              memory: definition.config.memory,
-              scratch_bytes: definition.config.scratch_bytes
-            ],
+            VMManager.Storage.resources(definition.config),
             totals,
             fn {key, value}, acc -> Map.update!(acc, key, &(&1 + value)) end
           )

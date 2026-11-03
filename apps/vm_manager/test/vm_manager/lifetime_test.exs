@@ -8,7 +8,8 @@ defmodule VMManager.LifetimeTest do
       id: "reusable-guest",
       kernel: "/kernel",
       initrd: "/initrd",
-      root: "/root"
+      guest: %Config.SowerGuest{},
+      vsock: %CloudHypervisor.Config.Vsock{cid: 3, socket: nil}
     }
 
     options = Keyword.put(Config.to_options(config), :owner, self())
@@ -16,7 +17,7 @@ defmodule VMManager.LifetimeTest do
 
     assert :ok =
              VMManager.Execution.validate_options(
-               Keyword.put(options, :image, %{config | contract: 1})
+               Keyword.put(options, :config, %{config | guest: %Config.SowerGuest{contract: 1}})
              )
   end
 end

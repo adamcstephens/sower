@@ -10,7 +10,12 @@ defmodule VMManager.PersistenceTest do
 
     %{
       directory: directory,
-      config: %Config{id: "durable-vm", kernel: "/kernel", initrd: "/initrd", root: "/root"}
+      config: %Config{
+        id: "durable-vm",
+        kernel: "/kernel",
+        initrd: "/initrd",
+        disks: [%CloudHypervisor.Config.Disk{path: "/root", readonly: true, image_type: :raw}]
+      }
     }
   end
 
@@ -19,27 +24,23 @@ defmodule VMManager.PersistenceTest do
     config: config
   } do
     lease = %VMManager.Network{
-      socket_path: "/activator.sock",
-      lease: "lease",
-      tap: "tap0",
-      mac: "02:00:00:00:00:01",
-      address: "10.0.0.2",
-      gateway: "10.0.0.1",
-      dns: "10.0.0.1"
+      ownership: :external,
+      devices: [%CloudHypervisor.Config.Net{tap: "tap0", mac: "02:00:00:00:00:01"}]
     }
 
     config = %{
       config
       | disks: [
-          %CloudHypervisor.Config.Disk{path: "/persistent", readonly: false, image_type: :raw}
+          %CloudHypervisor.Config.Disk{path: "/persistent", readonly: false, image_type: :raw},
+          %VMManager.Storage.EphemeralDisk{name: "scratch.ext4", bytes: 1024, filesystem: :ext4}
         ],
         persistent_disks: ["/persistent"],
-        mode: :attach,
-        network: :full,
-        network_config: :static,
-        network_lease: lease,
-        control_endpoint: "/vmm.sock",
-        guest_endpoint: "/guest.sock"
+        guest: %Config.SowerGuest{},
+        vsock: %CloudHypervisor.Config.Vsock{cid: 3, socket: nil},
+        serial: %CloudHypervisor.Config.Output{mode: :file, file: "serial.log"},
+        console: %CloudHypervisor.Config.Output{mode: :off},
+        rng: %CloudHypervisor.Config.RNG{src: "/dev/urandom"},
+        network: lease
     }
 
     {:ok, writer} = Manager.start_link(state_directory: directory)
@@ -54,7 +55,10 @@ defmodule VMManager.PersistenceTest do
       result: {:ok, %VMManager.Result{code: 0}}
     }
 
-    assert :ok = Store.save(directory, %{config.id => %{definition | observed: observed}})
+    assert :ok =
+             Store.save(directory, %{
+               config.id => %{definition | observed: observed, network: lease}
+             })
 
     reader = """
     Application.put_env(:vm_manager, :state_directory, System.fetch_env!("VM_MANAGER_COLD_STATE"))
@@ -62,12 +66,17 @@ defmodule VMManager.PersistenceTest do
     {:ok, [status]} = VMManager.list()
     "durable-vm" = status.id
     :stopped = status.desired
-    [disk] = status.config.disks
+    [disk, ephemeral] = status.config.disks
+    "scratch.ext4" = ephemeral.name
+    1024 = ephemeral.bytes
+    2 = status.config.guest.contract
+    3 = status.config.vsock.cid
+    "/dev/urandom" = status.config.rng.src
     "/persistent" = disk.path
     false = disk.readonly
     "raw" = Atom.to_string(disk.image_type)
     ["/persistent"] = status.config.persistent_disks
-    "tap0" = status.config.network_lease.tap
+    [%{tap: "tap0"}] = status.config.network.devices
     {:ok, result} = status.result
     0 = result.code
     IO.puts("cold-definition-restored")
@@ -142,12 +151,13 @@ defmodule VMManager.PersistenceTest do
 
     for {changes, reason} <- [
           {[system: "aarch64-linux"], :unsupported_system},
-          {[contract: 3], :unsupported_contract},
-          {[vsock_port: 5001], :unsupported_vsock_port},
-          {[network: :unfiltered], {:invalid_option, :network}},
-          {[network: :full, network_config: nil], :unsupported_network_config},
-          {[network: :full, network_config: :dhcp], :unsupported_network_config},
-          {[scratch_bytes: 0], :invalid_resources}
+          {[guest: %Config.SowerGuest{contract: 3}], :unsupported_guest},
+          {[guest: %Config.SowerGuest{vsock_port: 5001}], :unsupported_guest},
+          {[
+             disks: [
+               %VMManager.Storage.EphemeralDisk{name: "scratch.ext4", bytes: 0, filesystem: :ext4}
+             ]
+           ], :invalid_storage}
         ] do
       invalid = struct!(config, changes)
       new = %{invalid | id: "invalid-vm"}
@@ -202,7 +212,15 @@ defmodule VMManager.PersistenceTest do
       config
       | runtime_directory: base,
         persistent_disks: [persistent],
-        scratch_bytes: 1_048_576
+        disks: [
+          %CloudHypervisor.Config.Disk{path: persistent, readonly: false, image_type: :raw},
+          %VMManager.Storage.EphemeralDisk{
+            name: "scratch.ext4",
+            bytes: 1_048_576,
+            filesystem: :ext4
+          }
+        ],
+        serial: %CloudHypervisor.Config.Output{mode: :file, file: "serial.log"}
     }
 
     definition = %Manager.Definition{
@@ -257,7 +275,20 @@ defmodule VMManager.PersistenceTest do
     sentinel = Path.join(runtime, "unknown")
     File.write!(scratch, "retained scratch")
     File.write!(sentinel, "retain me")
-    config = %{config | runtime_directory: base}
+
+    config = %{
+      config
+      | runtime_directory: base,
+        disks:
+          config.disks ++
+            [
+              %VMManager.Storage.EphemeralDisk{
+                name: "scratch.ext4",
+                bytes: 1024,
+                filesystem: :ext4
+              }
+            ]
+    }
 
     definition = %Manager.Definition{
       config: config,
@@ -274,7 +305,7 @@ defmodule VMManager.PersistenceTest do
     assert {:ok,
             %VMManager.Status{
               phase: :retained,
-              cleanup: {:error, {:unexpected_files, ["unknown"]}}
+              cleanup: {:error, :unowned_storage}
             }} =
              VMManager.status(config.id, first)
 
@@ -331,7 +362,16 @@ defmodule VMManager.PersistenceTest do
     artifact = Path.join(directory, "root.img")
     File.write!(disk, "persistent bytes")
     File.write!(artifact, "caller artifact")
-    config = %{config | persistent_disks: [disk], root: artifact}
+
+    config = %{
+      config
+      | persistent_disks: [disk],
+        disks: [
+          %CloudHypervisor.Config.Disk{path: artifact, readonly: true, image_type: :raw},
+          %CloudHypervisor.Config.Disk{path: disk, readonly: false, image_type: :raw}
+        ]
+    }
+
     {:ok, manager} = Manager.start_link(state_directory: directory)
     assert {:ok, _} = VMManager.define(config, manager)
     assert :ok = VMManager.stop(config.id, manager)
@@ -405,11 +445,11 @@ defmodule VMManager.PersistenceTest do
     GenServer.stop(second)
   end
 
-  test "configuration rejects live process identities and functions", %{config: config} do
-    assert {:error, :non_serializable_configuration} =
+  test "storage declarations reject live process identities and functions", %{config: config} do
+    assert {:error, :invalid_storage} =
              Config.validate(%{config | disks: [self()]})
 
-    assert {:error, :non_serializable_configuration} =
+    assert {:error, :invalid_storage} =
              Config.validate(%{config | disks: [fn -> :ok end]})
 
     assert :ok = Config.validate(config)

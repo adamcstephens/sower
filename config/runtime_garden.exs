@@ -1,12 +1,16 @@
 import Config
 
+Code.ensure_loaded!(Garden.VM.Network)
+Code.ensure_loaded!(Garden.ActivatorClient)
+
 config :garden, Garden.Scheduler, timezone: Garden.Scheduler.get_timezone()
 
 garden = Garden.Config.load()
 
+config :garden, :activator_socket, garden.activator_socket
+
 config :vm_manager,
   state_directory: Path.join(garden.state_directory, "vm-manager"),
-  activator_socket: garden.activator_socket,
   budgets: [
     vms: garden.vm_capacity.vms,
     cpus: garden.vm_capacity.cpus,

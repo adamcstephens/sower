@@ -24,9 +24,14 @@ defmodule VMManager.RestartPolicyTest do
       id: "policy",
       kernel: "/kernel",
       initrd: "/initrd",
-      root: "/root",
+      disks: [
+        %VMManager.Storage.EphemeralDisk{
+          name: "scratch.ext4",
+          bytes: 1_048_576,
+          filesystem: :ext4
+        }
+      ],
       mkfs: System.find_executable("false"),
-      scratch_bytes: 1_048_576,
       restart_delay_ms: 1,
       restart_max_attempts: 2,
       restart_window_ms: 60_000
@@ -68,9 +73,10 @@ defmodule VMManager.RestartPolicyTest do
     assert {:ok, %VMManager.Status{execution: nil}} =
              VMManager.status(context.config.id, context.manager)
 
-    assert {:error, :vm_unavailable} = VMManager.await_ready(context.config.id, context.manager)
+    assert {:error, :guest_agent_disabled} =
+             VMManager.await_ready(context.config.id, context.manager)
 
-    assert {:error, :vm_unavailable} =
+    assert {:error, :guest_agent_disabled} =
              VMManager.execute(
                context.config.id,
                %VMManager.Command{path: "/bin/true"},
@@ -100,7 +106,7 @@ defmodule VMManager.RestartPolicyTest do
     assert booting.id == id
     assert booting.execution_id == id
     assert booting.config.id == id
-    assert booting.config.root == config.root
+    assert booting.config.disks == config.disks
     assert booting.failure == nil
     assert :ok = VMManager.stop(id, context.manager)
 
@@ -114,16 +120,16 @@ defmodule VMManager.RestartPolicyTest do
     assert stopped.failure == nil
     assert stopped.cleanup == :ok
     assert stopped.execution == nil
-    assert {:error, :vm_unavailable} = VMManager.await_ready(id, context.manager)
+    assert {:error, :guest_agent_disabled} = VMManager.await_ready(id, context.manager)
 
-    assert {:error, :vm_unavailable} =
+    assert {:error, :guest_agent_disabled} =
              VMManager.execute(id, %VMManager.Command{path: "/bin/true"}, [], context.manager)
 
     assert_eventually(fn -> DynamicSupervisor.count_children(context.runtime).active == 0 end)
     assert {:ok, %VMManager.Status{execution: nil}} = VMManager.status(id, context.manager)
-    assert {:error, :vm_unavailable} = VMManager.await_ready(id, context.manager)
+    assert {:error, :guest_agent_disabled} = VMManager.await_ready(id, context.manager)
 
-    assert {:error, :vm_unavailable} =
+    assert {:error, :guest_agent_disabled} =
              VMManager.execute(id, %VMManager.Command{path: "/bin/true"}, [], context.manager)
   end
 
@@ -135,7 +141,16 @@ defmodule VMManager.RestartPolicyTest do
     File.chmod!(formatter, 0o700)
     disk = Path.join(context.directory, "persistent.img")
     File.write!(disk, "owned persistent data")
-    config = %{context.config | mkfs: formatter, persistent_disks: [disk]}
+
+    config = %{
+      context.config
+      | mkfs: formatter,
+        persistent_disks: [disk],
+        disks:
+          context.config.disks ++
+            [%CloudHypervisor.Config.Disk{path: disk, readonly: false, image_type: :raw}]
+    }
+
     assert {:ok, _} = VMManager.define(config, context.manager)
     assert :ok = VMManager.start(config.id, context.manager)
     :ok = :sys.suspend(context.runtime)

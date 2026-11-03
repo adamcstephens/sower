@@ -74,10 +74,11 @@ defmodule VMManager.AttachmentTest do
         id: "expected",
         kernel: "/kernel",
         initrd: "/initrd",
-        root: "/root",
+        disks: [%CloudHypervisor.Config.Disk{path: "/root", readonly: true, image_type: :raw}],
+        guest: %VMManager.Config.SowerGuest{},
+        vsock: %CloudHypervisor.Config.Vsock{cid: 3, socket: guest},
         mode: :attach,
-        control_endpoint: control,
-        guest_endpoint: guest
+        control_endpoint: control
       }
 
       {:ok, execution} = VMManager.Execution.start_link(VMManager.Config.to_options(config))
@@ -120,22 +121,23 @@ defmodule VMManager.AttachmentTest do
       id: "existing",
       kernel: "/kernel",
       initrd: "/initrd",
-      root: "/root",
+      disks: [%CloudHypervisor.Config.Disk{path: "/root", readonly: true, image_type: :raw}],
+      guest: %VMManager.Config.SowerGuest{},
+      vsock: %CloudHypervisor.Config.Vsock{cid: 3, socket: guest},
       mode: :attach,
-      control_endpoint: control,
-      guest_endpoint: guest
+      control_endpoint: control
     }
 
     native_config = %{
       "payload" => %{
         "kernel" => config.kernel,
         "initramfs" => config.initrd,
-        "cmdline" => "sower.vm.id=existing"
+        "cmdline" => " sower.vm.id=existing"
       },
-      "cpus" => %{"boot_vcpus" => config.cpus},
+      "cpus" => %{"boot_vcpus" => config.cpus, "max_vcpus" => config.cpus},
       "memory" => %{"size" => config.memory},
-      "disks" => [%{"path" => config.root}],
-      "vsock" => %{"socket" => guest},
+      "disks" => [%{"path" => "/root", "readonly" => true, "image_type" => "Raw"}],
+      "vsock" => %{"cid" => 3, "socket" => guest},
       "net" => []
     }
 
@@ -185,12 +187,20 @@ defmodule VMManager.AttachmentTest do
         :gen_tcp.close(socket)
       end)
 
+    parent = self()
+
     guest_task =
       Task.async(fn ->
         {:ok, socket} = :gen_tcp.accept(bridge, 5_000)
         assert {:ok, "CONNECT 5000\n"} = :gen_tcp.recv(socket, 0, 1_000)
         :ok = :gen_tcp.send(socket, "OK 5000\n")
         :ok = :inet.setopts(socket, packet: :raw)
+        send(parent, {:guest_connected, self()})
+
+        receive do
+          :release_ready -> :ok
+        end
+
         ready = Jason.encode!(%{"type" => "ready", "version" => 2, "contract" => 2})
         :ok = :gen_tcp.send(socket, <<1, byte_size(ready)::unsigned-big-32, ready::binary>>)
         assert {:error, :closed} = :gen_tcp.recv(socket, 0, 5_000)
@@ -198,6 +208,12 @@ defmodule VMManager.AttachmentTest do
 
     {:ok, execution} = VMManager.Execution.start_link(VMManager.Config.to_options(config))
     on_exit(fn -> if Process.alive?(execution), do: GenServer.stop(execution) end)
+
+    assert {:ok, %VMManager.Status{phase: :booting, running: true}} =
+             GenServer.call(execution, :await_running, 5_000)
+
+    assert_receive {:guest_connected, guest_pid}, 5_000
+    send(guest_pid, :release_ready)
 
     assert {:ok, %VMManager.Status{phase: :ready}} =
              GenServer.call(execution, :await_ready, 5_000)

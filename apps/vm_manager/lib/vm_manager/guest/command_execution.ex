@@ -1,4 +1,4 @@
-defmodule VMManager.CommandExecution do
+defmodule VMManager.Guest.CommandExecution do
   @moduledoc false
   use GenServer
   use TypedStruct
@@ -8,23 +8,21 @@ defmodule VMManager.CommandExecution do
     field :vm_monitor, reference(), enforce: true
     field :caller_monitor, reference(), enforce: true
     field :caller_alive, boolean(), default: true
-    field :retain, boolean(), enforce: true
     field :timer, reference(), enforce: true
     field :status, VMManager.CommandStatus.t(), default: %VMManager.CommandStatus{}
     field :waiters, [GenServer.from()], default: []
   end
 
-  def start(vm, caller, deadline, retain),
-    do: GenServer.start(__MODULE__, {vm, caller, deadline, retain})
+  def start(vm, caller, deadline),
+    do: GenServer.start(__MODULE__, {vm, caller, deadline})
 
   @impl GenServer
-  def init({vm, caller, deadline, retain}) do
+  def init({vm, caller, deadline}) do
     {:ok,
      %__MODULE__{
        vm: vm,
        vm_monitor: Process.monitor(vm),
        caller_monitor: Process.monitor(caller),
-       retain: retain,
        timer: Process.send_after(self(), :deadline, deadline)
      }}
   end
@@ -84,6 +82,6 @@ defmodule VMManager.CommandExecution do
         status: %VMManager.CommandStatus{phase: :finished, result: result}
     }
 
-    if state.caller_alive and state.retain, do: {:noreply, state}, else: {:stop, :normal, state}
+    if state.caller_alive, do: {:noreply, state}, else: {:stop, :normal, state}
   end
 end

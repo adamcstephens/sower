@@ -48,7 +48,11 @@ defmodule VMManager.ReconnectionTest do
         :gen_tcp.close(second)
       end)
 
-    io = spawn(fn -> VMManager.IO.run(parent, path, 2, System.monotonic_time(:millisecond)) end)
+    io =
+      spawn(fn ->
+        VMManager.Guest.IO.run(parent, path, 2, System.monotonic_time(:millisecond), 5000)
+      end)
+
     on_exit(fn -> Process.exit(io, :kill) end)
     assert_receive {:guest_ready, _}
 
@@ -101,7 +105,11 @@ defmodule VMManager.ReconnectionTest do
       :gen_tcp.close(socket)
     end)
 
-    io = spawn(fn -> VMManager.IO.run(parent, path, 1, System.monotonic_time(:millisecond)) end)
+    io =
+      spawn(fn ->
+        VMManager.Guest.IO.run(parent, path, 1, System.monotonic_time(:millisecond), 5000)
+      end)
+
     on_exit(fn -> Process.exit(io, :kill) end)
     assert_receive {:guest_ready, _}
     command = self()
@@ -114,6 +122,159 @@ defmodule VMManager.ReconnectionTest do
 
     assert_receive {:output, :stdout, ^bytes}
     assert_receive {:command_finished, ^command, {:ok, %VMManager.Result{code: nil, signal: 15}}}
+  end
+
+  test "optional guest session holds admission until cancellation is certified by guest exit" do
+    path = Path.join(System.tmp_dir!(), "vm-session-#{System.unique_integer([:positive])}.sock")
+
+    {:ok, listener} =
+      :gen_tcp.listen(0, [:binary, active: false, packet: :line, ifaddr: {:local, path}])
+
+    parent = self()
+
+    peer =
+      spawn_link(fn ->
+        {:ok, socket} = :gen_tcp.accept(listener)
+        bridge(socket)
+
+        :ok =
+          :gen_tcp.send(socket, metadata(%{"type" => "ready", "version" => 2, "contract" => 2}))
+
+        assert {:ok, 1, %{"path" => "/bin/work"}} = request(socket)
+        assert {:ok, 1, %{"type" => "cancel"}} = request(socket)
+        send(parent, :cancel_received)
+
+        receive do
+          :certify_exit -> :ok
+        end
+
+        :ok =
+          :gen_tcp.send(
+            socket,
+            metadata(%{"type" => "exited", "version" => 2, "code" => nil, "signal" => 15})
+          )
+
+        :gen_tcp.close(socket)
+      end)
+
+    config = %VMManager.Config{
+      id: "session",
+      kernel: "/kernel",
+      guest: %VMManager.Config.SowerGuest{},
+      vsock: %CloudHypervisor.Config.Vsock{cid: 3, socket: nil}
+    }
+
+    options = VMManager.Config.to_options(config)
+
+    {:ok, session} =
+      VMManager.Guest.Session.start(
+        self(),
+        self(),
+        path,
+        options,
+        System.monotonic_time(:millisecond)
+      )
+
+    on_exit(fn ->
+      if Process.alive?(session), do: GenServer.stop(session)
+      :gen_tcp.close(listener)
+      File.rm(path)
+    end)
+
+    assert_receive {:guest_ready, _}
+    command = %VMManager.Command{path: "/bin/work"}
+    assert {:ok, handle} = GenServer.call(session, {:execute, command, [], self()})
+    assert :ok = VMManager.cancel_command(handle)
+    assert_receive :cancel_received
+    assert %VMManager.CommandStatus{phase: :running} = VMManager.command_status(handle)
+    assert {:error, :busy} = GenServer.call(session, {:execute, command, [], self()})
+    send(peer, :certify_exit)
+    assert {:error, :cancelled} = VMManager.await_command(handle)
+    assert_receive {:vm_status, [phase: :ready]}
+  end
+
+  for contract <- [1, 2] do
+    test "contract #{contract} teardown never reopens guest admission after a late terminal event" do
+      contract = unquote(contract)
+
+      path =
+        Path.join(System.tmp_dir!(), "vm-terminal-#{System.unique_integer([:positive])}.sock")
+
+      {:ok, listener} =
+        :gen_tcp.listen(0, [:binary, active: false, packet: :line, ifaddr: {:local, path}])
+
+      parent = self()
+
+      peer =
+        spawn_link(fn ->
+          {:ok, socket} = :gen_tcp.accept(listener)
+          bridge(socket)
+
+          ready =
+            if contract == 1,
+              do: %{"type" => "ready", "version" => 1},
+              else: %{"type" => "ready", "version" => 2, "contract" => 2}
+
+          :ok = :gen_tcp.send(socket, metadata(ready))
+          assert {:ok, 1, %{"path" => "/bin/work"}} = request(socket)
+
+          if contract == 2 do
+            assert {:ok, 1, %{"type" => "cancel"}} = request(socket)
+            send(parent, :cancel_observed)
+
+            receive do
+              :late_exit -> :ok
+            end
+          end
+
+          :ok =
+            :gen_tcp.send(
+              socket,
+              metadata(%{"type" => "exited", "version" => contract, "code" => 0, "signal" => nil})
+            )
+
+          :gen_tcp.close(socket)
+        end)
+
+      config = %VMManager.Config{
+        id: "terminal",
+        kernel: "/kernel",
+        guest: %VMManager.Config.SowerGuest{contract: contract},
+        vsock: %CloudHypervisor.Config.Vsock{cid: 3, socket: nil}
+      }
+
+      {:ok, session} =
+        VMManager.Guest.Session.start(
+          self(),
+          self(),
+          path,
+          VMManager.Config.to_options(config),
+          System.monotonic_time(:millisecond)
+        )
+
+      on_exit(fn ->
+        if Process.alive?(session), do: GenServer.stop(session)
+        :gen_tcp.close(listener)
+        File.rm(path)
+      end)
+
+      assert_receive {:guest_ready, _}
+      command = %VMManager.Command{path: "/bin/work"}
+      assert {:ok, handle} = GenServer.call(session, {:execute, command, [], self()})
+
+      if contract == 2 do
+        assert :ok = VMManager.cancel_command(handle)
+        assert_receive :cancel_observed
+        assert_receive {:finish, {:error, :command_cleanup_unconfirmed}}, 6_000
+        send(peer, :late_exit)
+      end
+
+      VMManager.await_command(handle)
+      if contract == 1, do: assert_receive({:finish, {:ok, %VMManager.Result{}}})
+
+      assert {:error, :vm_unavailable} =
+               GenServer.call(session, {:execute, command, [], self()})
+    end
   end
 
   defp bridge(socket) do
