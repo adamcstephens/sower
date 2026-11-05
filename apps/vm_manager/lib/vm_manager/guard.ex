@@ -135,6 +135,7 @@ defmodule VMManager.Guard do
 
   defp running(%__MODULE__{} = state, path) do
     config = state.options[:config]
+    if state.attached, do: Process.send_after(self(), :observe_attachment, 250)
 
     if config.guest == :none do
       if state.boot_timer, do: Process.cancel_timer(state.boot_timer)
@@ -148,6 +149,28 @@ defmodule VMManager.Guard do
 
       Process.monitor(session)
       loop(%{state | io: session})
+    end
+  end
+
+  defp observe_attachment(%__MODULE__{} = state) do
+    client = %CloudHypervisor.API{
+      socket: state.options[:config].control_endpoint,
+      request_timeout: 250
+    }
+
+    with {:ok, info} <- CloudHypervisor.API.info(client),
+         :ok <- matching_runtime(info, state) do
+      if stopped?(info) do
+        notify_status(state, running: false, phase: :stopping)
+        finish(state, {:ok, :external_shutdown}, :ok)
+      else
+        Process.send_after(self(), :observe_attachment, 250)
+        loop(state)
+      end
+    else
+      {:error, reason} ->
+        notify_status(state, running: false, phase: :stopping)
+        finish(state, {:error, {:attachment, reason}}, :unconfirmed)
     end
   end
 
@@ -236,6 +259,9 @@ defmodule VMManager.Guard do
       {:finish, result} ->
         stop(state, result)
 
+      :observe_attachment when state.attached ->
+        observe_attachment(state)
+
       :deadline when state.boot_timer != nil ->
         stop(state, {:error, :timeout})
 
@@ -278,7 +304,15 @@ defmodule VMManager.Guard do
   end
 
   defp launch(%__MODULE__{} = state) do
-    case VMManager.Network.provision(state.options[:config]) do
+    config = state.options[:config]
+
+    allocation_id =
+      {state.options[:name], config.id, state.options[:attempt] || state.directory}
+      |> :erlang.term_to_binary()
+      |> then(&:crypto.hash(:sha256, &1))
+      |> Base.encode16(case: :lower)
+
+    case VMManager.Network.provision(config, allocation_id) do
       {:ok, network} ->
         state = %{state | network: network}
 

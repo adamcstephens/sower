@@ -39,6 +39,8 @@ beamPackages.mixRelease {
       apps/vm_manager/test/vm_manager/regression_test.exs \
       apps/vm_manager/test/vm_manager/restart_policy_test.exs \
       apps/vm_manager/test/runtime_resources_test.exs \
+      apps/vm_manager/test/vm_manager/manager_intent_test.exs \
+      apps/garden/test/garden/vm_cli_test.exs \
       --replace-fail '#!/usr/bin/env sh' '#!${bashNonInteractive}/bin/sh'
   '';
   mixReleaseName = "garden";

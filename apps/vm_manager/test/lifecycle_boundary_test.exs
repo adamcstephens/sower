@@ -32,8 +32,7 @@ defmodule VMManager.LifecycleBoundaryTest do
     tmp_dir: directory
   } do
     {config, peer} = attached_vm(directory, true)
-    {:ok, execution} = VMManager.Execution.start_link(Config.to_options(config))
-    on_exit(fn -> if Process.alive?(execution), do: GenServer.stop(execution) end)
+    execution = start_supervised!({VMManager.Execution, Config.to_options(config)})
     assert_receive {:native_info_waiting, server}
     waiter = Task.async(fn -> GenServer.call(execution, :await_running, :infinity) end)
     assert Task.yield(waiter, 100) == nil
@@ -52,20 +51,11 @@ defmodule VMManager.LifecycleBoundaryTest do
     File.write!(lease, "allocated")
     network = %Network{ownership: :managed, provider: Lease, options: [path: lease], lease: lease}
     config = %{config | network: network}
-    {:ok, runtime} = DynamicSupervisor.start_link(strategy: :one_for_one)
+    runtime = start_supervised!({DynamicSupervisor, strategy: :one_for_one})
     state_directory = Path.join(directory, "state")
 
-    {:ok, manager} =
-      Manager.start_link(state_directory: state_directory, runtime_supervisor: runtime)
-
-    on_exit(fn ->
-      if Process.alive?(manager) do
-        VMManager.stop(config.id, manager)
-        GenServer.stop(manager)
-      end
-
-      if Process.alive?(runtime), do: Supervisor.stop(runtime)
-    end)
+    manager =
+      start_supervised!({Manager, state_directory: state_directory, runtime_supervisor: runtime})
 
     assert {:ok, id} = VMManager.define(config, manager)
     assert :ok = VMManager.start(id, manager)
@@ -78,13 +68,18 @@ defmodule VMManager.LifecycleBoundaryTest do
     restored = %{definition | desired: :stopped, boot_id: "previous-host"}
     assert :ok = Store.save(recovery_directory, %{id => restored})
 
-    {:ok, recovery} =
-      Manager.start_link(state_directory: recovery_directory, runtime_supervisor: runtime)
+    recovery =
+      start_supervised!(
+        Supervisor.child_spec(
+          {Manager, state_directory: recovery_directory, runtime_supervisor: runtime},
+          id: :recovery
+        )
+      )
 
     assert {:ok, %Status{phase: :stopped, cleanup: :ok}} = VMManager.status(id, recovery)
     assert File.exists?(lease <> ".revoked")
     refute File.exists?(lease)
-    GenServer.stop(recovery)
+    stop_supervised!(:recovery)
     assert :ok = VMManager.stop(id, manager)
     Task.await(peer)
   end
@@ -97,20 +92,11 @@ defmodule VMManager.LifecycleBoundaryTest do
     File.write!(lease, "allocated")
     network = %Network{ownership: :managed, provider: Lease, options: [path: lease], lease: lease}
     config = %{config | network: network}
-    {:ok, runtime} = DynamicSupervisor.start_link(strategy: :one_for_one)
+    runtime = start_supervised!({DynamicSupervisor, strategy: :one_for_one})
     state_directory = Path.join(directory, "consumed-state")
 
-    {:ok, manager} =
-      Manager.start_link(state_directory: state_directory, runtime_supervisor: runtime)
-
-    on_exit(fn ->
-      if Process.alive?(manager) do
-        VMManager.stop(config.id, manager)
-        GenServer.stop(manager)
-      end
-
-      if Process.alive?(runtime), do: Supervisor.stop(runtime)
-    end)
+    manager =
+      start_supervised!({Manager, state_directory: state_directory, runtime_supervisor: runtime})
 
     assert {:ok, id} = VMManager.define(config, manager)
     assert :ok = VMManager.start(id, manager)

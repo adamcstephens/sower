@@ -51,18 +51,26 @@ defmodule VMManager.Network do
 
   defp serializable?(_), do: false
 
-  def provision(%VMManager.Config{network: nil}), do: {:ok, nil}
+  def provision(%VMManager.Config{}, allocation_id)
+      when not is_binary(allocation_id) or byte_size(allocation_id) == 0 or
+             byte_size(allocation_id) > 128,
+      do: {:error, :invalid_network_allocation_id}
 
-  def provision(%VMManager.Config{network: %__MODULE__{ownership: :external} = network}),
-    do: {:ok, network}
+  def provision(%VMManager.Config{network: nil}, _allocation_id), do: {:ok, nil}
 
-  def provision(%VMManager.Config{network: %__MODULE__{lease: lease} = network})
+  def provision(
+        %VMManager.Config{network: %__MODULE__{ownership: :external} = network},
+        _allocation_id
+      ),
+      do: {:ok, network}
+
+  def provision(%VMManager.Config{network: %__MODULE__{lease: lease} = network}, _allocation_id)
       when not is_nil(lease),
       do: {:ok, network}
 
-  def provision(%VMManager.Config{} = config) do
+  def provision(%VMManager.Config{} = config, allocation_id) do
     network = config.network
-    network.provider.provision(config.id, network.options)
+    network.provider.provision(allocation_id, network.options)
   end
 
   def devices(nil), do: []

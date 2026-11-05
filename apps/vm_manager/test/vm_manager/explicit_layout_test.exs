@@ -190,6 +190,43 @@ defmodule VMManager.ExplicitLayoutTest do
     end
   end
 
+  test "admission rejects statically known aliases without guessing the runtime directory" do
+    disk = %EphemeralDisk{name: "scratch.img", bytes: 4096}
+    base = %Config{id: "aliases", kernel: "/kernel", disks: [disk]}
+
+    for device <- [:serial, :console] do
+      assert {:error, :invalid_storage} =
+               Config.validate(
+                 Map.put(base, device, %Native.Output{mode: :file, file: disk.name})
+               )
+    end
+
+    for config <- [
+          %{
+            base
+            | serial: %Native.Output{mode: :file, file: "shared.log"},
+              console: %Native.Output{mode: :file, file: "shared.log"}
+          },
+          %{
+            base
+            | disks: [%Native.Disk{path: "/data/../root.img"}, %Native.Disk{path: "/root.img"}]
+          },
+          %{
+            base
+            | disks: [%Native.Disk{path: "/root.img"}],
+              console: %Native.Output{mode: :file, file: "/data/../root.img"}
+          }
+        ] do
+      assert {:error, :invalid_storage} = Config.validate(config)
+    end
+
+    assert :ok =
+             Config.validate(%{base | disks: [disk, %Native.Disk{path: "scratch.img"}]})
+
+    assert :ok =
+             Config.validate(%{base | console: %Native.Output{mode: :file, file: "/scratch.img"}})
+  end
+
   test "rejects console and output aliases before allocating ephemeral storage", %{tmp_dir: dir} do
     disk = %EphemeralDisk{name: "scratch.img", bytes: 4096}
     base = %Config{id: "aliases", kernel: "/kernel", disks: [disk]}

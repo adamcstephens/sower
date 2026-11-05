@@ -10,6 +10,7 @@ defmodule Garden.VM.CLI do
   """
   alias Garden.Image
   alias VMManager.Command
+  require Logger
 
   def main(argv) do
     {options, positional, invalid} =
@@ -45,32 +46,105 @@ defmodule Garden.VM.CLI do
   end
 
   def run(%Image{} = image, %Command{} = command, options \\ []) do
+    {manager, options} = Keyword.pop(options, :manager, VMManager.Manager)
     id = "cli-" <> Integer.to_string(System.unique_integer([:positive, :monotonic]))
     config = Image.vm_config(image, id, Keyword.drop(options, [:deadline_ms, :on_output]))
 
-    with {:ok, ^id} <- VMManager.define(config) do
-      result =
-        with :ok <- VMManager.start(id),
-             {:ok, _status} <- VMManager.await_ready(id),
-             {:ok, handle} <-
-               VMManager.execute(id, command, Keyword.take(options, [:deadline_ms, :on_output])) do
-          VMManager.await_command(handle)
-        else
-          {:error, reason} -> {:error, reason}
+    caller = self()
+    reference = make_ref()
+
+    {owner, monitor} =
+      spawn_monitor(fn ->
+        own_disposable(caller, reference, config, command, options, manager)
+      end)
+
+    receive do
+      {^reference, {:return, result}} ->
+        Process.demonitor(monitor, [:flush])
+        result
+
+      {^reference, {:exit, reason}} ->
+        Process.demonitor(monitor, [:flush])
+        exit(reason)
+
+      {:DOWN, ^monitor, :process, ^owner, reason} ->
+        exit(reason)
+    end
+  end
+
+  defp own_disposable(
+         caller,
+         reference,
+         %VMManager.Config{} = config,
+         %Command{} = command,
+         options,
+         manager
+       ) do
+    caller_monitor = Process.monitor(caller)
+
+    case VMManager.define(config, manager) do
+      {:ok, id} ->
+        owner = self()
+
+        {worker, worker_monitor} =
+          spawn_monitor(fn ->
+            result = run_command(id, command, options, manager)
+            send(owner, {:command_result, self(), result})
+          end)
+
+        receive do
+          {:command_result, ^worker, result} ->
+            finish_disposable(caller, reference, id, manager, {:return, result})
+
+          {:DOWN, ^worker_monitor, :process, ^worker, reason} ->
+            finish_disposable(caller, reference, id, manager, {:exit, reason})
+
+          {:DOWN, ^caller_monitor, :process, ^caller, _reason} ->
+            Process.exit(worker, :kill)
+
+            receive do
+              {:DOWN, ^worker_monitor, :process, ^worker, _reason} -> :ok
+            end
+
+            cleanup_disposable(id, manager)
         end
 
-      case VMManager.stop(id) do
-        :ok ->
-          case VMManager.remove(id) do
-            :ok -> result
-            {:error, reason} -> {:error, reason}
-          end
+      {:error, reason} ->
+        send(caller, {reference, {:return, {:error, reason}}})
+    end
+  end
 
-        {:error, reason} ->
-          {:error, reason}
-      end
+  defp run_command(id, %Command{} = command, options, manager) do
+    with :ok <- VMManager.start(id, manager),
+         {:ok, _status} <- VMManager.await_ready(id, manager),
+         {:ok, handle} <-
+           VMManager.execute(
+             id,
+             command,
+             Keyword.take(options, [:deadline_ms, :on_output]),
+             manager
+           ) do
+      VMManager.await_command(handle)
     else
       {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp finish_disposable(caller, reference, id, manager, outcome) do
+    case cleanup_disposable(id, manager) do
+      :ok -> send(caller, {reference, outcome})
+      {:error, reason} -> send(caller, {reference, {:return, {:error, reason}}})
+    end
+  end
+
+  defp cleanup_disposable(id, manager) do
+    with :ok <- VMManager.stop(id, manager),
+         :ok <- VMManager.remove(id, manager) do
+      :ok
+    else
+      {:error, reason} ->
+        Logger.error(msg: "Disposable VM cleanup incomplete", vm_id: id, reason: inspect(reason))
+        {:error, reason}
     end
   end
 

@@ -6,6 +6,7 @@ defmodule VMManager.Manager do
   typedstruct module: Definition do
     field :config, Config.t(), enforce: true
     field :desired, atom(), default: :stopped
+    field :start_pending, boolean(), default: false
     field :attempts, [integer()], default: []
     field :retry_at, integer()
     field :failure, term()
@@ -151,7 +152,31 @@ defmodule VMManager.Manager do
     with {:ok, definition} <- fetch(state, id),
          :ok <- startable(state, id, definition),
          :ok <- capacity(state, id, definition.config) do
-      definition = %{definition | desired: :running, failure: nil, attempts: [], retry_at: nil}
+      replacement =
+        case runtime(state, id) do
+          nil ->
+            false
+
+          pid ->
+            case runtime_status(pid) do
+              {:ok, %Status{phase: phase}} ->
+                phase in [:stopping, :stopped, :finished, :retained]
+
+              :unavailable ->
+                false
+            end
+        end
+
+      definition = %{
+        definition
+        | desired: :running,
+          start_pending:
+            definition.start_pending or definition.desired == :stopped or replacement,
+          failure: nil,
+          attempts: [],
+          retry_at: nil
+      }
+
       proposed = put_definition(state, id, definition)
 
       case persist(proposed) do
@@ -169,7 +194,14 @@ defmodule VMManager.Manager do
 
   def handle_call({:stop, id}, from, state) do
     with {:ok, definition} <- fetch(state, id) do
-      definition = %{definition | desired: :stopped, retry_at: nil, failure: nil}
+      definition = %{
+        definition
+        | desired: :stopped,
+          start_pending: false,
+          retry_at: nil,
+          failure: nil
+      }
+
       proposed = put_definition(state, id, definition)
 
       case persist(proposed) do
@@ -415,10 +447,16 @@ defmodule VMManager.Manager do
             definition = state.definitions[id]
             state = publish(state, id, %{observed | execution: pid})
 
-            if observed.phase in [:stopped, :finished, :retained] do
-              finish(state, id, definition, observed, pid)
-            else
-              state
+            cond do
+              observed.phase in [:stopped, :finished, :retained] ->
+                finish(state, id, definition, observed, pid)
+
+              definition.desired == :stopped and observed.phase != :stopping ->
+                GenServer.cast(pid, {:finish, :ok})
+                state
+
+              true ->
+                state
             end
 
           :unavailable ->
@@ -461,6 +499,7 @@ defmodule VMManager.Manager do
             definition
             | config: config,
               reserved: true,
+              start_pending: false,
               boot_id: state.boot_id,
               beam_identity: beam_identity(),
               attempt: attempt,
@@ -592,6 +631,8 @@ defmodule VMManager.Manager do
     do: %{definition | failure: :attachment_lease_consumed, retry_at: nil}
 
   defp restart(%Definition{desired: :stopped} = definition, _observed), do: definition
+
+  defp restart(%Definition{start_pending: true} = definition, _observed), do: definition
 
   defp restart(%Definition{} = definition, %Status{} = observed) do
     config = definition.config
