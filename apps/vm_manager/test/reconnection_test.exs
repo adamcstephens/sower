@@ -166,17 +166,19 @@ defmodule VMManager.ReconnectionTest do
 
     options = VMManager.Config.to_options(config)
 
-    {:ok, session} =
-      VMManager.Guest.Session.start(
-        self(),
-        self(),
-        path,
-        options,
-        System.monotonic_time(:millisecond)
-      )
+    session =
+      start_supervised!(%{
+        id: VMManager.Guest.Session,
+        start:
+          {GenServer, :start_link,
+           [
+             VMManager.Guest.Session,
+             {self(), self(), path, options, System.monotonic_time(:millisecond)}
+           ]},
+        restart: :temporary
+      })
 
     on_exit(fn ->
-      if Process.alive?(session), do: GenServer.stop(session)
       :gen_tcp.close(listener)
       File.rm(path)
     end)
@@ -243,17 +245,20 @@ defmodule VMManager.ReconnectionTest do
         vsock: %CloudHypervisor.Config.Vsock{cid: 3, socket: nil}
       }
 
-      {:ok, session} =
-        VMManager.Guest.Session.start(
-          self(),
-          self(),
-          path,
-          VMManager.Config.to_options(config),
-          System.monotonic_time(:millisecond)
-        )
+      session =
+        start_supervised!(%{
+          id: VMManager.Guest.Session,
+          start:
+            {GenServer, :start_link,
+             [
+               VMManager.Guest.Session,
+               {self(), self(), path, VMManager.Config.to_options(config),
+                System.monotonic_time(:millisecond)}
+             ]},
+          restart: :temporary
+        })
 
       on_exit(fn ->
-        if Process.alive?(session), do: GenServer.stop(session)
         :gen_tcp.close(listener)
         File.rm(path)
       end)

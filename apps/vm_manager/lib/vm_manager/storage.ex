@@ -142,26 +142,30 @@ defmodule VMManager.Storage do
     end
   end
 
-  defp distinct_paths?(%Config{} = config, directory) do
+  def distinct_paths?(%Config{} = config, directory \\ nil) do
     outputs =
       for %CloudHypervisor.Config.Output{mode: :file, file: file} <-
             [config.serial, config.console],
           do: file
 
     if Enum.all?(outputs, &valid_output_file?/1) do
-      ephemeral =
-        for %EphemeralDisk{} = disk <- config.disks,
-            do: Path.expand(disk.name, directory)
+      paths =
+        Enum.map(config.disks, fn
+          %Disk{} = disk -> Path.expand(disk.path)
+          %EphemeralDisk{} = disk -> owned_path(disk.name, directory)
+        end) ++
+          Enum.map(outputs, fn file ->
+            if Path.type(file) == :absolute,
+              do: Path.expand(file),
+              else: owned_path(file, directory)
+          end)
 
-      paths = ephemeral ++ Enum.map(outputs, &Path.expand(&1, directory))
-
-      length(paths) == length(Enum.uniq(paths)) and
-        Enum.all?(config.disks, fn
-          %Disk{} = disk -> Path.expand(disk.path) not in paths
-          %EphemeralDisk{} -> true
-        end)
+      length(paths) == length(Enum.uniq(paths))
     else
       false
     end
   end
+
+  defp owned_path(name, nil), do: {:runtime, name}
+  defp owned_path(name, directory), do: Path.expand(name, directory)
 end

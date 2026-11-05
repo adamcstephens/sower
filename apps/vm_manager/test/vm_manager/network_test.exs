@@ -18,7 +18,7 @@ defmodule VMManager.NetworkTest do
   end
 
   test "no network provisions no devices and requires no cleanup" do
-    assert {:ok, nil} = Network.provision(%Config{id: "isolated"})
+    assert {:ok, nil} = Network.provision(%Config{id: "isolated"}, "allocation-isolated")
     assert Network.devices(nil) == []
     assert Network.cmdline(nil) == ""
     assert :ok = Network.revoke(nil)
@@ -33,7 +33,9 @@ defmodule VMManager.NetworkTest do
 
     network = %Network{ownership: :external, devices: devices, cmdline: " ip=dhcp"}
 
-    assert {:ok, ^network} = Network.provision(%Config{id: "external", network: network})
+    assert {:ok, ^network} =
+             Network.provision(%Config{id: "external", network: network}, "allocation-external")
+
     assert Network.devices(network) == devices
     assert Network.cmdline(network) == " ip=dhcp"
     assert :ok = Network.revoke(network)
@@ -43,7 +45,8 @@ defmodule VMManager.NetworkTest do
   test "resolved managed attachments are not provisioned again" do
     network = %Network{ownership: :managed, lease: "durable-lease"}
 
-    assert {:ok, ^network} = Network.provision(%Config{id: "restored", network: network})
+    assert {:ok, ^network} =
+             Network.provision(%Config{id: "restored", network: network}, "allocation-restored")
   end
 
   test "unresolved managed requests have no lease to revoke or release" do

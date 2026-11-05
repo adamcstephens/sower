@@ -79,6 +79,9 @@ defmodule VMManager.Config do
           match?(%CloudHypervisor.Config.Output{mode: :socket}, config.console) ->
         {:error, :invalid_output}
 
+      not VMManager.Storage.distinct_paths?(config) ->
+        {:error, :invalid_storage}
+
       config.mode == :attach and
           (Enum.any?(config.disks, &is_struct(&1, VMManager.Storage.EphemeralDisk)) or
              Enum.any?([config.serial, config.console], fn

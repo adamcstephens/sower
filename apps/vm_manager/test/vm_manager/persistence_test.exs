@@ -178,6 +178,60 @@ defmodule VMManager.PersistenceTest do
     GenServer.stop(manager)
   end
 
+  test "alias rejection leaves stopped definitions, durable state and allocation unchanged", %{
+    directory: directory,
+    config: config
+  } do
+    {:ok, manager} = Manager.start_link(state_directory: directory)
+    assert {:ok, config.id} == VMManager.define(config, manager)
+    assert {:ok, original} = Store.load(directory)
+    assert {:ok, statuses} = VMManager.list(manager)
+    runtime = Path.join(directory, "runtimes")
+    disk = %VMManager.Storage.EphemeralDisk{name: "scratch.img", bytes: 4096}
+
+    for changes <- [
+          [disks: [disk], console: %CloudHypervisor.Config.Output{mode: :file, file: disk.name}],
+          [disks: [disk], serial: %CloudHypervisor.Config.Output{mode: :file, file: disk.name}],
+          [
+            serial: %CloudHypervisor.Config.Output{mode: :file, file: "shared.log"},
+            console: %CloudHypervisor.Config.Output{mode: :file, file: "shared.log"}
+          ],
+          [
+            disks: [
+              %CloudHypervisor.Config.Disk{path: "/root"},
+              %CloudHypervisor.Config.Disk{path: "/root"}
+            ]
+          ],
+          [console: %CloudHypervisor.Config.Output{mode: :file, file: "/root"}]
+        ] do
+      invalid = struct!(config, changes)
+      assert {:error, :invalid_storage} = VMManager.define(%{invalid | id: "invalid"}, manager)
+      assert {:error, :invalid_storage} = VMManager.update(config.id, invalid, manager)
+      assert {:ok, ^statuses} = VMManager.list(manager)
+      assert {:ok, ^original} = Store.load(directory)
+      refute File.exists?(runtime)
+    end
+
+    refute original[config.id].reserved
+    assert original[config.id].attempt == nil
+
+    distinct = %{
+      config
+      | disks: config.disks ++ [disk],
+        serial: %CloudHypervisor.Config.Output{mode: :file, file: "serial.log"},
+        console: %CloudHypervisor.Config.Output{mode: :file, file: "console.log"}
+    }
+
+    assert :ok = VMManager.update(config.id, distinct, manager)
+    assert {:ok, "distinct"} = VMManager.define(%{distinct | id: "distinct"}, manager)
+    assert {:ok, definitions} = Store.load(directory)
+    assert definitions[config.id].config == distinct
+    assert definitions["distinct"].config == %{distinct | id: "distinct"}
+    assert Enum.all?(definitions, fn {_id, definition} -> not definition.reserved end)
+    refute File.exists?(runtime)
+    GenServer.stop(manager)
+  end
+
   test "complete definitions and stopped intent survive manager replacement", %{
     directory: directory,
     config: config

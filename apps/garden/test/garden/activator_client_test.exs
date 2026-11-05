@@ -167,7 +167,7 @@ defmodule Garden.ActivatorClientTest do
           request = Jason.decode!(request_line)
           assert request["type"] == "network"
           assert request["network_action"] == "provision"
-          assert request["execution_id"] == "execution-1"
+          assert request["execution_id"] == "allocation-1"
 
           send_response(socket, %{
             id: request["id"],
@@ -192,10 +192,13 @@ defmodule Garden.ActivatorClientTest do
       end)
 
       assert {:ok, network} =
-               VMManager.Network.provision(%VMManager.Config{
-                 id: "execution-1",
-                 network: Garden.VM.Network.request(socket_path: socket_path)
-               })
+               VMManager.Network.provision(
+                 %VMManager.Config{
+                   id: "execution-1",
+                   network: Garden.VM.Network.request(socket_path: socket_path)
+                 },
+                 "allocation-1"
+               )
 
       assert network.ownership == :managed
       assert network.provider == Garden.VM.Network
@@ -311,7 +314,7 @@ defmodule Garden.ActivatorClientTest do
         network: Garden.VM.Network.request(socket_path: socket_path)
       }
 
-      assert {:ok, lease} = VMManager.Network.provision(config)
+      assert {:ok, lease} = VMManager.Network.provision(config, "cold-allocation")
       assert {:ok, writer} = VMManager.Manager.start_link(state_directory: directory)
       assert {:ok, "cold-managed-network"} = VMManager.define(config, writer)
       GenServer.stop(writer)
@@ -387,7 +390,10 @@ defmodule Garden.ActivatorClientTest do
       refute VMManager.Network.valid?(%{network | lease: self()})
 
       assert {:error, {:network_connect, :enoent}} =
-               VMManager.Network.provision(%VMManager.Config{id: "missing", network: network})
+               VMManager.Network.provision(
+                 %VMManager.Config{id: "missing", network: network},
+                 "missing-allocation"
+               )
     end
 
     test "lost response after provision remains unconfirmed" do
@@ -405,10 +411,13 @@ defmodule Garden.ActivatorClientTest do
       end)
 
       assert {:error, {:network_provision_unconfirmed, :connection_closed}} =
-               VMManager.Network.provision(%VMManager.Config{
-                 id: "uncertain",
-                 network: Garden.VM.Network.request(socket_path: socket_path)
-               })
+               VMManager.Network.provision(
+                 %VMManager.Config{
+                   id: "uncertain",
+                   network: Garden.VM.Network.request(socket_path: socket_path)
+                 },
+                 "uncertain"
+               )
     end
 
     for action <- [:revoke, :release] do

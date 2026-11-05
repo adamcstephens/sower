@@ -227,6 +227,128 @@ defmodule VMManager.AttachmentTest do
     assert File.dir?(directory)
   end
 
+  for outcome <- [:shutdown, :endpoint_loss, :liveness_loss, :identity_change] do
+    test "agentless attachment observes external #{outcome} without guest IO" do
+      observe_external_runtime(unquote(outcome))
+    end
+  end
+
+  defp observe_external_runtime(outcome) do
+    directory = Path.join(System.tmp_dir!(), "vm-observe-#{System.unique_integer([:positive])}")
+    File.mkdir!(directory)
+    control = Path.join(directory, "control.sock")
+    marker = Path.join(directory, "external-data")
+    File.write!(marker, "keep")
+
+    {:ok, listener} =
+      :gen_tcp.listen(0, [:binary, active: false, packet: :line, ifaddr: {:local, control}])
+
+    on_exit(fn ->
+      :gen_tcp.close(listener)
+      File.rm_rf!(directory)
+    end)
+
+    config = %VMManager.Config{
+      id: "observed",
+      kernel: "/kernel",
+      guest: :none,
+      mode: :attach,
+      control_endpoint: control
+    }
+
+    parent = self()
+
+    peer =
+      Task.async(fn ->
+        {:ok, socket} = :gen_tcp.accept(listener, 1_000)
+        assert {:ok, "GET /api/v1/vm.info HTTP/1.1\r\n"} = :gen_tcp.recv(socket, 0, 1_000)
+        headers(socket)
+        native_reply(socket, config, "Running", "observed")
+        send(parent, :attachment_admitted)
+
+        receive do
+          :change_runtime -> :ok
+        end
+
+        if outcome == :endpoint_loss do
+          :gen_tcp.close(socket)
+          :gen_tcp.close(listener)
+        else
+          assert {:ok, "GET /api/v1/vm.info HTTP/1.1\r\n"} = :gen_tcp.recv(socket, 0, 2_000)
+          headers(socket)
+
+          case outcome do
+            :shutdown ->
+              native_reply(socket, config, "Created", "observed")
+
+            :identity_change ->
+              native_reply(socket, config, "Running", "foreign")
+
+            :liveness_loss ->
+              send(parent, :observation_waiting)
+
+              receive do
+                :release_observation -> :ok
+              end
+          end
+
+          if outcome != :liveness_loss,
+            do: assert({:error, :timeout} = :gen_tcp.recv(socket, 0, 100))
+
+          :gen_tcp.close(socket)
+        end
+      end)
+
+    execution = start_supervised!({VMManager.Execution, VMManager.Config.to_options(config)})
+    assert_receive :attachment_admitted
+
+    assert {:ok, %VMManager.Status{phase: :running, running: true}} =
+             GenServer.call(execution, :await_running, 1_000)
+
+    send(peer.pid, :change_runtime)
+    if outcome == :liveness_loss, do: assert_receive(:observation_waiting, 2_000)
+
+    if outcome == :shutdown do
+      assert {:ok, _} = GenServer.call(execution, :await, 3_000)
+
+      assert %VMManager.Status{phase: :stopped, running: false, cleanup: :ok} =
+               GenServer.call(execution, :status)
+    else
+      assert {:error, {:cleanup_unconfirmed, _, _, _}} =
+               GenServer.call(execution, :await, 3_000)
+
+      assert %VMManager.Status{phase: :retained, running: false} =
+               GenServer.call(execution, :status)
+    end
+
+    send(peer.pid, :release_observation)
+
+    Task.await(peer)
+    assert File.read!(marker) == "keep"
+  end
+
+  defp native_reply(socket, config, state, id) do
+    body =
+      Jason.encode!(%{
+        "state" => state,
+        "device_tree" => nil,
+        "memory_actual_size" => config.memory,
+        "config" =>
+          config
+          |> VMManager.Machine.build(nil, config.network)
+          |> CloudHypervisor.Config.to_api()
+          |> put_in(["payload", "cmdline"], config.cmdline <> " sower.vm.id=#{id}")
+      })
+
+    :ok =
+      :gen_tcp.send(socket, [
+        "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: ",
+        to_string(byte_size(body)),
+        "\r\n\r\n",
+        body
+      ])
+  end
+
   defp headers(socket) do
     case :gen_tcp.recv(socket, 0, 1_000) do
       {:ok, "\r\n"} -> :ok

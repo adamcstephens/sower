@@ -407,6 +407,42 @@ let
     end
     {:ok, current} = VM.status(owned)
     ensure.(current.os_pid == idle.os_pid)
+    cli_output = fn _, _ ->
+      send(parent, :disposable_cli_output)
+      receive do :never -> :ok end
+    end
+    {cli_caller, cli_monitor} = spawn_monitor(fn ->
+      Garden.VM.CLI.run(custom, command.("tree", []),
+        runtime_directory: root, boot_deadline_ms: 90_000,
+        scratch_bytes: 1024 * 1024 * 1024, on_output: cli_output)
+    end)
+    receive do
+      :disposable_cli_output -> :ok
+    after 90_000 -> raise "disposable CLI command did not start"
+    end
+    {:ok, cli_definitions} = VM.list()
+    [disposable] = Enum.filter(cli_definitions, &String.starts_with?(&1.id, "cli-"))
+    ensure.(disposable.desired == :running and disposable.os_pid != idle.os_pid)
+    Process.exit(cli_caller, :kill)
+    receive do
+      {:DOWN, ^cli_monitor, :process, ^cli_caller, :killed} -> :ok
+    after 1000 -> raise "disposable CLI caller did not die"
+    end
+    until.(fn -> VM.status(disposable.id) == {:error, :not_found} end)
+    ensure.(not File.exists?(disposable.directory))
+    ensure.(not File.exists?("/proc/#{disposable.os_pid}"))
+    ensure.(not Process.alive?(disposable.vmm))
+    {:ok, preserved} = VM.status(owned)
+    ensure.(preserved.phase == :ready and preserved.desired == :running)
+    ensure.(preserved.os_pid == idle.os_pid and preserved.directory == idle.directory)
+    {:ok, preserved_command} = VM.execute(owned,
+      shell.("test \"$(</var/lifetime-value)\" = persistent-value && printf cli-preserved"),
+      on_output: output)
+    {:ok, %{code: 0}} = VM.await_command(preserved_command)
+    receive do
+      {:stdout, "cli-preserved"} -> :ok
+    after 1000 -> raise "persistent VM was changed by disposable CLI cleanup"
+    end
     {:ok, handle} = VM.execute(owned, command.("tree", []), on_output: blocked)
     receive do :tree_output -> :ok after 5000 -> raise "stop tree did not start" end
     :ok = VM.stop(owned)
