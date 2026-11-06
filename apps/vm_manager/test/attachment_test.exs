@@ -416,8 +416,8 @@ defmodule VMManager.AttachmentTest do
         {:ok, socket} = :gen_tcp.accept(listener, 1_000)
         assert {:ok, "GET /api/v1/vm.info HTTP/1.1\r\n"} = :gen_tcp.recv(socket, 0, 1_000)
         headers(socket)
-        native_reply(socket, config, "Running", "observed")
         send(parent, :attachment_admitted)
+        native_reply(socket, config, "Running", "observed")
 
         receive do
           :change_runtime -> :ok
@@ -453,10 +453,11 @@ defmodule VMManager.AttachmentTest do
       end)
 
     execution = start_supervised!({VMManager.Execution, VMManager.Config.to_options(config)})
-    assert_receive :attachment_admitted
 
     assert {:ok, %VMManager.Status{phase: :running, running: true}} =
              GenServer.call(execution, :await_running, 1_000)
+
+    assert_receive :attachment_admitted
 
     send(peer.pid, :change_runtime)
     if outcome == :liveness_loss, do: assert_receive(:observation_waiting, 2_000)
