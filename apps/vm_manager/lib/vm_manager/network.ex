@@ -16,7 +16,7 @@ defmodule VMManager.Network do
   def valid?(%__MODULE__{} = network) do
     is_list(network.devices) and
       Enum.all?(network.devices, &is_struct(&1, CloudHypervisor.Config.Net)) and
-      is_binary(network.cmdline) and serializable?(network.options) and
+      is_binary(network.cmdline) and VMManager.Serialization.serializable?(network) and
       valid_custody?(network)
   end
 
@@ -31,25 +31,10 @@ defmodule VMManager.Network do
       function_exported?(network.provider, :provision, 2) and
       function_exported?(network.provider, :revoke, 2) and
       function_exported?(network.provider, :release, 2) and
-      serializable?(network.lease) and
       (not is_nil(network.lease) or (network.devices == [] and network.cmdline == ""))
   end
 
   defp valid_custody?(%__MODULE__{}), do: false
-
-  defp serializable?(value) when is_atom(value) or is_binary(value) or is_number(value),
-    do: true
-
-  defp serializable?([]), do: true
-  defp serializable?([head | tail]), do: serializable?(head) and serializable?(tail)
-
-  defp serializable?(value) when is_tuple(value),
-    do: value |> Tuple.to_list() |> Enum.all?(&serializable?/1)
-
-  defp serializable?(value) when is_map(value),
-    do: Enum.all?(value, fn {key, item} -> serializable?(key) and serializable?(item) end)
-
-  defp serializable?(_), do: false
 
   def provision(%VMManager.Config{}, allocation_id)
       when not is_binary(allocation_id) or byte_size(allocation_id) == 0 or

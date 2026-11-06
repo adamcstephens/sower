@@ -343,9 +343,27 @@ let
     end
     {:ok, %{code: 0}} = run.(stock, shell.("printf stock-command"), on_output: output)
     receive do {:stdout, "stock-command"} -> :ok after 1000 -> raise "missing stock output" end
+    {:ok, "standalone-witness"} =
+      VM.define(%VM.Config{id: "standalone-witness", kernel: stock.kernel})
+    shared_state = Application.fetch_env!(:vm_manager, :state_directory)
+    shared_store = Path.join(shared_state, "definitions.etf")
+    before_cli = File.read!(shared_store)
+    standalone = """
+    Application.put_env(:vm_manager, :state_directory, #{inspect(shared_state)})
     {:ok, %{code: 0}} = Garden.VM.CLI.main(["${stock}", "--path",
-      "/run/current-system/sw/bin/bash", "--argv", "[\"-c\",\"printf cli-command\"]",
+      "/run/current-system/sw/bin/bash", "--argv", "[\\"-c\\",\\"printf cli-command\\"]",
       "--scratch-mib", "1024", "--deadline-ms", "90000"])
+    IO.puts("standalone-cli-ok")
+    """
+    code_paths = Enum.flat_map(:code.get_path(), fn path -> ["-pa", List.to_string(path)] end)
+    {cli_output, cli_code} =
+      System.cmd("${beamPackages.elixir}/bin/elixir",
+        ["--erl", "+S 2:2"] ++ code_paths ++ ["--eval", standalone],
+        stderr_to_stdout: true)
+    ensure.(cli_code == 0)
+    ensure.(String.contains?(cli_output, "standalone-cli-ok"))
+    ensure.(File.read!(shared_store) == before_cli)
+    :ok = VM.remove("standalone-witness")
     {:ok, %{code: 23}} = run.(custom,
       command.("exact", ["space argument", "", "literal;$x"]), on_output: output)
     ensure.(collect.(collect, %{}) == %{stdout: <<"out", 0, 255, 10>>, stderr: <<"err", 0, 254, 10>>})

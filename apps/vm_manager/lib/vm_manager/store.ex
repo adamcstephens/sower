@@ -31,6 +31,55 @@ defmodule VMManager.Store do
     CloudHypervisor.Config.LandlockRule
   ]
 
+  @outcome_atoms [
+    nil,
+    true,
+    false,
+    :ok,
+    :error,
+    :pending,
+    :unknown,
+    :unconfirmed,
+    :shutdown_timeout,
+    :controller_lost,
+    :custody_abandoned,
+    :attachment_lease_consumed,
+    :restart_exhausted,
+    :terminated,
+    :vm_failed,
+    :host_restore_cleanup,
+    :unowned_storage,
+    :controller,
+    :interrupted,
+    :cancelled,
+    :timeout,
+    :owner_down,
+    :runtime_identity_mismatch,
+    :state_timeout,
+    :attachment,
+    :resource_directory,
+    :storage_startup,
+    :mkfs,
+    :io_down,
+    :vmm_exited,
+    :vmm_failed,
+    :vmm_server_down,
+    :vmm_startup,
+    :vmm_stop,
+    :guard_down,
+    :launch_failed,
+    :durable_store,
+    :external_shutdown,
+    :cleanup_unconfirmed,
+    :network_provision_unconfirmed,
+    :network_checkpoint,
+    :reconnect_unconfirmed,
+    :econnrefused,
+    :guest_protocol,
+    :invalid_exit_status,
+    :command_cleanup_unconfirmed
+  ]
+
   def load(directory) do
     case File.read(Path.join(directory, "definitions.etf")) do
       {:ok, binary} -> decode(binary)
@@ -43,7 +92,7 @@ defmodule VMManager.Store do
     do: write_atomic(Path.join(directory, "definitions.etf"), durable(definitions))
 
   def write_certificate(path, attempt, result, cleanup) do
-    write_atomic(path, %{attempt: attempt, result: durable(result), cleanup: durable(cleanup)})
+    write_atomic(path, %{attempt: attempt, result: outcome(result), cleanup: outcome(cleanup)})
   end
 
   def certificate(path) do
@@ -54,6 +103,14 @@ defmodule VMManager.Store do
     end
   end
 
+  defp durable(%VMManager.Config{} = value), do: value
+  defp durable(%VMManager.Network{} = value), do: value
+
+  defp durable(%CloudHypervisor.API.Error{} = value), do: diagnostic(value)
+
+  defp durable(%module{} = value) when module not in @durable_modules,
+    do: diagnostic(value)
+
   defp durable(value)
        when is_pid(value) or is_port(value) or is_reference(value) or is_function(value),
        do: inspect(value)
@@ -61,12 +118,48 @@ defmodule VMManager.Store do
   defp durable(value) when is_tuple(value),
     do: value |> Tuple.to_list() |> Enum.map(&durable/1) |> List.to_tuple()
 
-  defp durable(value) when is_list(value), do: Enum.map(value, &durable/1)
+  defp durable([]), do: []
+  defp durable([head | tail]), do: [durable(head) | durable(tail)]
 
-  defp durable(value) when is_map(value),
-    do: Map.new(Map.to_list(value), fn {key, item} -> {durable(key), durable(item)} end)
+  defp durable(value) when is_map(value) do
+    Map.new(Map.to_list(value), fn
+      {key, item} when key in [:result, :failure, :cleanup] -> {key, outcome(item)}
+      {key, item} -> {durable(key), durable(item)}
+    end)
+  end
 
   defp durable(value), do: value
+
+  defp outcome(value) when value in @outcome_atoms, do: value
+
+  defp outcome(%VMManager.Config{} = value), do: value
+  defp outcome(%VMManager.Network{} = value), do: value
+  defp outcome(%module{} = value) when module in @durable_modules, do: durable(value)
+
+  defp outcome(value) when is_tuple(value),
+    do: value |> Tuple.to_list() |> Enum.map(&outcome/1) |> List.to_tuple()
+
+  defp outcome([]), do: []
+  defp outcome([head | tail]), do: [outcome(head) | outcome(tail)]
+
+  defp outcome(value), do: diagnostic(value)
+
+  defp diagnostic(value) when is_atom(value), do: Atom.to_string(value)
+
+  defp diagnostic(value)
+       when is_pid(value) or is_port(value) or is_reference(value) or is_function(value),
+       do: inspect(value)
+
+  defp diagnostic(value) when is_tuple(value),
+    do: value |> Tuple.to_list() |> Enum.map(&diagnostic/1) |> List.to_tuple()
+
+  defp diagnostic([]), do: []
+  defp diagnostic([head | tail]), do: [diagnostic(head) | diagnostic(tail)]
+
+  defp diagnostic(value) when is_map(value),
+    do: Map.new(Map.to_list(value), fn {key, item} -> {diagnostic(key), diagnostic(item)} end)
+
+  defp diagnostic(value), do: value
 
   defp write_atomic(path, value) do
     directory = Path.dirname(path)

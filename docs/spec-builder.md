@@ -284,8 +284,12 @@ intent and waits for certified ephemeral cleanup, including any active command.
 `remove/1` removes a stopped definition without deleting persistent disks;
 `delete_storage/1` is the separate explicit persistent-storage operation.
 The local CLI composes define/start/readiness/execute/await-command/stop/remove
-through the same manager boundary. Output callbacks retain the `(stream, bytes)`
-interface; callers capture their job/step identity in the callback.
+through the same manager boundary. Standalone `mix sower.vm.run` uses a private
+per-invocation manager and state directory, without opening Garden's store or
+changing its budgets. In-process `Garden.VM.CLI.run/3` uses the supplied or
+already-running default manager. Disposable VM IDs are random across BEAM
+restarts. Output callbacks retain the `(stream, bytes)` interface; callers
+capture their job/step identity in the callback.
 
 Generic VM configurations can omit networking or explicitly attach an
 externally managed host network; the manager does not destroy external
@@ -345,11 +349,26 @@ Oversized requests return `request_exceeds_capacity`; requests
 that exceed currently available resources return `capacity_exhausted`,
 both with the exhausted dimension. Neither case queues or allocates a VM.
 
-Only certified native teardown and successful owned-file cleanup release
+Certified native teardown and successful owned-file cleanup normally release
 a reservation. Cleanup failures retain their VM ID, directory, and reservation;
 a terminal command result is not evidence that VM resources were released.
 Definitions remain durable until explicitly removed, rather than being evicted
 as a bounded cache of disposable execution results.
+
+For a same-host-boot reservation whose controller was lost,
+`VMManager.abandon_reservation(id, server \\ VMManager.Manager)` is an explicit
+operator escape hatch, never automatic recovery. It rejects a live registered
+controller and returns `{:ok, snapshot}` only after durably archiving the old
+definition in `abandoned_attempts` and clearing its active reservation and network
+custody. The snapshot retains configuration, paths, lease, attempt and boot/BEAM
+identities. Abandonment does not certify cleanup, signal processes, revoke or
+release networking, or delete storage. The operator owns manual cleanup of
+abandoned resources. A later start or update can create a fresh attempt under the
+same VM ID while retaining the archive; `remove/1` deletes that metadata without
+cleaning archived resources. `delete_storage/1` returns
+`{:error, :cleanup_uncertain}` while any abandoned attempt remains archived,
+even after a later attempt cleans up successfully, because persistent paths
+may overlap abandoned custody.
 
 Orderly manager-application shutdown stops native runtimes while preserving
 desired state for restoration on the next boot. A host reboot invalidates

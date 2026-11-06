@@ -233,6 +233,159 @@ defmodule VMManager.AttachmentTest do
     end
   end
 
+  for {scenario, observations} <- [
+        {:transient_timeout, [:timeout, :healthy, :shutdown]},
+        {:reset_timeout_budget, [:timeout, :timeout, :healthy, :timeout, :timeout, :shutdown]},
+        {:sustained_timeouts, [:timeout, :timeout, :timeout]},
+        {:refused_after_timeout, [:timeout, :refuse]},
+        {:foreign_after_timeout, [:timeout, :foreign]}
+      ] do
+    test "attachment observation handles #{scenario} without runtime mutation" do
+      observe_timeout_sequence(unquote(Macro.escape(observations)))
+    end
+  end
+
+  defp observe_timeout_sequence(observations) do
+    directory = Path.join(System.tmp_dir!(), "vm-timeout-#{System.unique_integer([:positive])}")
+    File.mkdir!(directory)
+    control = Path.join(directory, "control.sock")
+    marker = Path.join(directory, "external-data")
+    File.write!(marker, "keep")
+
+    {:ok, listener} =
+      :gen_tcp.listen(0, [:binary, active: false, packet: :line, ifaddr: {:local, control}])
+
+    on_exit(fn ->
+      :gen_tcp.close(listener)
+      File.rm_rf!(directory)
+    end)
+
+    config = %VMManager.Config{
+      id: "observed",
+      kernel: "/kernel",
+      guest: :none,
+      mode: :attach,
+      control_endpoint: control
+    }
+
+    parent = self()
+
+    peer =
+      start_supervised!(
+        Supervisor.child_spec(
+          {Task,
+           fn ->
+             {:ok, socket} = :gen_tcp.accept(listener, 2_000)
+             observation_request(socket)
+             native_reply(socket, config, "Running", "observed")
+             send(parent, :attachment_admitted)
+
+             Enum.reduce(observations, socket, fn
+               :refuse, nil ->
+                 :gen_tcp.close(listener)
+                 send(parent, :endpoint_refused)
+                 nil
+
+               observation, previous ->
+                 socket =
+                   if previous do
+                     previous
+                   else
+                     {:ok, connected} = :gen_tcp.accept(listener, 2_000)
+                     connected
+                   end
+
+                 observation_request(socket)
+
+                 case observation do
+                   :timeout ->
+                     assert {:error, :closed} = :gen_tcp.recv(socket, 0, 2_000)
+                     :gen_tcp.close(socket)
+                     send(parent, :request_timed_out)
+                     nil
+
+                   :healthy ->
+                     native_reply(socket, config, "Running", "observed")
+                     observation_request(socket)
+                     send(parent, {:healthy_observed, self()})
+
+                     receive do
+                       :continue_observation -> :ok
+                     end
+
+                     native_reply(socket, config, "Running", "observed")
+                     socket
+
+                   :shutdown ->
+                     native_reply(socket, config, "Created", "observed")
+                     assert {:error, :timeout} = :gen_tcp.recv(socket, 0, 100)
+                     :gen_tcp.close(socket)
+                     nil
+
+                   :foreign ->
+                     native_reply(socket, config, "Running", "foreign")
+                     assert {:error, :timeout} = :gen_tcp.recv(socket, 0, 100)
+                     :gen_tcp.close(socket)
+                     nil
+                 end
+             end)
+
+             send(parent, :observations_finished)
+           end},
+          restart: :temporary
+        )
+      )
+
+    execution = start_supervised!({VMManager.Execution, VMManager.Config.to_options(config)})
+    assert_receive :attachment_admitted, 2_000
+
+    assert {:ok, %VMManager.Status{phase: :running, running: true}} =
+             GenServer.call(execution, :await_running, 1_000)
+
+    for observation <- observations do
+      case observation do
+        :timeout ->
+          assert_receive :request_timed_out, 2_000
+
+        :healthy ->
+          assert_receive {:healthy_observed, ^peer}, 2_000
+
+          assert %VMManager.Status{phase: :running, running: true} =
+                   GenServer.call(execution, :status)
+
+          send(peer, :continue_observation)
+
+        :refuse ->
+          assert_receive :endpoint_refused, 2_000
+
+        _ ->
+          :ok
+      end
+    end
+
+    if List.last(observations) == :shutdown do
+      assert {:ok, :external_shutdown} = GenServer.call(execution, :await, 3_000)
+
+      assert %VMManager.Status{phase: :stopped, cleanup: :ok} =
+               GenServer.call(execution, :status)
+    else
+      assert {:error, {:cleanup_unconfirmed, _, _, _}} =
+               GenServer.call(execution, :await, 3_000)
+
+      assert %VMManager.Status{phase: :retained, running: false, cleanup: :unconfirmed} =
+               GenServer.call(execution, :status)
+    end
+
+    assert_receive :observations_finished, 2_000
+    assert File.read!(marker) == "keep"
+    assert File.exists?(control)
+  end
+
+  defp observation_request(socket) do
+    assert {:ok, "GET /api/v1/vm.info HTTP/1.1\r\n"} = :gen_tcp.recv(socket, 0, 2_000)
+    headers(socket)
+  end
+
   defp observe_external_runtime(outcome) do
     directory = Path.join(System.tmp_dir!(), "vm-observe-#{System.unique_integer([:positive])}")
     File.mkdir!(directory)

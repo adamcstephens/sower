@@ -125,7 +125,7 @@ defmodule VMManager.Config do
       ) ->
         {:error, :invalid_resources}
 
-      not serializable?(config) ->
+      not VMManager.Serialization.serializable?(config) ->
         {:error, :non_serializable_configuration}
 
       true ->
@@ -156,18 +156,4 @@ defmodule VMManager.Config do
     do: output.mode in [:off, :null, :tty, :pty]
 
   defp valid_output?(_output), do: false
-
-  defp serializable?(value)
-       when is_pid(value) or is_reference(value) or is_function(value) or is_port(value),
-       do: false
-
-  defp serializable?(value) when is_map(value),
-    do: Enum.all?(Map.to_list(value), fn {k, v} -> serializable?(k) and serializable?(v) end)
-
-  defp serializable?(value) when is_list(value), do: Enum.all?(value, &serializable?/1)
-
-  defp serializable?(value) when is_tuple(value),
-    do: value |> Tuple.to_list() |> Enum.all?(&serializable?/1)
-
-  defp serializable?(_value), do: true
 end

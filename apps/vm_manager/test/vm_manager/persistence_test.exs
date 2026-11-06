@@ -499,6 +499,45 @@ defmodule VMManager.PersistenceTest do
     GenServer.stop(second)
   end
 
+  test "uncertain cleanup certificate retains custody across manager replacement", %{
+    directory: directory,
+    config: config
+  } do
+    definition = %Manager.Definition{
+      config: config,
+      desired: :stopped,
+      reserved: true,
+      boot_id: File.read!("/proc/sys/kernel/random/boot_id") |> String.trim(),
+      attempt: "uncertain-cleanup",
+      observed: %VMManager.Status{phase: :ready, cleanup: :pending}
+    }
+
+    assert :ok = Store.save(directory, %{config.id => definition})
+
+    certificate =
+      Path.join(
+        directory,
+        "cleanup-" <>
+          Base.url_encode64(:crypto.hash(:sha256, config.id), padding: false) <> ".etf"
+      )
+
+    assert :ok = Store.write_certificate(certificate, definition.attempt, :ok, :unknown)
+
+    for _replacement <- 1..2 do
+      manager = start_supervised!({Manager, state_directory: directory})
+
+      assert {:ok, %VMManager.Status{phase: :retained, cleanup: :unknown}} =
+               VMManager.status(config.id, manager)
+
+      assert {:error, :cleanup_uncertain} = VMManager.start(config.id, manager)
+      assert {:ok, definitions} = Store.load(directory)
+      assert definitions[config.id].reserved
+      assert definitions[config.id].attempt == definition.attempt
+      assert definitions[config.id].desired == :stopped
+      stop_supervised!(Manager)
+    end
+  end
+
   test "storage declarations reject live process identities and functions", %{config: config} do
     assert {:error, :invalid_storage} =
              Config.validate(%{config | disks: [self()]})
