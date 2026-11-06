@@ -31,9 +31,8 @@ defmodule Garden.VM.CLI do
     with [] <- invalid,
          [directory] <- positional,
          {:ok, command} <- command(options),
-         {:ok, image} <- Image.load(directory),
-         {:ok, _apps} <- Application.ensure_all_started(:vm_manager) do
-      run(image, command,
+         {:ok, image} <- Image.load(directory) do
+      standalone(image, command,
         cpus: Keyword.get(options, :cpus, 1),
         memory: Keyword.get(options, :memory_mib, 512) * 1024 * 1024,
         scratch_bytes: Keyword.get(options, :scratch_mib, 4096) * 1024 * 1024,
@@ -45,9 +44,60 @@ defmodule Garden.VM.CLI do
     end
   end
 
+  defp standalone(image, command, options) do
+    Application.load(:vm_manager)
+
+    dependencies =
+      Enum.reduce_while(Application.spec(:vm_manager, :applications), :ok, fn application, :ok ->
+        case Application.ensure_all_started(application) do
+          {:ok, _applications} -> {:cont, :ok}
+          {:error, reason} -> {:halt, {:error, reason}}
+        end
+      end)
+
+    token = Base.encode16(:crypto.strong_rand_bytes(16), case: :lower)
+    directory = Path.join(System.tmp_dir!(), "sower-vm-#{token}")
+    manager = {:via, Registry, {VMManager.Registry, {:cli_manager, token}}}
+    runtime = {:via, Registry, {VMManager.Registry, {:cli_runtime, token}}}
+
+    manager_options =
+      VMManager.Application.options(
+        state_directory: directory,
+        manager_name: manager,
+        runtime_supervisor: runtime,
+        budgets:
+          Application.get_env(:vm_manager, :budgets,
+            vms: 1,
+            cpus: Keyword.fetch!(options, :cpus),
+            memory: Keyword.fetch!(options, :memory),
+            scratch_bytes: Keyword.fetch!(options, :scratch_bytes)
+          )
+      )
+
+    registry =
+      if Process.whereis(VMManager.Registry),
+        do: [],
+        else: [{Registry, keys: :unique, name: VMManager.Registry}]
+
+    with :ok <- dependencies,
+         {:ok, supervisor} <-
+           Supervisor.start_link(
+             registry ++ [{VMManager.Supervisor, manager_options}],
+             strategy: :one_for_one
+           ) do
+      try do
+        run(image, command, Keyword.put(options, :manager, manager))
+      after
+        Supervisor.stop(supervisor, :normal, :infinity)
+      end
+    else
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   def run(%Image{} = image, %Command{} = command, options \\ []) do
     {manager, options} = Keyword.pop(options, :manager, VMManager.Manager)
-    id = "cli-" <> Integer.to_string(System.unique_integer([:positive, :monotonic]))
+    id = "cli-" <> Base.encode16(:crypto.strong_rand_bytes(16), case: :lower)
     config = Image.vm_config(image, id, Keyword.drop(options, [:deadline_ms, :on_output]))
 
     caller = self()

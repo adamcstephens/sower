@@ -3,6 +3,128 @@ defmodule Garden.VM.CLITest do
 
   @moduletag :tmp_dir
 
+  test "startup composition resolves boot identity once without overriding caller options", %{
+    tmp_dir: directory
+  } do
+    previous = System.get_env("VM_MANAGER_BOOT_ID_FILE")
+
+    on_exit(fn ->
+      if previous,
+        do: System.put_env("VM_MANAGER_BOOT_ID_FILE", previous),
+        else: System.delete_env("VM_MANAGER_BOOT_ID_FILE")
+    end)
+
+    System.delete_env("VM_MANAGER_BOOT_ID_FILE")
+    refute Keyword.has_key?(VMManager.Application.options([]), :boot_id_file)
+    environment_file = Path.join(directory, "environment-boot-id")
+    explicit_file = Path.join(directory, "explicit-boot-id")
+    File.write!(environment_file, "environment-boot")
+    File.write!(explicit_file, "explicit-boot")
+    System.put_env("VM_MANAGER_BOOT_ID_FILE", environment_file)
+
+    options = VMManager.Application.options(state_directory: directory)
+    assert options[:boot_id_file] == environment_file
+    assert options[:state_directory] == directory
+
+    options =
+      VMManager.Application.options(
+        state_directory: directory,
+        boot_id_file: explicit_file
+      )
+
+    assert options[:boot_id_file] == explicit_file
+    assert options[:state_directory] == directory
+  end
+
+  test "standalone main cannot overwrite a concurrently updated Garden store", %{
+    tmp_dir: directory,
+    manager: manager
+  } do
+    state_directory = Path.join(directory, "state")
+    marker = Path.join(directory, "standalone-ready")
+    gate = Path.join(directory, "standalone-gate")
+    {"", 0} = System.cmd("mkfifo", [marker, gate])
+    executable_directory = Path.join(directory, "bin")
+    File.mkdir_p!(executable_directory)
+    formatter = System.find_executable("mkfs.ext4")
+    assert formatter
+
+    File.write!(
+      Path.join(executable_directory, "mkfs.ext4"),
+      "#!/usr/bin/env sh\nprintf ready > '#{marker}'\ncat '#{gate}'\nexec '#{formatter}' --invalid-regression-option \"$@\"\n"
+    )
+
+    File.chmod!(Path.join(executable_directory, "mkfs.ext4"), 0o700)
+    {artifact, 0} = System.cmd("readlink", ["--canonicalize", System.find_executable("sh")])
+    artifact = String.trim(artifact)
+    assert String.starts_with?(artifact, "/nix/store/")
+
+    File.write!(
+      Path.join(directory, "boot.json"),
+      Jason.encode!(%{
+        "version" => 1,
+        "system" => "x86_64-linux",
+        "contract" => 2,
+        "vsock_port" => 5000,
+        "scratch" => %{
+          "device" => "/dev/vdb",
+          "label" => "sower-scratch",
+          "filesystem" => "ext4"
+        },
+        "cmdline" => "",
+        "kernel" => artifact,
+        "initrd" => artifact,
+        "root" => artifact
+      })
+    )
+
+    script = Path.join(directory, "standalone.exs")
+
+    File.write!(script, """
+    Application.put_env(:vm_manager, :state_directory, #{inspect(state_directory)})
+    Application.put_env(:vm_manager, :budgets,
+      vms: 1, cpus: 1, memory: 512 * 1024 * 1024, scratch_bytes: 16 * 1024 * 1024)
+    {:error, {:request_exceeds_capacity, :cpus}} =
+      Garden.VM.CLI.main([#{inspect(directory)}, "--path", "/bin/true", "--cpus", "2",
+        "--scratch-mib", "16"])
+    nil = Process.whereis(VMManager.Registry)
+    nil = Process.whereis(VMManager.Manager)
+    Application.delete_env(:vm_manager, :budgets)
+    {:ok, registry} = Registry.start_link(keys: :unique, name: VMManager.Registry)
+    result = Garden.VM.CLI.main([#{inspect(directory)}, "--path", "/bin/true", "--scratch-mib", "16"])
+    ^registry = Process.whereis(VMManager.Registry)
+    nil = Process.whereis(VMManager.Manager)
+    IO.puts("standalone-result=" <> inspect(result))
+    """)
+
+    arguments =
+      ["--erl", "+S 2:2"] ++
+        Enum.flat_map(:code.get_path(), fn path ->
+          ["-pa", Path.expand(List.to_string(path))]
+        end) ++ [script]
+
+    reader = fifo_reader(marker)
+
+    command =
+      Task.async(fn ->
+        System.cmd("elixir", arguments,
+          stderr_to_stdout: true,
+          env: [{"PATH", executable_directory <> ":" <> System.fetch_env!("PATH")}]
+        )
+      end)
+
+    assert standalone_ready(reader, command) == "ready"
+    id = "garden-persistent"
+    assert {:ok, ^id} = VMManager.define(%VMManager.Config{id: id, kernel: "/kernel"}, manager)
+    store = Path.join(state_directory, "definitions.etf")
+    expected = File.read!(store)
+    File.write!(gate, "continue")
+    assert {output, 0} = Task.await(command, 10_000)
+    assert output =~ "standalone-result={:error,"
+    assert File.read!(store) == expected
+    assert {:ok, %VMManager.Status{desired: :stopped}} = VMManager.status(id, manager)
+  end
+
   test "caller death during boot removes only the disposable definition after cleanup", %{
     tmp_dir: directory,
     manager: manager
@@ -243,6 +365,33 @@ defmodule Garden.VM.CLITest do
 
       {:error, :closed} ->
         :ok
+    end
+  end
+
+  defp standalone_ready(reader, command, bytes \\ "")
+
+  defp standalone_ready(
+         {runner, monitor, os_pid} = reader,
+         %Task{ref: reference} = command,
+         bytes
+       ) do
+    receive do
+      {:stdout, ^os_pid, more} ->
+        standalone_ready(reader, command, bytes <> more)
+
+      {:DOWN, ^monitor, :process, ^runner, :normal} ->
+        bytes
+
+      {:DOWN, ^monitor, :process, ^runner, reason} ->
+        flunk("Standalone FIFO reader failed: #{inspect(reason)}")
+
+      {^reference, {output, code}} ->
+        flunk("Standalone exited before formatter gate (status #{code}):\n#{output}")
+    after
+      5_000 ->
+        flunk(
+          "Standalone did not reach formatter gate; child result: #{inspect(Task.yield(command, 0))}"
+        )
     end
   end
 

@@ -48,6 +48,26 @@ defmodule VMManager do
   def start(id, server \\ VMManager.Manager), do: GenServer.call(server, {:start, id}, :infinity)
   def stop(id, server \\ VMManager.Manager), do: GenServer.call(server, {:stop, id}, :infinity)
 
+  @doc """
+  Abandons a same-boot launch reservation whose controller was lost.
+
+  This is an explicit operator decision, not certified cleanup. No process is
+  signaled and no storage or network lease is released. The returned definition
+  preserves the abandoned attempt's paths and lease; it is also saved in the
+  definition's `abandoned_attempts` list before capacity is released. A later
+  explicit start may launch a fresh attempt with the same ID.
+
+  The caller remains responsible for abandoned resources. Removing the
+  definition discards its archive metadata without cleaning those resources.
+  Updates preserve the archive. `delete_storage/2` rejects definitions with
+  archived attempts, even after a later successful cleanup, because persistent
+  paths may still belong to abandoned resources.
+  Active controllers, unreserved definitions, attachments and reservations from
+  another host boot cannot be abandoned through this API.
+  """
+  def abandon_reservation(id, server \\ VMManager.Manager),
+    do: GenServer.call(server, {:abandon_reservation, id}, :infinity)
+
   def status(id, server \\ VMManager.Manager),
     do: GenServer.call(server, {:status, id}, :infinity)
 

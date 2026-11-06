@@ -18,6 +18,7 @@ defmodule VMManager.Guard do
     field :boot_timer, reference()
     field :formatters, [[String.t()]], default: []
     field :attached, boolean(), default: false
+    field :observation_timeouts, non_neg_integer(), default: 0
   end
 
   def run(server, options) do
@@ -165,14 +166,33 @@ defmodule VMManager.Guard do
         finish(state, {:ok, :external_shutdown}, :ok)
       else
         Process.send_after(self(), :observe_attachment, 250)
-        loop(state)
+        loop(%{state | observation_timeouts: 0})
       end
     else
       {:error, reason} ->
-        notify_status(state, running: false, phase: :stopping)
-        finish(state, {:error, {:attachment, reason}}, :unconfirmed)
+        if observation_timeout?(reason) and state.observation_timeouts < 2 do
+          Process.send_after(self(), :observe_attachment, 250)
+          loop(%{state | observation_timeouts: state.observation_timeouts + 1})
+        else
+          notify_status(state, running: false, phase: :stopping)
+          finish(state, {:error, {:attachment, reason}}, :unconfirmed)
+        end
     end
   end
+
+  defp observation_timeout?(%CloudHypervisor.API.Error{
+         kind: :transport,
+         reason: %Req.TransportError{reason: :timeout}
+       }),
+       do: true
+
+  defp observation_timeout?(%CloudHypervisor.API.Error{
+         kind: :transport,
+         reason: {:pool_timeout, _error}
+       }),
+       do: true
+
+  defp observation_timeout?(_reason), do: false
 
   defp allocate(%__MODULE__{} = state) do
     options = state.options

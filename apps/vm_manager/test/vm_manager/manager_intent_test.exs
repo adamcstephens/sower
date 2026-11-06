@@ -10,8 +10,21 @@ defmodule VMManager.ManagerIntentTest do
     runtime = String.to_atom("vm_intent_runtime_#{unique}")
     File.mkdir_p!(directory)
     formatter = Path.join(directory, "formatter")
-    File.write!(formatter, "#!/usr/bin/env sh\nexec sleep 60\n")
+    ready = Path.join(directory, "formatter-ready")
+    assert {"", 0} = System.cmd("mkfifo", [ready])
+    File.write!(formatter, "#!/usr/bin/env sh\nprintf ready > '#{ready}'\nexec sleep 60\n")
     File.chmod!(formatter, 0o700)
+
+    {:ok, reader, reader_os_pid} =
+      Rexec.run_link([System.find_executable("cat"), ready], owner: self())
+
+    Process.unlink(reader)
+    reader_monitor = Process.monitor(reader)
+
+    on_exit(fn ->
+      if Process.alive?(reader), do: Rexec.kill_tree(reader, :sigkill)
+      File.rm_rf!(directory)
+    end)
 
     supervisor =
       start_supervised!(
@@ -40,11 +53,10 @@ defmodule VMManager.ManagerIntentTest do
     assert {:ok, "intent"} = VMManager.define(config, manager)
     assert :ok = VMManager.subscribe(config.id, manager)
     assert :ok = VMManager.start(config.id, manager)
+    assert formatter_ready(reader, reader_monitor, reader_os_pid, manager) == "ready"
     assert {:ok, status} = VMManager.status(config.id, manager)
     guard = :sys.get_state(status.execution).guard
     true = :erlang.suspend_process(guard)
-
-    on_exit(fn -> File.rm_rf!(directory) end)
 
     %{
       directory: directory,
@@ -177,6 +189,55 @@ defmodule VMManager.ManagerIntentTest do
     end
   end
 
+  test "abandonment rejects a live controller without releasing its reservation", context do
+    try do
+      assert {:ok, before} = Store.load(context.directory)
+
+      assert {:error, :controller_active} =
+               VMManager.abandon_reservation(context.config.id, context.manager)
+
+      assert {:ok, ^before} = Store.load(context.directory)
+
+      assert {:ok, %VMManager.Status{execution: execution}} =
+               VMManager.status(context.config.id, context.manager)
+
+      assert execution == context.execution
+    after
+      resume_guard(context.guard)
+    end
+  end
+
+  test "start rejects a live retained controller without changing durable intent", context do
+    try do
+      assert {:ok, status} = VMManager.status(context.config.id, context.manager)
+      foreign = Path.join(status.directory, "foreign")
+      File.write!(foreign, "not owned")
+      stop = request_stop(context)
+      true = :erlang.resume_process(context.guard)
+      assert_receive {^stop, {:error, {:cleanup_incomplete, _cleanup}}}, 2000
+
+      assert {:ok, %VMManager.Status{phase: :retained}} =
+               VMManager.status(context.config.id, context.manager)
+
+      assert [{_, execution, :worker, _}] = DynamicSupervisor.which_children(context.runtime)
+      assert execution == context.execution
+      path = Path.join(context.directory, "definitions.etf")
+      before = File.read!(path)
+      assert {:ok, metadata} = File.stat(path)
+      assert {:error, :cleanup_uncertain} = VMManager.start(context.config.id, context.manager)
+      assert File.read!(path) == before
+      assert {:ok, unchanged} = File.stat(path)
+      assert unchanged.inode == metadata.inode
+      assert {:ok, definitions} = Store.load(context.directory)
+      refute definitions[context.config.id].start_pending
+      assert definitions[context.config.id].desired == :stopped
+      assert definitions[context.config.id].reserved
+      assert File.read!(foreign) == "not owned"
+    after
+      resume_guard(context.guard)
+    end
+  end
+
   defp drain_reconciliation do
     receive do
       message when message in [:tick, :reconcile] -> drain_reconciliation()
@@ -199,6 +260,34 @@ defmodule VMManager.ManagerIntentTest do
     assert :ok = Supervisor.terminate_child(context.supervisor, VMManager.Manager)
     assert {:ok, _} = Supervisor.restart_child(context.supervisor, VMManager.Manager)
     assert :ok = VMManager.subscribe(context.config.id, context.manager)
+  end
+
+  defp formatter_ready(reader, monitor, os_pid, manager, bytes \\ "") do
+    receive do
+      {:stdout, ^os_pid, more} ->
+        formatter_ready(reader, monitor, os_pid, manager, bytes <> more)
+
+      {:DOWN, ^monitor, :process, ^reader, :normal} ->
+        bytes
+
+      {:DOWN, ^monitor, :process, ^reader, reason} ->
+        flunk(
+          "formatter reader failed: #{inspect(reason)}; status=#{inspect(VMManager.status("intent", manager))}"
+        )
+    after
+      2000 ->
+        status = VMManager.status("intent", manager)
+
+        execution =
+          case status do
+            {:ok, %{execution: execution}} when is_pid(execution) -> :sys.get_state(execution)
+            _ -> nil
+          end
+
+        flunk(
+          "formatter readiness missing: status=#{inspect(status)} execution=#{inspect(execution)} reader=#{inspect(Process.info(reader))} output=#{inspect(bytes)}"
+        )
+    end
   end
 
   defp resume_guard(guard) do

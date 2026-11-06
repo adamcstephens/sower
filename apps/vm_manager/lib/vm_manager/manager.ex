@@ -17,6 +17,7 @@ defmodule VMManager.Manager do
     field :observed, Status.t()
     field :network, VMManager.Network.t()
     field :attachment_lease_consumed, boolean(), default: false
+    field :abandoned_attempts, [term()], default: []
   end
 
   typedstruct module: Drain do
@@ -34,6 +35,7 @@ defmodule VMManager.Manager do
     field :statuses, map(), default: %{}
     field :subscribers, map(), default: %{}
     field :stops, map(), default: %{}
+    field :cleanup_retries, map(), default: %{}
     field :boot_id, String.t(), enforce: true
     field :mode, atom(), default: :running
     field :drain, Drain.t()
@@ -97,7 +99,15 @@ defmodule VMManager.Manager do
   @impl GenServer
   def handle_call(request, _from, %__MODULE__{mode: :stopping} = state)
       when is_tuple(request) and
-             elem(request, 0) in [:define, :update, :start, :stop, :remove, :delete_storage],
+             elem(request, 0) in [
+               :define,
+               :update,
+               :start,
+               :stop,
+               :remove,
+               :delete_storage,
+               :abandon_reservation
+             ],
       do: {:reply, {:error, :draining}, state}
 
   def handle_call({:checkpoint_network, id, attempt, network}, _from, state) do
@@ -109,6 +119,41 @@ defmodule VMManager.Manager do
 
       _ ->
         {:reply, {:error, :stale_attempt}, state}
+    end
+  end
+
+  def handle_call({:abandon_reservation, id}, _from, state) do
+    with {:ok, definition} <- fetch(state, id),
+         :ok <- abandonable(state, id, definition) do
+      snapshot = %{definition | abandoned_attempts: []}
+
+      observed = %{
+        (definition.observed || %Status{})
+        | phase: :retained,
+          cleanup: :unknown,
+          failure: :custody_abandoned
+      }
+
+      updated = %{
+        definition
+        | reserved: false,
+          desired: :stopped,
+          start_pending: false,
+          retry_at: nil,
+          failure: :custody_abandoned,
+          network: nil,
+          observed: observed,
+          abandoned_attempts: [snapshot | definition.abandoned_attempts]
+      }
+
+      proposed = put_definition(state, id, updated)
+
+      case persist(proposed) do
+        :ok -> {:reply, {:ok, snapshot}, publish(proposed, id, observed)}
+        {:error, reason} -> {:reply, {:error, {:durable_store, reason}}, state}
+      end
+    else
+      {:error, reason} -> {:reply, {:error, reason}, state}
     end
   end
 
@@ -127,7 +172,7 @@ defmodule VMManager.Manager do
 
   def handle_call({:update, id, %Config{} = config}, _from, state) do
     with {:ok, definition} <- fetch(state, id),
-         :ok <- stopped(state, id),
+         :ok <- metadata_stopped(state, id),
          :ok <- Config.validate(config),
          :ok <- replacement_attachment(definition, config),
          true <- config.id == id do
@@ -268,7 +313,7 @@ defmodule VMManager.Manager do
   end
 
   def handle_call({:remove, id}, _from, state) do
-    with {:ok, _} <- fetch(state, id), :ok <- stopped(state, id) do
+    with {:ok, _} <- fetch(state, id), :ok <- metadata_stopped(state, id) do
       commit_reply(
         :ok,
         %{
@@ -284,7 +329,9 @@ defmodule VMManager.Manager do
   end
 
   def handle_call({:delete_storage, id}, _from, state) do
-    with {:ok, definition} <- fetch(state, id), :ok <- stopped(state, id) do
+    with {:ok, definition} <- fetch(state, id),
+         :ok <- storage_custody(definition),
+         :ok <- stopped(state, id) do
       result =
         Enum.reduce_while(definition.config.persistent_disks, :ok, fn path, :ok ->
           case File.rm(path) do
@@ -389,11 +436,17 @@ defmodule VMManager.Manager do
 
     case runtime(state, id) do
       nil ->
-        certificate = Store.certificate(certificate_path(state, id))
+        certificate =
+          if definition.reserved, do: Store.certificate(certificate_path(state, id)), else: nil
 
         cond do
           definition.reserved and definition.boot_id != state.boot_id ->
-            recover_host(state, id, definition)
+            now = System.monotonic_time(:millisecond)
+            {_delay, retry_at} = Map.get(state.cleanup_retries, id, {0, now})
+
+            if now >= retry_at,
+              do: recover_host(state, id, definition),
+              else: state
 
           definition.reserved and
               match?({:ok, %{attempt: attempt}} when attempt == definition.attempt, certificate) ->
@@ -401,7 +454,7 @@ defmodule VMManager.Manager do
 
             observed = %{
               (definition.observed || %Status{})
-              | phase: :stopped,
+              | phase: if(certificate.cleanup == :ok, do: :stopped, else: :retained),
                 result: certificate.result,
                 cleanup: certificate.cleanup
             }
@@ -431,6 +484,14 @@ defmodule VMManager.Manager do
         case runtime_status(pid) do
           {:ok, observed} ->
             durable = %{observed | execution: nil, guard: nil, owner: nil, vmm: nil}
+
+            durable =
+              if observed.phase in [:booting, :running, :ready, :running_command] do
+                previous = definition.observed || %Status{phase: :booting}
+                %{durable | phase: previous.phase, running: previous.running}
+              else
+                durable
+              end
 
             state =
               if definition.observed != durable do
@@ -570,6 +631,17 @@ defmodule VMManager.Manager do
         network: if(cleanup == :ok, do: nil, else: definition.network)
     }
 
+    retries =
+      if cleanup == :ok do
+        Map.delete(state.cleanup_retries, id)
+      else
+        {previous, _deadline} = Map.get(state.cleanup_retries, id, {0, 0})
+        delay = min(max(previous * 2, 1000), 30_000)
+        Map.put(state.cleanup_retries, id, {delay, System.monotonic_time(:millisecond) + delay})
+      end
+
+    state = %{state | cleanup_retries: retries}
+
     proposed = put_definition(state, id, updated)
     result = if updated == definition, do: :ok, else: persist(proposed)
 
@@ -685,13 +757,37 @@ defmodule VMManager.Manager do
     end
   end
 
+  defp abandonable(state, id, %Definition{} = definition) do
+    cond do
+      runtime(state, id) != nil ->
+        {:error, :controller_active}
+
+      not definition.reserved ->
+        {:error, :not_reserved}
+
+      definition.boot_id != state.boot_id or definition.config.mode != :launch or
+          status(state, id, definition).failure != :controller_lost ->
+        {:error, :not_controller_lost}
+
+      true ->
+        :ok
+    end
+  end
+
   defp startable(_state, _id, %Definition{attachment_lease_consumed: true}),
     do: {:error, :attachment_lease_consumed}
 
   defp startable(state, id, %Definition{} = definition) do
-    if definition.reserved and runtime(state, id) == nil,
-      do: {:error, :cleanup_uncertain},
-      else: :ok
+    case runtime(state, id) do
+      nil ->
+        if definition.reserved, do: {:error, :cleanup_uncertain}, else: :ok
+
+      pid ->
+        case runtime_status(pid) do
+          {:ok, %Status{phase: :retained}} -> {:error, :cleanup_uncertain}
+          _ -> :ok
+        end
+    end
   end
 
   defp certificate_path(state, id),
@@ -773,6 +869,21 @@ defmodule VMManager.Manager do
         execution: execution
     }
   end
+
+  defp metadata_stopped(state, id) do
+    definition = state.definitions[id]
+    observed = definition.observed || %Status{}
+
+    if definition.desired == :stopped and not definition.reserved and runtime(state, id) == nil and
+         definition.abandoned_attempts != [] and observed.failure == :custody_abandoned do
+      :ok
+    else
+      stopped(state, id)
+    end
+  end
+
+  defp storage_custody(%Definition{abandoned_attempts: []}), do: :ok
+  defp storage_custody(%Definition{}), do: {:error, :cleanup_uncertain}
 
   defp stopped(state, id) do
     definition = state.definitions[id]

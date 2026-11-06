@@ -17,6 +17,33 @@ defmodule VMManager.NetworkTest do
     refute Network.valid?(%Network{options: [callback: fn -> :ok end]})
   end
 
+  @tag :tmp_dir
+  test "configuration and network admission share recursive durable-container semantics",
+       %{tmp_dir: directory} do
+    options = %{
+      nested: {%CloudHypervisor.Config.Net{tap: "caller", mac: "02:00:00:00:00:03"}, [1 | "tail"]}
+    }
+
+    network = %Network{options: options}
+    config = %Config{id: "containers", kernel: "/kernel", network: network}
+
+    assert Network.valid?(network)
+    assert :ok = Config.validate(config)
+
+    persisted = %{"config" => config, "options" => options}
+    assert :ok = VMManager.Store.save(directory, persisted)
+    assert {:ok, ^persisted} = VMManager.Store.load(directory)
+
+    for live <- [self(), make_ref(), fn -> :ok end] do
+      network = %{network | options: %{nested: {[1 | live], options}}}
+      refute Network.valid?(network)
+      assert {:error, {:invalid_option, :network}} = Config.validate(%{config | network: network})
+
+      assert {:error, :non_serializable_configuration} =
+               Config.validate(%{config | runtime_directory: %{nested: {[1 | live], options}}})
+    end
+  end
+
   test "no network provisions no devices and requires no cleanup" do
     assert {:ok, nil} = Network.provision(%Config{id: "isolated"}, "allocation-isolated")
     assert Network.devices(nil) == []

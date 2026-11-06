@@ -17,7 +17,3 @@ config :vm_manager,
     memory: garden.vm_capacity.memory,
     scratch_bytes: garden.vm_capacity.scratch_bytes
   ]
-
-if boot_id_file = System.get_env("VM_MANAGER_BOOT_ID_FILE") do
-  config :vm_manager, boot_id_file: boot_id_file
-end
