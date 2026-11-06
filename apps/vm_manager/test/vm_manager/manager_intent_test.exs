@@ -1,5 +1,5 @@
 defmodule VMManager.ManagerIntentTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias VMManager.{Config, Store}
 
@@ -203,6 +203,33 @@ defmodule VMManager.ManagerIntentTest do
 
       assert execution == context.execution
     after
+      resume_guard(context.guard)
+    end
+  end
+
+  test "certified stop stays stopped while Registry retains the dead controller", context do
+    key = {:registry_partition, make_ref()}
+    {:ok, partition} = Registry.register(VMManager.Registry, key, nil)
+    Registry.unregister(VMManager.Registry, key)
+    :ok = :sys.suspend(partition)
+
+    try do
+      true = :erlang.resume_process(context.guard)
+      assert :ok = VMManager.stop(context.config.id, context.manager)
+      refute Process.alive?(context.execution)
+
+      assert [{execution, _}] =
+               Registry.lookup(VMManager.Registry, {context.directory, context.config.id})
+
+      assert execution == context.execution
+      assert {:ok, definitions} = Store.load(context.directory)
+      refute definitions[context.config.id].reserved
+      assert definitions[context.config.id].observed.cleanup == :ok
+
+      assert {:ok, %VMManager.Status{phase: :stopped, cleanup: :ok}} =
+               VMManager.status(context.config.id, context.manager)
+    after
+      :ok = :sys.resume(partition)
       resume_guard(context.guard)
     end
   end
