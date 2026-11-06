@@ -225,7 +225,15 @@ let
     retire = fn id ->
       :ok = VM.stop(id)
       {:ok, status} = VM.status(id)
-      ensure.(status.cleanup == :ok)
+      unless status.cleanup == :ok do
+        manager = :sys.get_state(VMManager.Manager)
+        registered = Registry.lookup(VMManager.Registry, {manager.identity, id})
+        raise "stop returned without certified cleanup: " <>
+          inspect(%{status: status, definition: manager.definitions[id],
+            registered: Enum.map(registered, fn {pid, value} ->
+              {pid, Process.alive?(pid), value}
+            end)}, limit: :infinity)
+      end
       :ok = VM.remove(id)
     end
     shell = fn script ->

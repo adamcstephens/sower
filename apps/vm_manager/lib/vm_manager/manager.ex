@@ -802,7 +802,7 @@ defmodule VMManager.Manager do
 
   defp runtime(state, id) do
     case Registry.lookup(VMManager.Registry, {state.identity, id}) do
-      [{pid, _}] -> pid
+      [{pid, _}] -> if Process.alive?(pid), do: pid, else: nil
       [] -> nil
     end
   end
