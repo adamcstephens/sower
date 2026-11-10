@@ -1,5 +1,17 @@
 defmodule VMManager.Store do
-  @moduledoc false
+  @moduledoc """
+  Persists manager definitions and attempt cleanup certificates as ETF files.
+
+  Writes use a temporary file, sync it, rename it and sync the containing
+  directory. Missing definitions load as an empty map; invalid decoded values
+  return an error.
+
+  Before safe ETF decoding, `@durable_modules` are loaded so their atoms exist
+  on a cold BEAM. The same list also participates in a separate write-time
+  struct-preservation policy: other structs are converted to diagnostic data,
+  with special handling for configuration, network and outcomes. Neither use
+  makes the list a security allowlist or schema validator for decoded data.
+  """
 
   @durable_modules [
     VMManager,

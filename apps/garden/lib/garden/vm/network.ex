@@ -1,5 +1,11 @@
 defmodule Garden.VM.Network do
-  @moduledoc false
+  @moduledoc """
+  Adapts Garden's activator network leases to the VM manager provider contract.
+
+  Provisioning returns the tap device and guest kernel command line alongside
+  the lease. Revocation and release are delegated to the activator; ambiguous
+  provisioning failures are reported as unconfirmed.
+  """
 
   alias VMManager.Network
 

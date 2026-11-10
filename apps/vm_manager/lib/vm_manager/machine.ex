@@ -1,5 +1,10 @@
 defmodule VMManager.Machine do
-  @moduledoc false
+  @moduledoc """
+  Translates VM manager configuration into Cloud Hypervisor configuration.
+
+  It resolves attempt-local disk and output paths and compares an attached
+  VMM's reported configuration and state against the expected machine.
+  """
   alias CloudHypervisor.Config, as: Native
   alias VMManager.Config
   alias VMManager.Storage.EphemeralDisk

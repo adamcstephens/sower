@@ -1,9 +1,27 @@
 defmodule VMManager.Manager do
+  @moduledoc """
+  Reconciles durable VM definitions and desired state with supervised executions.
+
+  The manager persists lifecycle intent, resource reservations and network
+  checkpoints before acting on them. It applies capacity and restart policies,
+  publishes observations, and reconciles persisted attempts after restart.
+  A lost controller or unconfirmed cleanup retains its reservation rather than
+  assuming resources are free. Explicit abandonment releases capacity without
+  cleaning the abandoned resources.
+  """
+
   use GenServer
   use TypedStruct
   alias VMManager.{Config, Network, Status, Store}
 
   typedstruct module: Definition do
+    @moduledoc """
+    Durable VM configuration and lifecycle intent, including attempt custody.
+
+    Reservations, boot identity, observed outcome and abandoned attempts allow
+    reconciliation without treating a missing controller as proof of cleanup.
+    """
+
     field :config, Config.t(), enforce: true
     field :desired, atom(), default: :stopped
     field :start_pending, boolean(), default: false
@@ -21,6 +39,8 @@ defmodule VMManager.Manager do
   end
 
   typedstruct module: Drain do
+    @moduledoc "Tracks the shutdown worker and callers waiting for the manager to drain."
+
     field :worker, pid(), enforce: true
     field :monitor, reference(), enforce: true
     field :waiters, [GenServer.from()], default: []

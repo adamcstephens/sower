@@ -1,5 +1,11 @@
 defmodule VMManager.Guest.IO do
-  @moduledoc false
+  @moduledoc """
+  Runs the guest vsock bridge connection and streams command output.
+
+  It negotiates guest readiness, encodes requests and consumes framed output
+  through a callback. Contract 2 can cancel and reconnect; an interrupted
+  command is reported as failed rather than replayed.
+  """
   use TypedStruct
   alias VMManager.Guest.Protocol
 

@@ -1,4 +1,11 @@
 defmodule Mix.Tasks.Sower.Vm.Run do
+  @moduledoc """
+  Runs a command in a disposable local VM using `Garden.VM.CLI`.
+
+  The guest exit code becomes the task's exit status; a signal maps to 128 plus
+  its number. VM execution failures are raised as Mix errors.
+  """
+
   use Mix.Task
 
   @shortdoc "Run a command in a local Cloud Hypervisor VM"

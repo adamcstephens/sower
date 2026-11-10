@@ -1,5 +1,12 @@
 defmodule VMManager.Guest.Session do
-  @moduledoc false
+  @moduledoc """
+  Coordinates guest readiness and command execution for one VM attempt.
+
+  Only one command can be active at a time. The session owns its IO worker and
+  command handle, forwards status to the execution controller and asks the
+  guard to tear down when communication or command cleanup cannot be confirmed.
+  Contract 1 ends the VM after a command; contract 2 returns to ready.
+  """
   use GenServer
   use TypedStruct
   alias VMManager.Guest.{CommandExecution, IO, Protocol}

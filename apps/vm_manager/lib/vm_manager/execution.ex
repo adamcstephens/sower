@@ -1,5 +1,11 @@
 defmodule VMManager.Execution do
-  @moduledoc false
+  @moduledoc """
+  Controls one VM attempt and exposes its observed status to the manager.
+
+  A separate guard owns the attempt's resource lifecycle. This server forwards
+  stop and command requests, tracks readiness and resolves waiters. It reports
+  retained state when the guard cannot confirm cleanup.
+  """
   use GenServer
   use TypedStruct
   alias VMManager, as: VM

@@ -1,5 +1,11 @@
 defmodule VMManager.Network do
-  @moduledoc false
+  @moduledoc """
+  Describes VM network devices and their resource custody.
+
+  External devices remain caller-owned. Managed networks delegate provisioning,
+  revocation and release to a provider, with its lease and options carried in
+  the configuration for lifecycle reconciliation.
+  """
   use TypedStruct
 
   typedstruct do

@@ -1,7 +1,12 @@
 defmodule Garden.Application do
   # See https://hexdocs.pm/elixir/Application.html
   # for more information on OTP Applications
-  @moduledoc false
+  @moduledoc """
+  Starts Garden's local services and, when an endpoint is configured, its client.
+
+  Storage, the task supervisor and admin socket run independently of the
+  scheduler and server socket, which require the configured endpoint.
+  """
 
   use Application
 
