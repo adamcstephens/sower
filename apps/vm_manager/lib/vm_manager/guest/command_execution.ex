@@ -1,5 +1,11 @@
 defmodule VMManager.Guest.CommandExecution do
-  @moduledoc false
+  @moduledoc """
+  Holds the status and result of one guest command for its caller.
+
+  It monitors the session and caller, requests cancellation on deadline or
+  caller death, and replies to waiters when the command finishes. Cancellation
+  is a request; completion depends on the session's cleanup outcome.
+  """
   use GenServer
   use TypedStruct
 

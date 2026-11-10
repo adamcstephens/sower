@@ -1,10 +1,19 @@
 defmodule VMManager.Storage do
-  @moduledoc false
+  @moduledoc """
+  Validates and prepares VM disk and output layouts for an attempt.
+
+  Ephemeral disks are created in the attempt directory; native disk paths are
+  supplied by the caller. Cleanup removes only expected regular files in that
+  directory and refuses layouts it cannot establish as owned. Persistent disk
+  deletion is a separate manager operation.
+  """
   use TypedStruct
   alias CloudHypervisor.Config.Disk
   alias VMManager.Config
 
   typedstruct module: EphemeralDisk do
+    @moduledoc "An attempt-local disk, optionally formatted as ext4 before boot."
+
     field :name, String.t(), enforce: true
     field :bytes, pos_integer(), enforce: true
     field :filesystem, :ext4 | nil

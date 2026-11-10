@@ -1,4 +1,11 @@
 defmodule VMManager.Application do
+  @moduledoc """
+  Starts the VM manager registry and supervision tree.
+
+  The default state directory is under `XDG_STATE_HOME`, or `~/.local/state`
+  when unset. Application options can override it and the host boot identity file.
+  """
+
   use Application
 
   @impl Application

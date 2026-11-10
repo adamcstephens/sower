@@ -1,7 +1,18 @@
 defmodule VMManager.Config do
+  @moduledoc """
+  Validated definition of a VM's boot artifacts, resources, devices and lifecycle policy.
+
+  Launch mode owns a new runtime; attach mode describes an existing runtime and
+  requires explicit control and device paths. The guest may be disabled or use
+  a supported Sower guest contract. Configurations must be serializable because
+  the manager persists definitions across restarts.
+  """
+
   use TypedStruct
 
   typedstruct module: SowerGuest do
+    @moduledoc "Guest-agent contract version and vsock port for command execution."
+
     field :contract, integer(), default: 2
     field :vsock_port, pos_integer(), default: 5000
   end

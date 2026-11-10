@@ -1,4 +1,11 @@
 defmodule VMManager.Supervisor do
+  @moduledoc """
+  Supervises the runtime supervisor, durable manager and shutdown coordinator.
+
+  The shutdown coordinator is started last so it can drain the manager before
+  the manager and runtime supervisor are stopped.
+  """
+
   use Supervisor
 
   def start_link(options),
@@ -20,6 +27,13 @@ defmodule VMManager.Supervisor do
 end
 
 defmodule VMManager.Shutdown do
+  @moduledoc """
+  Requests a manager drain during supervision shutdown.
+
+  Shutdown waits for the manager's response and logs incomplete cleanup; it
+  does not turn an unconfirmed cleanup into a successful one.
+  """
+
   use GenServer
   require Logger
 
