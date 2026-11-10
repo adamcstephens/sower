@@ -34,11 +34,20 @@ defmodule VMManager.Machine do
   end
 
   def matches?(%CloudHypervisor.API.Info{} = info, %Config{} = config, directory, network) do
+    (info.state == "Running" or (info.state == "Created" and info.device_tree == nil)) and
+      matches_configuration?(info, config, directory, network)
+  end
+
+  def matches_configuration?(
+        %CloudHypervisor.API.Info{} = info,
+        %Config{} = config,
+        directory,
+        network
+      ) do
     expected = build(config, directory, network) |> Native.to_api()
     actual = info.config
 
-    (info.state == "Running" or (info.state == "Created" and info.device_tree == nil)) and
-      subset?(expected, actual) and
+    subset?(expected, actual) and
       get_in(actual, ["payload", "initramfs"]) == config.initrd and
       subset?(Map.get(expected, "disks", []), Map.get(actual, "disks", [])) and
       subset?(Map.get(expected, "net", []), Map.get(actual, "net", [])) and

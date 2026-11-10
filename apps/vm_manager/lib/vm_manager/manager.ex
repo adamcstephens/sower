@@ -257,8 +257,9 @@ defmodule VMManager.Manager do
     end
   end
 
-  def handle_call({:stop, id}, from, state) do
-    with {:ok, definition} <- fetch(state, id) do
+  def handle_call({:stop, id, options}, from, state) do
+    with {:ok, policy} <- VMManager.Stop.new(options),
+         {:ok, definition} <- fetch(state, id) do
       definition = %{
         definition
         | desired: :stopped,
@@ -286,7 +287,7 @@ defmodule VMManager.Manager do
               end
 
             pid ->
-              GenServer.cast(pid, {:finish, :ok})
+              GenServer.cast(pid, {:stop, policy})
               send(self(), :reconcile)
 
               {:noreply,
@@ -533,7 +534,7 @@ defmodule VMManager.Manager do
                 finish(state, id, definition, observed, pid)
 
               definition.desired == :stopped and observed.phase != :stopping ->
-                GenServer.cast(pid, {:finish, :ok})
+                GenServer.cast(pid, {:stop, %VMManager.Stop{}})
                 state
 
               true ->
@@ -837,7 +838,7 @@ defmodule VMManager.Manager do
 
   defp stop_runtime(pid) do
     try do
-      GenServer.call(pid, :stop, 30_000)
+      GenServer.call(pid, {:stop, %VMManager.Stop{}}, :infinity)
     catch
       :exit, reason -> {:error, {:controller_unavailable, inspect(reason)}}
     end

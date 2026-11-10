@@ -26,8 +26,9 @@ defmodule CloudHypervisor do
   output descriptors. An independent cleanup owner survives lifecycle-server
   death and removes execution API/vsock sockets and the API lock only after
   certified completion. Caller-supplied execution socket paths are not reused.
-  Graceful VMM shutdown and forced process termination are distinct from API
-  VM shutdown. Owner death terminates the owned process tree.
+  Graceful stop requests guest-clean power-button shutdown with a bounded wait,
+  then tears down the VMM with force fallback. Direct API VM shutdown is distinct.
+  Owner death immediately terminates the owned process tree.
   Cleanup failures are explicit and retain execution sockets rather than
   claiming successful teardown. Startup failures remove only empty directories.
 

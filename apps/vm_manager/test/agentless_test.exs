@@ -48,7 +48,7 @@ defmodule VMManager.AgentlessTest do
         for {method, endpoint, body} <- [
               {"GET", "vm.info", info.("Running")},
               {"GET", "vm.info", info.("Running")},
-              {"PUT", "vm.shutdown", ""},
+              {"PUT", "vm.power-button", ""},
               {"GET", "vm.info", info.("Created")}
             ] do
           {:ok, socket} = :gen_tcp.accept(listener, 5_000)
@@ -86,7 +86,7 @@ defmodule VMManager.AgentlessTest do
 
     assert {:error, :timeout} = :gen_tcp.accept(bridge, 100)
     assert Process.alive?(execution)
-    assert :ok = GenServer.call(execution, :stop, 5_000)
+    assert :ok = GenServer.call(execution, {:stop, %VMManager.Stop{}}, 5_000)
 
     assert %VMManager.Status{phase: :stopped, running: false, cleanup: :ok} =
              GenServer.call(execution, :status)

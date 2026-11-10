@@ -167,7 +167,7 @@ defmodule VMManager.AttachmentTest do
               {"PUT", "vm.boot", 204, ""},
               {"GET", "vm.info", 200, info.("Running")},
               {"GET", "vm.info", 200, info.("Running")},
-              {"PUT", "vm.shutdown", 204, ""},
+              {"PUT", "vm.power-button", 204, ""},
               {"GET", "vm.info", 200, allocated_created},
               {"GET", "vm.info", 200, info.("Created")}
             ] do
@@ -218,7 +218,7 @@ defmodule VMManager.AttachmentTest do
     assert {:ok, %VMManager.Status{phase: :ready}} =
              GenServer.call(execution, :await_ready, 5_000)
 
-    assert :ok = GenServer.call(execution, :stop, 5_000)
+    assert :ok = GenServer.call(execution, {:stop, %VMManager.Stop{}}, 5_000)
     assert %VMManager.Status{phase: :stopped, cleanup: :ok} = GenServer.call(execution, :status)
     Task.await(server)
     Task.await(guest_task)

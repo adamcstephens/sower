@@ -13,8 +13,8 @@ defmodule CloudHypervisor.API do
   Unrelated exceptions propagate.
 
   `create/2` accepts the shared `CloudHypervisor.Config` direct-boot contract.
-  `shutdown/1` stops the VM, not the VMM process and not a guest power-button
-  request. `shutdown_vmm/1` exits the VMM.
+  `power_button/1` requests guest-clean ACPI shutdown. `shutdown/1` stops
+  the VM directly, not the VMM process. `shutdown_vmm/1` exits the VMM.
   """
 
   use TypedStruct
@@ -55,6 +55,7 @@ defmodule CloudHypervisor.API do
     do: request(client, :put, "vm.create", :empty, json: Config.to_api(config))
 
   def boot(%__MODULE__{} = client), do: request(client, :put, "vm.boot", :empty)
+  def power_button(%__MODULE__{} = client), do: request(client, :put, "vm.power-button", :empty)
   def shutdown(%__MODULE__{} = client), do: request(client, :put, "vm.shutdown", :empty)
   def delete(%__MODULE__{} = client), do: request(client, :put, "vm.delete", :empty)
   def shutdown_vmm(%__MODULE__{} = client), do: request(client, :put, "vmm.shutdown", :empty)

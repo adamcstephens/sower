@@ -123,7 +123,7 @@ defmodule VMManager.NetworkAllocationTest do
   end
 
   defp stop_allocating(manager, id, socket) do
-    request = :gen_server.send_request(manager, {:stop, id})
+    request = :gen_server.send_request(manager, {:stop, id, [mode: :force]})
     assert {:ok, %{desired: :stopped}} = VMManager.status(id, manager)
     assert :ok = :gen_tcp.send(socket, "continue\n")
     assert :ok = :gen_tcp.close(socket)

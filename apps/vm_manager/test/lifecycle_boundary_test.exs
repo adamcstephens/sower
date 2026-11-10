@@ -36,11 +36,11 @@ defmodule VMManager.LifecycleBoundaryTest do
     assert_receive {:native_info_waiting, server}
     waiter = Task.async(fn -> GenServer.call(execution, :await_running, :infinity) end)
     assert Task.yield(waiter, 100) == nil
-    GenServer.cast(execution, {:finish, :ok})
+    GenServer.cast(execution, {:stop, %VMManager.Stop{mode: :force}})
     assert %Status{phase: :stopping} = GenServer.call(execution, :status)
     send(server, :reply_running)
     assert {:error, _reason} = Task.await(waiter, 5_000)
-    assert :ok = GenServer.call(execution, :stop, 5_000)
+    assert :ok = GenServer.call(execution, {:stop, %VMManager.Stop{mode: :force}}, 5_000)
     Task.await(peer)
   end
 
@@ -155,27 +155,25 @@ defmodule VMManager.LifecycleBoundaryTest do
 
     peer =
       Task.async(fn ->
-        for {{method, endpoint, body}, index} <-
-              Enum.with_index([
-                {"GET", "vm.info", info.("Running")},
-                {"GET", "vm.info", info.("Running")},
-                {"PUT", "vm.shutdown", ""},
-                {"GET", "vm.info", info.("Created")}
-              ]) do
+        exchange = fn exchange, state, gated ->
           {:ok, socket} = :gen_tcp.accept(listener, 5_000)
-
-          assert {:ok, "#{method} /api/v1/#{endpoint} HTTP/1.1\r\n"} ==
-                   :gen_tcp.recv(socket, 0, 5_000)
-
+          {:ok, request} = :gen_tcp.recv(socket, 0, 5_000)
           headers(socket)
 
-          if index == 0 and gated do
+          if gated do
             send(parent, {:native_info_waiting, self()})
 
             receive do
               :reply_running -> :ok
             end
           end
+
+          {body, next_state} =
+            case request do
+              "GET /api/v1/vm.info HTTP/1.1\r\n" -> {info.(state), state}
+              "PUT /api/v1/vm.power-button HTTP/1.1\r\n" -> {"", "Created"}
+              "PUT /api/v1/vm.shutdown HTTP/1.1\r\n" -> {"", "Created"}
+            end
 
           :ok =
             :gen_tcp.send(socket, [
@@ -186,7 +184,10 @@ defmodule VMManager.LifecycleBoundaryTest do
             ])
 
           :gen_tcp.close(socket)
+          unless state == "Created", do: exchange.(exchange, next_state, false)
         end
+
+        exchange.(exchange, "Running", gated)
       end)
 
     {config, peer}

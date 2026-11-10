@@ -22,18 +22,20 @@ defmodule CloudHypervisor.Process do
   not guest-runtime readiness or live state after standalone API mutations.
   Use `API.info(client)` for the VM's current state.
 
-  `stop/2` returns `{:ok, {:exit_status, integer} | {:signal, integer}}` only
+  `stop/3` returns `{:ok, {:exit_status, integer} | {:signal, integer}}` only
   after Rexec confirms that its owned tree has been reaped. Graceful stop
-  requests API VMM shutdown, then escalates to `Rexec.kill_tree/2` after
-  500 ms. Force stop immediately kills the tree. Cleanup allows Rexec's
-  five-second deadline and delivery grace. Unconfirmed cleanup returns
+  requests the guest power button and waits up to the supplied guest budget
+  (10,000 ms by default) for `Created` with no device tree, then shuts down
+  the VMM. Expiry or API failure falls back to VMM shutdown, followed after
+  500 ms by tree kill. Force stop immediately kills the tree. Cleanup allows
+  Rexec's five-second deadline and delivery grace. Unconfirmed cleanup returns
   `{:error, :shutdown_timeout}` or `{:error, {:cleanup_failed, message}}`
   and retains the execution directory. A cleanup failure remains a failure
   even if Rexec subsequently exits. Startup execution errors use
   `{:startup, message}`; only an empty directory is removed in that case.
   A nonempty startup directory or Rexec cleanup notice is reported as
   `{:cleanup_failed, message}` and retained.
-  Stopping the VM alone remains `API.shutdown(client)`, not `stop/2`.
+  Stopping the VM directly remains `API.shutdown(client)`, not `stop/3`.
 
   The owner receives `{:cloud_hypervisor, server, event}`. Events are
   `{:stdout, bytes}`, `{:stderr, bytes}`, `{:api_ready, status}`,
@@ -78,12 +80,21 @@ defmodule CloudHypervisor.Process do
   end
 
   typedstruct module: Request do
+    @moduledoc "An in-flight native API request monitored by the lifecycle server."
+
     field :pid, pid(), enforce: true
     field :monitor, reference(), enforce: true
-    field :kind, :ping | :create | :boot | :info | :shutdown, enforce: true
+
+    field :kind, :ping | :create | :boot | :info | :power_button | :guest_info | :shutdown,
+      enforce: true
   end
 
   typedstruct module: State do
+    @moduledoc """
+    Owned-process lifecycle state, including startup waiters and the bounded
+    guest, VMM and force teardown stages.
+    """
+
     field :status, Status.t(), enforce: true
     field :launch, Launch.t(), enforce: true
     field :config, Config.t(), enforce: true
@@ -102,7 +113,7 @@ defmodule CloudHypervisor.Process do
     field :startup_result, term()
     field :startup_waiters, [GenServer.from()], default: []
     field :stop_waiters, [GenServer.from()], default: []
-    field :stop_stage, :graceful | :force
+    field :stop_stage, :guest | :graceful | :force
   end
 
   def start_link(options) do
@@ -130,8 +141,15 @@ defmodule CloudHypervisor.Process do
   def status(server), do: GenServer.call(server, :status, @call_timeout)
   def await_ready(server), do: GenServer.call(server, :await_ready, :infinity)
 
-  def stop(server, mode) when mode in [:graceful, :force],
-    do: GenServer.call(server, {:stop, mode}, @call_timeout)
+  def stop(server, mode, guest_shutdown_timeout_ms \\ 10_000)
+      when mode in [:graceful, :force] and is_integer(guest_shutdown_timeout_ms) and
+             guest_shutdown_timeout_ms >= 0,
+      do:
+        GenServer.call(
+          server,
+          {:stop, mode, guest_shutdown_timeout_ms},
+          :infinity
+        )
 
   @impl GenServer
   def init({:ok, launch, config, mode, owner, timeout, before_stop}) do
@@ -207,20 +225,24 @@ defmodule CloudHypervisor.Process do
   def handle_call(:await_ready, _from, %State{} = state),
     do: {:reply, state.startup_result, state}
 
-  def handle_call({:stop, _mode}, _from, %State{cleanup_error: message} = state)
+  def handle_call({:stop, _mode, _timeout}, _from, %State{cleanup_error: message} = state)
       when not is_nil(message),
       do: {:reply, {:error, {:cleanup_failed, message}}, state}
 
-  def handle_call({:stop, _mode}, _from, %State{runner: nil} = state) do
+  def handle_call({:stop, _mode, _timeout}, _from, %State{runner: nil} = state) do
     {:reply, stop_result(state), state}
   end
 
-  def handle_call({:stop, _mode}, _from, %State{stop_stage: :force, shutdown_timer: nil} = state),
-    do: {:reply, {:error, :shutdown_timeout}, state}
+  def handle_call(
+        {:stop, _mode, _timeout},
+        _from,
+        %State{stop_stage: :force, shutdown_timer: nil} = state
+      ),
+      do: {:reply, {:error, :shutdown_timeout}, state}
 
-  def handle_call({:stop, mode}, from, %State{} = state) do
+  def handle_call({:stop, mode, timeout}, from, %State{} = state) do
     state = %{state | stop_waiters: [from | state.stop_waiters]}
-    {:noreply, begin_stop(state, mode, {:stopped, mode})}
+    {:noreply, begin_stop(state, mode, {:stopped, mode}, timeout)}
   end
 
   @impl GenServer
@@ -267,6 +289,12 @@ defmodule CloudHypervisor.Process do
     kind = if state.status.api_ready, do: :info, else: :ping
     {:noreply, request(state, kind)}
   end
+
+  def handle_info(:guest_poll, %State{stop_stage: :guest} = state),
+    do: {:noreply, request(state, :guest_info)}
+
+  def handle_info(:guest_timeout, %State{stop_stage: :guest} = state),
+    do: {:noreply, shutdown_vmm(state)}
 
   def handle_info(:readiness_timeout, %State{status: %Status{phase: :starting}} = state) do
     {:noreply, begin_stop(state, :force, :readiness_timeout)}
@@ -423,6 +451,8 @@ defmodule CloudHypervisor.Process do
             :create -> API.create(client, config)
             :boot -> API.boot(client)
             :info -> API.info(client)
+            :power_button -> API.power_button(client)
+            :guest_info -> API.info(client)
             :shutdown -> API.shutdown_vmm(client)
           end
 
@@ -431,6 +461,25 @@ defmodule CloudHypervisor.Process do
 
     %{state | request: %Request{pid: pid, monitor: monitor, kind: kind}}
   end
+
+  defp request_result(%State{stop_stage: :guest} = state, :power_button, :ok),
+    do: request(state, :guest_info)
+
+  defp request_result(
+         %State{stop_stage: :guest} = state,
+         :guest_info,
+         {:ok, %API.Info{state: "Created", device_tree: nil}}
+       ),
+       do: shutdown_vmm(state)
+
+  defp request_result(%State{stop_stage: :guest} = state, :guest_info, {:ok, %API.Info{} = info}) do
+    BEAM.send_after(self(), :guest_poll, 25)
+    %{state | status: %{state.status | vm_state: info.state}}
+  end
+
+  defp request_result(%State{stop_stage: :guest} = state, kind, _error)
+       when kind in [:power_button, :guest_info],
+       do: shutdown_vmm(state)
 
   defp request_result(%State{status: %Status{phase: :stopping}} = state, :shutdown, :ok),
     do: state
@@ -480,12 +529,17 @@ defmodule CloudHypervisor.Process do
     state
   end
 
-  defp begin_stop(%State{runner: nil} = state, _mode, _reason), do: state
-  defp begin_stop(%State{stop_stage: :force} = state, _mode, _reason), do: state
-  defp begin_stop(%State{stop_stage: :graceful} = state, :graceful, _reason), do: state
-  defp begin_stop(%State{stop_stage: :graceful} = state, :force, _reason), do: force_stop(state)
+  defp begin_stop(state, mode, reason, timeout \\ 10_000)
+  defp begin_stop(%State{runner: nil} = state, _mode, _reason, _timeout), do: state
+  defp begin_stop(%State{stop_stage: :force} = state, _mode, _reason, _timeout), do: state
 
-  defp begin_stop(%State{} = state, mode, reason) do
+  defp begin_stop(%State{stop_stage: stage} = state, :graceful, _reason, _timeout)
+       when stage in [:guest, :graceful], do: state
+
+  defp begin_stop(%State{stop_stage: stage} = state, :force, _reason, _timeout)
+       when stage in [:guest, :graceful], do: force_stop(state)
+
+  defp begin_stop(%State{} = state, mode, reason, timeout) do
     cancel_timer(state.readiness_timer)
     cancel_request(state)
     state = before_stop(state)
@@ -501,16 +555,26 @@ defmodule CloudHypervisor.Process do
     if mode == :force do
       force_stop(state)
     else
-      timer = BEAM.send_after(self(), :force_stop, @grace_timeout)
-      state = %{state | stop_stage: :graceful, shutdown_timer: timer}
+      timer = BEAM.send_after(self(), :guest_timeout, timeout)
+      state = %{state | stop_stage: :guest, shutdown_timer: timer, deadline: now() + timeout}
 
       if state.status.api_ready,
-        do: request(state, :shutdown),
-        else:
-          (
-            Rexec.kill(state.runner, :sigterm)
-            state
-          )
+        do: request(state, :power_button),
+        else: shutdown_vmm(state)
+    end
+  end
+
+  defp shutdown_vmm(%State{} = state) do
+    cancel_timer(state.shutdown_timer)
+    cancel_request(state)
+    timer = BEAM.send_after(self(), :force_stop, @grace_timeout)
+    state = %{state | stop_stage: :graceful, shutdown_timer: timer, request: nil}
+
+    if state.status.api_ready do
+      request(state, :shutdown)
+    else
+      Rexec.kill(state.runner, :sigterm)
+      state
     end
   end
 

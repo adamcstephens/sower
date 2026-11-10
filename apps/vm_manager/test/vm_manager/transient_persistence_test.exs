@@ -178,7 +178,7 @@ defmodule VMManager.TransientPersistenceTest do
     case :gen_tcp.recv(socket, 0, 5000) do
       {:ok, request} ->
         headers(socket)
-        stopping = String.starts_with?(request, "PUT /api/v1/vm.shutdown ")
+        stopping = String.starts_with?(request, "PUT /api/v1/vm.power-button ")
         state = if stopping, do: "Created", else: state
 
         body =

@@ -78,11 +78,11 @@ defmodule VMManager.Execution do
     {:reply, :ok, stopping(state)}
   end
 
-  def handle_call(:stop, from, %__MODULE__{} = state) do
+  def handle_call({:stop, %VM.Stop{} = policy}, from, %__MODULE__{} = state) do
     if terminal?(state) do
       {:reply, stop_result(state), state}
     else
-      send(state.guard, {:finish, :ok})
+      send(state.guard, {:stop, policy})
       {:noreply, %{stopping(state) | waiters: [{:stop, from} | state.waiters]}}
     end
   end
@@ -134,6 +134,11 @@ defmodule VMManager.Execution do
   end
 
   @impl GenServer
+  def handle_cast({:stop, %VM.Stop{} = policy}, %__MODULE__{} = state) do
+    send(state.guard, {:stop, policy})
+    {:noreply, stopping(state)}
+  end
+
   def handle_cast({:finish, result}, %__MODULE__{} = state) do
     send(state.guard, {:finish, result})
     {:noreply, stopping(state)}

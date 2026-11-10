@@ -172,6 +172,77 @@ let
       })
     ];
   };
+  shutdownProbe = pkgs.writeText "shutdown-probe.py" ''
+    import glob, os, selectors, struct, subprocess, sys
+    if sys.argv[1] == "sentinel":
+        with open("/dev/vda", "r+b", buffering=0) as disk:
+            disk.write(b"sower-clean-shutdown\n")
+            os.fsync(disk.fileno())
+        sys.exit(0)
+    selector = selectors.DefaultSelector()
+    for path in glob.glob("/dev/input/event*"):
+        event = open(path, "rb", buffering=0)
+        selector.register(event, selectors.EVENT_READ)
+    assert selector.get_map(), "no ACPI input devices"
+    with open("/dev/vda", "rb", buffering=0) as disk:
+        if disk.read(21) == b"sower-clean-shutdown\n":
+            print("sower-shutdown-sentinel-restored", flush=True)
+    print("sower-shutdown-listener-ready", flush=True)
+    ignore = "sower.ignore-power=1" in open("/proc/cmdline").read().split()
+    event_format = "llHHi"
+    while True:
+        for key, _ in selector.select():
+            _, _, kind, code, value = struct.unpack(event_format, key.fileobj.read(struct.calcsize(event_format)))
+            if (kind, code, value) == (1, 116, 1):
+                print("sower-power-button-received", flush=True)
+                if not ignore:
+                    subprocess.run(["/bin/systemctl", "--no-block", "poweroff"], check=True)
+  '';
+  shutdownGuest = (pkgs.nixos {
+    system.stateVersion = "25.11";
+    boot.loader.grub.enable = false;
+    fileSystems."/" = {
+      device = "none";
+      fsType = "tmpfs";
+    };
+    boot.initrd = {
+      availableKernelModules = [ "virtio_pci" "virtio_blk" "button" "evdev" ];
+      kernelModules = [ "button" "evdev" ];
+      systemd = {
+        enable = true;
+        additionalUpstreamUnits = [ "systemd-udev-settle.service" ];
+        storePaths = [ pkgs.python3 pkgs.coreutils shutdownProbe ];
+        targets.shutdown-test = {
+          unitConfig.DefaultDependencies = false;
+          requires = [ "shutdown-listener.service" ];
+          after = [ "shutdown-listener.service" ];
+        };
+        services.shutdown-sentinel = {
+          unitConfig.DefaultDependencies = false;
+          conflicts = [ "shutdown.target" ];
+          before = [ "shutdown-listener.service" "shutdown.target" ];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            ExecStart = "${pkgs.coreutils}/bin/true";
+            ExecStop = "${pkgs.python3}/bin/python3 ${shutdownProbe} sentinel";
+          };
+        };
+        services.shutdown-listener = {
+          unitConfig.DefaultDependencies = false;
+          conflicts = [ "shutdown.target" ];
+          before = [ "shutdown.target" ];
+          requires = [ "systemd-modules-load.service" "systemd-udev-trigger.service" "systemd-udev-settle.service" "shutdown-sentinel.service" ];
+          after = [ "systemd-modules-load.service" "systemd-udev-trigger.service" "systemd-udev-settle.service" "shutdown-sentinel.service" ];
+          serviceConfig = {
+            ExecStart = "${pkgs.python3}/bin/python3 ${shutdownProbe} listen";
+            StandardOutput = "tty";
+            TTYPath = "/dev/ttyS0";
+          };
+        };
+      };
+    };
+  }).config;
   scenario = pkgs.writeText "image-scenario.exs" ''
     alias Garden.Image
     alias VMManager, as: VM
@@ -252,6 +323,104 @@ let
       retire.(id)
       clean.()
       result
+    end
+    for ownership <- [:launch, :attach], policy <- [:graceful, :unresponsive, :force] do
+      alias CloudHypervisor.{API, Config}
+      id = "shutdown-#{ownership}-#{policy}"
+      external = "/tmp/#{id}"
+      disk = external <> ".raw"
+      File.mkdir_p!(external)
+      {_, 0} = System.cmd("truncate", ["--size", "16M", disk])
+      control = Path.join(external, "control.sock")
+      serial = Path.join(external, "serial.log")
+      kernel = "${shutdownGuest.system.build.kernel}/${shutdownGuest.system.boot.loader.kernelFile}"
+      initrd = "${shutdownGuest.system.build.initialRamdisk}/${shutdownGuest.system.boot.loader.initrdFile}"
+      cmdline = "console=ttyS0 rd.systemd.unit=shutdown-test.target" <>
+        if(policy == :unresponsive, do: " sower.ignore-power=1", else: "")
+      disks = [%Config.Disk{path: disk, readonly: false, image_type: :raw}]
+      api = %API{socket: control}
+      external_pid =
+        if ownership == :attach do
+          {_, 0} = System.cmd("systemd-run", ["--unit=#{id}",
+            "${pkgs.cloud-hypervisor}/bin/cloud-hypervisor", "--api-socket", control, "--no-shutdown"])
+          until.(fn -> File.exists?(control) end)
+          :ok = API.create(api, %Config{
+            kernel: kernel, initramfs: initrd, cmdline: cmdline <> " sower.vm.id=#{id}", disks: disks,
+            cpus: %Config.CPUs{boot_vcpus: 1, max_vcpus: 1}, memory: 1_073_741_824,
+            console: %Config.Output{mode: :off},
+            serial: %Config.Output{mode: :file, file: serial},
+            rng: %Config.RNG{src: "/dev/urandom"}
+          })
+          :ok = API.boot(api)
+          {pid, 0} = System.cmd("systemctl", ["show", "--property=MainPID", "--value", id])
+          String.trim(pid)
+        end
+      cfg = %VM.Config{
+        id: id, mode: ownership, kernel: kernel, initrd: initrd, cmdline: cmdline,
+        memory: 1_073_741_824,
+        disks: disks, persistent_disks: [disk], runtime_directory: root,
+        control_endpoint: if(ownership == :attach, do: control),
+        serial: %Config.Output{mode: :file, file: serial},
+        mkfs: "${pkgs.coreutils}/bin/false"
+      }
+      {:ok, ^id} = VM.define(cfg)
+      :ok = VM.start(id)
+      {:ok, running} = VM.await_running(id)
+      {:error, :guest_agent_disabled} = VM.await_ready(id)
+      await_marker = fn marker ->
+        deadline = System.monotonic_time(:millisecond) + 30_000
+        wait = fn wait ->
+          log = case File.read(serial) do
+            {:ok, bytes} -> bytes
+            {:error, reason} -> inspect(reason)
+          end
+          unless String.contains?(log, marker) do
+            if System.monotonic_time(:millisecond) >= deadline do
+              raise "#{id} missing #{marker}: #{inspect(VM.status(id))}\n#{log}"
+            end
+            Process.sleep(20)
+            wait.(wait)
+          end
+        end
+        wait.(wait)
+      end
+      await_marker.("sower-shutdown-listener-ready")
+      ensure.(not String.starts_with?(File.read!(disk), "sower-clean-shutdown"))
+      options = if policy == :force,
+        do: [mode: :force, guest_shutdown_timeout_ms: 15_000],
+        else: [guest_shutdown_timeout_ms: if(policy == :unresponsive, do: 1500, else: 15_000)]
+      started = System.monotonic_time(:millisecond)
+      :ok = VM.stop(id, VMManager.Manager, options)
+      elapsed = System.monotonic_time(:millisecond) - started
+      {:ok, stopped} = VM.status(id)
+      ensure.(stopped.desired == :stopped and stopped.cleanup == :ok)
+      ensure.(String.starts_with?(File.read!(disk), "sower-clean-shutdown\n") ==
+        (policy == :graceful))
+      if policy == :unresponsive, do: ensure.(elapsed >= 1200 and elapsed < 10_000)
+      if policy == :force, do: ensure.(elapsed < 10_000)
+      if ownership == :attach do
+        log = File.read!(serial)
+        ensure.(String.contains?(log, "sower-power-button-received") == (policy != :force))
+      end
+      if policy == :graceful do
+        :ok = VM.start(id)
+        {:ok, _} = VM.await_running(id)
+        await_marker.("sower-shutdown-sentinel-restored")
+        :ok = VM.stop(id, VMManager.Manager, mode: :force)
+      end
+      :ok = VM.remove(id)
+      ensure.(File.regular?(disk))
+      if ownership == :attach do
+        ensure.(File.exists?("/proc/" <> external_pid))
+        ensure.(File.exists?(control) and File.dir?(external))
+        {:ok, _} = API.info(api)
+        {_, 0} = System.cmd("systemctl", ["stop", id])
+      else
+        ensure.(not File.exists?("/proc/#{running.os_pid}"))
+      end
+      File.rm_rf!(external)
+      File.rm!(disk)
+      clean.()
     end
     external_disk = "/tmp/image-agentless.raw"
     File.write!(external_disk, "external-disk-contents")
@@ -1203,7 +1372,7 @@ pkgs.testers.runNixOSTest {
     machine.succeed("image-restoration-scenario restore", timeout=120)
     machine.succeed("image-restoration-scenario agentless-restore", timeout=120)
     machine.succeed("mkdir --parents /run/image-external /var/lib/image-restoration; truncate --size 1G /var/lib/image-restoration/external.ext4; ${pkgs.e2fsprogs}/bin/mkfs.ext4 -q -F -L sower-scratch /var/lib/image-restoration/external.ext4")
-    machine.succeed("systemd-run --unit=image-external ${pkgs.cloud-hypervisor}/bin/cloud-hypervisor --api-socket /run/image-external/control.sock")
+    machine.succeed("systemd-run --unit=image-external ${pkgs.cloud-hypervisor}/bin/cloud-hypervisor --api-socket /run/image-external/control.sock --no-shutdown")
     machine.wait_until_succeeds("test -S /run/image-external/control.sock")
     external_pid = machine.succeed("systemctl show --property=MainPID --value image-external.service").strip()
     assert int(external_pid) > 0

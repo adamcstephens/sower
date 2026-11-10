@@ -68,7 +68,21 @@ defmodule VMManager do
     do: GenServer.call(server, {:update, id, config}, :infinity)
 
   def start(id, server \\ VMManager.Manager), do: GenServer.call(server, {:start, id}, :infinity)
-  def stop(id, server \\ VMManager.Manager), do: GenServer.call(server, {:stop, id}, :infinity)
+
+  @doc """
+  Stops a VM with certified cleanup, preserving its definition and persistent disks.
+
+  The default `mode: :graceful` requests guest ACPI shutdown, waiting at most
+  `guest_shutdown_timeout_ms` (10,000 by default) before force teardown.
+  `mode: :force` bypasses the guest request and wait. Attached VMs use only their
+  verified control endpoint; their externally owned VMM process is never killed.
+  Attached cleanup requires an observable matching stopped VM; loss of its
+  endpoint is uncertain, not proof of teardown. Cloud Hypervisor's
+  `--no-shutdown` keeps the external VMM available after guest poweroff.
+  Success certifies teardown, not that the guest honored the shutdown request.
+  """
+  def stop(id, server \\ VMManager.Manager, options \\ []),
+    do: GenServer.call(server, {:stop, id, options}, :infinity)
 
   @doc """
   Abandons a same-boot launch reservation whose controller was lost.

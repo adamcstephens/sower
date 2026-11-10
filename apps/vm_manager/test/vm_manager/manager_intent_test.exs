@@ -159,7 +159,7 @@ defmodule VMManager.ManagerIntentTest do
       end)
 
       true = :erlang.resume_process(context.guard)
-      assert :ok = GenServer.call(context.execution, :stop)
+      assert :ok = GenServer.call(context.execution, {:stop, %VMManager.Stop{mode: :force}})
 
       assert %VMManager.Status{cleanup: :ok, phase: :stopped} =
                GenServer.call(context.execution, :status)
@@ -275,7 +275,11 @@ defmodule VMManager.ManagerIntentTest do
 
   defp request_stop(context) do
     reference = make_ref()
-    send(context.manager, {:"$gen_call", {self(), reference}, {:stop, context.config.id}})
+
+    send(
+      context.manager,
+      {:"$gen_call", {self(), reference}, {:stop, context.config.id, [mode: :force]}}
+    )
 
     assert {:ok, %VMManager.Status{desired: :stopped}} =
              VMManager.status(context.config.id, context.manager)

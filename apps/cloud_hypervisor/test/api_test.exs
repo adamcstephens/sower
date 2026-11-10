@@ -46,6 +46,7 @@ defmodule CloudHypervisor.APITest do
   test "empty 200/204 mutation successes" do
     for {function, endpoint} <- [
           boot: "vm.boot",
+          power_button: "vm.power-button",
           shutdown: "vm.shutdown",
           delete: "vm.delete",
           shutdown_vmm: "vmm.shutdown"

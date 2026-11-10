@@ -420,6 +420,62 @@ defmodule CloudHypervisor.ProcessTest do
     Task.await(server, @timeout)
   end
 
+  test "graceful stop observes guest completion before VMM shutdown" do
+    {:ok, pid} = start(executable("exec sleep 60"), mode: :api)
+    {:ok, client} = VMM.client(pid)
+    server = api_server(client, 204, :complete)
+    assert {:ok, _} = VMM.await_ready(pid)
+
+    stop = Task.async(fn -> VMM.stop(pid, :graceful, 2_000) end)
+    assert_receive {:api_request, "/api/v1/vm.power-button"}, @timeout
+    assert_receive {:api_info, "Created"}, @timeout
+    assert_receive {:api_request, "/api/v1/vmm.shutdown"}, @timeout
+    assert {:ok, {:signal, 9}} = Task.await(stop, @timeout)
+    refute File.exists?(VMM.status(pid).directory)
+    Task.await(server, @timeout)
+  end
+
+  test "force interrupts guest wait and concurrent graceful calls preserve its deadline" do
+    {:ok, pid} = start(executable("exec sleep 60"), mode: :api)
+    {:ok, client} = VMM.client(pid)
+    server = api_server(client, 204, :ignore)
+    assert {:ok, _} = VMM.await_ready(pid)
+    first = Task.async(fn -> VMM.stop(pid, :graceful, 2_000) end)
+    assert_receive {:api_request, "/api/v1/vm.power-button"}, @timeout
+    deadline = :sys.get_state(pid).deadline
+    second = Task.async(fn -> VMM.stop(pid, :graceful, 10_000) end)
+    assert :sys.get_state(pid).deadline == deadline
+    assert {:ok, {:signal, 9}} = VMM.stop(pid, :force)
+    assert {:ok, {:signal, 9}} = Task.await(first, @timeout)
+    assert {:ok, {:signal, 9}} = Task.await(second, @timeout)
+    refute_receive {:api_request, "/api/v1/vmm.shutdown"}
+    Task.shutdown(server, :brutal_kill)
+  end
+
+  test "guest timeout falls back when the guest ignores the power button" do
+    {:ok, pid} = start(executable("exec sleep 60"), mode: :api)
+    {:ok, client} = VMM.client(pid)
+    server = api_server(client, 204, :ignore)
+    assert {:ok, _} = VMM.await_ready(pid)
+    assert {:ok, {:signal, 9}} = VMM.stop(pid, :graceful, 50)
+    assert_receive {:api_request, "/api/v1/vm.power-button"}, @timeout
+    assert_receive {:api_request, "/api/v1/vmm.shutdown"}, @timeout
+    Task.await(server, @timeout)
+  end
+
+  test "Created with attached devices is not guest completion" do
+    {:ok, pid} = start(executable("exec sleep 60"), mode: :api)
+    {:ok, client} = VMM.client(pid)
+    server = api_server(client, 204, :devices)
+    assert {:ok, _} = VMM.await_ready(pid)
+    stop = Task.async(fn -> VMM.stop(pid, :graceful, 1_000) end)
+    assert_receive {:api_request, "/api/v1/vm.power-button"}, @timeout
+    refute_receive {:api_request, "/api/v1/vmm.shutdown"}, 100
+    assert {:ok, {:signal, 9}} = Task.await(stop, @timeout)
+    assert_receive {:api_request, "/api/v1/vmm.shutdown"}, @timeout
+    Task.await(server, @timeout)
+  end
+
   test "an API boot rejection kills and reaps before failed readiness returns" do
     executable = executable("exec sleep 60")
     owner = self()
@@ -585,18 +641,20 @@ defmodule CloudHypervisor.ProcessTest do
     end
   end
 
-  defp api_server(%API{} = client, boot_status \\ 204) do
+  defp api_server(%API{} = client, boot_status \\ 204, guest_behavior \\ :reject) do
     {:ok, listener} =
       :gen_tcp.listen(0, [:binary, active: false, ifaddr: {:local, client.socket}])
 
     on_exit(fn -> :gen_tcp.close(listener) end)
-    Task.async(fn -> serve_api(listener, "Empty", boot_status) end)
+    owner = self()
+    Task.async(fn -> serve_api(listener, "Empty", boot_status, guest_behavior, owner) end)
   end
 
-  defp serve_api(listener, vm_state, boot_status) do
+  defp serve_api(listener, vm_state, boot_status, guest_behavior, owner) do
     {:ok, socket} = :gen_tcp.accept(listener, @timeout)
     {headers, _request_body} = receive_request(socket, "")
     [_, endpoint | _] = String.split(hd(String.split(headers, "\r\n")), " ")
+    send(owner, {:api_request, endpoint})
 
     {status, body, next_state, done} =
       case {endpoint, vm_state} do
@@ -615,7 +673,21 @@ defmodule CloudHypervisor.ProcessTest do
           {boot_status, %{"error" => "boot rejected"}, vm_state, true}
 
         {"/api/v1/vm.info", state} ->
-          {200, %{"config" => %{}, "state" => state, "memory_actual_size" => 0}, state, false}
+          send(owner, {:api_info, state})
+          tree = if state == "Created" and guest_behavior == :devices, do: %{"devices" => []}
+
+          {200,
+           %{"config" => %{}, "state" => state, "memory_actual_size" => 0, "device_tree" => tree},
+           state, false}
+
+        {"/api/v1/vm.power-button", "Running"} when guest_behavior == :complete ->
+          {204, nil, "Created", false}
+
+        {"/api/v1/vm.power-button", "Running"} when guest_behavior == :ignore ->
+          {204, nil, "Running", false}
+
+        {"/api/v1/vm.power-button", "Running"} when guest_behavior == :devices ->
+          {204, nil, "Created", false}
 
         {"/api/v1/vm.shutdown", "Running"} ->
           {204, nil, "Shutdown", false}
@@ -636,7 +708,7 @@ defmodule CloudHypervisor.ProcessTest do
       )
 
     :gen_tcp.close(socket)
-    if not done, do: serve_api(listener, next_state, boot_status)
+    if not done, do: serve_api(listener, next_state, boot_status, guest_behavior, owner)
   end
 
   defp receive_request(socket, bytes) do

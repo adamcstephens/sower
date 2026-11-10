@@ -42,7 +42,7 @@ defmodule VMManager.RuntimeResourcesTest do
       assert {:ok, %{mode: child_mode}} = File.stat(runtime)
       assert Bitwise.band(child_mode, 0o777) == 0o700
       assert File.exists?(Path.join(runtime, "scratch.ext4"))
-      assert :ok = GenServer.call(execution, :stop, 5_000)
+      assert :ok = GenServer.call(execution, {:stop, %VMManager.Stop{mode: :force}}, 5_000)
       refute File.exists?(runtime)
       assert File.dir?(base)
       assert File.exists?(marker)

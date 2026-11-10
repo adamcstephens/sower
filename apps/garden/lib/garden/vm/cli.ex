@@ -188,7 +188,7 @@ defmodule Garden.VM.CLI do
   end
 
   defp cleanup_disposable(id, manager) do
-    with :ok <- VMManager.stop(id, manager),
+    with :ok <- VMManager.stop(id, manager, mode: :force),
          :ok <- VMManager.remove(id, manager) do
       :ok
     else

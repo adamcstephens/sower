@@ -26,6 +26,8 @@ defmodule VMManager.Guard do
     field :formatters, [[String.t()]], default: []
     field :attached, boolean(), default: false
     field :observation_timeouts, non_neg_integer(), default: 0
+    field :stop_worker, pid()
+    field :stop_mode, :graceful | :force
   end
 
   def run(server, options) do
@@ -65,6 +67,9 @@ defmodule VMManager.Guard do
 
   defp admit_attachment(%__MODULE__{} = state, client, info, deadline) do
     receive do
+      {:stop, policy} ->
+        stop(state, :ok, policy)
+
       {:finish, result} ->
         stop(state, result)
 
@@ -91,8 +96,17 @@ defmodule VMManager.Guard do
     end
   end
 
-  defp matching_runtime(%CloudHypervisor.API.Info{} = info, %__MODULE__{} = state) do
-    if VMManager.Machine.matches?(
+  defp matching_runtime(
+         %CloudHypervisor.API.Info{} = info,
+         %__MODULE__{} = state,
+         stage \\ :admission
+       ) do
+    matches =
+      if stage == :stopping,
+        do: &VMManager.Machine.matches_configuration?/4,
+        else: &VMManager.Machine.matches?/4
+
+    if matches.(
          info,
          state.options[:config],
          state.directory,
@@ -283,6 +297,9 @@ defmodule VMManager.Guard do
       {:cleanup_error, _pid, message} ->
         loop(%{state | cleanup_error: message})
 
+      {:stop, policy} ->
+        stop(state, :ok, policy)
+
       {:finish, result} ->
         stop(state, result)
 
@@ -377,6 +394,9 @@ defmodule VMManager.Guard do
 
   defp admit_launch(%__MODULE__{} = state) do
     receive do
+      {:stop, policy} ->
+        stop(state, :ok, policy)
+
       {:finish, result} ->
         stop(state, result)
 
@@ -414,16 +434,15 @@ defmodule VMManager.Guard do
     end
   end
 
-  defp shutdown_attached(_client, %CloudHypervisor.API.Info{state: "Created", device_tree: nil}),
-    do: :ok
+  defp stop(%__MODULE__{} = state, result),
+    do: stop(state, result, %VMManager.Stop{mode: :force})
 
-  defp shutdown_attached(client, %CloudHypervisor.API.Info{state: "Running"}),
-    do: CloudHypervisor.API.shutdown(client)
+  defp stop(%__MODULE__{outcome: outcome} = state, _result, _policy)
+       when not is_nil(outcome),
+       do: loop(state)
 
-  defp stop(%__MODULE__{outcome: outcome} = state, _result) when not is_nil(outcome),
-    do: loop(state)
-
-  defp stop(%__MODULE__{formatter: formatter} = state, result) when not is_nil(formatter) do
+  defp stop(%__MODULE__{formatter: formatter} = state, result, _policy)
+       when not is_nil(formatter) do
     notify_status(state, phase: :stopping)
 
     try do
@@ -436,38 +455,41 @@ defmodule VMManager.Guard do
     loop(%{state | outcome: result})
   end
 
-  defp stop(%__MODULE__{attached: true} = state, result) do
+  defp stop(%__MODULE__{attached: true} = state, result, policy) do
     notify_status(state, phase: :stopping)
     stop_session(state.io)
-    client = %CloudHypervisor.API{socket: state.options[:control_endpoint]}
-
-    cleanup =
-      with {:ok, running} <- CloudHypervisor.API.info(client),
-           :ok <- matching_runtime(running, state),
-           :ok <- VMManager.Network.revoke(state.network),
-           :ok <- shutdown_attached(client, running),
-           :ok <- await_state(client, "Created", System.monotonic_time(:millisecond) + 10_000) do
-        :ok
-      else
-        error -> {:error, {:external_shutdown, error}}
-      end
-
-    finish(state, result, cleanup)
+    guard = self()
+    worker = spawn(fn -> send(guard, {:stopped, stop_attached(state, policy)}) end)
+    Process.send_after(self(), :cleanup_deadline, policy.guest_shutdown_timeout_ms + 11_000)
+    await_stop(%{state | outcome: result, stop_worker: worker, stop_mode: policy.mode})
   end
 
-  defp stop(%__MODULE__{vmm: nil} = state, result), do: finish(state, result, :ok)
+  defp stop(%__MODULE__{vmm: nil} = state, result, _policy),
+    do: finish(state, result, :ok)
 
-  defp stop(%__MODULE__{} = state, result) do
+  defp stop(%__MODULE__{} = state, result, policy) do
     notify_status(state, phase: :stopping)
     stop_session(state.io)
     revocation = VMManager.Network.revoke(state.network)
+    start_owned_stop(state, policy)
+    Process.send_after(self(), :cleanup_deadline, policy.guest_shutdown_timeout_ms + 10_000)
+
+    await_stop(%{
+      state
+      | outcome: result,
+        cleanup_error: revocation_error(revocation),
+        stop_mode: policy.mode
+    })
+  end
+
+  defp start_owned_stop(%__MODULE__{} = state, policy) do
     guard = self()
     vmm = state.vmm
 
     spawn(fn ->
       cleanup =
         try do
-          case CloudHypervisor.Process.stop(vmm, :force) do
+          case CloudHypervisor.Process.stop(vmm, policy.mode, policy.guest_shutdown_timeout_ms) do
             {:error, {:startup, _message} = reason} = error ->
               case {CloudHypervisor.Process.await_ready(vmm), CloudHypervisor.Process.status(vmm)} do
                 {{:error, ^reason},
@@ -492,15 +514,129 @@ defmodule VMManager.Guard do
 
       send(guard, {:stopped, cleanup})
     end)
+  end
 
-    Process.send_after(self(), :cleanup_deadline, 10_000)
-    await_stop(%{state | outcome: result, cleanup_error: revocation_error(revocation)})
+  defp stop_attached(%__MODULE__{} = state, %VMManager.Stop{} = policy) do
+    client = %CloudHypervisor.API{socket: state.options[:control_endpoint], request_timeout: 250}
+
+    with {:ok, info} <- CloudHypervisor.API.info(client),
+         :ok <- matching_runtime(info, state, :stopping) do
+      revocation = VMManager.Network.revoke(state.network)
+
+      cleanup =
+        cond do
+          stopped?(info) ->
+            :ok
+
+          policy.mode == :force ->
+            force_attached(state, client, info)
+
+          true ->
+            deadline = System.monotonic_time(:millisecond) + policy.guest_shutdown_timeout_ms
+
+            case CloudHypervisor.API.power_button(client) do
+              :ok -> await_guest_stop(state, client, deadline)
+              {:error, _reason} -> force_attached(state, client)
+            end
+        end
+
+      if cleanup == :ok, do: revocation, else: cleanup
+    else
+      error -> {:error, {:external_shutdown, error}}
+    end
+  end
+
+  defp await_guest_stop(%__MODULE__{} = state, client, deadline) do
+    receive do
+      :force -> force_attached(state, client)
+    after
+      0 ->
+        remaining = deadline - System.monotonic_time(:millisecond)
+
+        if remaining <= 0 do
+          force_attached(state, client)
+        else
+          with {:ok, info} <-
+                 CloudHypervisor.API.info(%{client | request_timeout: min(250, remaining)}),
+               :ok <- matching_runtime(info, state, :stopping) do
+            if stopped?(info) do
+              :ok
+            else
+              receive do
+                :force -> force_attached(state, client)
+              after
+                min(25, remaining) -> await_guest_stop(state, client, deadline)
+              end
+            end
+          else
+            error -> {:error, {:external_shutdown, error}}
+          end
+        end
+    end
+  end
+
+  defp force_attached(%__MODULE__{} = state, client) do
+    with {:ok, info} <- CloudHypervisor.API.info(client),
+         :ok <- matching_runtime(info, state, :stopping) do
+      force_attached(state, client, info)
+    else
+      error -> {:error, {:external_shutdown, error}}
+    end
+  end
+
+  defp force_attached(%__MODULE__{} = state, client, info) do
+    if stopped?(info) do
+      :ok
+    else
+      with :ok <- CloudHypervisor.API.shutdown(client) do
+        await_attached_stop(state, client, System.monotonic_time(:millisecond) + 10_000)
+      else
+        error ->
+          with {:ok, info} <- CloudHypervisor.API.info(client),
+               :ok <- matching_runtime(info, state, :stopping),
+               true <- stopped?(info) do
+            :ok
+          else
+            _ -> {:error, {:external_shutdown, error}}
+          end
+      end
+    end
+  end
+
+  defp await_attached_stop(%__MODULE__{} = state, client, deadline) do
+    if System.monotonic_time(:millisecond) >= deadline do
+      {:error, :shutdown_timeout}
+    else
+      with {:ok, info} <- CloudHypervisor.API.info(client),
+           :ok <- matching_runtime(info, state, :stopping) do
+        if stopped?(info) do
+          :ok
+        else
+          Process.sleep(25)
+          await_attached_stop(state, client, deadline)
+        end
+      else
+        error -> {:error, {:external_shutdown, error}}
+      end
+    end
   end
 
   defp await_stop(%__MODULE__{} = state) do
     receive do
+      {:stop, %VMManager.Stop{mode: :force}} when state.stop_mode != :force ->
+        await_stop(escalate_stop(state))
+
+      {:finish, {:error, _reason}} ->
+        await_stop(escalate_stop(state))
+
+      {:DOWN, ref, :process, _pid, _reason} when ref == state.server_monitor ->
+        await_stop(escalate_stop(%{state | outcome: {:error, :owner_down}}))
+
+      {:stopped, :ok} ->
+        finish(state, state.outcome, :ok)
+
       {:stopped, {:ok, _}} ->
-        GenServer.stop(state.vmm, :normal)
+        if state.vmm, do: GenServer.stop(state.vmm, :normal)
         finish(state, state.outcome, :ok)
 
       {:stopped, :startup_cleanup_confirmed} ->
@@ -516,6 +652,18 @@ defmodule VMManager.Guard do
       _ ->
         await_stop(state)
     end
+  end
+
+  defp escalate_stop(%__MODULE__{stop_mode: :force} = state), do: state
+
+  defp escalate_stop(%__MODULE__{attached: true} = state) do
+    send(state.stop_worker, :force)
+    %{state | stop_mode: :force}
+  end
+
+  defp escalate_stop(%__MODULE__{} = state) do
+    start_owned_stop(state, %VMManager.Stop{mode: :force})
+    %{state | stop_mode: :force}
   end
 
   defp finish(%__MODULE__{} = state, result, certification) do
