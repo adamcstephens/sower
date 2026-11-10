@@ -1,5 +1,12 @@
 defmodule VMManager.Guard do
-  @moduledoc false
+  @moduledoc """
+  Owns the resource lifecycle for one launched or attached VM attempt.
+
+  It prepares storage and networking, starts or verifies the VMM, monitors the
+  execution controller and guest session, and coordinates teardown. Attached
+  runtimes are checked against the requested configuration before admission.
+  Cleanup failures are reported as unconfirmed rather than certified success.
+  """
   use TypedStruct
   alias CloudHypervisor.Launch
 

@@ -1,5 +1,10 @@
 defmodule VMManager.Serialization do
-  @moduledoc false
+  @moduledoc """
+  Checks whether configuration values consist of serializable Erlang terms.
+
+  Atoms, numbers, bitstrings and recursively composed lists, tuples and maps
+  are accepted; runtime handles such as processes and functions are not.
+  """
 
   def serializable?(value) when is_atom(value) or is_bitstring(value) or is_number(value),
     do: true

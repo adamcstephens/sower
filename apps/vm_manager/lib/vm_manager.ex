@@ -1,7 +1,18 @@
 defmodule VMManager do
+  @moduledoc """
+  Public interface for defining and operating managed virtual machines.
+
+  Definitions and desired state belong to `VMManager.Manager`; each running
+  attempt has a separate execution controller. Guest commands require a
+  configured guest agent and a ready session. Stopping a VM and removing its
+  definition are separate from deleting explicitly designated persistent disks.
+  """
+
   use TypedStruct
 
   typedstruct module: Command do
+    @moduledoc "A guest command request, including arguments, environment and stdin payload."
+
     field :path, String.t(), enforce: true
     field :args, [String.t()], default: []
     field :env, map(), default: %{}
@@ -9,6 +20,8 @@ defmodule VMManager do
   end
 
   typedstruct module: Result do
+    @moduledoc "A completed guest command's exit status and timing in milliseconds."
+
     field :code, integer() | nil
     field :signal, integer() | nil
     field :ready_ms, non_neg_integer()
@@ -16,11 +29,20 @@ defmodule VMManager do
   end
 
   typedstruct module: CommandStatus do
+    @moduledoc "The current phase and eventual result of a guest command handle."
+
     field :phase, atom(), default: :running
     field :result, term()
   end
 
   typedstruct module: Status do
+    @moduledoc """
+    Observed VM state, including its configuration, runtime handles and cleanup result.
+
+    Process identifiers describe the current BEAM runtime, not durable ownership.
+    A retained phase indicates that cleanup has not been confirmed.
+    """
+
     field :id, String.t()
     field :config, VMManager.Config.t()
     field :desired, atom(), default: :stopped

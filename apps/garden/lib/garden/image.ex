@@ -1,6 +1,11 @@
 defmodule Garden.Image do
   @moduledoc """
-  Boot artifacts and metadata for an image produced by mkImage.
+  Loads boot metadata and artifacts for an image produced by mkImage.
+
+  Supported metadata describes an x86_64 Linux image with guest contract 1 or 2
+  and store-resident boot artifacts. `vm_config/3` builds a VM definition with
+  a read-only root, attempt-local scratch disk and optional managed networking.
+  Full networking requires an image declaring static network support.
   """
   use TypedStruct
 
