@@ -1,77 +1,56 @@
 defmodule Garden.VM.Network do
-  @moduledoc false
-  use TypedStruct
+  @moduledoc """
+  Adapts Garden's activator network leases to the VM manager provider contract.
 
-  typedstruct do
-    field :socket_path, String.t(), enforce: true
-    field :lease, String.t(), enforce: true
-    field :tap, String.t(), enforce: true
-    field :mac, String.t(), enforce: true
-    field :address, String.t(), enforce: true
-    field :gateway, String.t(), enforce: true
-    field :dns, String.t(), enforce: true
+  Provisioning returns the tap device and guest kernel command line alongside
+  the lease. Revocation and release are delegated to the activator; ambiguous
+  provisioning failures are reported as unconfirmed.
+  """
+
+  alias VMManager.Network
+
+  def request(options \\ []) do
+    %Network{
+      ownership: :managed,
+      provider: __MODULE__,
+      options: [
+        socket_path:
+          Keyword.get_lazy(options, :socket_path, fn ->
+            Application.get_env(:garden, :activator_socket, "/run/sower-activator/activator.sock")
+          end)
+      ]
+    }
   end
 
-  def provision(options) do
-    case Keyword.get(options, :network, :none) do
-      :none ->
-        {:ok, nil}
+  def provision(id, options) do
+    case Garden.ActivatorClient.network(:provision, Keyword.put(options, :execution_id, id)) do
+      {:ok, lease} ->
+        {:ok,
+         %Network{
+           ownership: :managed,
+           provider: __MODULE__,
+           options: options,
+           lease: lease.lease,
+           devices: [%CloudHypervisor.Config.Net{tap: lease.tap, mac: lease.mac}],
+           cmdline:
+             " sower.network.address=#{lease.address} sower.network.gateway=#{lease.gateway}" <>
+               " sower.network.dns=#{lease.dns} sower.network.mac=#{lease.mac}"
+         }}
 
-      :full ->
-        socket_path =
-          Keyword.get(options, :activator_socket, "/run/sower-activator/activator.sock")
+      {:error, :socket_not_found} ->
+        {:error, {:network_connect, :enoent}}
 
-        execution_id =
-          to_string(
-            Keyword.get(options, :execution_id, "local-#{System.unique_integer([:positive])}")
-          )
+      {:error, :connection_refused} ->
+        {:error, {:network_connect, :econnrefused}}
 
-        case Garden.ActivatorClient.network(:provision,
-               socket_path: socket_path,
-               execution_id: execution_id
-             ) do
-          {:ok, lease} ->
-            {:ok,
-             %__MODULE__{
-               socket_path: socket_path,
-               lease: lease.lease,
-               tap: lease.tap,
-               mac: lease.mac,
-               address: lease.address,
-               gateway: lease.gateway,
-               dns: lease.dns
-             }}
-
-          {:error, :socket_not_found} ->
-            {:error, {:network_connect, :enoent}}
-
-          {:error, :connection_refused} ->
-            {:error, {:network_connect, :econnrefused}}
-
-          {:error, reason} ->
-            {:error, {:network_provision_unconfirmed, reason}}
-        end
+      {:error, reason} ->
+        {:error, {:network_provision_unconfirmed, reason}}
     end
   end
 
-  def revoke(nil), do: :ok
-  def revoke(%__MODULE__{} = network), do: operation(network, :revoke)
-  def release(nil), do: :ok
-  def release(%__MODULE__{} = network), do: operation(network, :release)
+  def revoke(lease, options),
+    do: Garden.ActivatorClient.network(:revoke, Keyword.put(options, :lease, lease))
 
-  defp operation(%__MODULE__{} = network, action) do
-    Garden.ActivatorClient.network(action, socket_path: network.socket_path, lease: network.lease)
-  end
-
-  def devices(nil), do: []
-
-  def devices(%__MODULE__{} = network),
-    do: [%CloudHypervisor.Config.Net{tap: network.tap, mac: network.mac}]
-
-  def cmdline(nil), do: ""
-
-  def cmdline(%__MODULE__{} = network) do
-    " sower.network.address=#{network.address} sower.network.gateway=#{network.gateway}" <>
-      " sower.network.dns=#{network.dns} sower.network.mac=#{network.mac}"
-  end
+  def release(lease, options),
+    do: Garden.ActivatorClient.network(:release, Keyword.put(options, :lease, lease))
 end

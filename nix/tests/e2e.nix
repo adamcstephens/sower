@@ -369,6 +369,23 @@ testers.runNixOSTest {
       server.wait_for_unit("sower-garden.service")
       server.wait_for_open_port(4000)
 
+      def assert_host_boot_identity(machine, pid):
+          environment = dict(
+              entry.split("=", 1)
+              for entry in machine.succeed(f"cat /proc/{pid}/environ").split(chr(0))
+              if "=" in entry
+          )
+          identity_path = environment["VM_MANAGER_BOOT_ID_FILE"]
+          machine.succeed(
+              f"cmp -- /proc/sys/kernel/random/boot_id /proc/{pid}/root{identity_path}"
+          )
+
+      with subtest("system garden receives actual host boot identity"):
+          pid = server.succeed(
+              "systemctl show --property=MainPID --value sower-garden.service"
+          ).strip()
+          assert_host_boot_identity(server, pid)
+
       with subtest("activator socket activation"):
           server.succeed("test -S /run/sower-activator/activator.sock")
           server.succeed("test \"$(stat -c '%a' /run/sower-activator/activator.sock)\" = 660")
@@ -505,6 +522,13 @@ testers.runNixOSTest {
           server.systemctl("daemon-reload", user)
           server.systemctl("start sower-garden.service", user)
           server.wait_for_unit("sower-garden.service", user)
+          pid = server.succeed(
+              f"su --login {user} --command '"
+              f"XDG_RUNTIME_DIR=/run/user/{uid} "
+              f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus "
+              "systemctl --user show --property=MainPID --value sower-garden.service'"
+          ).strip()
+          assert_host_boot_identity(server, pid)
 
       with subtest("start home-manager garden"):
           server.wait_for_unit("home-manager-testuser.service")

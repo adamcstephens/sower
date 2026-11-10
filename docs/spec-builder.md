@@ -244,38 +244,57 @@ reaps the command tree. The guest accepts the next connection only after
 cleanup, so readiness on that connection certifies the previous command is
 gone. A stalled output consumer cannot block host-side cancellation.
 
-`Garden.VM` supervises VM lifetime independently from command execution and
-streams output outside its lifecycle process. An independent guard survives
-owner/controller death and reclaims scratch and known files only after
-confirmed VM teardown. Uncertain cleanup or unexpected files retain resources
-and fail. New images declare contract 2; Garden still accepts contract-1
-images for disposable execution only. Persistent boot rejects contract 1
-before allocation. Older Gardens reject contract-2 images explicitly rather
-than silently treating them as disposable contract-1 images.
+`VMManager` owns VM lifetime independently from Garden and command execution.
+Its OTP application starts alongside Garden in the release; restarting Garden
+does not stop its VMs. An independent guard reclaims ephemeral scratch and known
+files only after confirmed VM teardown. Uncertain cleanup or unexpected files
+retain resources and capacity reservations. Contract-2 guests support repeated
+commands; contract-1 guests support one command followed by teardown through the
+same manager boundary.
 
-### Garden-local admission
+### VM admission
 
-The local API separates VM admission from command admission. `boot/1` admits
-a VM with an explicit VM owner and returns its handle; `await_ready/1` waits
-for guest readiness. `execute/2` starts a command in a ready VM and returns
-a command handle. `command_status/1`, `await_command/1`, and
-`cancel_command/1` address that command, not VM lifetime. A command owner
-loss cancels its command; VM owner loss stops the entire VM. Only one command
-may be active per VM; a busy VM rejects another execution rather than queuing
-or replacing it. Command completion or cancellation leaves the VM running.
+Garden resolves images and translates their complete boot artifacts into
+`VMManager.Config`. The manager does not load images or read Garden configuration.
+The configuration specifies a kernel, optional initrd, ordered native or
+manager-created ephemeral disks, and optional devices. A native disk remains
+caller-owned; an ephemeral disk is allocated and formatted by the manager.
+Optional serial and console devices use native `CloudHypervisor.Config.Output`
+structs; relative single-filename outputs belong to the manager's attempt
+directory and are cleaned after certified teardown, while absolute paths remain
+caller-owned.
+Garden's image helper supplies the root and scratch layout and Sower guest
+devices; generic callers need neither scratch storage nor the Sower agent.
+`define/1` durably records a configuration under its caller-supplied ID.
+`start/1` persists desired running state, and `await_running/1` waits for the
+hypervisor's Running state. `await_ready/1` waits for the Sower guest handshake
+and returns `{:error, :guest_agent_disabled}` when there is no guest agent.
+Definitions, desired state, resource reservations, and bounded restart accounting
+survive manager and application restarts. Reconciliation reconnects to a matching
+live runtime or restores a desired VM after its runtime is gone.
 
-`status/1` observes the VM and `stop/1` terminates it, including any active
-command, with certified resource cleanup. The disposable `run` API composes
-boot/readiness/execute/await-command/stop and returns only after cleanup;
-contract-1 images retain their legacy disposable path. Existing
-`Garden.VM.Manager.start/1`, `await/1`, and `cancel/1` remain disposable
-entry points. Manager IDs and `list/0` expose ledger state independently of
-temporary controller lifetime, including retained terminal records.
-Output callbacks retain the local launcher's `(stream, bytes)` interface;
-callers capture their job/step identity in the callback.
+`execute/2` returns a command handle. `command_status/1`, `await_command/1`,
+and `cancel_command/1` address that command, not VM lifetime. Command caller
+loss cancels only its command. VM lifetime is not owned by the defining caller.
+Only one command may be active per VM; a busy VM rejects another execution.
+Command completion or cancellation leaves the VM running.
 
-Local callers opt into IPv4 public egress with `network: :full`; the default
-`network: :none` still supplies no NIC. The operator must enable
+`status/1` and `list/0` observe definitions and runtimes. `stop/1` persists stopped
+intent and waits for certified ephemeral cleanup, including any active command.
+`remove/1` removes a stopped definition without deleting persistent disks;
+`delete_storage/1` is the separate explicit persistent-storage operation.
+The local CLI composes define/start/readiness/execute/await-command/stop/remove
+through the same manager boundary. Standalone `mix sower.vm.run` uses a private
+per-invocation manager and state directory, without opening Garden's store or
+changing its budgets. In-process `Garden.VM.CLI.run/3` uses the supplied or
+already-running default manager. Disposable VM IDs are random across BEAM
+restarts. Output callbacks retain the `(stream, bytes)` interface; callers
+capture their job/step identity in the callback.
+
+Generic VM configurations can omit networking or explicitly attach an
+externally managed host network; the manager does not destroy external
+attachments. Garden image callers opt into IPv4 public egress with
+`network: :full`; the default `network: :none` still supplies no NIC. The operator must enable
 `services.sower.activator.network.enable` and configure its public DNS resolver
 and protected destination addresses. Garden uses short-lived requests on the
 existing `/run/sower-activator/activator.sock` Accept=true socket, with
@@ -288,7 +307,8 @@ Errors emit `error` and a nonzero completion. Activation behavior is unchanged.
 The privileged activator authenticates the peer's system service cgroup
 against `network.gardenUnits` (default `["sower-garden.service"]`), derives the
 instance, and records its owner identity. Garden and Cloud Hypervisor remain
-unprivileged. Local socket overrides use `:activator_socket`.
+unprivileged. Local socket overrides use the `socket_path` option to
+`Garden.VM.Network.request/1`.
 Static address, gateway, DNS, and MAC kernel parameters configure the image
 before its vsock executor reports readiness. The guest retains the standard
 `cache.nixos.org` substituter and signing key with signature verification.
@@ -329,19 +349,34 @@ Oversized requests return `request_exceeds_capacity`; requests
 that exceed currently available resources return `capacity_exhausted`,
 both with the exhausted dimension. Neither case queues or allocates a VM.
 
-Only certified native teardown and successful owned-file cleanup release
-a reservation. Cleanup failures retain their VM ID, command results,
-directory, and reservation indefinitely; a terminal command result is not
-evidence that VM resources were released. Clean terminal results are retained
-up to `vm_result_limit` (default 128); oldest results are evicted first, after
-recording the result and retiring its controller.
+Certified native teardown and successful owned-file cleanup normally release
+a reservation. Cleanup failures retain their VM ID, directory, and reservation;
+a terminal command result is not evidence that VM resources were released.
+Definitions remain durable until explicitly removed, rather than being evicted
+as a bounded cache of disposable execution results.
 
-Recovery closes admission and drains existing executions without replaying
-commands. Orderly shutdown closes admission first and waits up to
-`vm_shutdown_ms` (default 15,000) for cleanup; incomplete cleanup is
-reported explicitly. A whole-BEAM crash still requires host-enforced
-containment and startup reconciliation, which this local manager does not
-provide. Server dispatch and production sandbox integration remain separate.
+For a same-host-boot reservation whose controller was lost,
+`VMManager.abandon_reservation(id, server \\ VMManager.Manager)` is an explicit
+operator escape hatch, never automatic recovery. It rejects a live registered
+controller and returns `{:ok, snapshot}` only after durably archiving the old
+definition in `abandoned_attempts` and clearing its active reservation and network
+custody. The snapshot retains configuration, paths, lease, attempt and boot/BEAM
+identities. Abandonment does not certify cleanup, signal processes, revoke or
+release networking, or delete storage. The operator owns manual cleanup of
+abandoned resources. A later start or update can create a fresh attempt under the
+same VM ID while retaining the archive; `remove/1` deletes that metadata without
+cleaning archived resources. `delete_storage/1` returns
+`{:error, :cleanup_uncertain}` while any abandoned attempt remains archived,
+even after a later attempt cleans up successfully, because persistent paths
+may overlap abandoned custody.
+
+Orderly manager-application shutdown stops native runtimes while preserving
+desired state for restoration on the next boot. A host reboot invalidates
+previous-boot native identities and reconciles desired VMs. A same-boot abrupt
+BEAM loss without a matching live external runtime cannot certify old cleanup;
+its reservations remain retained. Host-enforced containment and production
+systemd isolation remain separate from this extraction. Commands are never
+replayed during recovery.
 
 ## Nix Store Strategy
 

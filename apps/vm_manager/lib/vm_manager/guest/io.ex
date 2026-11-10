@@ -1,12 +1,19 @@
-defmodule Garden.VM.IO do
-  @moduledoc false
+defmodule VMManager.Guest.IO do
+  @moduledoc """
+  Runs the guest vsock bridge connection and streams command output.
+
+  It negotiates guest readiness, encodes requests and consumes framed output
+  through a callback. Contract 2 can cancel and reconnect; an interrupted
+  command is reported as failed rather than replayed.
+  """
   use TypedStruct
-  alias Garden.VM.Protocol
+  alias VMManager.Guest.Protocol
 
   typedstruct do
     field :guard, pid(), enforce: true
     field :path, String.t(), enforce: true
     field :contract, integer(), enforce: true
+    field :vsock_port, pos_integer(), default: 5000
     field :socket, port()
     field :command, pid()
     field :callback, function()
@@ -20,19 +27,19 @@ defmodule Garden.VM.IO do
   def output(:stdout, bytes), do: IO.binwrite(:stdio, bytes)
   def output(:stderr, bytes), do: IO.binwrite(:standard_error, bytes)
 
-  def run(guard, vmm, contract, started) do
+  def run(guard, path, contract, started, vsock_port) when is_binary(path) do
     Process.flag(:trap_exit, true)
 
-    with {:ok, status} <- CloudHypervisor.Process.await_ready(vmm),
-         {:ok, socket} <- connect(Path.join(status.directory, "vsock.sock")),
+    with {:ok, socket} <- connect(path, vsock_port),
          :ok <- ready(socket, contract) do
       elapsed = System.monotonic_time(:millisecond) - started
       send(guard, {:guest_ready, elapsed})
 
       idle(%__MODULE__{
         guard: guard,
-        path: Path.join(status.directory, "vsock.sock"),
+        path: path,
         contract: contract,
+        vsock_port: vsock_port,
         socket: socket,
         ready_ms: elapsed
       })
@@ -67,7 +74,7 @@ defmodule Garden.VM.IO do
   defp connection(%__MODULE__{socket: socket}) when not is_nil(socket), do: {:ok, socket}
 
   defp connection(%__MODULE__{} = state) do
-    with {:ok, socket} <- connect(state.path),
+    with {:ok, socket} <- connect(state.path, state.vsock_port),
          :ok <- ready(socket, state.contract) do
       {:ok, socket}
     else
@@ -90,10 +97,10 @@ defmodule Garden.VM.IO do
         consume(%{state | buffer: state.buffer <> bytes})
 
       {:tcp_closed, socket} when socket == state.socket ->
-        send(state.guard, {:finish, {:error, :guest_disconnected}})
+        reconnect(state, :guest_disconnected)
 
       {:tcp_error, socket, reason} when socket == state.socket ->
-        send(state.guard, {:finish, {:error, {:guest_connection, reason}}})
+        reconnect(state, {:guest_connection, reason})
 
       {:output_done, worker} when worker == state.worker ->
         consume(%{state | worker: nil})
@@ -157,7 +164,7 @@ defmodule Garden.VM.IO do
             do: {:error, state.cancelled},
             else:
               {:ok,
-               %Garden.VM.Result{
+               %VMManager.Result{
                  code: code,
                  signal: signal,
                  ready_ms: state.ready_ms,
@@ -174,13 +181,31 @@ defmodule Garden.VM.IO do
     end
   end
 
+  defp reconnect(%__MODULE__{contract: 2} = state, reason) do
+    :gen_tcp.close(state.socket)
+    if state.worker, do: Process.exit(state.worker, :kill)
+    send(state.guard, {:guest_reconnecting, state.command})
+
+    case connection(%{state | socket: nil}) do
+      {:ok, socket} ->
+        send(state.guard, {:command_finished, state.command, {:error, state.cancelled || reason}})
+        idle(%{state | socket: socket, command: nil, callback: nil, buffer: <<>>, worker: nil})
+
+      {:error, error} ->
+        send(state.guard, {:finish, {:error, {:reconnect_unconfirmed, error}}})
+    end
+  end
+
+  defp reconnect(%__MODULE__{} = state, reason),
+    do: send(state.guard, {:finish, {:error, reason}})
+
   defp completed(%__MODULE__{} = state, result) do
     :gen_tcp.close(state.socket)
     send(state.guard, {:command_finished, state.command, result})
     idle(%{state | socket: nil, command: nil, callback: nil, buffer: <<>>})
   end
 
-  defp connect(path) do
+  defp connect(path, vsock_port) do
     case :gen_tcp.connect(
            {:local, String.to_charlist(path)},
            0,
@@ -188,7 +213,7 @@ defmodule Garden.VM.IO do
            1_000
          ) do
       {:ok, socket} ->
-        with :ok <- :gen_tcp.send(socket, "CONNECT 5000\n"),
+        with :ok <- :gen_tcp.send(socket, "CONNECT #{vsock_port}\n"),
              {:ok, line} <- :gen_tcp.recv(socket, 0, 1_000),
              true <- Regex.match?(~r/\AOK [0-9]+\n\z/, line),
              :ok <- :inet.setopts(socket, packet: :raw) do
@@ -197,7 +222,7 @@ defmodule Garden.VM.IO do
           {:error, reason} when reason in [:closed, :econnrefused, :timeout] ->
             :gen_tcp.close(socket)
             Process.sleep(25)
-            connect(path)
+            connect(path, vsock_port)
 
           error ->
             :gen_tcp.close(socket)
@@ -206,7 +231,7 @@ defmodule Garden.VM.IO do
 
       {:error, reason} when reason in [:enoent, :econnrefused] ->
         Process.sleep(25)
-        connect(path)
+        connect(path, vsock_port)
 
       {:error, reason} ->
         {:error, {:bridge, reason}}

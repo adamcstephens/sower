@@ -19,6 +19,7 @@ beamPackages.mixRelease {
     fileset = lib.fileset.unions [
       ../../apps/nix
       ../../apps/garden
+      ../../apps/vm_manager
       ../../apps/sower_client
       ../../apps/cloud_hypervisor
       ../../config
@@ -33,9 +34,13 @@ beamPackages.mixRelease {
   # https://github.com/NixOS/nixpkgs/pull/558236
   buildInputs = [ bashNonInteractive ];
 
-
   postPatch = ''
-    substituteInPlace apps/garden/test/garden/vm_manager_test.exs \
+    substituteInPlace \
+      apps/vm_manager/test/vm_manager/regression_test.exs \
+      apps/vm_manager/test/vm_manager/restart_policy_test.exs \
+      apps/vm_manager/test/runtime_resources_test.exs \
+      apps/vm_manager/test/vm_manager/manager_intent_test.exs \
+      apps/garden/test/garden/vm_cli_test.exs \
       --replace-fail '#!/usr/bin/env sh' '#!${bashNonInteractive}/bin/sh'
   '';
   mixReleaseName = "garden";
@@ -61,9 +66,11 @@ beamPackages.mixRelease {
     export MIX_ENV=test
     ln -sv $PWD/_build/prod _build/test
 
-    pushd apps/garden
-    mix do deps.loadpaths --no-deps-check + test
-    popd
+    for app in vm_manager garden; do
+      pushd "apps/$app"
+      mix do deps.loadpaths --no-deps-check + test
+      popd
+    done
 
     export MIX_ENV=prod
 

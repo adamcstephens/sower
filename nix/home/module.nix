@@ -93,6 +93,7 @@ in
               }"
               "SOWER_CONFIG_FILE=%E/sower/client.json"
               "XDG_STATE_HOME=${config.xdg.stateHome}"
+              "VM_MANAGER_BOOT_ID_FILE=%d/vm-manager-boot-id"
               "RELEASE_MODE=interactive"
               "SHELL=${lib.getExe pkgs.bash}"
             ]
@@ -109,6 +110,8 @@ in
             ++ lib.optionals (cfg.accessTokenFile != null) [
               "SOWER_ACCESS_TOKEN_FILE=${cfg.accessTokenFile}"
             ];
+
+            LoadCredential = [ "vm-manager-boot-id:/proc/sys/kernel/random/boot_id" ];
 
             ExecStartPre =
               if cfg.distribution then lib.getExe secretsScript else "${pkgs.coreutils}/bin/mkdir -p ${stateDir}";

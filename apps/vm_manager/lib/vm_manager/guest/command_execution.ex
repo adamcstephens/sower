@@ -1,5 +1,11 @@
-defmodule Garden.VM.CommandExecution do
-  @moduledoc false
+defmodule VMManager.Guest.CommandExecution do
+  @moduledoc """
+  Holds the status and result of one guest command for its caller.
+
+  It monitors the session and caller, requests cancellation on deadline or
+  caller death, and replies to waiters when the command finishes. Cancellation
+  is a request; completion depends on the session's cleanup outcome.
+  """
   use GenServer
   use TypedStruct
 
@@ -8,23 +14,21 @@ defmodule Garden.VM.CommandExecution do
     field :vm_monitor, reference(), enforce: true
     field :caller_monitor, reference(), enforce: true
     field :caller_alive, boolean(), default: true
-    field :retain, boolean(), enforce: true
     field :timer, reference(), enforce: true
-    field :status, Garden.VM.CommandStatus.t(), default: %Garden.VM.CommandStatus{}
+    field :status, VMManager.CommandStatus.t(), default: %VMManager.CommandStatus{}
     field :waiters, [GenServer.from()], default: []
   end
 
-  def start(vm, caller, deadline, retain),
-    do: GenServer.start(__MODULE__, {vm, caller, deadline, retain})
+  def start(vm, caller, deadline),
+    do: GenServer.start(__MODULE__, {vm, caller, deadline})
 
   @impl GenServer
-  def init({vm, caller, deadline, retain}) do
+  def init({vm, caller, deadline}) do
     {:ok,
      %__MODULE__{
        vm: vm,
        vm_monitor: Process.monitor(vm),
        caller_monitor: Process.monitor(caller),
-       retain: retain,
        timer: Process.send_after(self(), :deadline, deadline)
      }}
   end
@@ -35,7 +39,7 @@ defmodule Garden.VM.CommandExecution do
   def handle_call(
         :await,
         from,
-        %__MODULE__{status: %Garden.VM.CommandStatus{phase: :running}} = state
+        %__MODULE__{status: %VMManager.CommandStatus{phase: :running}} = state
       ) do
     {:noreply, %{state | waiters: [from | state.waiters]}}
   end
@@ -70,7 +74,7 @@ defmodule Garden.VM.CommandExecution do
     end
   end
 
-  defp complete(%__MODULE__{status: %Garden.VM.CommandStatus{phase: :finished}} = state, _result),
+  defp complete(%__MODULE__{status: %VMManager.CommandStatus{phase: :finished}} = state, _result),
     do: {:noreply, state}
 
   defp complete(%__MODULE__{} = state, result) do
@@ -81,9 +85,9 @@ defmodule Garden.VM.CommandExecution do
     state = %{
       state
       | waiters: [],
-        status: %Garden.VM.CommandStatus{phase: :finished, result: result}
+        status: %VMManager.CommandStatus{phase: :finished, result: result}
     }
 
-    if state.caller_alive and state.retain, do: {:noreply, state}, else: {:stop, :normal, state}
+    if state.caller_alive, do: {:noreply, state}, else: {:stop, :normal, state}
   end
 end

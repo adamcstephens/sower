@@ -1,5 +1,11 @@
-defmodule Garden.VM.Protocol do
-  @moduledoc false
+defmodule VMManager.Guest.Protocol do
+  @moduledoc """
+  Encodes guest command and cancellation frames and decodes guest events.
+
+  Frames carry a kind byte, a big-endian payload length and up to 65,536 bytes
+  of metadata or output. Decoding distinguishes incomplete frames from invalid
+  kinds, metadata and exit statuses.
+  """
   @maximum 65_536
 
   def decode_frame(bytes) when byte_size(bytes) < 5, do: :more
@@ -27,7 +33,7 @@ defmodule Garden.VM.Protocol do
 
   def execute(command, version \\ 1)
 
-  def execute(%Garden.VM.Command{} = command, version) do
+  def execute(%VMManager.Command{} = command, version) do
     with {:ok, payload} <-
            Jason.encode(%{
              "type" => "execute",

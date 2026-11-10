@@ -150,72 +150,242 @@ let
       })
     ];
   };
+  agentless = flake.lib.mkImage {
+    inherit system;
+    modules = [
+      ({ ... }: {
+        boot.initrd.systemd.targets.agentless = {
+          unitConfig.DefaultDependencies = false;
+          requires = [ "agentless-ready.service" ];
+          after = [ "agentless-ready.service" ];
+        };
+        boot.initrd.systemd.services.agentless-ready = {
+          unitConfig.DefaultDependencies = false;
+          requires = [ "systemd-udevd.service" ];
+          after = [ "systemd-udevd.service" ];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+          };
+          script = "printf 'sower-agentless-userspace-ready\\n' > /dev/ttyS0";
+        };
+      })
+    ];
+  };
   scenario = pkgs.writeText "image-scenario.exs" ''
-    {:ok, _} = Application.ensure_all_started(:cloud_hypervisor)
     alias Garden.Image
-    alias Garden.VM
-    {:ok, %Image{contract: 2} = stock} = Image.load("${stock}")
+    alias VMManager, as: VM
+    {:ok, stock} = Image.load("${stock}")
     {:ok, custom} = Image.load("${custom}")
     root = "/tmp/image-scenarios"
-    File.mkdir!(root)
-    opts = [resource_directory: root, deadline_ms: 90_000, scratch_bytes: 1024 * 1024 * 1024]
-    command = fn mode, args ->
-      %VM.Command{path: "${pkgs.python3}/bin/python3", args: ["/etc/sower/probe.py", mode | args],
-        env: %{"ONLY" => "provided", "PYTHONCOERCECLOCALE" => "0"},
-        stdin: %{"message" => "stdin", "number" => 7}}
-    end
+    File.mkdir_p!(root)
+    Application.put_env(:vm_manager, :state_directory, "/tmp/image-manager-state")
+    budgets = [vms: 2, cpus: 2, memory: 1024 * 1024 * 1024,
+      scratch_bytes: 2 * 1024 * 1024 * 1024]
+    Application.put_env(:vm_manager, :budgets, budgets)
+    {:ok, _} = Application.ensure_all_started(:vm_manager)
     ensure = fn condition -> if not condition, do: raise("image lifecycle assertion failed") end
+    until = fn predicate ->
+      deadline = System.monotonic_time(:millisecond) + 30_000
+      wait = fn wait ->
+        unless predicate.() do
+          ensure.(System.monotonic_time(:millisecond) < deadline)
+          Process.sleep(20)
+          wait.(wait)
+        end
+      end
+      wait.(wait)
+    end
     clean = fn -> ensure.(File.ls!(root) == []) end
     parent = self()
     output = fn stream, bytes -> send(parent, {stream, bytes}) end
-    {:ok, missing_vmm} = VM.start_link(opts ++ [image: stock,
-      command: %VM.Command{path: "/run/current-system/sw/bin/true"},
-      hypervisor: "/nonexistent/sower-hypervisor"])
-    {:error, {:vmm_failed, {:startup, startup_message}}} = VM.await(missing_vmm)
-    ensure.(is_binary(startup_message))
-    missing_status = VM.status(missing_vmm)
-    ensure.(missing_status.cleanup == :ok and missing_status.os_pid == nil)
-    ensure.(is_pid(missing_status.vmm) and not Process.alive?(missing_status.vmm))
-    GenServer.stop(missing_vmm)
-    clean.()
-    {:ok, failed_formatter} = VM.start_link(opts ++ [image: stock,
-      command: %VM.Command{path: "/run/current-system/sw/bin/true"},
-      mkfs: "${pkgs.coreutils}/bin/false"])
-    {:error, {:mkfs, {:shutdown, {:exit_status, 1}}}} = VM.await(failed_formatter)
-    formatter_status = VM.status(failed_formatter)
-    ensure.(formatter_status.cleanup == :ok and formatter_status.vmm == nil)
-    GenServer.stop(failed_formatter)
-    clean.()
-    {:ok, result} = VM.run(stock, %VM.Command{path: "/run/current-system/sw/bin/bash",
-      args: ["-c", "printf stock-command"]}, Keyword.put(opts, :on_output, output))
-    ensure.(result.code == 0)
-    receive do {:stdout, "stock-command"} -> :ok after 1000 -> raise "missing stock output" end
-    clean.()
-    {:ok, cli_result} = Garden.VM.CLI.main(["${stock}", "--path",
-      "/run/current-system/sw/bin/bash", "--argv", "[\"-c\",\"printf cli-command\"]",
-      "--scratch-mib", "1024", "--deadline-ms", "90000"])
-    ensure.(cli_result.code == 0)
-    {:ok, result} = VM.run(custom, command.("exact", ["space argument", "", "literal;$x"]),
-      Keyword.put(opts, :on_output, output))
-    ensure.(result.code == 23)
     collect = fn collect, acc ->
       receive do
         {stream, bytes} when stream in [:stdout, :stderr] ->
           collect.(collect, Map.update(acc, stream, bytes, &(&1 <> bytes)))
       after 0 -> acc end
     end
-    ensure.(collect.(collect, %{}) == %{stdout: <<"out", 0, 255, 10>>, stderr: <<"err", 0, 254, 10>>})
+    config = fn image, overrides ->
+      id = "image-" <> Integer.to_string(System.unique_integer([:positive, :monotonic]))
+      Image.vm_config(image, id, Keyword.merge(
+        [runtime_directory: root, boot_deadline_ms: 90_000,
+         scratch_bytes: 1024 * 1024 * 1024], overrides))
+    end
+    define = fn image, overrides ->
+      cfg = config.(image, overrides)
+      {:ok, id} = VM.define(cfg)
+      id
+    end
+    boot = fn image, overrides ->
+      id = define.(image, overrides)
+      :ok = VM.start(id)
+      {:ok, _} = VM.await_ready(id)
+      id
+    end
+    retire = fn id ->
+      :ok = VM.stop(id)
+      {:ok, status} = VM.status(id)
+      unless status.cleanup == :ok do
+        manager = :sys.get_state(VMManager.Manager)
+        registered = Registry.lookup(VMManager.Registry, {manager.identity, id})
+        raise "stop returned without certified cleanup: " <>
+          inspect(%{status: status, definition: manager.definitions[id],
+            registered: Enum.map(registered, fn {pid, value} ->
+              {pid, Process.alive?(pid), value}
+            end)}, limit: :infinity)
+      end
+      :ok = VM.remove(id)
+    end
+    shell = fn script ->
+      %VM.Command{path: "/run/current-system/sw/bin/bash", args: ["-c", script]}
+    end
+    command = fn mode, args ->
+      %VM.Command{path: "${pkgs.python3}/bin/python3",
+        args: ["/etc/sower/probe.py", mode | args],
+        env: %{"ONLY" => "provided", "PYTHONCOERCECLOCALE" => "0"},
+        stdin: %{"message" => "stdin", "number" => 7}}
+    end
+    run = fn image, command, options ->
+      id = boot.(image, [])
+      {:ok, handle} = VM.execute(id, command, options)
+      result = VM.await_command(handle)
+      retire.(id)
+      clean.()
+      result
+    end
+    external_disk = "/tmp/image-agentless.raw"
+    File.write!(external_disk, "external-disk-contents")
+    {_, 0} = System.cmd("truncate", ["--size", "16M", external_disk])
+    agentless_config = %VM.Config{
+      id: "agentless-image",
+      kernel: "${agentless}/kernel",
+      initrd: "${agentless}/initrd",
+      cmdline: "console=ttyS0 rd.systemd.unit=agentless.target",
+      serial: %CloudHypervisor.Config.Output{mode: :file, file: "serial.log"},
+      disks: [%CloudHypervisor.Config.Disk{
+        path: external_disk, readonly: false, image_type: :raw
+      }],
+      runtime_directory: root,
+      mkfs: "${pkgs.coreutils}/bin/false"
+    }
+    {:ok, "agentless-image"} = VM.define(agentless_config)
+    :ok = VM.subscribe("agentless-image")
+    :ok = VM.start("agentless-image")
+    {:ok, %VM.Status{running: true, phase: :running} = agentless} =
+      VM.await_running("agentless-image")
+    serial_ready = fn status ->
+      until.(fn ->
+        case File.read(Path.join(status.directory, "serial.log")) do
+          {:ok, log} -> String.contains?(log, "sower-agentless-userspace-ready")
+          {:error, _} -> false
+        end
+      end)
+    end
+    serial_ready.(agentless)
+    receive_running = fn receive_running ->
+      receive do
+        {:vm_manager, "agentless-image", %VM.Status{running: true}} -> :ok
+        {:vm_manager, "agentless-image", %VM.Status{}} -> receive_running.(receive_running)
+      after 30_000 -> raise "missing agentless running notification"
+      end
+    end
+    receive_running.(receive_running)
+    {:error, :guest_agent_disabled} = VM.await_ready("agentless-image")
+    {:error, :guest_agent_disabled} =
+      VM.execute("agentless-image", %VM.Command{path: "/bin/true"})
+    {:ok, listed} = VM.list()
+    ensure.(Enum.any?(listed, &(&1.id == "agentless-image")))
+    {:ok, observed} = VM.status("agentless-image")
+    ensure.(observed.os_pid == agentless.os_pid)
+    old_manager = Process.whereis(VMManager.Manager)
+    Process.exit(old_manager, :kill)
+    until.(fn ->
+      manager = Process.whereis(VMManager.Manager)
+      manager != nil and manager != old_manager
+    end)
+    {:ok, reconnected} = VM.await_running("agentless-image")
+    ensure.(reconnected.os_pid == agentless.os_pid)
+    :ok = Application.stop(:vm_manager)
+    until.(fn -> not File.exists?("/proc/#{agentless.os_pid}") end)
+    {:ok, _} = Application.ensure_all_started(:vm_manager)
+    {:ok, restored_agentless} = VM.await_running("agentless-image")
+    ensure.(restored_agentless.id == "agentless-image")
+    ensure.(restored_agentless.os_pid != agentless.os_pid)
+    serial_ready.(restored_agentless)
+    retire.("agentless-image")
+    ensure.(File.read!(external_disk) |> String.starts_with?("external-disk-contents"))
     clean.()
-    {:ok, owned} = VM.boot(custom, opts)
-    {:ok, idle} = VM.await_ready(owned)
+    {_, 0} = System.cmd("${pkgs.iproute2}/bin/ip", ["tuntap", "add", "dev", "sower-ext-test", "mode", "tap"])
+    external_network = %VM.Network{
+      ownership: :external,
+      devices: [%CloudHypervisor.Config.Net{tap: "sower-ext-test", mac: "02:00:00:00:00:42"}]
+    }
+    network_config = %{agentless_config | id: "agentless-network", network: external_network}
+    {:ok, "agentless-network"} = VM.define(network_config)
+    :ok = VM.start("agentless-network")
+    {:ok, %VM.Status{running: true}} = VM.await_running("agentless-network")
+    retire.("agentless-network")
+    {_, 0} = System.cmd("${pkgs.iproute2}/bin/ip", ["link", "show", "dev", "sower-ext-test"])
+    failed_config = %{network_config | id: "agentless-network-failure", hypervisor: "/nonexistent/sower-hypervisor"}
+    {:ok, "agentless-network-failure"} = VM.define(failed_config)
+    :ok = VM.start("agentless-network-failure")
+    {:error, _} = VM.await_running("agentless-network-failure")
+    retire.("agentless-network-failure")
+    {_, 0} = System.cmd("${pkgs.iproute2}/bin/ip", ["link", "show", "dev", "sower-ext-test"])
+    {_, 0} = System.cmd("${pkgs.iproute2}/bin/ip", ["link", "delete", "dev", "sower-ext-test"])
+    :ok = File.rm(external_disk)
+    clean.()
+    for {overrides, expected} <- [
+      {[hypervisor: "/nonexistent/sower-hypervisor"], :vmm_failed},
+      {[mkfs: "${pkgs.coreutils}/bin/false"], :mkfs}
+    ] do
+      id = define.(stock, overrides)
+      :ok = VM.start(id)
+      {:error, _} = VM.await_ready(id)
+      until.(fn -> {:ok, status} = VM.status(id); status.cleanup == :ok end)
+      {:ok, status} = VM.status(id)
+      {:error, failure} = status.result
+      ensure.(elem(failure, 0) == expected)
+      retire.(id)
+      clean.()
+    end
+    {:ok, %{code: 0}} = run.(stock, shell.("printf stock-command"), on_output: output)
+    receive do {:stdout, "stock-command"} -> :ok after 1000 -> raise "missing stock output" end
+    {:ok, "standalone-witness"} =
+      VM.define(%VM.Config{id: "standalone-witness", kernel: stock.kernel})
+    shared_state = Application.fetch_env!(:vm_manager, :state_directory)
+    shared_store = Path.join(shared_state, "definitions.etf")
+    before_cli = File.read!(shared_store)
+    standalone = """
+    Application.put_env(:vm_manager, :state_directory, #{inspect(shared_state)})
+    {:ok, %{code: 0}} = Garden.VM.CLI.main(["${stock}", "--path",
+      "/run/current-system/sw/bin/bash", "--argv", "[\\"-c\\",\\"printf cli-command\\"]",
+      "--scratch-mib", "1024", "--deadline-ms", "90000"])
+    IO.puts("standalone-cli-ok")
+    """
+    code_paths = Enum.flat_map(:code.get_path(), fn path -> ["-pa", List.to_string(path)] end)
+    {cli_output, cli_code} =
+      System.cmd("${beamPackages.elixir}/bin/elixir",
+        ["--erl", "+S 2:2"] ++ code_paths ++ ["--eval", standalone],
+        stderr_to_stdout: true)
+    ensure.(cli_code == 0)
+    ensure.(String.contains?(cli_output, "standalone-cli-ok"))
+    ensure.(File.read!(shared_store) == before_cli)
+    :ok = VM.remove("standalone-witness")
+    {:ok, %{code: 23}} = run.(custom,
+      command.("exact", ["space argument", "", "literal;$x"]), on_output: output)
+    ensure.(collect.(collect, %{}) == %{stdout: <<"out", 0, 255, 10>>, stderr: <<"err", 0, 254, 10>>})
+    owned = boot.(custom, [])
+    {:ok, idle} = VM.status(owned)
     ensure.(idle.phase == :ready and idle.persistent)
     Process.sleep(200)
-    ensure.(VM.status(owned).os_pid == idle.os_pid and Process.alive?(idle.vmm))
-    shell = fn script -> %VM.Command{path: "/run/current-system/sw/bin/bash", args: ["-c", script]} end
+    {:ok, current} = VM.status(owned)
+    ensure.(current.os_pid == idle.os_pid and Process.alive?(idle.vmm))
     {:ok, first} = VM.execute(owned, shell.("printf persistent-value > /var/lifetime-value; exit 17"))
     {:ok, %{code: 17}} = VM.await_command(first)
-    ensure.(VM.status(owned).phase == :ready and VM.status(owned).os_pid == idle.os_pid)
-    {:ok, second} = VM.execute(owned, shell.("test \"$(</var/lifetime-value)\" = persistent-value && printf 'out\\000\\377\\n' && printf 'err\\000\\376\\n' >&2"), on_output: output)
+    {:ok, second} = VM.execute(owned,
+      shell.("test \"$(</var/lifetime-value)\" = persistent-value && printf 'out\\000\\377\\n' && printf 'err\\000\\376\\n' >&2"),
+      on_output: output)
     {:ok, %{code: 0}} = VM.await_command(second)
     ensure.(collect.(collect, %{}) == %{stdout: <<"out", 0, 255, 10>>, stderr: <<"err", 0, 254, 10>>})
     {:ok, missing} = VM.execute(owned, %VM.Command{path: "/nonexistent/command"})
@@ -223,520 +393,251 @@ let
     {:ok, signalled} = VM.execute(owned, command.("signal", []))
     {:ok, %{code: nil, signal: 15}} = VM.await_command(signalled)
     %VM.CommandStatus{phase: :finished, result: {:ok, %{code: 17}}} = VM.command_status(first)
-    {:ok, lost_consumer} = VM.execute(owned, command.("tree", []), on_output: fn _, _ -> exit(:normal) end)
-    {:error, :output_consumer_down} = VM.await_command(lost_consumer)
-    {:ok, reaped} = VM.execute(owned, command.("tree-gone", []), on_output: output)
-    {:ok, %{code: 0}} = VM.await_command(reaped)
-    receive do {:stdout, "tree-reaped\n"} -> :ok after 1000 -> raise "missing consumer cleanup proof" end
-    blocked_tree = fn _, _ ->
+    blocked = fn _, _ ->
       send(parent, :tree_output)
       receive do :never -> :ok end
     end
-    {:ok, cancelled_tree} = VM.execute(owned, command.("tree", []), on_output: blocked_tree)
-    receive do :tree_output -> :ok after 5000 -> raise "tree did not start" end
-    {:error, :busy} = VM.execute(owned, shell.("exit 99"))
-    :ok = VM.cancel_command(cancelled_tree)
-    {:error, :cancelled} = VM.await_command(cancelled_tree)
-    {:ok, reaped} = VM.execute(owned, command.("tree-gone", []), on_output: output)
-    {:ok, %{code: 0}} = VM.await_command(reaped)
-    receive do {:stdout, "tree-reaped\n"} -> :ok after 1000 -> raise "missing cleanup proof" end
-    {:ok, timed_tree} = VM.execute(owned, command.("tree", []), on_output: blocked_tree, deadline_ms: 2000)
-    receive do :tree_output -> :ok after 5000 -> raise "timed tree did not start" end
-    {:error, :timeout} = VM.await_command(timed_tree)
-    {:ok, reaped} = VM.execute(owned, command.("tree-gone", []), on_output: output)
-    {:ok, %{code: 0}} = VM.await_command(reaped)
-    receive do {:stdout, "tree-reaped\n"} -> :ok after 1000 -> raise "missing timeout cleanup proof" end
-    caller = spawn(fn ->
-      {:ok, _handle} = VM.execute(owned, command.("tree", []), on_output: blocked_tree)
-      send(parent, :caller_command)
-      receive do :never -> :ok end
-    end)
-    receive do :caller_command -> :ok after 1000 -> raise "missing caller handle" end
-    receive do :tree_output -> :ok after 5000 -> raise "caller tree did not start" end
-    Process.exit(caller, :kill)
-    retry = fn retry ->
-      case VM.execute(owned, command.("tree-gone", []), on_output: output) do
-        {:error, :busy} -> Process.sleep(20); retry.(retry)
-        {:ok, handle} -> handle
-      end
-    end
-    {:ok, %{code: 0}} = VM.await_command(retry.(retry))
-    receive do {:stdout, "tree-reaped\n"} -> :ok after 1000 -> raise "missing caller cleanup proof" end
-    ensure.(VM.status(owned).os_pid == idle.os_pid)
-    :ok = VM.stop(owned)
-    ensure.(VM.status(owned).phase == :stopped and VM.status(owned).cleanup == :ok)
-    {:error, :vm_unavailable} = VM.execute(owned, shell.("exit 0"))
-    GenServer.stop(owned)
-    clean.()
-    {:ok, boot_stop} = VM.boot(custom, opts)
-    :ok = VM.stop(boot_stop)
-    ensure.(VM.status(boot_stop).phase == :stopped)
-    GenServer.stop(boot_stop)
-    clean.()
-    {:ok, active_stop} = VM.boot(custom, opts)
-    {:ok, _} = VM.await_ready(active_stop)
-    {:ok, active_command} = VM.execute(active_stop, command.("tree", []), on_output: blocked_tree)
-    receive do :tree_output -> :ok after 5000 -> raise "stop tree did not start" end
-    :ok = VM.stop(active_stop)
-    {:error, :vm_stopped} = VM.await_command(active_command)
-    ensure.(VM.status(active_stop).cleanup == :ok)
-    GenServer.stop(active_stop)
-    clean.()
-    {:ok, idle_dead} = VM.boot(custom, opts)
-    {:ok, idle_status} = VM.await_ready(idle_dead)
-    {_, 0} = System.cmd("kill", ["--signal", "KILL", Integer.to_string(idle_status.os_pid)])
-    {:error, _} = VM.await(idle_dead)
-    ensure.(VM.status(idle_dead).cleanup == :ok)
-    {:error, :vm_unavailable} = VM.execute(idle_dead, shell.("exit 0"))
-    GenServer.stop(idle_dead)
-    clean.()
-    {:ok, a} = VM.start_link(opts ++ [image: custom, command: command.("write", ["a", "2"])])
-    {:ok, b} = VM.start_link(opts ++ [image: custom, command: command.("write", ["b", "0"])])
-    {:ok, ra} = VM.await(a)
-    {:ok, rb} = VM.await(b)
-    ensure.(ra.code == 0 and rb.code == 0)
-    GenServer.stop(a)
-    GenServer.stop(b)
-    clean.()
-    {:ok, fresh} = VM.run(custom, command.("write", ["fresh", "0"]), opts)
-    ensure.(fresh.code == 0)
-    clean.()
-    wait = fn wait, execution ->
-      status = VM.status(execution)
-      if status.phase == :running, do: status, else: (Process.sleep(20); wait.(wait, execution))
-    end
-    blocked = fn _, _ -> receive do :never -> :ok end end
-    drain = fn _, _ -> :ok end
-    {:ok, timed} = VM.start_link(Keyword.merge(opts,
-      image: custom, command: command.("block", []), on_output: blocked, deadline_ms: 30_000))
-    {:error, :timeout} = VM.await(timed)
-    GenServer.stop(timed)
-    clean.()
-    {:ok, cancelled} = VM.start_link(opts ++ [image: custom, command: command.("block", []), on_output: blocked])
-    wait.(wait, cancelled)
-    :ok = VM.cancel(cancelled)
-    {:error, :cancelled} = VM.await(cancelled)
-    GenServer.stop(cancelled)
-    clean.()
-    owner = spawn(fn -> receive do :never -> :ok end end)
-    {:ok, orphan} = VM.start_link(opts ++ [image: custom, command: command.("block", []),
-      owner: owner, on_output: drain])
-    wait.(wait, orphan)
-    Process.exit(owner, :kill)
-    {:error, :owner_down} = VM.await(orphan)
-    GenServer.stop(orphan)
-    clean.()
-    {:ok, dead} = VM.start_link(opts ++ [image: custom, command: command.("block", []),
-      on_output: drain])
-    status = wait.(wait, dead)
-    {_, 0} = System.cmd("kill", ["--signal", "KILL", Integer.to_string(status.os_pid)])
-    {:error, _} = VM.await(dead)
-    ensure.(VM.status(dead).cleanup == :ok)
-    GenServer.stop(dead)
-    clean.()
-    {:ok, severed} = VM.start_link(opts ++ [image: custom, command: command.("block", []),
-      on_output: drain])
-    status = wait.(wait, severed)
-    Process.unlink(severed)
-    Process.exit(severed, :kill)
-    deadline = System.monotonic_time(:millisecond) + 15_000
-    reclaimed = fn reclaimed ->
-      if File.exists?(status.directory) do
-        ensure.(System.monotonic_time(:millisecond) < deadline)
-        Process.sleep(50)
-        reclaimed.(reclaimed)
-      end
-    end
-    reclaimed.(reclaimed)
-    clean.()
-    {:ok, retained} = VM.start_link(opts ++ [image: custom, command: command.("block", [])])
-    status = wait.(wait, retained)
-    unexpected = Path.join(status.directory, "unowned")
-    File.write!(unexpected, "retain me")
-    :ok = VM.cancel(retained)
-    {:error, {:cleanup_unconfirmed, {:error, :cancelled},
-      {:error, {:unexpected_files, ["unowned"]}}, directory}} = VM.await(retained)
-    ensure.(directory == status.directory and File.read!(unexpected) == "retain me")
-    ensure.(File.exists?(Path.join(directory, "scratch.ext4")))
-    GenServer.stop(retained)
-    Enum.each(["unowned", "scratch.ext4", "serial.log"], fn name ->
-      :ok = File.rm(Path.join(directory, name))
-    end)
-    :ok = File.rmdir(directory)
-    clean.()
-    alias Garden.VM.Manager
-    eventually = fn eventually, predicate, deadline ->
-      if predicate.() do
-        :ok
+    for failure <- [:consumer, :cancel, :timeout, :caller] do
+      callback = if failure == :consumer, do: fn _, _ -> exit(:normal) end, else: blocked
+      options = [on_output: callback, deadline_ms: if(failure == :timeout, do: 2000, else: 60_000)]
+      if failure == :caller do
+        caller = spawn(fn ->
+          {:ok, _} = VM.execute(owned, command.("tree", []), options)
+          send(parent, :caller_command)
+          receive do :never -> :ok end
+        end)
+        receive do :caller_command -> :ok after 1000 -> raise "missing caller handle" end
+        receive do :tree_output -> :ok after 5000 -> raise "caller tree did not start" end
+        Process.exit(caller, :kill)
       else
-        ensure.(System.monotonic_time(:millisecond) < deadline)
-        Process.sleep(20)
-        eventually.(eventually, predicate, deadline)
-      end
-    end
-    until = fn predicate ->
-      eventually.(eventually, predicate, System.monotonic_time(:millisecond) + 30_000)
-    end
-    manager_opts = Keyword.merge(opts,
-      owner: self(), image: custom, cpus: 1, memory: 512 * 1024 * 1024,
-      command: command.("block", []), on_output: drain)
-    managed_wait = fn id ->
-      deadline = System.monotonic_time(:millisecond) + 30_000
-      until.(fn ->
-        case Manager.status(id) do
-          {:ok, status} ->
-            if status.phase in [:finished, :retained] or
-               System.monotonic_time(:millisecond) >= deadline do
-              serial = if status.directory, do: File.read(Path.join(status.directory, "serial.log"))
-              raise "managed VM did not become ready: #{inspect(status)} serial=#{inspect(serial)}"
-            end
-            status.phase == :running
-          _ -> false
+        {:ok, handle} = VM.execute(owned, command.("tree", []), options)
+        if failure != :consumer do
+          receive do :tree_output -> :ok after 5000 -> raise "tree did not start" end
+          {:error, :busy} = VM.execute(owned, shell.("exit 99"))
         end
-      end)
-      {:ok, status} = Manager.status(id)
-      status
-    end
-    os_gone = fn os_pid ->
-      until.(fn -> not File.exists?("/proc/#{os_pid}") end)
-    end
-    retired = fn execution ->
-      until.(fn -> not Process.alive?(execution) end)
-    end
-    budgets = [vms: 2, cpus: 2, memory: 1024 * 1024 * 1024,
-      scratch_bytes: 2 * 1024 * 1024 * 1024]
-    start_manager = fn overrides ->
-      {:ok, supervisor} = VM.Supervisor.start_link(
-        Keyword.merge([budgets: budgets, result_limit: 2, shutdown_ms: 15_000], overrides))
-      Process.unlink(supervisor)
-      supervisor
-    end
-    controller = fn id ->
-      {:ok, status} = Manager.status(id)
-      status.execution
-    end
-    managed_ids = :ets.new(:managed_ids, [:set, :public])
-    start_with_output = fn options ->
-      token = make_ref()
-      callback = fn stream, bytes ->
-        until.(fn -> :ets.member(managed_ids, token) end)
-        [{^token, id}] = :ets.lookup(managed_ids, token)
-        send(parent, {:managed_output, id, stream, bytes})
+        expected = case failure do
+          :consumer -> :output_consumer_down
+          :cancel -> :ok = VM.cancel_command(handle); :cancelled
+          :timeout -> :timeout
+        end
+        {:error, ^expected} = VM.await_command(handle)
       end
-      {:ok, id} = Manager.start(Keyword.put(options, :on_output, callback))
-      :ets.insert(managed_ids, {token, id})
-      {:ok, id}
+      retry = fn retry ->
+        case VM.execute(owned, command.("tree-gone", []), on_output: output) do
+          {:error, :busy} -> Process.sleep(20); retry.(retry)
+          {:ok, handle} -> handle
+        end
+      end
+      {:ok, %{code: 0}} = VM.await_command(retry.(retry))
+      receive do {:stdout, "tree-reaped\n"} -> :ok after 1000 -> raise "missing process cleanup proof" end
     end
-    supervisor = start_manager.([])
-    idle_owner = spawn(fn -> receive do :never -> :ok end end)
-    {:ok, idle_a} = Manager.boot(custom, Keyword.put(opts, :owner, idle_owner))
-    {:ok, idle_b} = Manager.boot(custom, opts)
-    {:ok, idle_a_status} = Manager.await_ready(idle_a)
-    {:ok, idle_b_status} = Manager.await_ready(idle_b)
-    ensure.(File.exists?(Path.join(idle_a_status.directory, "scratch.ext4")))
-    ensure.(File.exists?(Path.join(idle_b_status.directory, "scratch.ext4")))
-    {:error, {:capacity_exhausted, :vms}} = Manager.boot(custom, opts)
-    {:ok, idle_command} = Manager.execute(idle_b, shell.("printf shared > /var/shared"))
-    {:ok, %{code: 0}} = VM.await_command(idle_command)
-    {:error, {:capacity_exhausted, :vms}} = Manager.boot(custom, opts)
-    Process.exit(idle_owner, :kill)
-    {:error, :owner_down} = Manager.await(idle_a)
-    ensure.(not File.exists?(idle_a_status.directory))
-    :ok = Manager.stop(idle_b)
-    ensure.(not File.exists?(idle_b_status.directory))
+    {:ok, current} = VM.status(owned)
+    ensure.(current.os_pid == idle.os_pid)
+    cli_output = fn _, _ ->
+      send(parent, :disposable_cli_output)
+      receive do :never -> :ok end
+    end
+    {cli_caller, cli_monitor} = spawn_monitor(fn ->
+      Garden.VM.CLI.run(custom, command.("tree", []),
+        runtime_directory: root, boot_deadline_ms: 90_000,
+        scratch_bytes: 1024 * 1024 * 1024, on_output: cli_output)
+    end)
+    receive do
+      :disposable_cli_output -> :ok
+    after 90_000 -> raise "disposable CLI command did not start"
+    end
+    {:ok, cli_definitions} = VM.list()
+    [disposable] = Enum.filter(cli_definitions, &String.starts_with?(&1.id, "cli-"))
+    ensure.(disposable.desired == :running and disposable.os_pid != idle.os_pid)
+    Process.exit(cli_caller, :kill)
+    receive do
+      {:DOWN, ^cli_monitor, :process, ^cli_caller, :killed} -> :ok
+    after 1000 -> raise "disposable CLI caller did not die"
+    end
+    until.(fn -> VM.status(disposable.id) == {:error, :not_found} end)
+    ensure.(not File.exists?(disposable.directory))
+    ensure.(not File.exists?("/proc/#{disposable.os_pid}"))
+    ensure.(not Process.alive?(disposable.vmm))
+    {:ok, preserved} = VM.status(owned)
+    ensure.(preserved.phase == :ready and preserved.desired == :running)
+    ensure.(preserved.os_pid == idle.os_pid and preserved.directory == idle.directory)
+    {:ok, preserved_command} = VM.execute(owned,
+      shell.("test \"$(</var/lifetime-value)\" = persistent-value && printf cli-preserved"),
+      on_output: output)
+    {:ok, %{code: 0}} = VM.await_command(preserved_command)
+    receive do
+      {:stdout, "cli-preserved"} -> :ok
+    after 1000 -> raise "persistent VM was changed by disposable CLI cleanup"
+    end
+    {:ok, handle} = VM.execute(owned, command.("tree", []), on_output: blocked)
+    receive do :tree_output -> :ok after 5000 -> raise "stop tree did not start" end
+    :ok = VM.stop(owned)
+    {:error, :vm_stopped} = VM.await_command(handle)
+    {:error, :vm_unavailable} = VM.execute(owned, shell.("exit 0"))
+    :ok = VM.remove(owned)
     clean.()
-    {:ok, idle_controller} = Manager.boot(custom, opts)
-    {:ok, idle_controller_status} = Manager.await_ready(idle_controller)
-    Process.exit(idle_controller_status.execution, :kill)
-    {:error, :owner_down} = Manager.await(idle_controller)
-    ensure.(not File.exists?(idle_controller_status.directory))
+    boot_stop = define.(custom, [])
+    :ok = VM.start(boot_stop)
+    retire.(boot_stop)
+    clean.()
+    a = boot.(custom, [])
+    b = boot.(custom, [])
+    {:ok, a_status} = VM.status(a)
+    {:ok, b_status} = VM.status(b)
+    ensure.(a_status.directory != b_status.directory and a_status.os_pid != b_status.os_pid)
+    {:ok, ah} = VM.execute(a, command.("write", ["a", "2"]), on_output: output)
+    {:ok, bh} = VM.execute(b, command.("write", ["b", "0"]), on_output: output)
+    {:ok, %{code: 0}} = VM.await_command(ah)
+    {:ok, %{code: 0}} = VM.await_command(bh)
+    ensure.(collect.(collect, %{}).stdout in ["isolated:aisolated:b", "isolated:bisolated:a"])
+    {:ok, listed} = VM.list()
+    ensure.(Enum.count(listed, &(&1.phase == :ready)) == 2)
+    rejected = define.(custom, [])
+    allocated = Enum.sort(File.ls!(root))
+    {:error, {:capacity_exhausted, :vms}} = VM.start(rejected)
+    ensure.(Enum.sort(File.ls!(root)) == allocated)
+    :ok = VM.remove(rejected)
+    retire.(a)
+    retire.(b)
     clean.()
     for {dimension, excessive} <- [cpus: 3, memory: 2 * 1024 * 1024 * 1024,
                                   scratch_bytes: 3 * 1024 * 1024 * 1024] do
-      {:error, {:request_exceeds_capacity, ^dimension}} =
-        Manager.start(Keyword.put(manager_opts, dimension, excessive))
+      id = define.(custom, [{dimension, excessive}])
+      {:error, {:request_exceeds_capacity, ^dimension}} = VM.start(id)
+      :ok = VM.remove(id)
       clean.()
-      ensure.(DynamicSupervisor.count_children(Garden.VM.ExecutionSupervisor).active == 0)
     end
-    {:error, :not_found} = Manager.status("not-an-execution")
-    {:error, :not_found} = Manager.await("not-an-execution")
-    {:error, :not_found} = Manager.cancel("not-an-execution")
-    {:ok, exact_id} = start_with_output.(Keyword.put(manager_opts,
-      :command, command.("exact", ["space argument", "", "literal;$x"])))
-    exact_controller = controller.(exact_id)
-    {:ok, exact_result} = Manager.await(exact_id)
-    ensure.(exact_result.code == 23)
-    {:ok, exact_status} = Manager.status(exact_id)
-    ensure.(exact_status.phase == :finished and exact_status.cleanup == :ok)
-    ensure.(exact_status.result == {:ok, exact_result})
-    ensure.(exact_status.execution_id == exact_id and exact_status.execution == exact_controller)
-    retired.(exact_controller)
-    managed_collect = fn collect, id, acc ->
-      receive do
-        {:managed_output, ^id, stream, bytes} ->
-          collect.(collect, id, Map.update(acc, stream, bytes, &(&1 <> bytes)))
-      after 0 -> acc end
-    end
-    ensure.(managed_collect.(managed_collect, exact_id, %{}) ==
-      %{stdout: <<"out", 0, 255, 10>>, stderr: <<"err", 0, 254, 10>>})
-    clean.()
-    {:ok, signal_id} = Manager.start(Keyword.put(manager_opts, :command, command.("signal", [])))
-    {:ok, signal_result} = Manager.await(signal_id)
-    ensure.(signal_result.code == nil and signal_result.signal == 15)
-    {:ok, signal_status} = Manager.status(signal_id)
-    ensure.(signal_status.result == {:ok, signal_result} and signal_status.cleanup == :ok)
-    clean.()
-    {:ok, a_id} = start_with_output.(Keyword.put(manager_opts,
-      :command, command.("write", ["managed-a", "30"])))
-    {:ok, b_id} = start_with_output.(Keyword.put(manager_opts,
-      :command, command.("write", ["managed-b", "30"])))
-    ensure.(a_id != b_id)
-    a_status = managed_wait.(a_id)
-    b_status = managed_wait.(b_id)
-    ensure.(a_status.directory != b_status.directory and a_status.os_pid != b_status.os_pid)
-    ensure.(a_status.execution_id == a_id and b_status.execution_id == b_id)
-    {:ok, listed} = Manager.list()
-    running_ids = for status <- listed, status.phase == :running, do: status.execution_id
-    ensure.(running_ids == [a_id, b_id])
-    a_socket_directory = CloudHypervisor.Process.status(a_status.vmm).directory
-    b_socket_directory = CloudHypervisor.Process.status(b_status.vmm).directory
-    ensure.(a_socket_directory != b_socket_directory)
-    ensure.(File.exists?(Path.join(a_status.directory, "scratch.ext4")))
-    ensure.(File.exists?(Path.join(b_status.directory, "scratch.ext4")))
-    allocated = Enum.sort(File.ls!(root))
-    {:error, {:capacity_exhausted, :vms}} = Manager.start(manager_opts)
-    ensure.(Enum.sort(File.ls!(root)) == allocated)
-    {:ok, a_result} = Manager.await(a_id)
-    {:ok, b_result} = Manager.await(b_id)
-    ensure.(a_result.code == 0 and b_result.code == 0)
-    ensure.(managed_collect.(managed_collect, a_id, %{}) == %{stdout: "isolated:managed-a"})
-    ensure.(managed_collect.(managed_collect, b_id, %{}) == %{stdout: "isolated:managed-b"})
-    ensure.(not File.exists?(a_socket_directory) and not File.exists?(b_socket_directory))
-    {:error, :not_found} = Manager.status(exact_id)
-    {:error, :not_found} = Manager.status(signal_id)
-    until.(fn -> DynamicSupervisor.count_children(Garden.VM.ExecutionSupervisor).active == 0 end)
-    clean.()
-    :ok = Manager.shutdown()
-    {:error, :draining} = Manager.start(manager_opts)
-    :ok = Supervisor.stop(supervisor, :normal, :infinity)
     for dimension <- [:cpus, :memory, :scratch_bytes] do
-      supervisor = start_manager.(budgets: Keyword.put(budgets, :vms, 3))
-      {:ok, held_id} = Manager.start(Keyword.put(manager_opts, dimension, budgets[dimension]))
-      held_status = managed_wait.(held_id)
-      allocated = Enum.sort(File.ls!(root))
-      {:error, {:capacity_exhausted, ^dimension}} = Manager.start(manager_opts)
-      ensure.(Enum.sort(File.ls!(root)) == allocated)
-      :ok = Manager.cancel(held_id)
-      {:error, :cancelled} = Manager.await(held_id)
-      os_gone.(held_status.os_pid)
+      held = boot.(custom, [{dimension, budgets[dimension]}])
+      next = define.(custom, [])
+      {:error, {:capacity_exhausted, ^dimension}} = VM.start(next)
+      :ok = VM.remove(next)
+      retire.(held)
       clean.()
-      :ok = Manager.shutdown()
-      :ok = Supervisor.stop(supervisor, :normal, :infinity)
     end
-    supervisor = start_manager.([])
-    blocked_managed = fn stream, bytes ->
-      send(parent, {:output_blocked, self(), stream, byte_size(bytes)})
-      receive do :never -> :ok end
-    end
-    {:ok, cancelled_id} = Manager.start(Keyword.put(manager_opts, :on_output, blocked_managed))
-    cancelled_status = managed_wait.(cancelled_id)
-    receive do {:output_blocked, _, _, size} when size > 0 -> :ok
-      after 10_000 -> raise "managed output did not block" end
-    :ok = Manager.cancel(cancelled_id)
-    {:error, :cancelled} = Manager.await(cancelled_id)
-    os_gone.(cancelled_status.os_pid)
+    {:error, :not_found} = VM.status("not-a-vm")
+    {:error, :not_found} = VM.stop("not-a-vm")
+    {:ok, %{code: 0}} = run.(custom, command.("write", ["fresh", "0"]), [])
+    persistent_path = "/tmp/image-persistent.raw"
+    {_, 0} = System.cmd("truncate", ["--size", "16M", persistent_path])
+    persistent_config = config.(custom,
+      disks: [%CloudHypervisor.Config.Disk{
+        path: persistent_path, readonly: false, image_type: :raw
+      }],
+      persistent_disks: [persistent_path])
+    {:ok, persistent_id} = VM.define(persistent_config)
+    :ok = VM.start(persistent_id)
+    {:ok, _} = VM.await_ready(persistent_id)
+    {:ok, write_disk} = VM.execute(persistent_id, %VM.Command{
+      path: "${pkgs.python3}/bin/python3",
+      args: ["-c", "import os; disk = os.open('/dev/vdc', os.O_WRONLY); assert os.write(disk, b'sower-disk') == 10; os.fsync(disk); os.close(disk)"]
+    })
+    {:ok, %{code: 0}} = VM.await_command(write_disk)
+    :ok = VM.stop(persistent_id)
+    {:ok, stopped_disk} = VM.status(persistent_id)
+    ensure.(stopped_disk.desired == :stopped and stopped_disk.cleanup == :ok)
+    ensure.(File.regular?(persistent_path))
     clean.()
-    {:ok, deadline_id} = Manager.start(Keyword.merge(manager_opts,
-      on_output: blocked_managed, deadline_ms: 30_000))
-    deadline_status = managed_wait.(deadline_id)
-    receive do {:output_blocked, _, _, size} when size > 0 -> :ok
-      after 10_000 -> raise "deadline output did not block" end
-    {:error, :timeout} = Manager.await(deadline_id)
-    os_gone.(deadline_status.os_pid)
+    :ok = VM.start(persistent_id)
+    {:ok, _} = VM.await_ready(persistent_id)
+    {:ok, read_disk} = VM.execute(persistent_id, %VM.Command{
+      path: "${pkgs.python3}/bin/python3",
+      args: ["-c", "disk = open('/dev/vdc', 'rb', buffering=0); assert disk.read(10) == b'sower-disk'; disk.close()"]
+    })
+    {:ok, %{code: 0}} = VM.await_command(read_disk)
+    :ok = VM.stop(persistent_id)
+    :ok = VM.remove(persistent_id)
+    {:error, :not_found} = VM.status(persistent_id)
+    ensure.(File.regular?(persistent_path))
+    {:ok, ^persistent_id} = VM.define(persistent_config)
+    :ok = VM.delete_storage(persistent_id)
+    ensure.(not File.exists?(persistent_path))
+    {:ok, _} = VM.status(persistent_id)
+    :ok = VM.remove(persistent_id)
     clean.()
-    for death <- [:owner, :controller, :vmm] do
-      owner = spawn(fn -> receive do :never -> :ok end end)
-      {:ok, id} = Manager.start(Keyword.put(manager_opts, :owner, owner))
-      execution = controller.(id)
-      status = managed_wait.(id)
-      case death do
-        :owner -> Process.exit(owner, :kill)
-        :controller -> Process.exit(execution, :kill)
-        :vmm -> {_, 0} = System.cmd("kill", ["--signal", "KILL", Integer.to_string(status.os_pid)])
-      end
-      case {death, Manager.await(id)} do
-        {:vmm, {:error, _}} -> :ok
-        {_, {:error, :owner_down}} -> :ok
-        other -> raise "unexpected managed death result: #{inspect(other)}"
-      end
-      {:ok, terminal} = Manager.status(id)
-      ensure.(terminal.cleanup == :ok and terminal.phase == :finished)
-      retired.(execution)
-      os_gone.(status.os_pid)
-      Process.exit(owner, :kill)
-      clean.()
-    end
-    :ok = Manager.shutdown()
-    :ok = Supervisor.stop(supervisor, :normal, :infinity)
-    for subtree <- [Garden.VM.Manager, Garden.VM.ExecutionSupervisor] do
-      supervisor = start_manager.([])
-      {:ok, first_id} = Manager.start(manager_opts)
-      {:ok, second_id} = Manager.start(manager_opts)
-      statuses = Enum.map([first_id, second_id], managed_wait)
-      old_subtree = Process.whereis(subtree)
-      Process.exit(old_subtree, :kill)
-      Enum.each(statuses, fn status -> os_gone.(status.os_pid) end)
-      until.(fn ->
-        new_subtree = Process.whereis(subtree)
-        new_subtree != nil and new_subtree != old_subtree and
-          Process.whereis(Garden.VM.Manager) != nil
-      end)
-      until.(fn -> DynamicSupervisor.count_children(Garden.VM.ExecutionSupervisor).active == 0 end)
-      Enum.each([first_id, second_id], fn id ->
-        {:error, :owner_down} = Manager.await(id)
-        {:ok, status} = Manager.status(id)
-        ensure.(status.phase == :finished and status.cleanup == :ok)
-      end)
-      clean.()
-      {:ok, fresh_id} = Manager.start(manager_opts)
-      ensure.(fresh_id != first_id and fresh_id != second_id)
-      fresh_status = managed_wait.(fresh_id)
-      :ok = Manager.shutdown()
-      {:error, :draining} = Manager.start(manager_opts)
-      {:error, _} = Manager.await(fresh_id)
-      os_gone.(fresh_status.os_pid)
-      :ok = Supervisor.stop(supervisor, :normal, :infinity)
-      clean.()
-    end
-    supervisor = start_manager.([])
-    {:ok, killed_subtree_id} = Manager.start(manager_opts)
-    killed_subtree_status = managed_wait.(killed_subtree_id)
-    killed_subtree_socket_directory =
-      CloudHypervisor.Process.status(killed_subtree_status.vmm).directory
-    Process.exit(supervisor, :kill)
+    durable = boot.(custom, [])
+    {:ok, before} = VM.status(durable)
+    old_manager = Process.whereis(VMManager.Manager)
+    Process.exit(old_manager, :kill)
     until.(fn ->
-      Enum.all?([Garden.VM.Supervisor, Garden.VM.Manager,
-        Garden.VM.ExecutionSupervisor, Garden.VM.Ledger], fn name ->
-        Process.whereis(name) == nil
-      end)
+      manager = Process.whereis(VMManager.Manager)
+      manager != nil and manager != old_manager
     end)
-    os_gone.(killed_subtree_status.os_pid)
-    until.(fn -> not File.exists?(killed_subtree_status.directory) end)
-    ensure.(not File.exists?(killed_subtree_socket_directory))
-    supervisor = start_manager.([])
-    {:error, :owner_down} = Manager.await(killed_subtree_id)
-    {:ok, killed_subtree_terminal} = Manager.status(killed_subtree_id)
-    ensure.(killed_subtree_terminal.phase == :finished and killed_subtree_terminal.cleanup == :ok)
-    ensure.(DynamicSupervisor.count_children(Garden.VM.ExecutionSupervisor).active == 0)
-    clean.()
-    {:ok, after_subtree_id} = Manager.start(manager_opts)
-    ensure.(after_subtree_id != killed_subtree_id)
-    after_subtree_status = managed_wait.(after_subtree_id)
-    :ok = Manager.shutdown()
-    {:error, :cancelled} = Manager.await(after_subtree_id)
-    os_gone.(after_subtree_status.os_pid)
-    :ok = Supervisor.stop(supervisor, :normal, :infinity)
-    clean.()
-    supervisor = start_manager.([])
-    {:ok, shutdown_id} = Manager.start(Keyword.put(manager_opts, :on_output, blocked_managed))
-    shutdown_status = managed_wait.(shutdown_id)
-    receive do {:output_blocked, _, _, size} when size > 0 -> :ok
-      after 10_000 -> raise "shutdown output did not block" end
-    :ok = Supervisor.stop(supervisor, :normal, :infinity)
-    ensure.(Process.whereis(Garden.VM.Manager) == nil)
-    os_gone.(shutdown_status.os_pid)
-    clean.()
-    config = Garden.Config.load(%{
-      "state_directory" => "/tmp/image-garden-state",
-      "admin_socket" => "/tmp/image-garden-admin.sock",
-      "vm_capacity" => Map.new(Keyword.put(budgets, :vms, 1), fn {key, value} ->
-        {Atom.to_string(key), value}
-      end)
-    }, skip_config_file: true)
-    ensure.(config.endpoint == nil)
+    {:ok, after_manager} = VM.await_ready(durable)
+    ensure.(after_manager.os_pid == before.os_pid)
+    {:ok, handle} = VM.execute(durable, shell.("printf reconnect"))
+    {:ok, %{code: 0}} = VM.await_command(handle)
+    Garden.Config.load(%{"state_directory" => "/tmp/image-garden-state",
+      "admin_socket" => "/tmp/image-garden-admin.sock"}, skip_config_file: true)
     {:ok, _} = Application.ensure_all_started(:garden)
-    {:ok, garden_id} = Manager.start(Keyword.put(manager_opts, :on_output, blocked_managed))
-    garden_status = managed_wait.(garden_id)
-    receive do {:output_blocked, _, _, size} when size > 0 -> :ok
-      after 10_000 -> raise "garden shutdown output did not block" end
-    true = :erlang.suspend_process(garden_status.guard)
-    spawn(fn -> :ok = Application.stop(:garden); send(parent, :garden_stopped) end)
-    until.(fn ->
-      case Manager.start(manager_opts) do
-        {:error, :draining} -> true
-        {:error, {:capacity_exhausted, :vms}} -> false
-        other -> raise "admission opened during garden shutdown: #{inspect(other)}"
-      end
-    end)
-    true = :erlang.resume_process(garden_status.guard)
-    receive do :garden_stopped -> :ok after 30_000 -> raise "garden did not drain" end
-    ensure.(Process.whereis(Garden.VM.Supervisor) == nil)
-    ensure.(Process.whereis(Garden.VM.Manager) == nil)
-    os_gone.(garden_status.os_pid)
-    ensure.(not File.exists?(garden_status.directory))
+    :ok = Application.stop(:garden)
+    {:ok, after_garden} = VM.status(durable)
+    ensure.(after_garden.os_pid == before.os_pid and after_garden.phase == :ready)
+    :ok = Application.stop(:vm_manager)
+    until.(fn -> not File.exists?("/proc/#{before.os_pid}") end)
+    {:ok, _} = Application.ensure_all_started(:vm_manager)
+    {:ok, restored} = VM.await_ready(durable)
+    ensure.(restored.id == durable and restored.os_pid != before.os_pid)
+    {:ok, handle} = VM.execute(durable, shell.("exit 0"))
+    {:ok, %{code: 0}} = VM.await_command(handle)
+    {_, 0} = System.cmd("kill", ["--signal", "KILL", Integer.to_string(restored.os_pid)])
+    until.(fn -> {:ok, status} = VM.status(durable); status.phase in [:finished, :failed, :stopped] end)
+    retire.(durable)
     clean.()
-    supervisor = start_manager.(budgets: Keyword.put(budgets, :vms, 1), result_limit: 1)
-    {:ok, retained_id} = Manager.start(manager_opts)
-    retained_controller = controller.(retained_id)
-    retained_status = managed_wait.(retained_id)
-    retained_file = Path.join(retained_status.directory, "unowned")
-    File.write!(retained_file, "managed retention")
-    :ok = Manager.cancel(retained_id)
-    {:error, {:cleanup_unconfirmed, {:error, :cancelled},
-      {:error, {:unexpected_files, ["unowned"]}}, retained_directory}} = Manager.await(retained_id)
-    ensure.(retained_directory == retained_status.directory)
-    retired.(retained_controller)
-    {:ok, retained_status} = Manager.status(retained_id)
-    ensure.(retained_status.phase == :retained and File.read!(retained_file) == "managed retention")
-    ensure.(File.exists?(Path.join(retained_directory, "scratch.ext4")))
-    {:error, {:capacity_exhausted, :vms}} = Manager.start(manager_opts)
-    {:error, {:cleanup_incomplete, failures}} = Manager.shutdown()
-    ensure.(Enum.any?(failures, fn {id, _, directory} ->
-      id == retained_id and directory == retained_directory
-    end))
-    {:error, :draining} = Manager.start(manager_opts)
-    :ok = Supervisor.stop(supervisor, :normal, :infinity)
-    ensure.(File.read!(retained_file) == "managed retention")
-    supervisor = start_manager.(budgets: Keyword.put(budgets, :vms, 1), result_limit: 1)
-    {:ok, restarted_retained_status} = Manager.status(retained_id)
-    ensure.(restarted_retained_status.phase == :retained)
-    ensure.(restarted_retained_status.result == retained_status.result)
-    ensure.(restarted_retained_status.directory == retained_directory)
-    ensure.(File.read!(retained_file) == "managed retention")
-    ensure.(DynamicSupervisor.count_children(Garden.VM.ExecutionSupervisor).active == 0)
-    {:error, {:capacity_exhausted, :vms}} = Manager.start(manager_opts)
-    {:error, {:cleanup_incomplete, _}} = Manager.shutdown()
-    :ok = Supervisor.stop(supervisor, :normal, :infinity)
-    Enum.each(["unowned", "scratch.ext4", "serial.log"], fn name ->
-      :ok = File.rm(Path.join(retained_directory, name))
-    end)
-    :ok = File.rmdir(retained_directory)
+    retained = boot.(custom, [])
+    {:ok, retained_status} = VM.status(retained)
+    unexpected = Path.join(retained_status.directory, "unowned")
+    File.write!(unexpected, "retain me")
+    {:error, _} = VM.stop(retained)
+    {:ok, retained_status} = VM.status(retained)
+    ensure.(retained_status.cleanup != :ok and File.read!(unexpected) == "retain me")
+    :ok = Application.stop(:vm_manager)
+    {:ok, _} = Application.ensure_all_started(:vm_manager)
+    {:ok, recovered} = VM.status(retained)
+    ensure.(recovered.directory == retained_status.directory and recovered.cleanup != :ok)
+    ensure.(File.read!(unexpected) == "retain me")
+    :ok = Application.stop(:vm_manager)
+    for name <- ["unowned", "scratch.ext4", "serial.log"] do
+      :ok = File.rm(Path.join(recovered.directory, name))
+    end
+    :ok = File.rmdir(recovered.directory)
     clean.()
-    supervisor = start_manager.(budgets: Keyword.put(budgets, :vms, 1), result_limit: 1)
-    {:ok, unreleased_status} = Manager.status(retained_id)
-    ensure.(unreleased_status.phase == :retained and unreleased_status.result == retained_status.result)
-    {:error, {:capacity_exhausted, :vms}} = Manager.start(manager_opts)
-    {:error, {:cleanup_incomplete, _}} = Manager.shutdown()
-    :ok = Supervisor.stop(supervisor, :normal, :infinity)
-    clean.()
-    :ets.delete(managed_ids)
-    IO.puts("real image scenarios passed; ready_ms=#{result.ready_ms} elapsed_ms=#{result.elapsed_ms}")
+    IO.puts("real image scenarios passed")
   '';
   networkScenario = pkgs.writeText "image-network-scenario.exs" ''
-    {:ok, _} = Application.ensure_all_started(:cloud_hypervisor)
-    alias Garden.{Image, VM}
-    alias Garden.VM.Manager
+    alias Garden.Image
+    alias VMManager, as: VM
+    alias VMManager, as: Manager
     {:ok, image} = Image.load("${custom}")
     root = System.get_env("SOWER_NETWORK_ROOT") || "/var/lib/sower-garden/image-network-scenarios"
     File.mkdir_p!(root)
+    Application.put_env(:vm_manager, :state_directory, root <> "-manager-" <> System.pid())
+    Application.put_env(:vm_manager, :budgets,
+      [vms: 2, cpus: 2, memory: 5 * 1024 * 1024 * 1024,
+       scratch_bytes: 8 * 1024 * 1024 * 1024])
+    :ok = Application.load(:garden)
+    Code.ensure_loaded!(Garden.VM.Network)
+    Code.ensure_loaded!(Garden.ActivatorClient)
+    {:ok, _} = Application.ensure_all_started(:vm_manager)
     parent = self()
     output = fn stream, bytes -> send(parent, {stream, bytes}) end
-    {:ok, supervisor} = VM.Supervisor.start_link(
-      budgets: [vms: 2, cpus: 2, memory: 5 * 1024 * 1024 * 1024,
-        scratch_bytes: 8 * 1024 * 1024 * 1024], result_limit: 20)
-    options = [image: image, owner: self(), network: :full, resource_directory: root,
-      cpus: 1, memory: 2 * 1024 * 1024 * 1024, scratch_bytes: 4 * 1024 * 1024 * 1024,
-      deadline_ms: 600_000, on_output: output]
+    options = [network: :full, runtime_directory: root, boot_deadline_ms: 90_000,
+      cpus: 1, memory: 2 * 1024 * 1024 * 1024, scratch_bytes: 4 * 1024 * 1024 * 1024]
+    define = fn overrides ->
+      id = "network-" <> Integer.to_string(System.unique_integer([:positive, :monotonic]))
+      {:ok, ^id} = Manager.define(Image.vm_config(image, id, Keyword.merge(options, overrides)))
+      id
+    end
+    boot = fn overrides ->
+      id = define.(overrides)
+      :ok = Manager.start(id)
+      {:ok, _} = Manager.await_ready(id)
+      id
+    end
+    retire = fn id ->
+      :ok = Manager.stop(id)
+      :ok = Manager.remove(id)
+    end
     ensure = fn condition -> if not condition, do: raise("network lifecycle assertion failed") end
     collect = fn collect, acc ->
       receive do
@@ -745,21 +646,22 @@ let
       after 0 -> acc end
     end
     run = fn command ->
-      {:ok, id} = Manager.start(Keyword.put(options, :command, command))
-      {:ok, result} = Manager.await(id)
+      id = boot.([])
+      {:ok, handle} = Manager.execute(id, command, on_output: output, deadline_ms: 600_000)
+      {:ok, result} = Manager.await_command(handle)
       stdout = collect.(collect, "")
       IO.binwrite(stdout)
       ensure.(result.code == 0)
       IO.puts("managed-exit=#{result.code}")
-      {:ok, status} = Manager.status(id)
-      ensure.(status.phase == :finished and status.cleanup == :ok)
+      retire.(id)
       stdout
     end
     blocked = %VM.Command{path: "/run/current-system/sw/bin/bash",
       args: ["-c", "echo network-live; exec curl --silent --show-error --connect-timeout 300 https://93.184.216.34"],
       env: %{"PATH" => "/run/current-system/sw/bin"}}
     live = fn overrides ->
-      {:ok, id} = Manager.start(Keyword.merge(Keyword.put(options, :command, blocked), overrides))
+      id = boot.([])
+      {:ok, handle} = Manager.execute(id, blocked, Keyword.merge([on_output: output, deadline_ms: 600_000], overrides))
       receive do
         {:stdout, bytes} -> ensure.(bytes == "network-live\n")
         after 90_000 -> raise "network lifecycle guest did not start"
@@ -769,18 +671,19 @@ let
       [_, uid] = Regex.run(~r/^Uid:\s+(\d+)/m, native)
       [_, capabilities] = Regex.run(~r/^CapEff:\s+([0-9a-f]+)/m, native)
       ensure.(uid != "0" and String.to_integer(capabilities, 16) == 0)
-      id
+      {id, handle}
     end
     if System.get_env("SOWER_NETWORK_EXPECT_FAILURE") do
-      {:ok, id} = Manager.start(Keyword.put(options, :command, blocked))
-      {:error, {:cleanup_unconfirmed, _, _, _}} = Manager.await(id)
+      id = define.([])
+      :ok = Manager.start(id)
+      {:error, _} = Manager.await_ready(id)
       {:ok, status} = Manager.status(id)
-      ensure.(status.phase == :retained and is_nil(status.vmm) and is_nil(status.os_pid))
+      ensure.(status.cleanup != :ok and is_nil(status.vmm) and is_nil(status.os_pid))
       IO.puts("interrupted provision retained without launching a VMM")
       System.halt(0)
     end
     if hold = System.get_env("SOWER_NETWORK_HOLD") do
-      {:ok, id} = Manager.boot(image, Keyword.put(options, :boot_deadline_ms, 90_000))
+      id = boot.([])
       {:ok, _} = Manager.await_ready(id)
       {:ok, command} = Manager.execute(id, %VM.Command{path: "/run/current-system/sw/bin/true"})
       {:ok, %{code: 0}} = VM.await_command(command)
@@ -788,7 +691,7 @@ let
       File.write!(hold, Jason.encode!(%{beam: System.pid(), vmm: status.os_pid}))
       Process.sleep(:infinity)
     end
-    {:ok, owned_network} = Manager.boot(image, Keyword.put(options, :boot_deadline_ms, 90_000))
+    owned_network = boot.([])
     {:ok, owned_status} = Manager.await_ready(owned_network)
     for _ <- 1..2 do
       {:ok, command} = Manager.execute(owned_network,
@@ -800,7 +703,7 @@ let
       ensure.(status.phase == :ready and status.os_pid == owned_status.os_pid)
       ensure.(File.exists?(Path.join(status.directory, "scratch.ext4")))
     end
-    :ok = Manager.stop(owned_network)
+    retire.(owned_network)
     ensure.(not File.exists?(owned_status.directory))
     run.(%VM.Command{path: "/run/current-system/sw/bin/bash", args: ["-o", "errexit", "-o", "nounset", "-c", """
       curl --fail --location --max-time 120 https://github.com/NixOS/nix-installer/releases/download/2.35.2/nix-installer-x86_64-linux --output /tmp/nix-installer
@@ -815,10 +718,12 @@ let
       args: ["run", cowsay_ref,
         "--", "hello from sower"], env: %{"PATH" => "/run/current-system/sw/bin"}})
     ensure.(cowsay =~ "< hello from sower >")
-    {:ok, peer} = Manager.start(Keyword.merge(options,
-      command: %VM.Command{path: "${pkgs.python3}/bin/python3",
+    peer = boot.([])
+    {:ok, peer_handle} = Manager.execute(peer,
+      %VM.Command{path: "${pkgs.python3}/bin/python3",
         args: ["/etc/sower/probe.py", "network-peer"]},
-      on_output: fn stream, bytes -> send(parent, {:peer, stream, bytes}) end))
+      deadline_ms: 600_000,
+      on_output: fn stream, bytes -> send(parent, {:peer, stream, bytes}) end)
     peer_address = receive do
       {:peer, :stdout, bytes} ->
         ["peer-address=" <> address] = String.split(bytes, "\n", trim: true)
@@ -829,38 +734,52 @@ let
       args: ["/etc/sower/probe.py", "network-attack",
         "127.0.0.1", "192.168.50.1", "169.254.169.254", "93.184.216.34", peer_address]})
     ensure.(attack =~ "probes sent")
-    {:ok, peer_result} = Manager.await(peer)
+    {:ok, peer_result} = Manager.await_command(peer_handle)
     ensure.(peer_result.code == 0)
     receive do
       {:peer, :stdout, bytes} -> ensure.(bytes == "peer-deliveries=0\n")
       after 5_000 -> raise "missing peer delivery observation"
     end
-    cancelled = live.([])
-    :ok = Manager.cancel(cancelled)
-    {:error, :cancelled} = Manager.await(cancelled)
-    timed = live.(deadline_ms: 30_000)
-    {:error, :timeout} = Manager.await(timed)
-    owner = spawn(fn -> receive do :stop -> :ok end end)
-    orphan = live.(owner: owner)
-    Process.exit(owner, :kill)
-    {:error, :owner_down} = Manager.await(orphan)
-    crashed = live.([])
+    retire.(peer)
+    {cancelled, cancelled_handle} = live.([])
+    :ok = Manager.cancel_command(cancelled_handle)
+    {:error, :cancelled} = Manager.await_command(cancelled_handle)
+    retire.(cancelled)
+    {timed, timed_handle} = live.(deadline_ms: 30_000)
+    {:error, :timeout} = Manager.await_command(timed_handle)
+    retire.(timed)
+    orphan = boot.([])
+    caller = spawn(fn ->
+      {:ok, _} = Manager.execute(orphan, blocked, on_output: output, deadline_ms: 600_000)
+      send(parent, :orphan_started)
+      receive do :never -> :ok end
+    end)
+    receive do :orphan_started -> :ok after 1000 -> raise "missing orphan caller" end
+    receive do {:stdout, "network-live\n"} -> :ok after 90_000 -> raise "missing orphan output" end
+    Process.exit(caller, :kill)
+    {:ok, _} = Manager.await_ready(orphan)
+    retire.(orphan)
+    {crashed, crashed_handle} = live.([])
     {:ok, crashed_status} = Manager.status(crashed)
     {_, 0} = System.cmd("kill", ["--signal", "KILL", Integer.to_string(crashed_status.os_pid)])
-    {:error, _} = Manager.await(crashed)
-    retired = live.([])
+    {:error, _} = Manager.await_command(crashed_handle)
+    retire.(crashed)
+    {retired, retired_handle} = live.([])
     {:ok, retired_status} = Manager.status(retired)
+    :ok = Manager.subscribe(retired)
     Process.exit(retired_status.execution, :kill)
-    {:error, :owner_down} = Manager.await(retired)
-    {:ok, failed_boot} = Manager.start(Keyword.merge(options,
-      command: blocked, hypervisor: "/nonexistent/sower-hypervisor"))
-    {:error, _} = Manager.await(failed_boot)
-    Enum.each([peer, cancelled, timed, orphan, crashed, retired, failed_boot], fn id ->
-      {:ok, status} = Manager.status(id)
-      ensure.(status.phase == :finished and status.cleanup == :ok)
-    end)
-    :ok = Manager.shutdown()
-    :ok = Supervisor.stop(supervisor, :normal, :infinity)
+    {:error, _} = Manager.await_command(retired_handle)
+    receive do
+      {:vm_manager, ^retired, %VM.Status{phase: phase, cleanup: :ok}}
+          when phase in [:stopped, :finished] -> :ok
+    after 30_000 -> raise "controller loss did not certify VM teardown"
+    end
+    retire.(retired)
+    failed_boot = define.(hypervisor: "/nonexistent/sower-hypervisor")
+    :ok = Manager.start(failed_boot)
+    {:error, _} = Manager.await_ready(failed_boot)
+    retire.(failed_boot)
+    :ok = Application.stop(:vm_manager)
     ensure.(File.ls!(root) == [])
     IO.puts("real network scenarios passed")
   '';
@@ -879,6 +798,201 @@ let
         args+=(-pa "$directory")
       done < <(find ${garden} -type d -name ebin)
       exec elixir "''${args[@]}" ${networkScenario}
+    '';
+  };
+  restorationScenario = pkgs.writeText "image-restoration-scenario.exs" ''
+    alias Garden.Image
+    alias VMManager, as: VM
+    alias CloudHypervisor.{API, Config}
+    [phase] = System.argv()
+    external = String.starts_with?(phase, "attach-")
+    id = cond do
+      String.starts_with?(phase, "agentless-") -> "agentless-restoration"
+      external -> "external-restoration"
+      String.starts_with?(phase, "graceful-") -> "graceful-restoration"
+      true -> "host-restoration"
+    end
+    state = "/var/lib/image-restoration/" <> id
+    File.mkdir_p!(state)
+    Application.put_env(:vm_manager, :state_directory, state)
+    :ok = Application.load(:garden)
+    Code.ensure_loaded!(Garden.VM.Network)
+    Code.ensure_loaded!(Garden.ActivatorClient)
+    {:ok, _} = Application.ensure_all_started(:vm_manager)
+    {:ok, image} = Image.load("${custom}")
+    if String.starts_with?(phase, "agentless-") do
+      if phase == "agentless-prepare" do
+        File.mkdir_p!("/run/image-restoration")
+        disk = "/var/lib/image-restoration/agentless.raw"
+        File.write!(disk, "agentless-host-restoration")
+        {_, 0} = System.cmd("truncate", ["--size", "16M", disk])
+        config = %VM.Config{
+          id: id,
+          kernel: "${agentless}/kernel",
+          initrd: "${agentless}/initrd",
+          cmdline: "console=ttyS0 rd.systemd.unit=agentless.target",
+          serial: %Config.Output{mode: :file, file: "serial.log"},
+          disks: [%Config.Disk{path: disk, readonly: false, image_type: :raw}],
+          runtime_directory: "/run/image-restoration",
+          mkfs: "${pkgs.coreutils}/bin/false"
+        }
+        {:ok, ^id} = VM.define(config)
+        :ok = VM.start(id)
+      end
+      {:ok, %VM.Status{running: true} = agentless} = VM.await_running(id)
+      deadline = System.monotonic_time(:millisecond) + 30_000
+      wait_serial = fn wait_serial ->
+        case File.read(Path.join(agentless.directory, "serial.log")) do
+          {:ok, log} ->
+            unless String.contains?(log, "sower-agentless-userspace-ready") do
+              if System.monotonic_time(:millisecond) >= deadline, do: raise("missing agentless userspace marker")
+              Process.sleep(20)
+              wait_serial.(wait_serial)
+            end
+          {:error, _} ->
+            if System.monotonic_time(:millisecond) >= deadline, do: raise("missing agentless serial log")
+            Process.sleep(20)
+            wait_serial.(wait_serial)
+        end
+      end
+      wait_serial.(wait_serial)
+      {:error, :guest_agent_disabled} = VM.await_ready(id)
+      if phase == "agentless-restore" do
+        :ok = VM.stop(id)
+        {:ok, %VM.Status{cleanup: :ok}} = VM.status(id)
+        :ok = VM.remove(id)
+        true = String.starts_with?(File.read!("/var/lib/image-restoration/agentless.raw"), "agentless-host-restoration")
+        :ok = File.rm("/var/lib/image-restoration/agentless.raw")
+      end
+      IO.puts("agentless restoration phase passed: " <> phase)
+      System.halt(0)
+    end
+    control = "/run/image-external/control.sock"
+    guest = "/run/image-external/guest.sock"
+    api = %API{socket: control}
+    scratch = "/var/lib/image-restoration/external.ext4"
+    if phase == "attach-prepare" do
+      :ok = API.create(api, %Config{
+        kernel: image.kernel, initramfs: image.initrd,
+        cmdline: image.cmdline <> " sower.vm.id=" <> id,
+        cpus: %Config.CPUs{boot_vcpus: 1, max_vcpus: 1}, memory: 536_870_912,
+        disks: [
+          %Config.Disk{path: image.root, readonly: true, image_type: :raw},
+          %Config.Disk{path: scratch, readonly: false, image_type: :raw}
+        ],
+        vsock: %Config.Vsock{cid: 3, socket: guest},
+        console: %Config.Output{mode: :off}, serial: %Config.Output{mode: :off},
+        rng: %Config.RNG{src: "/dev/urandom"}
+      })
+      :ok = API.boot(api)
+    end
+    if phase in ["prepare", "graceful-prepare", "attach-prepare"] do
+      overrides =
+        if external do
+          [mode: :attach, control_endpoint: control, vsock: %Config.Vsock{cid: 3, socket: guest}]
+        else
+          File.mkdir_p!("/run/image-restoration")
+          [runtime_directory: "/run/image-restoration"]
+        end
+      config = Image.vm_config(image, id,
+        Keyword.merge([scratch_bytes: 1024 * 1024 * 1024, boot_deadline_ms: 90_000], overrides))
+      config =
+        if external do
+          %{config |
+            serial: %Config.Output{mode: :off},
+            disks: [
+              %Config.Disk{path: image.root, readonly: true, image_type: :raw},
+              %Config.Disk{path: scratch, readonly: false, image_type: :raw}
+            ]}
+        else
+          config
+        end
+      {:ok, ^id} = VM.define(config)
+      :ok = VM.start(id)
+    end
+    {:ok, _status} = VM.await_ready(id)
+    if phase == "attach-prepare" do
+      {:ok, handle} = VM.execute(id, %VM.Command{
+        path: "/run/current-system/sw/bin/bash",
+        args: ["-c", "printf survived > /var/external-reconnect"]
+      })
+      {:ok, %{code: 0}} = VM.await_command(handle)
+      parent = self()
+      {:ok, _interrupted} = VM.execute(id, %VM.Command{
+        path: "${pkgs.python3}/bin/python3",
+        args: ["-c", """
+        import os, signal
+        with open("/var/external-invocations", "ab", buffering=0) as record:
+            record.write(b"invoked\\n")
+            os.fsync(record.fileno())
+        with open("/var/external-command-pid", "w") as record:
+            record.write(str(os.getpid()))
+            record.flush()
+            os.fsync(record.fileno())
+        print("interrupted-command-ready", flush=True)
+        signal.pause()
+        """]
+      }, deadline_ms: 600_000,
+        on_output: fn stream, bytes -> send(parent, {:interrupted_output, stream, bytes}) end)
+      observe_ready = fn observe_ready, output ->
+        receive do
+          {:interrupted_output, :stdout, bytes} ->
+            output = output <> bytes
+            unless String.contains?(output, "interrupted-command-ready\n") do
+              observe_ready.(observe_ready, output)
+            end
+        after 90_000 -> raise "interrupted guest command did not become ready"
+        end
+      end
+      observe_ready.(observe_ready, "")
+    else
+      command =
+        if external do
+          %VM.Command{
+            path: "${pkgs.python3}/bin/python3",
+            args: ["-c", """
+            import os
+            assert open("/var/external-reconnect").read() == "survived"
+            assert open("/var/external-invocations").read().splitlines() == ["invoked"]
+            old_pid = int(open("/var/external-command-pid").read())
+            assert not os.path.exists("/proc/" + str(old_pid))
+            """]
+          }
+        else
+          %VM.Command{path: "/run/current-system/sw/bin/bash", args: ["-c", "exit 0"]}
+        end
+      {:ok, handle} = VM.execute(id, command)
+      {:ok, %{code: 0}} = VM.await_command(handle)
+    end
+    if phase in ["restore", "graceful-restore", "attach-restore"] do
+      :ok = VM.stop(id)
+      :ok = VM.remove(id)
+      if external do
+        {:ok, %API.Info{state: "Created", device_tree: nil}} = API.info(api)
+        true = File.exists?(control)
+      end
+    end
+    if phase == "graceful-prepare" do
+      :ok = Application.stop(:vm_manager)
+    end
+    IO.puts("restoration phase passed: " <> phase)
+    System.halt(0)
+  '';
+  restorationRunner = pkgs.writeShellApplication {
+    name = "image-restoration-scenario";
+    runtimeInputs = [
+      beamPackages.elixir
+      pkgs.cloud-hypervisor
+      pkgs.e2fsprogs
+      pkgs.coreutils
+      pkgs.findutils
+    ];
+    text = ''
+      args=()
+      while IFS= read -r directory; do
+        args+=(-pa "$directory")
+      done < <(find ${garden} -type d -name ebin)
+      exec elixir "''${args[@]}" ${restorationScenario} "$@"
     '';
   };
   protectedListener = pkgs.writeText "protected-listener.py" ''
@@ -1034,6 +1148,7 @@ pkgs.testers.runNixOSTest {
       environment.systemPackages = [
         runner
         networkRunner
+        restorationRunner
         pkgs.tcpdump
         pkgs.iproute2
         pkgs.nftables
@@ -1076,6 +1191,30 @@ pkgs.testers.runNixOSTest {
     machine.succeed("test -z \"$(find /tmp/image-scenarios -mindepth 1 -print -quit)\"")
     machine.succeed("! pgrep --full '[c]loud-hypervisor'")
     machine.succeed("test -z \"$(find /tmp -maxdepth 1 -type d -name 'cloud-hypervisor-*' -print -quit)\"")
+    machine.succeed("image-restoration-scenario graceful-prepare", timeout=120)
+    machine.succeed("! pgrep --full '[c]loud-hypervisor'")
+    machine.succeed("image-restoration-scenario graceful-restore", timeout=120)
+    machine.succeed("image-restoration-scenario prepare", timeout=120)
+    machine.succeed("image-restoration-scenario agentless-prepare", timeout=120)
+    machine.reboot()
+    machine.wait_for_shutdown()
+    machine.start()
+    machine.wait_for_unit("multi-user.target")
+    machine.succeed("image-restoration-scenario restore", timeout=120)
+    machine.succeed("image-restoration-scenario agentless-restore", timeout=120)
+    machine.succeed("mkdir --parents /run/image-external /var/lib/image-restoration; truncate --size 1G /var/lib/image-restoration/external.ext4; ${pkgs.e2fsprogs}/bin/mkfs.ext4 -q -F -L sower-scratch /var/lib/image-restoration/external.ext4")
+    machine.succeed("systemd-run --unit=image-external ${pkgs.cloud-hypervisor}/bin/cloud-hypervisor --api-socket /run/image-external/control.sock")
+    machine.wait_until_succeeds("test -S /run/image-external/control.sock")
+    external_pid = machine.succeed("systemctl show --property=MainPID --value image-external.service").strip()
+    assert int(external_pid) > 0
+    machine.succeed(f"test -d /proc/{external_pid}")
+    machine.succeed("image-restoration-scenario attach-prepare", timeout=120)
+    assert machine.succeed("systemctl show --property=MainPID --value image-external.service").strip() == external_pid
+    machine.succeed("image-restoration-scenario attach-restore", timeout=120)
+    assert machine.succeed("systemctl show --property=MainPID --value image-external.service").strip() == external_pid
+    machine.succeed(f"test -d /proc/{external_pid}")
+    machine.succeed("systemctl stop image-external.service")
+    machine.succeed("! pgrep --full '[c]loud-hypervisor'")
     machine.wait_for_unit("protected-listener.service")
     protected.wait_for_unit("protected-listener.service")
     # Positive control establishes that the protected service is real and routed.

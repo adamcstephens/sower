@@ -307,7 +307,10 @@ fn prepare_artifact(args: &DeployArgs) -> Result<PreparedArtifact> {
     if args.sudo && !matches!(seed_type, SeedType::Nixos | SeedType::HomeManager) {
         bail!("--sudo supports nixos and home-manager activation");
     }
-    if args.sudo && args.action == Some(DeployAction::Restart) && !matches!(seed_type, SeedType::Nixos) {
+    if args.sudo
+        && args.action == Some(DeployAction::Restart)
+        && !matches!(seed_type, SeedType::Nixos)
+    {
         bail!("--sudo --action restart requires a nixos seed");
     }
     crate::commands::seed::precheck(Path::new(&artifact), seed_type)

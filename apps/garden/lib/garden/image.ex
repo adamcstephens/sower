@@ -1,6 +1,11 @@
 defmodule Garden.Image do
   @moduledoc """
-  Boot artifacts and metadata for an image produced by mkImage.
+  Loads boot metadata and artifacts for an image produced by mkImage.
+
+  Supported metadata describes an x86_64 Linux image with guest contract 1 or 2
+  and store-resident boot artifacts. `vm_config/3` builds a VM definition with
+  a read-only root, attempt-local scratch disk and optional managed networking.
+  Full networking requires an image declaring static network support.
   """
   use TypedStruct
 
@@ -38,6 +43,56 @@ defmodule Garden.Image do
     else
       {:error, reason} -> {:error, reason}
     end
+  end
+
+  def vm_config(%__MODULE__{} = image, id, options \\ []) do
+    alias CloudHypervisor.Config, as: Native
+    alias VMManager.Storage.EphemeralDisk
+
+    {scratch_bytes, options} = Keyword.pop(options, :scratch_bytes, 4_294_967_296)
+    {disks, options} = Keyword.pop(options, :disks, [])
+    {network, options} = Keyword.pop(options, :network, :none)
+
+    network =
+      case network do
+        :none -> nil
+        :full when image.network_config == :static -> Garden.VM.Network.request()
+        :full -> raise ArgumentError, "full networking requires static network image support"
+        network -> network
+      end
+
+    struct!(
+      VMManager.Config,
+      Keyword.merge(
+        [
+          id: id,
+          kernel: image.kernel,
+          initrd: image.initrd,
+          cmdline: image.cmdline,
+          system: image.system,
+          guest: %VMManager.Config.SowerGuest{
+            contract: image.contract,
+            vsock_port: image.vsock_port
+          },
+          disks:
+            [
+              %Native.Disk{path: image.root, readonly: true, image_type: :raw},
+              %EphemeralDisk{
+                name: "scratch.ext4",
+                bytes: scratch_bytes,
+                filesystem: :ext4,
+                label: "sower-scratch"
+              }
+            ] ++ disks,
+          network: network,
+          serial: %Native.Output{mode: :file, file: "serial.log"},
+          console: %Native.Output{mode: :off},
+          rng: %Native.RNG{src: "/dev/urandom"},
+          vsock: %Native.Vsock{cid: 3, socket: nil}
+        ],
+        options
+      )
+    )
   end
 
   defp supported(%{"contract" => contract}) when contract not in [1, 2],
