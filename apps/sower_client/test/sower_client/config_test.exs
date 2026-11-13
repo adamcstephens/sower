@@ -73,6 +73,19 @@ defmodule SowerClient.ConfigTest do
     end
   end
 
+  test "managed profile publication never inherits the private state directory" do
+    with_env(
+      %{"USER" => "alice", "XDG_STATE_HOME" => "/user/state", "STATE_DIRECTORY" => "/private"},
+      fn ->
+        assert Config.default_managed_profiles_directory() == "/user/state/sower-profiles"
+      end
+    )
+
+    with_env(%{"USER" => "root", "STATE_DIRECTORY" => "/private"}, fn ->
+      assert Config.default_managed_profiles_directory() == "/var/lib/sower-profiles"
+    end)
+  end
+
   describe "default_client_name/0" do
     test "returns USER@HOST for non-sower-garden users" do
       {:ok, hostname} = :inet.gethostname()

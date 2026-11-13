@@ -1,4 +1,5 @@
 defmodule Sower.Orchestration.GardenSeedGeneration do
+  @moduledoc "Reconciles observed native generations by garden, profile and generation number."
   use Sower.Schema
   import Ecto.Changeset
   import Ecto.Query, warn: false
@@ -39,7 +40,9 @@ defmodule Sower.Orchestration.GardenSeedGeneration do
     |> foreign_key_constraint(:garden_id)
     |> foreign_key_constraint(:seed_id)
     |> foreign_key_constraint(:profile_id)
-    |> unique_constraint([:garden_id, :seed_id])
+    |> unique_constraint([:garden_id, :profile_id, :generation_number],
+      name: :garden_profile_generation_identity_index
+    )
   end
 
   def list_garden_seed_generation(%Garden{id: garden_id}) do
@@ -79,7 +82,15 @@ defmodule Sower.Orchestration.GardenSeedGeneration do
       created_at_generation: attrs.created_at_generation
     }
 
-    case Repo.get_by(__MODULE__, garden_id: garden_id, seed_id: seed_id) do
+    query =
+      from(g in __MODULE__, where: g.garden_id == ^garden_id and g.profile_id == ^profile_id)
+
+    query =
+      if attrs.generation_number == nil,
+        do: from(g in query, where: is_nil(g.generation_number) and g.seed_id == ^seed_id),
+        else: from(g in query, where: g.generation_number == ^attrs.generation_number)
+
+    case Repo.one(query) do
       nil ->
         %__MODULE__{}
         |> changeset(changeset_attrs)
@@ -87,6 +98,7 @@ defmodule Sower.Orchestration.GardenSeedGeneration do
 
       %__MODULE__{} = existing ->
         update_attrs = %{
+          seed_id: seed_id,
           profile_id: profile_id,
           generation_number: attrs.generation_number,
           is_current: attrs.is_current,
@@ -110,14 +122,19 @@ defmodule Sower.Orchestration.GardenSeedGeneration do
       ) do
     result =
       Repo.transaction(fn ->
-        if Enum.empty?(report.profiles) do
-          delete_all_garden_seed_generations(garden.id)
-        else
-          for profile <- report.profiles do
-            nix_profile = NixProfile.find_or_create!(profile.profile_path)
-            rows = resolve_profile_generation_rows(garden, profile)
-            sync_profile_generation_rows(garden, nix_profile, rows)
-          end
+        if report.complete != false do
+          profile_ids =
+            for profile <- report.profiles do
+              nix_profile = NixProfile.find_or_create!(profile.profile_path)
+              rows = resolve_profile_generation_rows(garden, profile)
+              sync_profile_generation_rows(garden, nix_profile, rows)
+              nix_profile.id
+            end
+
+          from(g in __MODULE__,
+            where: g.garden_id == ^garden.id and g.profile_id not in ^profile_ids
+          )
+          |> Repo.delete_all()
         end
 
         :ok
@@ -139,8 +156,15 @@ defmodule Sower.Orchestration.GardenSeedGeneration do
       |> Enum.map(& &1.path)
       |> Enum.uniq()
 
+    query = from(s in Seed, where: s.artifact in ^artifacts)
+
+    query =
+      if profile.seed_type,
+        do: from(s in query, where: s.seed_type == ^profile.seed_type),
+        else: query
+
     seeds_by_artifact =
-      from(s in Seed, where: s.artifact in ^artifacts)
+      query
       |> Repo.all()
       |> Map.new(&{&1.artifact, &1})
 
@@ -196,9 +220,11 @@ defmodule Sower.Orchestration.GardenSeedGeneration do
     |> Enum.reverse()
     |> normalize_current_generation_rows()
     |> Enum.reverse()
-    |> Enum.uniq_by(& &1.seed_id)
+    |> Enum.uniq_by(&generation_identity/1)
     |> Enum.reverse()
   end
+
+  defp generation_identity(row), do: row.generation_number || {:seed, row.seed_id}
 
   defp parse_generation_created(%DateTime{} = dt), do: {:ok, DateTime.truncate(dt, :second)}
 
@@ -212,14 +238,16 @@ defmodule Sower.Orchestration.GardenSeedGeneration do
   defp parse_generation_created(_), do: :error
 
   defp normalize_current_generation_rows(rows) do
-    current_seed_id =
-      Enum.reduce(rows, nil, fn row, acc -> if row.is_current, do: row.seed_id, else: acc end)
+    current_number =
+      Enum.reduce(rows, nil, fn row, acc ->
+        if row.is_current, do: generation_identity(row), else: acc
+      end)
 
-    if is_nil(current_seed_id) do
+    if is_nil(current_number) do
       rows
     else
       Enum.map(rows, fn row ->
-        %{row | is_current: row.seed_id == current_seed_id}
+        %{row | is_current: generation_identity(row) == current_number}
       end)
     end
   end
@@ -232,41 +260,35 @@ defmodule Sower.Orchestration.GardenSeedGeneration do
       |> Repo.update_all(set: [is_current: false])
     end
 
-    keep_seed_ids =
-      Enum.reduce(rows, [], fn row, acc ->
-        upsert_garden_generation(garden.id, nix_profile.id, row.seed_id, row)
-        [row.seed_id | acc]
+    keep_ids =
+      Enum.map(rows, fn row ->
+        {:ok, generation} = upsert_garden_generation(garden.id, nix_profile.id, row.seed_id, row)
+        generation.id
       end)
-      |> Enum.uniq()
 
-    delete_stale_garden_seed_generations(garden.id, nix_profile.id, keep_seed_ids)
+    delete_stale_garden_seed_generations(garden.id, nix_profile.id, keep_ids)
   end
 
   defp generation_row_changed?(existing, attrs) do
-    existing.profile_id != attrs.profile_id or
+    existing.seed_id != attrs.seed_id or existing.profile_id != attrs.profile_id or
       existing.generation_number != attrs.generation_number or
       existing.is_current != attrs.is_current or
       existing.created_at_generation != attrs.created_at_generation
   end
 
-  defp delete_stale_garden_seed_generations(garden_id, profile_id, keep_seed_ids) do
+  defp delete_stale_garden_seed_generations(garden_id, profile_id, keep_ids) do
     query =
       from(asg in __MODULE__,
         where: asg.garden_id == ^garden_id and asg.profile_id == ^profile_id
       )
 
     query =
-      if keep_seed_ids == [] do
+      if keep_ids == [] do
         query
       else
-        from(asg in query, where: asg.seed_id not in ^keep_seed_ids)
+        from(asg in query, where: asg.id not in ^keep_ids)
       end
 
     Repo.delete_all(query)
-  end
-
-  defp delete_all_garden_seed_generations(garden_id) do
-    from(asg in __MODULE__, where: asg.garden_id == ^garden_id)
-    |> Repo.delete_all()
   end
 end

@@ -1,4 +1,7 @@
 defmodule Garden.DeploymentLog do
+  @moduledoc """
+  Streams bounded deployment log batches with explicit subscription identity.
+  """
   use GenServer
   use TypedStruct
 
@@ -13,6 +16,7 @@ defmodule Garden.DeploymentLog do
     field :pending, :atomics.atomics_ref(), enforce: true
     field :deployment_sid, String.t()
     field :seed_sid, String.t()
+    field :subscription_sid, String.t()
     field :send_fun, function()
     field :sequence, non_neg_integer(), default: 0
     field :buffer, binary(), default: ""
@@ -72,6 +76,7 @@ defmodule Garden.DeploymentLog do
        pending: pending,
        deployment_sid: deployment_sid,
        seed_sid: seed_sid,
+       subscription_sid: Keyword.get(opts, :subscription_sid),
        send_fun: Keyword.get(opts, :send_fun, &Garden.Socket.send_deployment_log/1)
      }}
   end
@@ -120,6 +125,7 @@ defmodule Garden.DeploymentLog do
     state.send_fun.(%SeedDeploymentLog{
       deployment_sid: state.deployment_sid,
       seed_sid: state.seed_sid,
+      subscription_sid: state.subscription_sid,
       sequence: sequence,
       output: state.buffer
     })

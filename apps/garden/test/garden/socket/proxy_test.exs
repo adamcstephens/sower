@@ -160,7 +160,6 @@ defmodule Garden.Socket.ProxyTest do
 
   test "registers, exchanges and refreshes tokens, joins and reconnects through the proxy" do
     configure_socket(reconnect_after_msec: [20])
-    start_supervised!(Garden.Scheduler)
     socket = start_supervised!({Garden.Socket, []})
 
     assert_receive {:http_request, "/api/v1/gardens/register", registration_headers,

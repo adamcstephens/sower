@@ -72,6 +72,12 @@
             "x-struct": null,
             "x-validate": null
           },
+          "profile_name": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
           "result": {
             "nullable": true,
             "type": "string",
@@ -89,6 +95,12 @@
             "x-validate": null
           },
           "state": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "subscription_sid": {
             "nullable": true,
             "type": "string",
             "x-struct": null,
@@ -273,7 +285,9 @@
               "nixos",
               "home-manager",
               "nix-darwin",
-              "service"
+              "service",
+              "package",
+              "devshell"
             ],
             "type": "string",
             "x-struct": null,
@@ -912,7 +926,7 @@
             }
           },
           {
-            "description": "Seed type, one of [nixos, home-manager, nix-darwin, service]",
+            "description": "Seed type, one of [nixos, home-manager, nix-darwin, service, package, devshell]",
             "example": "nixos",
             "in": "query",
             "name": "seed_type",

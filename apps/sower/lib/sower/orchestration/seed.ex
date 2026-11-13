@@ -1,4 +1,5 @@
 defmodule Sower.Orchestration.Seed do
+  @moduledoc "Stores seed artifacts, subscription matching and registrations inferred from observed native profiles."
   use Sower.Schema
   use Flop.Schema
 
@@ -434,7 +435,12 @@ defmodule Sower.Orchestration.Seed do
         %SowerClient.Orchestration.GardenSeedGeneration{} = generation,
         %SowerClient.Orchestration.GardenSeedProfile{} = profile
       ) do
-    case get_by_artifact(generation.path) do
+    seed =
+      if profile.seed_type,
+        do: Repo.get_by(__MODULE__, artifact: generation.path, seed_type: profile.seed_type),
+        else: get_by_artifact(generation.path)
+
+    case seed do
       nil ->
         register(garden, generation, profile)
 
@@ -445,7 +451,7 @@ defmodule Sower.Orchestration.Seed do
 
   defp register(garden, generation, profile) do
     {name, path_tags} = extract_info_from_store_path(generation.path)
-    seed_type = seed_type_from_profile_path(profile.profile_path)
+    seed_type = profile.seed_type || seed_type_from_profile_path(profile.profile_path)
 
     # Build tags: garden_source + any profile tags
     tags =

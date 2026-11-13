@@ -1,4 +1,5 @@
 defmodule Sower.Orchestration.DeploymentLog.Buffer do
+  @moduledoc "Owns bounded log chunks keyed by seed, explicit subscription destination and sequence."
   use GenServer, restart: :temporary, shutdown: 2_000
   use TypedStruct
 
@@ -8,8 +9,10 @@ defmodule Sower.Orchestration.DeploymentLog.Buffer do
   @timeout 2_000
 
   typedstruct module: State do
+    @moduledoc "Private state of one deployment's bounded log buffer."
     field :deployment, Deployment.t(), enforce: true
     field :seeds_by_sid, map(), enforce: true
+    field :destinations, MapSet.t(), default: MapSet.new()
     field :table, :ets.tid(), enforce: true
     field :max_bytes, pos_integer(), default: 1_048_576
     field :max_chunks, pos_integer(), default: 1024
@@ -41,10 +44,24 @@ defmodule Sower.Orchestration.DeploymentLog.Buffer do
     if is_integer(max_bytes) and max_bytes > 0 and is_integer(max_chunks) and max_chunks > 0 do
       seeds_by_sid = Map.new(deployment.seeds, fn %Seed{} = seed -> {seed.sid, seed} end)
 
+      destinations =
+        case deployment.seed_deployments do
+          %Ecto.Association.NotLoaded{} ->
+            MapSet.new(Enum.map(deployment.seeds, &{&1.sid, nil}))
+
+          rows ->
+            Enum.reduce(rows, MapSet.new(), fn row, acc ->
+              seed = Enum.find(deployment.seeds, &(&1.id == row.seed_id))
+              acc = MapSet.put(acc, {seed.sid, row.subscription_sid})
+              if is_nil(row.profile_name), do: MapSet.put(acc, {seed.sid, nil}), else: acc
+            end)
+        end
+
       {:ok,
        %State{
          deployment: deployment,
          seeds_by_sid: seeds_by_sid,
+         destinations: destinations,
          table: :ets.new(__MODULE__, [:ordered_set, :private]),
          max_bytes: max_bytes,
          max_chunks: max_chunks
@@ -88,6 +105,10 @@ defmodule Sower.Orchestration.DeploymentLog.Buffer do
       not Map.has_key?(state.seeds_by_sid, request.seed_sid) ->
         {:error, :seed_not_in_deployment}
 
+      not MapSet.member?(state.destinations, {request.seed_sid, request.subscription_sid}) and
+          not MapSet.member?(state.destinations, {request.seed_sid, nil}) ->
+        {:error, :seed_not_in_deployment}
+
       true ->
         :ok
     end
@@ -103,8 +124,12 @@ defmodule Sower.Orchestration.DeploymentLog.Buffer do
 
   defp insert(%SeedDeploymentLog{} = request, %State{} = state) do
     seed = Map.fetch!(state.seeds_by_sid, request.seed_sid)
-    key = {seed.sid, request.sequence}
-    floor = Map.get(state.evicted_through, seed.sid, 0)
+
+    destination =
+      if request.subscription_sid, do: {seed.sid, request.subscription_sid}, else: seed.sid
+
+    key = {destination, request.sequence}
+    floor = Map.get(state.evicted_through, destination, 0)
 
     if request.sequence <= floor or :ets.member(state.table, key) do
       {:reply, {:ok, %{}}, state}
@@ -123,6 +148,7 @@ defmodule Sower.Orchestration.DeploymentLog.Buffer do
         deployment_id: state.deployment.id,
         deployment_sid: state.deployment.sid,
         seed_sid: seed.sid,
+        subscription_sid: request.subscription_sid,
         sequence: request.sequence,
         output: output
       }

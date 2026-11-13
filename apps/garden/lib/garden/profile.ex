@@ -1,6 +1,8 @@
 defmodule Garden.Profile do
   @moduledoc """
-  Collects Nix profile generation data for reporting to the server.
+  Observes native profiles and maintains package/devshell profile directories.
+  Configured subscriptions own destinations; native links and staged GC roots
+  are the only local inventory. Cleanup never runs the host garbage collector.
   """
 
   require Logger
@@ -24,13 +26,19 @@ defmodule Garden.Profile do
       %SowerClient.Orchestration.GardenSeedsReport{profiles: [...]}
   """
   def collect_profiles(targets) when is_list(targets) do
-    profiles =
-      targets
-      |> Enum.map(&collect_target/1)
-      |> Enum.reject(fn {result, _} -> result == :error end)
-      |> Enum.map(fn {_, profile} -> profile end)
+    {profiles, failed} =
+      Enum.reduce(targets, {[], []}, fn target, {profiles, failed} ->
+        case collect_target(target) do
+          {:ok, profile} -> {[profile | profiles], failed}
+          {:error, _reason} -> {profiles, [target.path | failed]}
+        end
+      end)
 
-    GardenSeedsReport.cast!(%{profiles: profiles})
+    GardenSeedsReport.cast!(%{
+      profiles: Enum.reverse(profiles),
+      complete: failed == [],
+      failed_profile_paths: Enum.reverse(failed)
+    })
   end
 
   @doc """
@@ -92,24 +100,178 @@ defmodule Garden.Profile do
 
   defp extract_username_from_rules(_), do: nil
 
-  @doc """
-  Collects profiles for the given subscriptions.
-
-  Builds profile targets from subscriptions and collects profiles for each target.
-  Returns an empty report if no subscriptions exist (allowing server cleanup).
-
-  ## Examples
-
-      iex> subs = [%{seed_type: "nixos", seed_name: "host", rules: []}]
-      iex> Garden.Profile.collect_profiles_for_subscriptions(subs)
-      %SowerClient.Orchestration.GardenSeedsReport{profiles: [...]}
-
-      iex> Garden.Profile.collect_profiles_for_subscriptions([])
-      %SowerClient.Orchestration.GardenSeedsReport{profiles: []}
-  """
   def collect_profiles_for_subscriptions(subscriptions) when is_list(subscriptions) do
-    targets = build_profile_targets(subscriptions)
-    collect_profiles(targets)
+    legacy = subscriptions |> build_profile_targets() |> collect_profiles()
+
+    Enum.reduce(Enum.filter(subscriptions, &managed?(&1.seed_type)), legacy, fn sub, report ->
+      case observe(sub) do
+        {:ok, profile} ->
+          %{report | profiles: report.profiles ++ [profile]}
+
+        {:error, reason} ->
+          Logger.error(
+            msg: "Failed to observe profile",
+            profile: path(sub),
+            error: inspect(reason)
+          )
+
+          %{
+            report
+            | complete: false,
+              failed_profile_paths: [path(sub) | report.failed_profile_paths]
+          }
+      end
+    end)
+  end
+
+  def managed?(type), do: type in ["package", "devshell"]
+
+  def path(subscription, root \\ Garden.Config.get().managed_profiles_directory) do
+    unless managed?(subscription.seed_type) and
+             is_binary(subscription.name) and
+             Regex.match?(~r/\A[A-Za-z0-9][A-Za-z0-9._-]*\z/, subscription.name) do
+      raise ArgumentError, "invalid managed profile destination"
+    end
+
+    Path.join([root, subscription.seed_type, subscription.name, "profile"])
+  end
+
+  def prepare(subscription, root \\ Garden.Config.get().managed_profiles_directory) do
+    directory = Path.dirname(path(subscription, root))
+    File.mkdir_p!(root)
+    mode = :erlang.band(File.stat!(root).mode, 0o777)
+
+    for path <- [Path.dirname(directory), directory, Path.join(directory, "staged")] do
+      File.mkdir_p!(path)
+      File.chmod!(path, mode)
+    end
+
+    :ok
+  end
+
+  def stage_root(subscription, artifact, root \\ Garden.Config.get().managed_profiles_directory) do
+    Path.join([Path.dirname(path(subscription, root)), "staged", Path.basename(artifact)])
+  end
+
+  def observe(subscription, root \\ Garden.Config.get().managed_profiles_directory) do
+    profile = path(subscription, root)
+
+    case File.lstat(Path.dirname(profile)) do
+      {:error, :enoent} ->
+        {:ok,
+         GardenSeedProfile.cast!(%{
+           profile_path: profile,
+           name: subscription.name,
+           seed_type: subscription.seed_type,
+           subscription_sid: subscription.sid,
+           generations: []
+         })}
+
+      {:ok, %{type: :directory}} ->
+        with {:ok, generations} <- Nix.Profile.generations(profile),
+             {:ok, current} <- current_link(profile) do
+          {:ok,
+           GardenSeedProfile.cast!(%{
+             profile_path: profile,
+             name: subscription.name,
+             seed_type: subscription.seed_type,
+             subscription_sid: subscription.sid,
+             generations:
+               Enum.map(generations, fn generation ->
+                 generation
+                 |> to_garden_seed_generation(nil)
+                 |> Map.put(:is_current, generation.link == current)
+               end)
+           })}
+        else
+          {:error, reason} -> {:error, reason}
+        end
+
+      {:ok, _} ->
+        {:error, :not_directory}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp current_link(profile) do
+    case File.read_link(profile) do
+      {:ok, link} -> {:ok, Path.expand(link, Path.dirname(profile))}
+      {:error, :enoent} -> {:ok, nil}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def activated(subscription, artifact) do
+    with :ok <- File.rm(stage_root(subscription, artifact)),
+         :ok <- prune(subscription) do
+      :ok
+    else
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def prune(
+        subscription,
+        root \\ Garden.Config.get().managed_profiles_directory,
+        now \\ DateTime.utc_now()
+      )
+
+  def prune(%{retention: nil}, _root, _now), do: :ok
+
+  def prune(subscription, root, now) do
+    profile = path(subscription, root)
+
+    with {:ok, generations} <- Nix.Profile.generations(profile),
+         {:ok, current} <- current_link(profile) do
+      Enum.with_index(generations)
+      |> Enum.each(fn {generation, index} ->
+        retention = subscription.retention
+        keep_count = retention.keep_generations != nil and index < retention.keep_generations
+
+        keep_age =
+          retention.keep_days != nil and
+            DateTime.diff(now, generation.created) <= retention.keep_days * 86_400
+
+        unless generation.link == current or keep_count or keep_age, do: File.rm!(generation.link)
+      end)
+
+      :ok
+    else
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def reconcile(subscriptions, root \\ Garden.Config.get().managed_profiles_directory) do
+    configured =
+      subscriptions
+      |> Enum.filter(&managed?(&1.seed_type))
+      |> MapSet.new(&Path.dirname(path(&1, root)))
+
+    for type <- ["package", "devshell"] do
+      directory = Path.join(root, type)
+
+      case File.lstat(directory) do
+        {:error, :enoent} ->
+          :ok
+
+        {:ok, %{type: :directory}} ->
+          for name <- File.ls!(directory),
+              destination = Path.join(directory, name),
+              not MapSet.member?(configured, destination) do
+            File.rm_rf!(destination)
+          end
+
+        {:ok, _} ->
+          raise File.Error, reason: :enotdir, action: "reconcile", path: directory
+
+        {:error, reason} ->
+          raise File.Error, reason: reason, action: "reconcile", path: directory
+      end
+    end
+
+    :ok
   end
 
   @doc """

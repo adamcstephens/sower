@@ -1,8 +1,9 @@
 defmodule SowerClient.Seed do
+  @moduledoc "A published store artifact and its installation semantics, including opaque package and devshell outputs."
   use SowerClient.Schema
   use SowerClient.ChannelMessage, event: "get:seed"
 
-  @seed_types ["nixos", "home-manager", "nix-darwin", "service"]
+  @seed_types ["nixos", "home-manager", "nix-darwin", "service", "package", "devshell"]
 
   OpenApiSpex.schema(%{
     title: "Seed",

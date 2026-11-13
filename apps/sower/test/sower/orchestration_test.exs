@@ -505,7 +505,7 @@ defmodule Sower.OrchestrationTest do
     end
 
     @tag :capture_log
-    test "upsert_from_report/4 updates existing profile on conflict" do
+    test "upsert_from_report/4 updates the same profile-local generation" do
       garden = garden_fixture()
       seed = seed_fixture()
       profile = nix_profile_fixture()
@@ -521,19 +521,19 @@ defmodule Sower.OrchestrationTest do
       assert asp1.generation_number == 41
 
       attrs2 = %{
-        generation_number: 42,
+        generation_number: 41,
         is_current: true,
         created_at_generation: now
       }
 
       {:ok, asp2} = Orchestration.upsert_garden_generation(garden.id, profile.id, seed.id, attrs2)
       assert asp2.id == asp1.id
-      assert asp2.generation_number == 42
+      assert asp2.generation_number == 41
       assert asp2.is_current == true
     end
 
     @tag :capture_log
-    test "unique constraint on garden_id and seed_id" do
+    test "unique constraint on garden, profile and generation number" do
       garden = garden_fixture()
       seed = seed_fixture()
       profile = nix_profile_fixture()
@@ -557,7 +557,7 @@ defmodule Sower.OrchestrationTest do
           garden_id: garden.id,
           seed_id: seed.id,
           profile_id: profile.id,
-          generation_number: 2,
+          generation_number: 1,
           is_current: true,
           created_at_generation: now
         })

@@ -1,4 +1,5 @@
 defmodule SowerWeb.Api.DeploymentJSON do
+  @moduledoc "Renders deployment outcomes without collapsing independently addressed seed destinations."
   alias Sower.Orchestration.Deployment
 
   @doc """
@@ -23,6 +24,8 @@ defmodule SowerWeb.Api.DeploymentJSON do
   defp seed_info(seed_deployment) do
     %{
       seed_sid: seed_deployment.seed.sid,
+      subscription_sid: seed_deployment.subscription_sid,
+      profile_name: seed_deployment.profile_name,
       name: seed_deployment.seed.name,
       seed_type: seed_deployment.seed.seed_type,
       state: seed_deployment.state,

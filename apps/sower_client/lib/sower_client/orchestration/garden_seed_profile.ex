@@ -8,8 +8,12 @@ defmodule SowerClient.Orchestration.GardenSeedProfile do
     title: "GardenSeedProfile",
     type: :object,
     properties: %{
+      name: %Schema{type: :string, nullable: true},
+      subscription_sid: %Schema{type: :string, nullable: true},
+      seed_type: %Schema{type: :string, nullable: true},
       profile_path: %Schema{
         type: :string,
+        nullable: true,
         description: "The Nix profile path (e.g., /nix/var/nix/profiles/system)"
       },
       tags: %Schema{

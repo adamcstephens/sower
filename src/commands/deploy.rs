@@ -25,8 +25,8 @@ const POLL_INTERVAL: Duration = Duration::from_secs(2);
 #[derive(Debug, Args)]
 pub struct DeployArgs {
     /// Flake reference to build, e.g. `.#myhost` or `.#nixos/myhost`.
-    /// Bare host attributes build a NixOS toplevel; nixos/, home/, and seed/
-    /// jobs build wrappers whose seed.json identifies the deployable artifact.
+    /// Bare host attributes build a NixOS toplevel; canonical seed jobs build
+    /// wrappers whose seed.json identifies the deployable artifact.
     flake: Option<String>,
 
     #[command(flatten)]
@@ -74,7 +74,7 @@ pub struct DeployArgs {
     #[arg(long, short = 'n')]
     name: Option<String>,
 
-    /// Seed type: nixos | home-manager | nix-darwin | service.
+    /// Seed type: nixos | home-manager | nix-darwin | service | package | devshell.
     /// Defaults to the wrapper manifest's type, or nixos for raw artifacts.
     #[arg(long = "type", short = 't')]
     seed_type: Option<SeedType>,
@@ -635,8 +635,12 @@ fn canonical_job(attr: &str) -> Option<(&str, &str)> {
     } else {
         (component, name)
     };
-    (!name.is_empty() && matches!(namespace, "nixos" | "home" | "seed"))
-        .then_some((namespace, name))
+    (!name.is_empty()
+        && matches!(
+            namespace,
+            "nixos" | "home" | "seed" | "package" | "devshell"
+        ))
+    .then_some((namespace, name))
 }
 
 /// Split a flake reference into the installable to build and the seed name it
@@ -877,6 +881,10 @@ mod tests {
             ".#nixos/host",
             ".#home/host",
             ".#seed/host",
+            ".#package/host",
+            ".#devshell/host",
+            ".#packages.x86_64-linux.\"package/host\"",
+            ".#packages.x86_64-linux.\"devshell/host\"",
             ".#packages.x86_64-linux.nixos/host",
             ".#\"nixos/host\"",
             ".#\"home/host\"",
@@ -895,7 +903,7 @@ mod tests {
 
     #[test]
     fn quoted_canonical_jobs_preserve_dotted_names_without_quotes() {
-        for namespace in ["nixos", "home", "seed"] {
+        for namespace in ["nixos", "home", "seed", "package", "devshell"] {
             for qualifier in ["", "packages.x86_64-linux.", "packages.\"system.name\"."] {
                 let reference = format!(".#{qualifier}\"{namespace}/host.example\"");
                 let (installable, name) = flake_installable(&reference).unwrap();
@@ -983,7 +991,14 @@ mod tests {
 
     #[test]
     fn manifests_accept_supported_seed_types_and_string_tags() {
-        for seed_type in ["nixos", "home-manager", "nix-darwin", "service"] {
+        for seed_type in [
+            "nixos",
+            "home-manager",
+            "nix-darwin",
+            "service",
+            "package",
+            "devshell",
+        ] {
             let payload = serde_json::json!({
                 "version": 1, "name": "host", "seed_type": seed_type,
                 "artifact": "/nix/store/00000000000000000000000000000000-target",

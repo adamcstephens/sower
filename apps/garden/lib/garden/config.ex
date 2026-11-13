@@ -106,7 +106,10 @@ defmodule Garden.Config do
       end
     end
 
-    # Expand state_directory path
-    %{config | state_directory: Path.expand(config.state_directory)}
+    %{
+      config
+      | state_directory: Path.expand(config.state_directory),
+        managed_profiles_directory: Path.expand(config.managed_profiles_directory)
+    }
   end
 end

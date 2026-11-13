@@ -1,7 +1,8 @@
 defmodule Garden.Socket do
   @moduledoc """
   Maintains the garden control channel, registration, authentication lifecycle,
-  and local deployment dispatch.
+  and local deployment dispatch, negotiating native profile support while
+  retaining legacy deployment compatibility.
 
   HTTP registration uses runtime Req defaults. WebSocket connections reuse the
   application settings established at boot or explicit configuration reload.
@@ -10,7 +11,6 @@ defmodule Garden.Socket do
   Explicit start observers are correlated by request ID before submission;
   deployment workers report starts directly, independently of server connectivity.
   """
-
   use Garden.ChannelClient, lobby_topic: "garden:lobby"
 
   require Logger
@@ -122,7 +122,7 @@ defmodule Garden.Socket do
       case Map.get(socket.assigns, :private_topic) do
         topic when is_binary(topic) ->
           if joined?(socket, topic),
-            do: push_message(socket, chunk),
+            do: push(socket, topic, chunk.__struct__.event(), peer_payload(socket, chunk)),
             else: {:error, :disconnected}
 
         _ ->
@@ -200,7 +200,23 @@ defmodule Garden.Socket do
     end
   end
 
+  def handle_call(
+        {event, %SowerClient.Orchestration.SeedDeploymentResult{} = result},
+        _from,
+        socket
+      ) do
+    {:ok, ref} = push(socket, private_channel(socket), event, peer_payload(socket, result))
+    {:reply, await_reply(ref), socket}
+  end
+
   def handle_call(message, from, socket), do: super(message, from, socket)
+
+  defp peer_payload(socket, payload) do
+    Lifecycle.payload_for_peer(
+      payload,
+      Map.get(socket.assigns, :managed_profiles_supported, false)
+    )
+  end
 
   @impl Slipstream
   def handle_cast({:deployment_request, %{sid: sid}, force?}, socket) do
@@ -213,6 +229,11 @@ defmodule Garden.Socket do
   @impl Slipstream
   def handle_cast(:report_seeds, socket) do
     subscriptions = Map.get(Storage.read(), :subscriptions, [])
+
+    subscriptions =
+      if Map.get(socket.assigns, :managed_profiles_supported, false),
+        do: subscriptions,
+        else: Enum.reject(subscriptions, &Garden.Profile.managed?(&1.seed_type))
 
     case Lifecycle.build_seed_report(subscriptions) do
       :no_profiles ->
@@ -228,7 +249,13 @@ defmodule Garden.Socket do
           subscription_count: length(subscriptions)
         )
 
-        {:ok, _ref} = push(socket, private_channel(socket), "garden:seeds:report", report)
+        {:ok, _ref} =
+          push(
+            socket,
+            private_channel(socket),
+            "garden:seeds:report",
+            peer_payload(socket, report)
+          )
     end
 
     {:noreply, socket}
@@ -241,19 +268,28 @@ defmodule Garden.Socket do
     report = %GardenReport{
       version: to_string(Application.spec(:garden, :vsn)),
       policy: config.policy || %{},
-      timezone: config.timezone || Scheduler.get_timezone()
+      timezone: config.timezone || Scheduler.get_timezone(),
+      capabilities: ["managed_profiles_v1"]
     }
 
     Logger.debug(msg: "Reporting garden facts", version: report.version)
 
-    {:ok, _ref} = push_message(socket, report)
+    {:ok, _ref} =
+      push(socket, private_channel(socket), GardenReport.event(), peer_payload(socket, report))
 
     {:noreply, socket}
   end
 
   @impl Slipstream
   def handle_cast({:seed_status, %SeedDeploymentStatus{} = status}, socket) do
-    {:ok, _} = push(socket, private_channel(socket), SeedDeploymentStatus.event(), status)
+    {:ok, _} =
+      push(
+        socket,
+        private_channel(socket),
+        SeedDeploymentStatus.event(),
+        peer_payload(socket, status)
+      )
+
     {:noreply, socket}
   end
 
@@ -267,7 +303,12 @@ defmodule Garden.Socket do
         if sub.schedule, do: %{sub | timezone: tz}, else: sub
       end)
 
-    sync_payload = %{subscriptions: Enum.map(config_subscriptions, &Map.from_struct/1)}
+    config_subscriptions =
+      if Map.get(socket.assigns, :managed_profiles_supported, false),
+        do: config_subscriptions,
+        else: Enum.reject(config_subscriptions, &Garden.Profile.managed?(&1.seed_type))
+
+    sync_payload = %{subscriptions: Enum.map(config_subscriptions, &peer_payload(socket, &1))}
 
     topic = private_channel(socket)
     {:ok, ref} = push(socket, topic, "subscriptions:sync", sync_payload)
@@ -601,7 +642,10 @@ defmodule Garden.Socket do
       |> assign(:conn_sid, conn_sid)
       |> assign(:garden_sid, garden_sid)
       |> maybe_schedule_existing_reauth(storage.oauth_credentials)
-      |> join("garden:#{garden_sid}", %{direct_override: true})
+      |> join("garden:#{garden_sid}", %{
+        direct_override: true,
+        capabilities: ["managed_profiles_v1"]
+      })
 
     {:ok, socket}
   end
@@ -619,6 +663,7 @@ defmodule Garden.Socket do
       |> assign(:conn_sid, conn_sid)
       |> assign(:pending_deployments_supported, Map.get(reply, "pending_deployments", false))
       |> assign(:deployment_logs_supported, Map.get(reply, "deployment_logs", false))
+      |> assign(:managed_profiles_supported, Map.get(reply, "managed_profiles", false))
 
     {:ok, socket}
   end

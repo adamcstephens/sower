@@ -1,9 +1,34 @@
 defmodule Garden.Scheduler do
+  @moduledoc "Schedules configured deployments and daily native profile retention."
   use Quantum, otp_app: :garden
 
   require Logger
 
   @sub_prefix "subsched_"
+
+  def schedule_retention do
+    new_job()
+    |> Quantum.Job.set_name(:profile_retention)
+    |> Quantum.Job.set_schedule(Crontab.CronExpression.Parser.parse!("0 0 * * *"))
+    |> Quantum.Job.set_overlap(false)
+    |> Quantum.Job.set_task(fn ->
+      for subscription <- Garden.Config.get().subscriptions,
+          Garden.Profile.managed?(subscription.seed_type) do
+        case Garden.Profile.prune(subscription) do
+          :ok ->
+            :ok
+
+          {:error, reason} ->
+            Logger.error(
+              msg: "Profile retention failed",
+              subscription: subscription.name,
+              error: inspect(reason)
+            )
+        end
+      end
+    end)
+    |> add_job()
+  end
 
   def refresh_subscriptions(subscriptions) do
     existing_jobs =

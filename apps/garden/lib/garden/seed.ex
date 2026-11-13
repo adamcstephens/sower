@@ -1,4 +1,5 @@
 defmodule Garden.Seed do
+  @moduledoc "Activates system seeds through the activator and package seeds through native Nix profiles."
   alias SowerClient.{Activator, Seed}
 
   require Logger
@@ -6,6 +7,11 @@ defmodule Garden.Seed do
   @default_socket_path "/run/sower-activator/activator.sock"
 
   def activate(seed, mode \\ "switch", on_output \\ fn _line -> :ok end)
+
+  def activate(%Seed{seed_type: type} = seed, {:profile, path}, on_output)
+      when type in ["package", "devshell"] do
+    Nix.Profile.set(path, seed.artifact, on_output)
+  end
 
   def activate(%Seed{seed_type: "home-manager"} = seed, _mode, on_output) do
     run_activation("home-manager", seed.artifact, [tags: seed.tags], on_output)

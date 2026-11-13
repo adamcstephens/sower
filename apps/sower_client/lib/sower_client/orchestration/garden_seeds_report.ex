@@ -10,6 +10,12 @@ defmodule SowerClient.Orchestration.GardenSeedsReport do
     title: "GardenSeedsReport",
     type: :object,
     properties: %{
+      complete: %Schema{type: :boolean, nullable: true},
+      failed_profile_paths: %Schema{
+        type: :array,
+        items: %Schema{type: :string},
+        default: []
+      },
       profiles: %Schema{
         type: :array,
         items: SowerClient.Orchestration.GardenSeedProfile,

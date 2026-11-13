@@ -10,6 +10,7 @@ defmodule SowerClient.Orchestration.GardenReport do
     title: "GardenReport",
     type: :object,
     properties: %{
+      capabilities: %Schema{type: :array, items: %Schema{type: :string}, default: []},
       version: %Schema{
         type: :string,
         description: "Software version the garden is running"

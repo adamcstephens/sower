@@ -19,6 +19,7 @@ let
     cfg.settings
     // {
       admin_socket = adminSocketPath;
+      managed_profiles_directory = cfg.managedProfilesDirectory;
     }
     // (lib.optionalAttrs activatorCfg.enable { activator_socket = activatorCfg.socketPath; });
 
@@ -70,6 +71,12 @@ in
   options = {
     services.sower.garden = {
       enable = lib.mkEnableOption "Sower garden";
+
+      managedProfilesDirectory = lib.mkOption {
+        type = lib.types.str;
+        default = "/var/lib/sower-profiles";
+        description = "Garden-owned publication directory for named package and devshell profiles, readable by external consumers.";
+      };
 
       package = lib.mkOption { type = lib.types.package; };
 
@@ -263,7 +270,10 @@ in
           "/dev/kvm rw"
           "/dev/net/tun rw"
         ];
-        ReadWritePaths = lib.optionals activatorCfg.network.enable [
+        ReadWritePaths = [
+          cfg.managedProfilesDirectory
+        ]
+        ++ lib.optionals activatorCfg.network.enable [
           activatorCfg.network.stateDirectory
           "/run/sower-network-ownership"
         ];
@@ -335,7 +345,10 @@ in
         '';
     };
 
-    systemd.tmpfiles.rules = lib.optionals manageServices [
+    systemd.tmpfiles.rules = [
+      "d ${cfg.managedProfilesDirectory} 0755 sower-garden sower-garden -"
+    ]
+    ++ lib.optionals manageServices [
       "d /etc/sower 0755 root root"
       "L /etc/sower/systemd - - - - /nix/var/nix/profiles/sower/services-units/systemd"
     ];

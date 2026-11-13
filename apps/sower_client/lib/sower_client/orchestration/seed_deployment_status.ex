@@ -1,4 +1,5 @@
 defmodule SowerClient.Orchestration.SeedDeploymentStatus do
+  @moduledoc "Progress for one seed destination; managed profiles require subscription identity."
   use SowerClient.Schema
   use SowerClient.ChannelMessage, event: "deployment:seed_status"
 
@@ -6,6 +7,7 @@ defmodule SowerClient.Orchestration.SeedDeploymentStatus do
     title: "SeedDeploymentStatus",
     type: :object,
     properties: %{
+      subscription_sid: %Schema{type: :string, nullable: true},
       deployment_sid: %Schema{
         type: :string,
         description: "deployment sid which is being reported on"

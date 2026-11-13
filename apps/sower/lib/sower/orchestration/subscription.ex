@@ -1,4 +1,5 @@
 defmodule Sower.Orchestration.Subscription do
+  @moduledoc "Persists configured deployment subscriptions, including optional native profile retention."
   use Sower.Schema
   import Ecto.Changeset
   import Ecto.Query, warn: false
@@ -24,8 +25,9 @@ defmodule Sower.Orchestration.Subscription do
     field :seed_type, :string
     field :schedule, :string
     field :timezone, :string
-    embeds_many :rules, __MODULE__.Rule
-    embeds_many :policy, __MODULE__.PolicyRule
+    field :retention, :map
+    embeds_many :rules, __MODULE__.Rule, on_replace: :delete
+    embeds_many :policy, __MODULE__.PolicyRule, on_replace: :delete
 
     timestamps(type: :utc_datetime)
   end
@@ -39,7 +41,8 @@ defmodule Sower.Orchestration.Subscription do
       :seed_name,
       :seed_type,
       :schedule,
-      :timezone
+      :timezone,
+      :retention
     ])
     |> cast_embed(:rules, with: &__MODULE__.Rule.changeset/2)
     |> cast_embed(:policy, with: &__MODULE__.PolicyRule.changeset/2)
@@ -176,6 +179,7 @@ defmodule Sower.Orchestration.Subscription do
                 :rules,
                 :schedule,
                 :timezone,
+                :retention,
                 :policy
               ]},
            conflict_target: [:garden_id, :org_id, :name],
@@ -195,6 +199,7 @@ defmodule Sower.Orchestration.Subscription do
       rules: sub.rules,
       schedule: sub.schedule,
       timezone: sub.timezone,
+      retention: if(sub.retention, do: sub.retention |> Jason.encode!() |> Jason.decode!()),
       policy: policy_to_list(sub.policy)
     }
 

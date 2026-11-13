@@ -68,12 +68,26 @@ let
       };
     }).${system};
   homeSeed = homeJobs."home/example";
+  packageJob = sowerLib.mkSeedPackage {
+    inherit pkgs target;
+    name = "example";
+  };
+  packageSeed = packageJob.value;
+  devshell = pkgs.mkShell { packages = [ pkgs.hello ]; };
+  devshellJob = sowerLib.mkSeedDevshell {
+    inherit pkgs;
+    name = "example";
+    target = devshell;
+  };
+  devshellSeed = devshellJob.value;
   closure = pkgs.closureInfo {
     rootPaths = [
       seed
       nixosSeed
       overrideSeed
       homeSeed
+      packageSeed
+      devshellSeed
     ];
   };
   unsupportedMeta = nixosConfig // {
@@ -95,19 +109,23 @@ let
     libraries = [ pkgs.python3Packages.jsonschema ];
   } (builtins.readFile ./seed-manifest-check.py);
 in
-assert builtins.attrNames nixosJobs == [
-  "nixos/example"
-  "nixos/override"
-];
+assert
+  builtins.attrNames nixosJobs == [
+    "nixos/example"
+    "nixos/override"
+  ];
 assert builtins.attrNames homeJobs == [ "home/example" ];
-assert !(builtins.tryEval (sowerLib.mkSeedNixos "unsupported" unsupportedMeta).value.drvPath).success;
+assert packageJob.name == "package/example";
+assert devshellJob.name == "devshell/example";
+assert
+  !(builtins.tryEval (sowerLib.mkSeedNixos "unsupported" unsupportedMeta).value.drvPath).success;
 assert !(builtins.tryEval (builtins.deepSeq unsupportedOption true)).success;
 pkgs.stdenv.mkDerivation {
   name = "seed-manifest-test";
   dontUnpack = true;
   nativeBuildInputs = [ check ];
   installPhase = ''
-    check-seed-manifest "${seed}" "${target}" "${../seed-manifest.schema.json}" "${nixosSeed}" "${homeSeed}" "${system}" "${overrideSeed}" "${closure}/store-paths"
+    check-seed-manifest "${seed}" "${target}" "${../seed-manifest.schema.json}" "${nixosSeed}" "${homeSeed}" "${system}" "${overrideSeed}" "${closure}/store-paths" "${packageSeed}" "${devshellSeed}" "${devshell}"
     touch "$out"
   '';
 }

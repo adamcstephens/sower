@@ -110,6 +110,40 @@ defmodule Garden.DeployerTest do
       end)
     end
 
+    test "stages package destinations through the ordinary pipeline without activation" do
+      seed = %Seed{
+        sid: "package",
+        name: "package",
+        seed_type: "package",
+        artifact: "/nix/store/package"
+      }
+
+      deployment = %Deployment{
+        sid: "packages",
+        seed_deployments:
+          for name <- ["first", "second"] do
+            %SeedDeployment{
+              seed: seed,
+              subscription_sid: name,
+              profile_name: name,
+              action: :stage
+            }
+          end
+      }
+
+      assert [{:ok, {:ok, ["staged"]}}, {:ok, {:ok, ["staged"]}}] =
+               Deployer.upgrade(deployment,
+                 async_stream_fun: fn items, fun -> Enum.map(items, &{:ok, fun.(&1)}) end,
+                 realize_seed_fun: fn destination -> {:ok, destination, []} end,
+                 find_subscription_fun: fn sid ->
+                   %Subscription{sid: sid, name: sid, seed_type: "package"}
+                 end,
+                 activate_seed_fun: fn _, _, _ -> flunk("stage must not activate") end,
+                 report_seed_status_fun: fn _, _, _ -> :ok end,
+                 report_seed_result_fun: fn _, _, result, _ -> assert result == :success end
+               )
+    end
+
     test "reports failure with fatal log line when activator is unavailable" do
       deployment = %Deployment{
         sid: "dep_1",

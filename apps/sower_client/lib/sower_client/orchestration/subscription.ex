@@ -1,4 +1,5 @@
 defmodule SowerClient.Orchestration.Subscription do
+  @moduledoc "A named deployment destination with seed selection, policy and optional managed retention."
   use SowerClient.Schema
   use SowerClient.ChannelMessage, event: "subscription:register"
 
@@ -6,6 +7,11 @@ defmodule SowerClient.Orchestration.Subscription do
     title: "Subscription",
     type: :object,
     properties: %{
+      retention: %Schema{
+        anyOf: [SowerClient.Orchestration.ProfileRetention],
+        nullable: true,
+        "x-struct": SowerClient.Orchestration.ProfileRetention
+      },
       sid: %Schema{
         type: :string,
         description: "subscription sid allocated by Sower",

@@ -12,6 +12,9 @@ home = json.loads((pathlib.Path(sys.argv[5]) / "seed.json").read_text())
 system = sys.argv[6]
 overridden = json.loads((pathlib.Path(sys.argv[7]) / "seed.json").read_text())
 closure = pathlib.Path(sys.argv[8]).read_text().splitlines()
+package = json.loads((pathlib.Path(sys.argv[9]) / "seed.json").read_text())
+devshell = json.loads((pathlib.Path(sys.argv[10]) / "seed.json").read_text())
+devshell_target = sys.argv[11]
 
 assert manifest == {
     "version": 1,
@@ -52,8 +55,18 @@ assert home == {
         "release": "26.11",
     },
 }
+assert package == {**manifest, "seed_type": "package"}
+assert devshell == {
+    **manifest,
+    "seed_type": "devshell",
+    "artifact": devshell_target,
+}
+assert devshell_target in closure
+assert pathlib.Path(devshell_target).is_file()
+assert sys.argv[9] != target
+assert sys.argv[10] != devshell_target
 validator = jsonschema.Draft7Validator(schema)
-for generated in (manifest, nixos, overridden, home):
+for generated in (manifest, nixos, overridden, home, package, devshell):
     validator.validate(generated)
 for version in (None, "1", 2):
     changed = dict(manifest)

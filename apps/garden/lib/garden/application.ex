@@ -4,8 +4,7 @@ defmodule Garden.Application do
   @moduledoc """
   Starts Garden's local services and, when an endpoint is configured, its client.
 
-  Storage, the task supervisor and admin socket run independently of the
-  scheduler and server socket, which require the configured endpoint.
+  Local storage, profile reconciliation, retention and admin access work offline.
   """
 
   use Application
@@ -16,11 +15,13 @@ defmodule Garden.Application do
 
     config = Garden.Config.get()
 
+    if config,
+      do: Garden.Profile.reconcile(config.subscriptions, config.managed_profiles_directory)
+
     # Only start client-related processes if endpoint is configured
     client_children =
       if config && config.endpoint do
         [
-          Garden.Scheduler,
           {Garden.Socket, []}
         ]
       else
@@ -30,6 +31,7 @@ defmodule Garden.Application do
     children =
       [
         {Garden.Storage, []},
+        Garden.Scheduler,
         {Task.Supervisor, name: Garden.TaskSupervisor},
         # Admin socket starts unconditionally so admin commands work even when
         # the garden has no endpoint / is disconnected.
@@ -40,6 +42,14 @@ defmodule Garden.Application do
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Garden.Supervisor]
-    Supervisor.start_link(children, opts)
+
+    case Supervisor.start_link(children, opts) do
+      {:ok, supervisor} ->
+        Garden.Scheduler.schedule_retention()
+        {:ok, supervisor}
+
+      error ->
+        error
+    end
   end
 end

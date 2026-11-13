@@ -1,10 +1,9 @@
 defmodule Garden.Socket.Lifecycle do
   @moduledoc """
-  Pure lifecycle transition functions for Garden.Socket.
+  Lifecycle transitions and message preparation for Garden.Socket.
 
-  Each function takes relevant state and returns a result without
-  performing side effects. The socket callbacks are thin wrappers
-  that call these functions and execute the returned effects.
+  Profile report preparation reads filesystem state through the profile collector;
+  socket callbacks handle transport and execute the returned lifecycle actions.
   """
 
   alias SowerClient.Orchestration.Deployment
@@ -61,11 +60,11 @@ defmodule Garden.Socket.Lifecycle do
     sid_map =
       registered
       |> Enum.map(&Subscription.cast!/1)
-      |> Map.new(&{{&1.seed_name, &1.seed_type}, &1.sid})
+      |> Map.new(&{&1.name, &1.sid})
 
     config_subscriptions
     |> Enum.map(fn sub ->
-      case Map.get(sid_map, {sub.seed_name, sub.seed_type}) do
+      case Map.get(sid_map, sub.name) do
         nil -> nil
         sid -> %{sub | sid: sid}
       end
@@ -124,4 +123,31 @@ defmodule Garden.Socket.Lifecycle do
       {:enqueue, Map.put(active_deployments, deployment.sid, deployment)}
     end
   end
+
+  def payload_for_peer(payload, true), do: payload
+  def payload_for_peer(%DateTime{} = value, false), do: value
+
+  def payload_for_peer(%module{} = payload, false) do
+    drop =
+      case module do
+        SowerClient.Orchestration.Subscription -> [:retention]
+        SowerClient.Orchestration.GardenReport -> [:capabilities]
+        SowerClient.Orchestration.GardenSeedsReport -> [:complete, :failed_profile_paths]
+        SowerClient.Orchestration.GardenSeedProfile -> [:name, :subscription_sid, :seed_type]
+        SowerClient.Orchestration.SeedDeploymentLog -> [:subscription_sid]
+        SowerClient.Orchestration.SeedDeploymentStatus -> [:subscription_sid]
+        SowerClient.Orchestration.SeedDeploymentResult -> [:subscription_sid]
+        _ -> []
+      end
+
+    payload
+    |> Map.from_struct()
+    |> Map.drop(drop)
+    |> Map.new(fn {key, value} -> {key, payload_for_peer(value, false)} end)
+  end
+
+  def payload_for_peer(payload, false) when is_list(payload),
+    do: Enum.map(payload, &payload_for_peer(&1, false))
+
+  def payload_for_peer(payload, false), do: payload
 end

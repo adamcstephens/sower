@@ -5,7 +5,6 @@ defmodule Garden.Deployer do
   An optional local observer receives each seed's actual worker start before
   realization, independently of websocket status delivery or deployment completion.
   """
-
   require Logger
 
   alias Garden.Socket
@@ -95,8 +94,9 @@ defmodule Garden.Deployer do
   defp upgrade_with_actions(%Deployment{} = deployment, opts) do
     logs =
       Map.new(deployment.seed_deployments, fn seed_deploy ->
-        {seed_deploy.seed.sid,
+        {deployment_log_key(seed_deploy),
          Garden.DeploymentLog.start(deployment.sid, seed_deploy.seed.sid,
+           subscription_sid: seed_deploy.subscription_sid,
            send_fun: Keyword.get(opts, :send_log_fun, &Socket.send_deployment_log/1)
          )}
       end)
@@ -108,6 +108,10 @@ defmodule Garden.Deployer do
     end
   end
 
+  defp deployment_log_key(%SeedDeployment{} = seed_deploy) do
+    {seed_deploy.seed.sid, seed_deploy.subscription_sid}
+  end
+
   defp do_upgrade_with_actions(%Deployment{} = deployment, opts, logs) do
     async_stream_fun = Keyword.get(opts, :async_stream_fun, &async_stream/2)
     realize_seed_fun = Keyword.get(opts, :realize_seed_fun, &realize_seed/2)
@@ -116,16 +120,6 @@ defmodule Garden.Deployer do
       Keyword.get(opts, :find_subscription_fun, &find_subscription/1)
 
     activate_seed_fun = Keyword.get(opts, :activate_seed_fun, &Garden.Seed.activate/3)
-
-    report_result = Keyword.get(opts, :report_seed_result_fun, &report_seed_result/4)
-
-    report_seed_result_fun = fn deployment, seed, result, output ->
-      Garden.DeploymentLog.flush(Map.fetch!(logs, seed.sid))
-      report_result.(deployment, seed, result, output)
-    end
-
-    report_seed_status_fun =
-      Keyword.get(opts, :report_seed_status_fun, &report_seed_status/3)
 
     garden_config_fun = Keyword.get(opts, :garden_config_fun, &Garden.Config.get/0)
     observer = Keyword.get(opts, :start_observer)
@@ -144,20 +138,38 @@ defmodule Garden.Deployer do
       end
 
       downloading_line = decision_line("downloading #{seed.name} (#{seed.seed_type})")
-      report_seed_status_fun.(deployment, seed, :downloading)
-      on_output = &Garden.DeploymentLog.output(Map.fetch!(logs, seed.sid), &1)
+      report_status(opts, deployment, seed_deploy, :downloading)
+
+      on_output =
+        &Garden.DeploymentLog.output(Map.fetch!(logs, deployment_log_key(seed_deploy)), &1)
 
       realized =
         if is_function(realize_seed_fun, 2),
           do: realize_seed_fun.(seed_deploy, on_output),
           else: realize_seed_fun.(seed_deploy)
 
-      Garden.DeploymentLog.flush(Map.fetch!(logs, seed.sid))
+      Garden.DeploymentLog.flush(Map.fetch!(logs, deployment_log_key(seed_deploy)))
       {downloading_line, realized}
     end)
     |> async_stream_fun.(fn
       {:ok, {downloading_line, {:ok, %SeedDeployment{seed: seed} = seed_deploy, download_output}}} ->
         subscription = find_subscription_fun.(seed_deploy.subscription_sid) || %Subscription{}
+
+        report_seed_status_fun = fn deployment, seed, status ->
+          report_status(opts, deployment, %{seed_deploy | seed: seed}, status)
+        end
+
+        report_seed_result_fun = fn deployment, seed, result, output ->
+          Garden.DeploymentLog.flush(Map.fetch!(logs, deployment_log_key(seed_deploy)))
+
+          case Keyword.get(opts, :report_seed_result_fun) do
+            nil ->
+              report_seed_result(deployment, seed, result, output, seed_deploy.subscription_sid)
+
+            fun ->
+              fun.(deployment, seed, result, output)
+          end
+        end
 
         preamble =
           [downloading_line | download_output] ++
@@ -165,7 +177,10 @@ defmodule Garden.Deployer do
 
         with action when is_atom(action) <-
                resolve_action(seed_deploy, subscription, garden_config_fun) do
-          mode = action_to_mode(action, seed.seed_type)
+          mode =
+            if action != :stage and Garden.Profile.managed?(seed.seed_type),
+              do: {:profile, Garden.Profile.path(subscription)},
+              else: action_to_mode(action, seed.seed_type)
 
           result =
             if mode == nil do
@@ -192,7 +207,7 @@ defmodule Garden.Deployer do
                 preamble ++
                   [
                     decision_line(
-                      "activating #{seed.name} (#{seed.seed_type}) with mode: #{mode}"
+                      "activating #{seed.name} (#{seed.seed_type}) with mode: #{inspect(mode)}"
                     )
                   ]
 
@@ -203,16 +218,37 @@ defmodule Garden.Deployer do
                 seed_type: seed.seed_type,
                 artifact: seed.artifact,
                 deployment_sid: deployment.sid,
-                mode: mode
+                mode: inspect(mode)
               )
 
               report_seed_status_fun.(deployment, seed, :activating)
-              on_output = &Garden.DeploymentLog.output(Map.fetch!(logs, seed.sid), &1)
+
+              on_output =
+                &Garden.DeploymentLog.output(
+                  Map.fetch!(logs, deployment_log_key(seed_deploy)),
+                  &1
+                )
 
               result =
                 if is_function(activate_seed_fun, 3),
                   do: activate_seed_fun.(seed, mode, on_output),
                   else: activate_seed_fun.(seed, mode)
+
+              result =
+                case result do
+                  {:ok, output} ->
+                    if Garden.Profile.managed?(seed.seed_type) do
+                      case Garden.Profile.activated(subscription, seed.artifact) do
+                        :ok -> {:ok, output}
+                        {:error, reason} -> {:error, {:profile_retention, reason}}
+                      end
+                    else
+                      result
+                    end
+
+                  error ->
+                    error
+                end
 
               case result do
                 {:ok, output} ->
@@ -252,6 +288,14 @@ defmodule Garden.Deployer do
                       ]
                   )
 
+                {:error, {:profile_retention, reason}} ->
+                  report_seed_result_fun.(
+                    deployment,
+                    seed,
+                    :failure,
+                    preamble ++ ["Profile retention failed: #{inspect(reason)}"]
+                  )
+
                 {:error, _reason} ->
                   :ok
               end
@@ -282,8 +326,13 @@ defmodule Garden.Deployer do
 
       {:ok,
        {downloading_line,
-        {:error, :failed_to_realize, %SeedDeployment{seed: seed} = _seed_deploy, download_output}}} ->
-        report_seed_result_fun.(
+        {:error, :failed_to_realize, %SeedDeployment{seed: seed} = seed_deploy, download_output}}} ->
+        report =
+          Keyword.get(opts, :report_seed_result_fun, fn deployment, seed, result, output ->
+            report_seed_result(deployment, seed, result, output, seed_deploy.subscription_sid)
+          end)
+
+        report.(
           deployment,
           seed,
           :failure,
@@ -304,8 +353,33 @@ defmodule Garden.Deployer do
     |> Enum.to_list()
   end
 
+  defp report_status(opts, deployment, seed_deploy, status) do
+    case Keyword.get(opts, :report_seed_status_fun) do
+      nil ->
+        report_seed_status(deployment, seed_deploy.seed, status, seed_deploy.subscription_sid)
+
+      fun ->
+        fun.(deployment, seed_deploy.seed, status)
+    end
+  end
+
   defp realize_seed(%SeedDeployment{seed: seed} = seed_deploy, on_output) do
-    case System.cmd("nix-store", ["--realize", seed.artifact],
+    args =
+      if Garden.Profile.managed?(seed.seed_type) do
+        subscription = find_subscription(seed_deploy.subscription_sid)
+
+        if subscription == nil or subscription.name != seed_deploy.profile_name or
+             subscription.seed_type != seed.seed_type,
+           do: raise(ArgumentError, "invalid profile destination")
+
+        root = Garden.Profile.stage_root(subscription, seed.artifact)
+        Garden.Profile.prepare(subscription)
+        ["--realize", seed.artifact, "--add-root", root, "--indirect"]
+      else
+        ["--realize", seed.artifact]
+      end
+
+    case System.cmd("nix-store", args,
            stderr_to_stdout: true,
            into: %Garden.OutputCollector{
              on_output: fn line ->
@@ -552,18 +626,27 @@ defmodule Garden.Deployer do
   defp action_to_mode(:stage, _seed_type), do: nil
   defp action_to_mode(nil, _seed_type), do: "switch"
 
-  defp report_seed_status(%Deployment{} = deployment, seed, status) do
+  defp report_seed_status(%Deployment{} = deployment, seed, status, subscription_sid) do
     seed_status =
       SeedDeploymentStatus.cast!(%{
         deployment_sid: deployment.sid,
         seed_sid: seed.sid,
-        status: status
+        status: status,
+        subscription_sid: subscription_sid
       })
 
     Socket.cast(:seed_status, seed_status)
   end
 
-  defp report_seed_result(%Deployment{} = deployment, seed, result, output_lines) do
+  defp report_seed_result(deployment, seed, result, output_lines, subscription_sid \\ nil)
+
+  defp report_seed_result(
+         %Deployment{} = deployment,
+         seed,
+         result,
+         output_lines,
+         subscription_sid
+       ) do
     log =
       output_lines
       |> Enum.reject(&is_nil/1)
@@ -574,6 +657,7 @@ defmodule Garden.Deployer do
       SeedDeploymentResult.cast!(%{
         deployment_sid: deployment.sid,
         seed_sid: seed.sid,
+        subscription_sid: subscription_sid,
         result: result,
         log: log
       })

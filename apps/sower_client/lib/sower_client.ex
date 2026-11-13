@@ -1,4 +1,5 @@
 defmodule SowerClient do
+  @moduledoc "Shared wire schema registry for server, Garden and operator clients."
   # Schemas the server pushes TO gardens (broadcasts + replies).
   # Changes to these can break old gardens that haven't upgraded.
   # Used by contract evolution tests and baseline generation.
@@ -33,6 +34,7 @@ defmodule SowerClient do
       SowerClient.GardenRegistration,
       SowerClient.Auth.OAuthCredentials,
       SowerClient.Auth.TokenInfo,
+      SowerClient.Orchestration.ProfileRetention,
       SowerClient.Orchestration.GardenSeedGeneration,
       SowerClient.Orchestration.GardenSeedProfile,
       SowerClient.Orchestration.GardenSeedsReport,
@@ -67,6 +69,7 @@ defmodule SowerClient do
 end
 
 defmodule SowerClient.Orchestration.SeedDeploymentLog do
+  @moduledoc "A bounded log chunk addressed to a seed and optional subscription destination."
   use SowerClient.Schema
   use SowerClient.ChannelMessage, event: "deployment:seed_log"
 
@@ -77,6 +80,7 @@ defmodule SowerClient.Orchestration.SeedDeploymentLog do
     properties: %{
       deployment_sid: %Schema{type: :string},
       seed_sid: %Schema{type: :string},
+      subscription_sid: %Schema{type: :string, nullable: true},
       sequence: %Schema{type: :integer, minimum: 1},
       output: %Schema{
         type: :string,
@@ -101,6 +105,7 @@ defmodule SowerClient.Orchestration.SeedDeploymentLog do
 end
 
 defmodule SowerClient.SeedManifest do
+  @moduledoc "Versioned producer manifest for an opaque built seed store artifact."
   use SowerClient.Schema
 
   OpenApiSpex.schema(%{
@@ -114,7 +119,7 @@ defmodule SowerClient.SeedManifest do
       name: %Schema{type: :string, minLength: 1},
       seed_type: %Schema{
         type: :string,
-        enum: ["nixos", "home-manager", "nix-darwin", "service"]
+        enum: ["nixos", "home-manager", "nix-darwin", "service", "package", "devshell"]
       },
       artifact: %Schema{
         type: :string,
@@ -215,4 +220,41 @@ defmodule SowerClient.Activator.NetworkLease do
     },
     required: [:lease, :tap, :mac, :address, :gateway, :dns]
   })
+end
+
+defmodule SowerClient.Orchestration.ProfileRetention do
+  @moduledoc "Retention criteria for owned profile generations; absent policy keeps all generations."
+  use SowerClient.Schema
+
+  OpenApiSpex.schema(%{
+    title: "ProfileRetention",
+    type: :object,
+    minProperties: 1,
+    additionalProperties: false,
+    "x-validate": __MODULE__.Criteria,
+    properties: %{
+      keep_generations: %Schema{type: :integer, minimum: 0, nullable: true},
+      keep_days: %Schema{type: :integer, minimum: 0, nullable: true}
+    }
+  })
+
+  defmodule Criteria do
+    @moduledoc false
+    alias OpenApiSpex.Cast
+
+    def cast(%Cast{value: value} = ctx) when is_map(value) do
+      configured? =
+        Enum.any?([:keep_generations, :keep_days], fn key ->
+          not is_nil(Map.get(value, key, Map.get(value, Atom.to_string(key))))
+        end)
+
+      if configured? do
+        Cast.cast(%{ctx | schema: %{ctx.schema | "x-validate": nil}})
+      else
+        Cast.error(ctx, {:invalid_type, :object})
+      end
+    end
+
+    def cast(%Cast{} = ctx), do: Cast.error(ctx, {:invalid_type, :object})
+  end
 end

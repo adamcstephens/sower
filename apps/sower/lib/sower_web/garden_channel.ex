@@ -13,6 +13,7 @@ defmodule SowerWeb.GardenChannel.Impl do
 end
 
 defmodule SowerWeb.GardenChannel do
+  @moduledoc "Handles authenticated Garden messages, deployment dispatch and current-session capability reporting."
   use Phoenix.Channel
   use SowerWeb, :verified_routes
 
@@ -70,12 +71,20 @@ defmodule SowerWeb.GardenChannel do
         socket =
           assign(socket,
             garden: garden,
-            direct_override: Map.get(params, "direct_override") == true
+            direct_override: Map.get(params, "direct_override") == true,
+            managed_profiles: "managed_profiles_v1" in Map.get(params, "capabilities", [])
           )
 
         send(self(), :track_presence)
         send(self(), :reconcile_deployments)
-        {:ok, %{conn_sid: conn_sid, pending_deployments: true, deployment_logs: true}, socket}
+
+        {:ok,
+         %{
+           conn_sid: conn_sid,
+           pending_deployments: true,
+           deployment_logs: true,
+           managed_profiles: true
+         }, socket}
 
       :error ->
         {:error, %{reason: "unauthorized"}}
@@ -194,7 +203,8 @@ defmodule SowerWeb.GardenChannel do
     {:ok, _} =
       Presence.track(self(), "garden:presence", socket.assigns.garden.sid, %{
         online_at: DateTime.utc_now(),
-        direct_override: socket.assigns.direct_override
+        direct_override: socket.assigns.direct_override,
+        managed_profiles_v1: socket.assigns.managed_profiles
       })
 
     {:noreply, socket}

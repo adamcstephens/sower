@@ -1,4 +1,5 @@
 defmodule Sower.Orchestration.DeploymentLog do
+  @moduledoc "Buffers bounded deployment logs, preserving subscription destination identity."
   use TypedStruct
   import Ecto.Query
 
@@ -12,6 +13,7 @@ defmodule Sower.Orchestration.DeploymentLog do
     field :deployment_id, integer()
     field :deployment_sid, String.t()
     field :seed_sid, String.t()
+    field :subscription_sid, String.t()
     field :sequence, pos_integer()
     field :output, binary()
     field :owner, pid()
@@ -87,9 +89,14 @@ defmodule Sower.Orchestration.DeploymentLog do
           Repo.rollback(:deployment_terminal)
 
         true ->
-          deployment = Repo.preload(deployment, :seeds)
+          deployment = Repo.preload(deployment, [:seeds, seed_deployments: :seed])
 
-          if Enum.any?(deployment.seeds, &(&1.sid == request.seed_sid)) do
+          if Enum.any?(deployment.seed_deployments, fn row ->
+               row.seed.sid == request.seed_sid and
+                 (row.subscription_sid == request.subscription_sid or
+                    (is_nil(row.profile_name) and
+                       (is_nil(request.subscription_sid) or is_nil(row.subscription_sid))))
+             end) do
             case call_owner(fn -> Pool.ensure(deployment) end, {:error, :buffer_unavailable}) do
               {:ok, owner} -> owner
               {:error, reason} -> Repo.rollback(reason)

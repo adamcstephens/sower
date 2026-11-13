@@ -5,6 +5,103 @@ defmodule Garden.ProfileTest do
   alias Garden.Profile
   alias SowerClient.Orchestration.{GardenSeedGeneration, GardenSeedProfile}
 
+  describe "native profiles" do
+    @tag :tmp_dir
+    test "profile directories inherit public or private base permissions", %{tmp_dir: tmp} do
+      subscription = %SowerClient.Orchestration.Subscription{name: "app", seed_type: "package"}
+
+      for mode <- [0o755, 0o700] do
+        root = Path.join(tmp, Integer.to_string(mode))
+        File.mkdir!(root)
+        File.chmod!(root, mode)
+        directory = Path.dirname(Profile.path(subscription, root))
+        File.mkdir_p!(directory)
+        File.chmod!(Path.dirname(directory), 0o700)
+        File.chmod!(directory, 0o700)
+
+        assert :ok = Profile.prepare(subscription, root)
+
+        for path <- [Path.dirname(directory), directory, Path.join(directory, "staged")] do
+          assert :erlang.band(File.stat!(path).mode, 0o777) == mode
+        end
+      end
+    end
+
+    @tag :tmp_dir
+    test "orders native numbers and identifies selected link rather than repeated artifact", %{
+      tmp_dir: root
+    } do
+      sub = %SowerClient.Orchestration.Subscription{name: "app", seed_type: "package"}
+      profile = Profile.path(sub, root)
+      File.mkdir_p!(Path.dirname(profile))
+      artifact = Path.join(root, "artifact")
+      File.mkdir!(artifact)
+      for number <- [2, 10], do: File.ln_s!(artifact, "#{profile}-#{number}-link")
+      File.ln_s!("profile-2-link", profile)
+
+      assert {:ok, observed} = Profile.observe(sub, root)
+      assert Enum.map(observed.generations, & &1.generation_number) == [10, 2]
+      assert Enum.map(observed.generations, & &1.is_current) == [false, true]
+    end
+
+    @tag :tmp_dir
+    test "retention protects selected and staged roots and combines age with count", %{
+      tmp_dir: root
+    } do
+      sub = %SowerClient.Orchestration.Subscription{name: "app", seed_type: "devshell"}
+      profile = Profile.path(sub, root)
+      File.mkdir_p!(Path.dirname(profile))
+      artifact = Path.join(root, "artifact")
+      File.mkdir!(artifact)
+      for number <- [1, 2, 3], do: File.ln_s!(artifact, "#{profile}-#{number}-link")
+      File.ln_s!("profile-2-link", profile)
+      stage = Profile.stage_root(sub, artifact, root)
+      File.mkdir_p!(Path.dirname(stage))
+      File.ln_s!(artifact, stage)
+      assert :ok = Profile.prune(sub, root)
+
+      sub = %{
+        sub
+        | retention: %SowerClient.Orchestration.ProfileRetention{
+            keep_generations: 1,
+            keep_days: 1
+          }
+      }
+
+      assert :ok = Profile.prune(sub, root)
+      assert File.exists?("#{profile}-1-link")
+      assert :ok = Profile.prune(sub, root, DateTime.add(DateTime.utc_now(), 172_800))
+      refute File.exists?("#{profile}-1-link")
+      assert File.exists?("#{profile}-2-link")
+      assert File.exists?("#{profile}-3-link")
+      assert File.exists?(stage)
+    end
+
+    @tag :tmp_dir
+    test "configuration removal deletes complete destination but not another type or host data",
+         %{tmp_dir: root} do
+      package = %SowerClient.Orchestration.Subscription{name: "app", seed_type: "package"}
+      shell = %{package | seed_type: "devshell"}
+      for sub <- [package, shell], do: File.mkdir_p!(Path.dirname(Profile.path(sub, root)))
+      unrelated = Path.join(root, "system")
+      File.mkdir!(unrelated)
+      assert :ok = Profile.reconcile([shell], root)
+      refute File.exists?(Path.dirname(Profile.path(package, root)))
+      assert File.exists?(Path.dirname(Profile.path(shell, root)))
+      assert File.exists?(unrelated)
+      assert_raise ArgumentError, fn -> Profile.path(%{shell | name: "../escape"}, root) end
+    end
+
+    @tag :tmp_dir
+    test "broken native generation is an observation error", %{tmp_dir: root} do
+      sub = %SowerClient.Orchestration.Subscription{name: "app", seed_type: "package"}
+      profile = Profile.path(sub, root)
+      File.mkdir_p!(Path.dirname(profile))
+      File.ln_s!("/missing-artifact", "#{profile}-1-link")
+      assert {:error, :enoent} = Profile.observe(sub, root)
+    end
+  end
+
   describe "do_collect_profile/2" do
     test "collects profile with generations from module state" do
       profile_path = "/nix/var/nix/profiles/system"

@@ -1,10 +1,10 @@
 defmodule SowerClient.Orchestration.Subscription.Window do
+  @moduledoc "Defines a deployment policy's time range, optional weekdays and timezone."
   use SowerClient.Schema
 
   OpenApiSpex.schema(%{
     title: "SubscriptionWindow",
     type: :object,
-    nullable: true,
     properties: %{
       days: %Schema{
         type: :array,

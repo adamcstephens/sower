@@ -374,8 +374,8 @@ the wrapper retains the target in its closure. Circus publication must
 expose `seed.json` as a file product returning raw JSON, not the wrapper
 directory as a NAR. The wrapper itself contains no CI-specific files.
 
-Local `sower build --seed` recognizes canonical `nixos/`, `home/`, and
-custom `seed/` jobs, including qualified flake attributes such as
+Local `sower build --seed` recognizes canonical `nixos/`, `home/`, `package/`,
+`devshell/`, and custom `seed/` jobs, including qualified flake attributes such as
 `packages.<system>.nixos/<name>` and quoted components such as
 `sowerJobs.<system>."seed/service.example"`. Dots inside quoted names remain
 part of the job name. Custom producers expose a wrapper as
@@ -387,11 +387,22 @@ version-1 manifest, and registers its `artifact`, never the wrapper path.
 Tags retain CLI, intrinsic manifest, then repository composition order;
 `--non-authoritative` retains its existing registration semantics.
 
+`mkSeedPackage { pkgs; name; target; tags ? {}; }` and
+`mkSeedDevshell { pkgs; name; target; tags ? {}; }` return name/value pairs
+for `package/<name>` and `devshell/<name>` wrappers. Both supply the target
+platform's `system` tag by default; explicit tags override that default.
+Their manifest types are `package` and `devshell`, alongside the existing
+`nixos`, `home-manager`, `nix-darwin`, and `service` types.
+The artifact remains the target's ordinary build output, including the
+opaque file produced by `pkgs.mkShell`. Production never records or sources
+a shell environment, runs shell hooks, or enters a development shell.
+
 Binary-cache publication uploads the wrapper's recursive closure, including
-the manifest target and its dependencies. Gardens download and activate the
-registered target through the existing seed API; they do not need the wrapper
-or evaluated seed metadata. Home Manager garden services explicitly supply
-their configured `XDG_STATE_HOME` so profile reporting survives activation
+the manifest target and its dependencies. Gardens consume the registered target
+through the existing seed API; they do not need the wrapper or evaluated seed
+metadata. Package and devshell subscriptions pin targets in explicitly named,
+versioned profiles rather than invoking an OS activator. Home Manager garden
+services explicitly supply their configured `XDG_STATE_HOME` so profile reporting survives activation
 and service restarts.
 
 Generated NixOS and Home Manager jobs each build one wrapper; there is no
@@ -410,6 +421,10 @@ and seed type, never the wrapper directory. Explicit name, type, and destination
 overrides retain precedence; otherwise the canonical job name implies the
 destination. Raw artifact paths and already-registered seeds retain their
 existing workflows.
+
+Package and devshell targets require a named Garden subscription; the seed's
+name does not select a managed profile. Sudo deployment and legacy
+`seed upgrade` activation do not support these types.
 
 ### resolve
 
@@ -939,6 +954,25 @@ Compatibility: gardens below the version that understands the `pipeline`
 trigger must not receive pipeline deployments. The server gates dispatch
 on the garden's reported `version`. This follows the existing contract
 discipline (`@server_pushed_schema_titles`, contract baseline).
+
+Package and devshell subscriptions own native Nix profiles at
+`<managed_profiles_directory>/<seed_type>/<subscription_name>/profile`.
+The Garden page reports native generations and the selected path; this is an
+observation, not a fresh installation check. Native Nix profile commands can
+select retained generations without restarting external services.
+
+The ordinary deployment policy's `stage` action retains an indirect GC root
+without changing the selection. Activation releases that output's staged root.
+Removing a configured subscription removes its entire managed profile directory
+on Garden startup or configuration reload, including while offline. Unrelated
+profiles and externally owned services are untouched.
+
+Subscription `retention` may contain nonnegative `keep_generations` and/or
+`keep_days`. Omission retains all generations. Count and age keep sets are
+combined, and the selected generation is retained. Staged outputs remain rooted
+until activation, explicit removal, or subscription removal. Root release does
+not promise immediate disk reclamation; host garbage collection remains outside
+Sower.
 
 ## Pipelines and Subscriptions
 
