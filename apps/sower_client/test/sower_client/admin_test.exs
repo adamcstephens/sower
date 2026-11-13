@@ -5,19 +5,40 @@ defmodule SowerClient.AdminTest do
   alias SowerClient.Admin.{Deploy, Reload, Reply, Request, Status, StatusReport}
 
   describe "decode_request/1" do
-    test "decodes opt-in waiting separately with bounded timeout" do
-      assert {:ok, %Request{message: %Admin.DeployWait{timeout: 30}}} =
+    test "deploy defaults to waiting with a bounded timeout" do
+      assert {:ok, %Request{message: %Deploy{} = command}} =
                Admin.decode_request(%{
-                 "kind" => "deploy_wait",
+                 "kind" => "deploy",
                  "payload" => %{"seed_type" => "nixos"}
                })
+
+      assert command.wait == true
+      assert command.timeout == 30
 
       for timeout <- [0, -1, 86401] do
         assert {:error, _} =
                  Admin.decode_request(%{
-                   "kind" => "deploy_wait",
+                   "kind" => "deploy",
                    "payload" => %{"timeout" => timeout}
                  })
+      end
+    end
+
+    test "deploy preserves explicit enqueue-only behavior" do
+      assert {:ok, %Request{message: %Deploy{} = command}} =
+               Admin.decode_request(%{
+                 "kind" => "deploy",
+                 "payload" => %{"wait" => false, "timeout" => 75}
+               })
+
+      assert command.wait == false
+      assert command.timeout == 75
+    end
+
+    test "deploy rejects null and invalid wait values" do
+      for wait <- [nil, "invalid", 1] do
+        assert {:error, _} =
+                 Admin.decode_request(%{"kind" => "deploy", "payload" => %{"wait" => wait}})
       end
     end
 
@@ -83,7 +104,6 @@ defmodule SowerClient.AdminTest do
 
     for title <- [
           "AdminDeploy",
-          "AdminDeployWait",
           "AdminReload",
           "AdminStatus",
           "AdminStatusReport",

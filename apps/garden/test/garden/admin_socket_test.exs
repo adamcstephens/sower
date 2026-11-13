@@ -41,7 +41,7 @@ defmodule Garden.AdminSocketTest do
       }
 
       path =
-        start_socket(fn %Admin.DeployWait{} = command -> {:wait, sub, command} end,
+        start_socket(fn %Admin.Deploy{wait: true} = command -> {:wait, sub, command} end,
           observe: fn ^sub, false, 30_000 ->
             send(self(), {:deployment_wait, "request-1", :accepted})
             send(self(), {:deployment_wait, "request-1", {:deployment, deployment}})
@@ -54,7 +54,7 @@ defmodule Garden.AdminSocketTest do
         Task.async(fn ->
           request(path, %{
             "id" => "wait-1",
-            "kind" => "deploy_wait",
+            "kind" => "deploy",
             "payload" => %{"seed_type" => "nixos"}
           })
         end)
@@ -80,7 +80,7 @@ defmodule Garden.AdminSocketTest do
       sub = %SowerClient.Orchestration.Subscription{seed_name: "host", seed_type: "nixos"}
 
       path =
-        start_socket(fn %Admin.DeployWait{} = command -> {:wait, sub, command} end,
+        start_socket(fn %Admin.Deploy{wait: true} = command -> {:wait, sub, command} end,
           observe: fn _, _, _ ->
             send(parent, {:observer, self()})
             {:ok, "request-1", parent}
@@ -88,7 +88,7 @@ defmodule Garden.AdminSocketTest do
         )
 
       client = connect(path)
-      :ok = :gen_tcp.send(client, [Jason.encode!(%{"kind" => "deploy_wait"}), "\n"])
+      :ok = :gen_tcp.send(client, [Jason.encode!(%{"kind" => "deploy"}), "\n"])
       assert_receive {:observer, observer}
       monitor = Process.monitor(observer)
       :gen_tcp.close(client)
