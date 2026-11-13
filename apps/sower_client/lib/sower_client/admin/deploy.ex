@@ -3,7 +3,9 @@ defmodule SowerClient.Admin.Deploy do
   `deploy` command payload for the garden admin socket.
 
   Either `seed_type` or `sid` scopes the deployment; the garden rejects a deploy
-  carrying neither.
+  carrying neither. By default the command observes authoritative execution starts
+  for up to 30 seconds. `wait: false` returns after enqueuing. The timeout ends
+  observation only, never deployment work.
   """
 
   use SowerClient.Schema
@@ -27,6 +29,18 @@ defmodule SowerClient.Admin.Deploy do
         type: :boolean,
         default: false,
         description: "Force deployment even if identical to a previous success"
+      },
+      wait: %Schema{
+        type: :boolean,
+        default: true,
+        description: "Wait for authoritative per-seed execution starts, not completion"
+      },
+      timeout: %Schema{
+        type: :integer,
+        minimum: 1,
+        maximum: 86400,
+        default: 30,
+        description: "Maximum observation time in seconds; unused when wait is false"
       }
     },
     required: []

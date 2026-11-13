@@ -101,20 +101,13 @@ fn build_request_line(id: &str, command: &GardenCommand) -> Result<String> {
             if trigger.seed_type.is_none() && trigger.sid.is_none() {
                 bail!("trigger requires --type or --sid");
             }
-            if !trigger.no_wait {
-                return protocol::deploy_wait_request(
-                    id,
-                    trigger.seed_type.map(SeedType::as_str),
-                    trigger.sid.as_deref(),
-                    trigger.force,
-                    trigger.timeout.unwrap_or(30),
-                );
-            }
             protocol::deploy_request(
                 id,
                 trigger.seed_type.map(SeedType::as_str),
                 trigger.sid.as_deref(),
                 trigger.force,
+                !trigger.no_wait,
+                trigger.timeout.unwrap_or(30),
             )
         }
         GardenCommand::Reload => protocol::reload_request(id),
@@ -167,6 +160,8 @@ mod tests {
         let v = json(&build_request_line("1", &cmd).unwrap());
         assert_eq!(v["kind"], "deploy");
         assert_eq!(v["payload"]["seed_type"], "nixos");
+        assert_eq!(v["payload"]["wait"], false);
+        assert_eq!(v["payload"]["timeout"], 30);
     }
 
     #[test]
@@ -182,6 +177,8 @@ mod tests {
         assert_eq!(v["kind"], "deploy");
         assert_eq!(v["payload"]["sid"], "abc");
         assert_eq!(v["payload"]["force"], true);
+        assert_eq!(v["payload"]["wait"], false);
+        assert_eq!(v["payload"]["timeout"], 30);
     }
 
     #[test]
@@ -199,7 +196,7 @@ mod tests {
     }
 
     #[test]
-    fn trigger_builds_wait_kind_with_default_timeout() {
+    fn trigger_waits_with_default_timeout() {
         let cmd = GardenCommand::Trigger(TriggerArgs {
             seed_type: Some(SeedType::Nixos),
             sid: None,
@@ -208,7 +205,8 @@ mod tests {
             timeout: None,
         });
         let v = json(&build_request_line("1", &cmd).unwrap());
-        assert_eq!(v["kind"], "deploy_wait");
+        assert_eq!(v["kind"], "deploy");
+        assert_eq!(v["payload"]["wait"], true);
         assert_eq!(v["payload"]["timeout"], 30);
         assert_eq!(v["payload"]["force"], true);
     }
@@ -225,13 +223,15 @@ mod tests {
 
         let cli = Cli::try_parse_from(["garden", "trigger", "--sid", "abc"]).unwrap();
         let v = json(&build_request_line("1", &cli.garden.command).unwrap());
-        assert_eq!(v["kind"], "deploy_wait");
+        assert_eq!(v["kind"], "deploy");
+        assert_eq!(v["payload"]["wait"], true);
         assert_eq!(v["payload"]["timeout"], 30);
 
         let cli = Cli::try_parse_from(["garden", "trigger", "--sid", "abc", "--no-wait"]).unwrap();
         let v = json(&build_request_line("1", &cli.garden.command).unwrap());
         assert_eq!(v["kind"], "deploy");
-        assert!(v["payload"].get("timeout").is_none());
+        assert_eq!(v["payload"]["wait"], false);
+        assert_eq!(v["payload"]["timeout"], 30);
 
         for args in [
             vec![
@@ -253,7 +253,8 @@ mod tests {
         let cli =
             Cli::try_parse_from(["garden", "trigger", "--sid", "abc", "--timeout", "75"]).unwrap();
         let v = json(&build_request_line("1", &cli.garden.command).unwrap());
-        assert_eq!(v["kind"], "deploy_wait");
+        assert_eq!(v["kind"], "deploy");
+        assert_eq!(v["payload"]["wait"], true);
         assert_eq!(v["payload"]["timeout"], 75);
     }
 }

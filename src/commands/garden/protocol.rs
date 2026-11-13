@@ -22,7 +22,6 @@ pub const MAX_LINE_BYTES: usize = 65_536;
 
 const KIND_DEPLOY: &str = "deploy";
 const KIND_RELOAD: &str = "reload";
-const KIND_DEPLOY_WAIT: &str = "deploy_wait";
 const KIND_REREGISTER: &str = "reregister";
 const KIND_STATUS: &str = "status";
 
@@ -45,6 +44,8 @@ struct DeployPayload<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     sid: Option<&'a str>,
     force: bool,
+    wait: bool,
+    timeout: u32,
 }
 
 /// Encode a `deploy` request to a single JSON line.
@@ -53,6 +54,8 @@ pub fn deploy_request(
     seed_type: Option<&str>,
     sid: Option<&str>,
     force: bool,
+    wait: bool,
+    timeout: u32,
 ) -> Result<String> {
     encode(&Envelope {
         v: PROTOCOL_VERSION,
@@ -62,35 +65,7 @@ pub fn deploy_request(
             seed_type,
             sid,
             force,
-        }),
-    })
-}
-
-#[derive(Debug, Serialize)]
-struct DeployWaitPayload<'a> {
-    #[serde(flatten)]
-    deploy: DeployPayload<'a>,
-    timeout: u32,
-}
-
-/// Encode an observed deployment without changing the legacy deploy contract.
-pub fn deploy_wait_request(
-    id: &str,
-    seed_type: Option<&str>,
-    sid: Option<&str>,
-    force: bool,
-    timeout: u32,
-) -> Result<String> {
-    encode(&Envelope {
-        v: PROTOCOL_VERSION,
-        id,
-        kind: KIND_DEPLOY_WAIT,
-        payload: Some(DeployWaitPayload {
-            deploy: DeployPayload {
-                seed_type,
-                sid,
-                force,
-            },
+            wait,
             timeout,
         }),
     })
@@ -193,31 +168,31 @@ mod tests {
 
     #[test]
     fn deploy_by_type_omits_sid() {
-        let line = deploy_request("7", Some("nixos"), None, false).unwrap();
+        let line = deploy_request("7", Some("nixos"), None, false, true, 30).unwrap();
         assert_eq!(
             value(&line),
             json!({"v": 1, "id": "7", "kind": "deploy",
-                   "payload": {"seed_type": "nixos", "force": false}})
+                   "payload": {"seed_type": "nixos", "force": false, "wait": true, "timeout": 30}})
         );
     }
 
     #[test]
     fn deploy_by_sid_omits_seed_type_and_carries_force() {
-        let line = deploy_request("7", None, Some("abc"), true).unwrap();
+        let line = deploy_request("7", None, Some("abc"), true, false, 30).unwrap();
         assert_eq!(
             value(&line),
             json!({"v": 1, "id": "7", "kind": "deploy",
-                   "payload": {"sid": "abc", "force": true}})
+                   "payload": {"sid": "abc", "force": true, "wait": false, "timeout": 30}})
         );
     }
 
     #[test]
-    fn deploy_wait_carries_scope_force_and_timeout() {
-        let line = deploy_wait_request("7", Some("nixos"), Some("abc"), true, 75).unwrap();
+    fn deploy_carries_scope_force_and_custom_timeout() {
+        let line = deploy_request("7", Some("nixos"), Some("abc"), true, true, 75).unwrap();
         assert_eq!(
             value(&line),
-            json!({"v": 1, "id": "7", "kind": "deploy_wait",
-                   "payload": {"seed_type": "nixos", "sid": "abc", "force": true, "timeout": 75}})
+            json!({"v": 1, "id": "7", "kind": "deploy",
+                   "payload": {"seed_type": "nixos", "sid": "abc", "force": true, "wait": true, "timeout": 75}})
         );
     }
 

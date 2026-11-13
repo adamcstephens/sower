@@ -4,6 +4,28 @@ defmodule Garden.AdminTest do
   alias SowerClient.Admin.{Deploy, Reload, Reregister, Status, StatusReport}
 
   describe "handle/1" do
+    test "deploy selects the same subscription for default waiting and enqueue-only" do
+      storage = Garden.Storage.read()
+      on_exit(fn -> Garden.Storage.write(storage) end)
+
+      sub = %SowerClient.Orchestration.Subscription{
+        sid: "sub-1",
+        name: "host",
+        seed_name: "host",
+        seed_type: "nixos"
+      }
+
+      Garden.Storage.put(:subscriptions, [sub])
+
+      for selector <- [%{sid: sub.sid}, %{seed_type: sub.seed_type}] do
+        command = Deploy.cast!(selector)
+        assert {:wait, ^sub, ^command} = Garden.Admin.handle(command)
+
+        assert {:ok, "deployment enqueued"} =
+                 Garden.Admin.handle(%{command | wait: false})
+      end
+    end
+
     test "reload requests a reload and reports back" do
       on_exit(fn -> Garden.take_pending_reload() end)
 

@@ -8,7 +8,6 @@ defmodule Garden.Admin do
   import SowerClient.Seed, only: [is_seed_type?: 1]
 
   alias SowerClient.Admin.Deploy
-  alias SowerClient.Admin.DeployWait
   alias SowerClient.Admin.Reload
   alias SowerClient.Admin.Reregister
   alias SowerClient.Admin.Status
@@ -22,28 +21,6 @@ defmodule Garden.Admin do
   into reply frames or observe until execution start.
   """
   def handle(%Deploy{} = command), do: deploy_command(command)
-
-  def handle(%DeployWait{} = command) do
-    subscriptions = Garden.Storage.read().subscriptions
-
-    matches =
-      cond do
-        is_binary(command.sid) ->
-          Enum.filter(subscriptions, &(&1.sid == command.sid))
-
-        is_binary(command.seed_type) ->
-          Enum.filter(subscriptions, &(&1.seed_type == command.seed_type))
-
-        true ->
-          []
-      end
-
-    case matches do
-      [sub] -> {:wait, sub, command}
-      [] -> {:error, "subscription not found"}
-      _ -> {:error, "multiple subscriptions matched"}
-    end
-  end
 
   def handle(%Reload{}), do: reload()
   def handle(%Reregister{}), do: reregister()
@@ -90,24 +67,31 @@ defmodule Garden.Admin do
      })}
   end
 
-  defp deploy_command(%Deploy{sid: sid, force: force}) when is_binary(sid) do
+  defp deploy_command(%Deploy{sid: sid} = command) when is_binary(sid) do
     case Enum.find(Garden.Storage.read().subscriptions, &(&1.sid == sid)) do
       nil -> {:error, "subscription not found for sid #{sid}"}
-      sub -> enqueue(Garden.Socket.deploy(sub, force: force))
+      sub -> dispatch_deploy(sub, command)
     end
   end
 
-  defp deploy_command(%Deploy{seed_type: seed_type, force: force}) when is_binary(seed_type) do
-    enqueue(deploy(seed_type, force: force))
+  defp deploy_command(%Deploy{seed_type: seed_type} = command) when is_binary(seed_type) do
+    case subs(seed_type) do
+      [sub] -> dispatch_deploy(sub, command)
+      [] -> {:error, "subscription not found"}
+      _ -> {:error, "multiple subscriptions matched"}
+    end
   end
 
   defp deploy_command(%Deploy{}) do
     {:error, "deploy requires a seed_type or sid"}
   end
 
-  defp enqueue(:ok), do: {:ok, "deployment enqueued"}
-  defp enqueue({:error, :subscription_not_found}), do: {:error, "subscription not found"}
-  defp enqueue({:error, :too_many_results}), do: {:error, "multiple subscriptions matched"}
+  defp dispatch_deploy(sub, %Deploy{wait: true} = command), do: {:wait, sub, command}
+
+  defp dispatch_deploy(sub, %Deploy{wait: false} = command) do
+    :ok = Garden.Socket.deploy(sub, force: command.force)
+    {:ok, "deployment enqueued"}
+  end
 
   def subs(seed_type) do
     Garden.Storage.read().subscriptions
