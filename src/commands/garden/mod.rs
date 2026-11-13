@@ -38,8 +38,8 @@ pub struct GardenArgs {
 
 #[derive(Debug, Subcommand)]
 enum GardenCommand {
-    /// Nudge the local garden to deploy what the server already has for it,
-    /// scoped by seed type or subscription sid.
+    /// Trigger deployment by seed type or subscription sid.
+    /// Wait up to 30 seconds for execution starts, not completion.
     Trigger(TriggerArgs),
     /// Request a reload (the same path as a SIGHUP).
     Reload,
@@ -64,14 +64,13 @@ struct TriggerArgs {
     #[arg(long)]
     force: bool,
 
-    /// Wait for each deployment to start, not complete. Ctrl-C stops observation,
-    /// not deployment.
+    /// Return after enqueuing instead of waiting for execution starts.
     #[arg(long)]
-    wait: bool,
+    no_wait: bool,
 
-    /// Maximum seconds to wait for deployment starts (default: 30). Expiry stops
-    /// observation, not deployment.
-    #[arg(long, requires = "wait", value_parser = clap::value_parser!(u32).range(1..=86_400))]
+    /// Maximum seconds to wait for deployment starts (default: 30).
+    /// Expiry or Ctrl-C stops observation, not deployment.
+    #[arg(long, conflicts_with = "no_wait", value_parser = clap::value_parser!(u32).range(1..=86_400))]
     timeout: Option<u32>,
 }
 
@@ -86,7 +85,7 @@ pub fn run(args: GardenArgs) -> Result<()> {
     let line = build_request_line(&request_id(), &command)?;
 
     let wait_timeout = match &command {
-        GardenCommand::Trigger(trigger) if trigger.wait => Some(trigger.timeout.unwrap_or(30)),
+        GardenCommand::Trigger(trigger) if !trigger.no_wait => Some(trigger.timeout.unwrap_or(30)),
         _ => None,
     };
     let exit_code = client::run_request(&socket, &line, wait_timeout)?;
@@ -102,7 +101,7 @@ fn build_request_line(id: &str, command: &GardenCommand) -> Result<String> {
             if trigger.seed_type.is_none() && trigger.sid.is_none() {
                 bail!("trigger requires --type or --sid");
             }
-            if trigger.wait {
+            if !trigger.no_wait {
                 return protocol::deploy_wait_request(
                     id,
                     trigger.seed_type.map(SeedType::as_str),
@@ -150,19 +149,19 @@ mod tests {
             seed_type: None,
             sid: None,
             force: false,
-            wait: false,
+            no_wait: false,
             timeout: None,
         });
         assert!(build_request_line("1", &cmd).is_err());
     }
 
     #[test]
-    fn trigger_by_type_builds_deploy_kind() {
+    fn trigger_by_type_without_waiting_builds_deploy_kind() {
         let cmd = GardenCommand::Trigger(TriggerArgs {
             seed_type: Some(SeedType::Nixos),
             sid: None,
             force: false,
-            wait: false,
+            no_wait: true,
             timeout: None,
         });
         let v = json(&build_request_line("1", &cmd).unwrap());
@@ -171,12 +170,12 @@ mod tests {
     }
 
     #[test]
-    fn trigger_by_sid_builds_deploy_kind() {
+    fn trigger_by_sid_without_waiting_builds_deploy_kind() {
         let cmd = GardenCommand::Trigger(TriggerArgs {
             seed_type: None,
             sid: Some("abc".to_string()),
             force: true,
-            wait: false,
+            no_wait: true,
             timeout: None,
         });
         let v = json(&build_request_line("1", &cmd).unwrap());
@@ -200,12 +199,12 @@ mod tests {
     }
 
     #[test]
-    fn trigger_wait_builds_distinct_kind_with_default_timeout() {
+    fn trigger_builds_wait_kind_with_default_timeout() {
         let cmd = GardenCommand::Trigger(TriggerArgs {
             seed_type: Some(SeedType::Nixos),
             sid: None,
             force: true,
-            wait: true,
+            no_wait: false,
             timeout: None,
         });
         let v = json(&build_request_line("1", &cmd).unwrap());
@@ -215,7 +214,7 @@ mod tests {
     }
 
     #[test]
-    fn trigger_timeout_requires_wait_and_positive_seconds() {
+    fn trigger_defaults_to_waiting_and_validates_opt_out() {
         use clap::Parser;
 
         #[derive(Parser)]
@@ -224,40 +223,37 @@ mod tests {
             garden: GardenArgs,
         }
 
+        let cli = Cli::try_parse_from(["garden", "trigger", "--sid", "abc"]).unwrap();
+        let v = json(&build_request_line("1", &cli.garden.command).unwrap());
+        assert_eq!(v["kind"], "deploy_wait");
+        assert_eq!(v["payload"]["timeout"], 30);
+
+        let cli = Cli::try_parse_from(["garden", "trigger", "--sid", "abc", "--no-wait"]).unwrap();
+        let v = json(&build_request_line("1", &cli.garden.command).unwrap());
+        assert_eq!(v["kind"], "deploy");
+        assert!(v["payload"].get("timeout").is_none());
+
         for args in [
-            vec!["garden", "trigger", "--sid", "abc", "--timeout", "10"],
             vec![
                 "garden",
                 "trigger",
                 "--sid",
                 "abc",
-                "--wait",
+                "--no-wait",
                 "--timeout",
-                "0",
+                "10",
             ],
-            vec![
-                "garden",
-                "trigger",
-                "--sid",
-                "abc",
-                "--wait",
-                "--timeout",
-                "86401",
-            ],
+            vec!["garden", "trigger", "--sid", "abc", "--timeout", "0"],
+            vec!["garden", "trigger", "--sid", "abc", "--timeout", "86401"],
+            vec!["garden", "trigger", "--sid", "abc", "--timeout", "invalid"],
+            vec!["garden", "trigger", "--sid", "abc", "--wait"],
         ] {
             assert!(Cli::try_parse_from(args).is_err());
         }
-        let cli = Cli::try_parse_from([
-            "garden",
-            "trigger",
-            "--sid",
-            "abc",
-            "--wait",
-            "--timeout",
-            "75",
-        ])
-        .unwrap();
+        let cli =
+            Cli::try_parse_from(["garden", "trigger", "--sid", "abc", "--timeout", "75"]).unwrap();
         let v = json(&build_request_line("1", &cli.garden.command).unwrap());
+        assert_eq!(v["kind"], "deploy_wait");
         assert_eq!(v["payload"]["timeout"], 75);
     }
 }

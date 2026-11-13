@@ -1,6 +1,6 @@
 defmodule Garden.Admin do
   @moduledoc """
-  Local garden administration, including opt-in bounded deployment-start observation.
+  Local garden administration, including bounded deployment-start observation.
   """
 
   require Logger
