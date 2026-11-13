@@ -1,6 +1,6 @@
 defmodule Garden.Admin do
   @moduledoc """
-  Admin tools for the garden. Useful on local repl
+  Local garden administration, including opt-in bounded deployment-start observation.
   """
 
   require Logger
@@ -8,6 +8,7 @@ defmodule Garden.Admin do
   import SowerClient.Seed, only: [is_seed_type?: 1]
 
   alias SowerClient.Admin.Deploy
+  alias SowerClient.Admin.DeployWait
   alias SowerClient.Admin.Reload
   alias SowerClient.Admin.Reregister
   alias SowerClient.Admin.Status
@@ -16,11 +17,34 @@ defmodule Garden.Admin do
   @doc """
   Dispatch a decoded admin socket command struct.
 
-  Returns one of `{:ok, message}`, `{:error, message}`, or
-  `{:status, %StatusReport{}}` for `Garden.AdminSocket` to encode into reply
-  frames.
+  Returns `{:ok, message}`, `{:error, message}`, `{:status, %StatusReport{}}`,
+  or `{:wait, subscription, command}` for `Garden.AdminSocket` to encode
+  into reply frames or observe until execution start.
   """
   def handle(%Deploy{} = command), do: deploy_command(command)
+
+  def handle(%DeployWait{} = command) do
+    subscriptions = Garden.Storage.read().subscriptions
+
+    matches =
+      cond do
+        is_binary(command.sid) ->
+          Enum.filter(subscriptions, &(&1.sid == command.sid))
+
+        is_binary(command.seed_type) ->
+          Enum.filter(subscriptions, &(&1.seed_type == command.seed_type))
+
+        true ->
+          []
+      end
+
+    case matches do
+      [sub] -> {:wait, sub, command}
+      [] -> {:error, "subscription not found"}
+      _ -> {:error, "multiple subscriptions matched"}
+    end
+  end
+
   def handle(%Reload{}), do: reload()
   def handle(%Reregister{}), do: reregister()
   def handle(%Status{}), do: status()

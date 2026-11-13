@@ -26,6 +26,75 @@ defmodule Garden.AdminSocketTest do
   end
 
   describe "request dispatch" do
+    test "streams accepted and started seeds without waiting for deployment completion" do
+      parent = self()
+      sub = %SowerClient.Orchestration.Subscription{seed_name: "host", seed_type: "nixos"}
+
+      deployment = %SowerClient.Orchestration.Deployment{
+        sid: "dep-1",
+        request_id: "request-1",
+        seed_deployments: [
+          %SowerClient.Orchestration.SeedDeployment{
+            seed: %SowerClient.Seed{sid: "seed-1", name: "host", seed_type: "nixos"}
+          }
+        ]
+      }
+
+      path =
+        start_socket(fn %Admin.DeployWait{} = command -> {:wait, sub, command} end,
+          observe: fn ^sub, false, 30_000 ->
+            send(self(), {:deployment_wait, "request-1", :accepted})
+            send(self(), {:deployment_wait, "request-1", {:deployment, deployment}})
+            send(parent, {:observer, self()})
+            {:ok, "request-1", parent}
+          end
+        )
+
+      result =
+        Task.async(fn ->
+          request(path, %{
+            "id" => "wait-1",
+            "kind" => "deploy_wait",
+            "payload" => %{"seed_type" => "nixos"}
+          })
+        end)
+
+      assert_receive {:observer, observer}
+      assert Task.yield(result, 20) == nil
+      send(observer, {:deployment_wait, "request-1", {:started, "seed-1"}})
+      frames = Task.await(result)
+      assert Enum.any?(frames, &(&1["data"] == "accepted host (nixos), deployment dep-1"))
+      assert Enum.any?(frames, &(&1["data"] == "waiting host (nixos), deployment dep-1"))
+      assert Enum.any?(frames, &(&1["data"] == "started host (nixos), deployment dep-1"))
+
+      assert List.last(frames) == %{
+               "v" => 1,
+               "id" => "wait-1",
+               "kind" => "complete",
+               "exit_code" => 0
+             }
+    end
+
+    test "closing a waiting client terminates only its observer" do
+      parent = self()
+      sub = %SowerClient.Orchestration.Subscription{seed_name: "host", seed_type: "nixos"}
+
+      path =
+        start_socket(fn %Admin.DeployWait{} = command -> {:wait, sub, command} end,
+          observe: fn _, _, _ ->
+            send(parent, {:observer, self()})
+            {:ok, "request-1", parent}
+          end
+        )
+
+      client = connect(path)
+      :ok = :gen_tcp.send(client, [Jason.encode!(%{"kind" => "deploy_wait"}), "\n"])
+      assert_receive {:observer, observer}
+      monitor = Process.monitor(observer)
+      :gen_tcp.close(client)
+      assert_receive {:DOWN, ^monitor, :process, ^observer, :normal}
+    end
+
     test "passes the typed command to the handler and streams ok then complete" do
       test_pid = self()
 
@@ -162,11 +231,11 @@ defmodule Garden.AdminSocketTest do
     end
   end
 
-  defp start_socket(handler) do
+  defp start_socket(handler, opts \\ []) do
     tmp = Path.join(System.tmp_dir!(), "admin-socket-#{System.unique_integer([:positive])}")
     path = Path.join(tmp, "admin.sock")
 
-    {:ok, pid} = AdminSocket.start_link(name: nil, socket_path: path, handler: handler)
+    {:ok, pid} = AdminSocket.start_link([name: nil, socket_path: path, handler: handler] ++ opts)
 
     on_exit(fn ->
       # The socket is linked to the (now-exited) test process, so it may already

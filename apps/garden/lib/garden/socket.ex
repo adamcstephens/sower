@@ -1,4 +1,11 @@
 defmodule Garden.Socket do
+  @moduledoc """
+  Garden/server channel lifecycle and local deployment dispatch.
+
+  Explicit start observers are correlated by request ID before submission;
+  deployment workers report starts directly, independently of server connectivity.
+  """
+
   use Garden.ChannelClient, lobby_topic: "garden:lobby"
 
   require Logger
@@ -13,6 +20,23 @@ defmodule Garden.Socket do
   def deploy(%SowerClient.Orchestration.Subscription{} = sub, opts \\ []) do
     force? = Keyword.get(opts, :force, false)
     GenServer.cast(__MODULE__, {:deployment_request, sub, force?})
+  end
+
+  def observe_deployment(%SowerClient.Orchestration.Subscription{} = sub, force?, timeout_ms) do
+    case GenServer.whereis(__MODULE__) do
+      nil ->
+        {:error, :not_running}
+
+      pid ->
+        try do
+          case GenServer.call(pid, {:observe_deployment, sub, force?, self()}, timeout_ms) do
+            {:ok, request_id} -> {:ok, request_id, pid}
+            {:error, _} = error -> error
+          end
+        catch
+          :exit, _ -> {:error, :unconfirmed}
+        end
+    end
   end
 
   def send_deployment_log(%SowerClient.Orchestration.SeedDeploymentLog{} = chunk) do
@@ -142,6 +166,32 @@ defmodule Garden.Socket do
       {:error, reason} = err ->
         Logger.error(msg: "Operator re-registration failed", reason: inspect(reason))
         {:reply, err, socket}
+    end
+  end
+
+  def handle_call({:observe_deployment, sub, force?, observer}, _from, socket) do
+    garden_sid = Map.get(socket.assigns, :garden_sid)
+    topic = if garden_sid, do: "garden:#{garden_sid}"
+
+    if is_binary(topic) and joined?(socket, topic) do
+      {:ok, request} = Lifecycle.build_deployment_request(sub.sid, force?)
+      monitor = Process.monitor(observer)
+
+      case push_message(socket, request) do
+        {:ok, ref} ->
+          watch = %Garden.DeploymentWait.Watch{pid: observer, monitor: monitor, ref: ref}
+
+          watches =
+            Map.put(Map.get(socket.assigns, :start_observers, %{}), request.request_id, watch)
+
+          {:reply, {:ok, request.request_id}, assign(socket, :start_observers, watches)}
+
+        {:error, reason} ->
+          Process.demonitor(monitor, [:flush])
+          {:reply, {:error, reason}, socket}
+      end
+    else
+      {:reply, {:error, :disconnected}, socket}
     end
   end
 
@@ -287,11 +337,13 @@ defmodule Garden.Socket do
     )
 
     invalidate_cached_token()
+    notify_disconnected(socket)
     {:ok, schedule_reconnect(socket)}
   end
 
   def handle_disconnect(reason, socket) do
     Logger.warning(msg: "Disconnected from server socket", reason: inspect(reason))
+    notify_disconnected(socket)
     {:ok, schedule_reconnect(socket)}
   end
 
@@ -584,6 +636,8 @@ defmodule Garden.Socket do
       {:ok, deployment} ->
         case Lifecycle.receive_deployment(deployment, socket.assigns.active_deployments) do
           {:enqueue, active_deployments} ->
+            notify_observer(socket, deployment.request_id, {:deployment, deployment})
+
             Logger.debug(
               msg: "Received deployment",
               request_id: deployment.request_id,
@@ -603,6 +657,8 @@ defmodule Garden.Socket do
             {:ok, socket}
 
           :skipped ->
+            notify_observer(socket, deployment.request_id, {:deployment, deployment})
+
             Logger.info(
               msg: "Deployment skipped by server",
               request_id: deployment.request_id,
@@ -625,6 +681,8 @@ defmodule Garden.Socket do
         %{assigns: %{garden_sid: garden_sid}} = socket
       )
       when topic == garden_sid do
+    notify_observer(socket, payload["request_id"], {:rejected, payload["reason"]})
+
     Logger.error(
       msg: "Deployment request failed",
       request_id: payload["request_id"],
@@ -640,12 +698,21 @@ defmodule Garden.Socket do
   end
 
   @impl Slipstream
-  def handle_reply(_ref, :ok, socket) do
-    {:noreply, socket}
-  end
-
   def handle_reply(ref, payload, socket) do
-    Logger.debug(msg: "Received unknown reply", ref: ref, payload: payload)
+    Enum.each(Map.get(socket.assigns, :start_observers, %{}), fn {request_id, watch} ->
+      if watch.ref == ref do
+        event =
+          case payload do
+            :ok -> :accepted
+            {:ok, _} -> :accepted
+            {:error, reason} -> {:rejected, inspect(reason)}
+            other -> {:rejected, inspect(other)}
+          end
+
+        send(watch.pid, {:deployment_wait, request_id, event})
+      end
+    end)
+
     {:noreply, socket}
   end
 
@@ -657,7 +724,9 @@ defmodule Garden.Socket do
         {:noreply, socket}
 
       {:ok, deployment} ->
-        {:ok, _} =
+        observer = get_in(socket.assigns, [:start_observers, deployment.request_id])
+
+        _ =
           push_message(
             socket,
             DeploymentStatus.cast!(%{
@@ -669,7 +738,7 @@ defmodule Garden.Socket do
         Task.Supervisor.start_child(Garden.TaskSupervisor, fn ->
           result =
             try do
-              Garden.Deployer.run(deployment)
+              Garden.Deployer.run(deployment, get_in(observer.pid))
             rescue
               error ->
                 Logger.error(
@@ -712,6 +781,15 @@ defmodule Garden.Socket do
 
         {:noreply, assign(socket, :active_deployments, active_deployments)}
     end
+  end
+
+  def handle_info({:DOWN, monitor, :process, _pid, _reason}, socket) do
+    watches =
+      Map.reject(Map.get(socket.assigns, :start_observers, %{}), fn {_id, watch} ->
+        watch.monitor == monitor
+      end)
+
+    {:noreply, assign(socket, :start_observers, watches)}
   end
 
   def handle_info(:attempt_reconnect, socket) do
@@ -762,6 +840,19 @@ defmodule Garden.Socket do
     end
 
     {:noreply, socket}
+  end
+
+  defp notify_observer(socket, request_id, event) do
+    case get_in(socket.assigns, [:start_observers, request_id]) do
+      nil -> :ok
+      watch -> send(watch.pid, {:deployment_wait, request_id, event})
+    end
+  end
+
+  defp notify_disconnected(socket) do
+    Enum.each(Map.get(socket.assigns, :start_observers, %{}), fn {request_id, watch} ->
+      send(watch.pid, {:deployment_wait, request_id, :disconnected})
+    end)
   end
 
   def private_channel(_socket) do

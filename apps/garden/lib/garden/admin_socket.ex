@@ -6,7 +6,8 @@ defmodule Garden.AdminSocket do
   inverse of the activator, where the Rust CLI is the per-connection server
   spawned by systemd socket activation. The `sower` CLI connects, sends a single
   newline-delimited compact JSON request envelope, and streams reply frames back
-  (`ok`/`error` then a terminal `complete` carrying an exit code).
+  (`ok`/`error` then a terminal `complete` carrying an exit code). Start-wait
+  commands stream per-seed progress until the bounded observation ends.
 
   Auth is SO_PEERCRED, mirroring the activator: a peer is authorized when its uid
   is root or the socket owner, or its gid matches the socket group. The listener
@@ -35,17 +36,20 @@ defmodule Garden.AdminSocket do
   @socket_mode 0o660
 
   typedstruct module: Creds do
+    @moduledoc "Operating-system peer credentials used for local authorization."
     field :pid, integer()
     field :uid, integer(), enforce: true
     field :gid, integer(), enforce: true
   end
 
   typedstruct module: Policy do
+    @moduledoc "Socket-owner and group authorization policy."
     field :allowed_uids, list(integer()), default: []
     field :allowed_gids, list(integer()), default: []
   end
 
   typedstruct module: State do
+    @moduledoc "Listener ownership and acceptor lifecycle."
     field :listen_socket, :gen_tcp.socket(), enforce: true
     field :socket_path, String.t(), enforce: true
     field :acceptor, pid(), enforce: true
@@ -69,10 +73,18 @@ defmodule Garden.AdminSocket do
     Process.flag(:trap_exit, true)
     socket_path = Keyword.get(opts, :socket_path) || configured_socket_path()
     handler = Keyword.get(opts, :handler, &Garden.Admin.handle/1)
+    observe = Keyword.get(opts, :observe, &Garden.Socket.observe_deployment/3)
+
+    dispatch = fn command ->
+      case handler.(command) do
+        {:wait, sub, command} -> {:wait, sub, command, observe}
+        result -> result
+      end
+    end
 
     case start_listening(socket_path) do
       {:ok, listen, policy} ->
-        acceptor = spawn_link(fn -> accept_loop(listen, policy, handler) end)
+        acceptor = spawn_link(fn -> accept_loop(listen, policy, dispatch) end)
         Logger.info(msg: "admin socket listening", path: socket_path)
         {:ok, %State{listen_socket: listen, socket_path: socket_path, acceptor: acceptor}}
 
@@ -235,6 +247,37 @@ defmodule Garden.AdminSocket do
     )
 
     :ok
+  end
+
+  defp emit(client, {:dispatch, id, {:wait, sub, command, observe}}) do
+    timeout_ms = command.timeout * 1000
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+
+    case observe.(sub, command.force, timeout_ms) do
+      {:ok, request_id, socket_pid} ->
+        monitor = Process.monitor(socket_pid)
+        :ok = :inet.setopts(client, active: :once)
+
+        emit = fn kind, text ->
+          write_frame(client, %{"v" => 1, "id" => id, "kind" => to_string(kind), "data" => text})
+        end
+
+        remaining = max(deadline - System.monotonic_time(:millisecond), 0)
+        exit_code = Garden.DeploymentWait.observe(request_id, sub, remaining, emit)
+        Process.demonitor(monitor, [:flush])
+        write_frame(client, complete_frame(id, exit_code))
+
+      {:error, :unconfirmed} ->
+        send_frames(client, id, :error, %{
+          "data" =>
+            "start unconfirmed #{sub.seed_name} (#{sub.seed_type}), deployment unavailable: submission interrupted or timed out; work may still run"
+        })
+
+      {:error, reason} ->
+        send_frames(client, id, :error, %{
+          "data" => "failed-to-start #{sub.seed_name} (#{sub.seed_type}): #{inspect(reason)}"
+        })
+    end
   end
 
   defp emit(client, {:dispatch, id, {:ok, message}}),
