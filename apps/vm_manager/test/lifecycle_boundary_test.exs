@@ -33,7 +33,7 @@ defmodule VMManager.LifecycleBoundaryTest do
   } do
     {config, peer} = attached_vm(directory, true)
     execution = start_supervised!({VMManager.Execution, Config.to_options(config)})
-    assert_receive {:native_info_waiting, server}
+    assert_receive {:native_info_waiting, server}, 5_000
     waiter = Task.async(fn -> GenServer.call(execution, :await_running, :infinity) end)
     assert Task.yield(waiter, 100) == nil
     GenServer.cast(execution, {:finish, :ok})
@@ -101,6 +101,8 @@ defmodule VMManager.LifecycleBoundaryTest do
     assert {:ok, id} = VMManager.define(config, manager)
     assert :ok = VMManager.start(id, manager)
     assert {:ok, %Status{running: true}} = VMManager.await_running(id, manager)
+    peer_pid = peer.pid
+    assert_receive {:native_running_observed, ^peer_pid}, 5_000
     assert :ok = VMManager.stop(id, manager)
     Task.await(peer)
     refute File.exists?(lease)
@@ -115,6 +117,8 @@ defmodule VMManager.LifecycleBoundaryTest do
     assert :ok = VMManager.update(id, fresh_config, manager)
     assert :ok = VMManager.start(id, manager)
     assert {:ok, %Status{running: true}} = VMManager.await_running(id, manager)
+    fresh_peer_pid = fresh_peer.pid
+    assert_receive {:native_running_observed, ^fresh_peer_pid}, 5_000
     assert :ok = VMManager.stop(id, manager)
     Task.await(fresh_peer)
     refute File.exists?(fresh_lease)
@@ -155,41 +159,57 @@ defmodule VMManager.LifecycleBoundaryTest do
 
     peer =
       Task.async(fn ->
-        for {{method, endpoint, body}, index} <-
-              Enum.with_index([
-                {"GET", "vm.info", info.("Running")},
-                {"GET", "vm.info", info.("Running")},
-                {"PUT", "vm.shutdown", ""},
-                {"GET", "vm.info", info.("Created")}
-              ]) do
-          {:ok, socket} = :gen_tcp.accept(listener, 5_000)
+        serve_running(listener, info.("Running"), gated, parent, 0)
+        {:ok, socket} = :gen_tcp.accept(listener, 5_000)
 
-          assert {:ok, "#{method} /api/v1/#{endpoint} HTTP/1.1\r\n"} ==
-                   :gen_tcp.recv(socket, 0, 5_000)
+        assert {:ok, "GET /api/v1/vm.info HTTP/1.1\r\n"} ==
+                 :gen_tcp.recv(socket, 0, 5_000)
 
-          headers(socket)
-
-          if index == 0 and gated do
-            send(parent, {:native_info_waiting, self()})
-
-            receive do
-              :reply_running -> :ok
-            end
-          end
-
-          :ok =
-            :gen_tcp.send(socket, [
-              "HTTP/1.1 200 OK\r\ncontent-length: ",
-              to_string(byte_size(body)),
-              "\r\nconnection: close\r\n\r\n",
-              body
-            ])
-
-          :gen_tcp.close(socket)
-        end
+        headers(socket)
+        respond(socket, info.("Created"))
       end)
 
     {config, peer}
+  end
+
+  defp serve_running(listener, body, gated, parent, observations) do
+    {:ok, socket} = :gen_tcp.accept(listener, 5_000)
+    {:ok, request} = :gen_tcp.recv(socket, 0, 5_000)
+    headers(socket)
+
+    case request do
+      "GET /api/v1/vm.info HTTP/1.1\r\n" ->
+        if observations == 0 and gated do
+          send(parent, {:native_info_waiting, self()})
+
+          receive do
+            :reply_running -> :ok
+          end
+        end
+
+        respond(socket, body)
+        if observations > 0, do: send(parent, {:native_running_observed, self()})
+        serve_running(listener, body, gated, parent, observations + 1)
+
+      "PUT /api/v1/vm.shutdown HTTP/1.1\r\n" ->
+        assert observations >= 2
+        respond(socket, "")
+
+      unexpected ->
+        flunk("unexpected request while VM is running: #{inspect(unexpected)}")
+    end
+  end
+
+  defp respond(socket, body) do
+    :ok =
+      :gen_tcp.send(socket, [
+        "HTTP/1.1 200 OK\r\ncontent-length: ",
+        to_string(byte_size(body)),
+        "\r\nconnection: close\r\n\r\n",
+        body
+      ])
+
+    :gen_tcp.close(socket)
   end
 
   defp headers(socket) do

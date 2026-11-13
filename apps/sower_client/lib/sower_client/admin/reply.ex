@@ -3,8 +3,8 @@ defmodule SowerClient.Admin.Reply do
   Reply frame for the garden admin socket (garden -> CLI).
 
   Mirrors the activator's Output/Error/Complete shape: `ok`/`error` frames carry
-  data (and `status` for a `status` request), then a terminal `complete` frame
-  carries the exit code the CLI exits with.
+  human-readable data, optional status or structured profile operation results,
+  then a terminal `complete` frame carries the exit code the CLI exits with.
   """
 
   use SowerClient.Schema
@@ -37,7 +37,8 @@ defmodule SowerClient.Admin.Reply do
         nullable: true,
         description: "Exit code, present on the terminal complete frame"
       },
-      status: SowerClient.Admin.StatusReport
+      status: SowerClient.Admin.StatusReport,
+      profile_result: SowerClient.Orchestration.ProfileOperationResult
     },
     required: [:id, :kind]
   })

@@ -27,7 +27,8 @@ check-elixir-format:
     mix format --check-formatted
 
 check-elixir-test: dev-services
-    mix test
+    cargo build --bin sower
+    PATH="$PWD/target/debug:$PATH" mix test
 
 check-rust: check-rust-lint check-rust-test
 

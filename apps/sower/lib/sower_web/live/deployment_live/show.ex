@@ -1,4 +1,10 @@
 defmodule SowerWeb.DeploymentLive.Show do
+  @moduledoc """
+  Displays deployment destinations, status, and retained live output.
+
+  Subscription-bound destinations keep independent logs even when they share a seed.
+  """
+
   use SowerWeb, :live_view
 
   alias Sower.Orchestration
@@ -86,7 +92,7 @@ defmodule SowerWeb.DeploymentLive.Show do
           <div :if={@deployment.seed_deployments != []} class="space-y-4">
             <article
               :for={sd <- @deployment.seed_deployments}
-              id={"seed-log-#{sd.seed.sid}"}
+              id={"seed-log-#{seed_log_id(sd)}"}
               class="rounded-lg border border-hairline/50 p-4"
             >
               <% log = seed_log(sd, @live_logs) %>
@@ -96,7 +102,7 @@ defmodule SowerWeb.DeploymentLive.Show do
                   log && "cursor-pointer"
                 ]}
                 phx-click={log && "toggle_seed_log"}
-                phx-value-seed_sid={log && sd.seed.sid}
+                phx-value-seed_sid={log && seed_log_id(sd)}
               >
                 <div class="text-sm font-semibold text-content flex flex-wrap items-center gap-2 min-w-0">
                   <.link
@@ -105,6 +111,9 @@ defmodule SowerWeb.DeploymentLive.Show do
                   >
                     {sd.seed.seed_type}/{sd.seed.name}
                   </.link>
+                  <span :if={sd.profile_name} class="text-sm font-semibold">
+                    {sd.profile_name}
+                  </span>
                   <span class="text-xs font-normal text-content-muted">
                     {sd.seed.artifact}
                   </span>
@@ -122,17 +131,17 @@ defmodule SowerWeb.DeploymentLive.Show do
                     variant={:secondary}
                     type="button"
                     phx-click="toggle_seed_log"
-                    phx-value-seed_sid={sd.seed.sid}
+                    phx-value-seed_sid={seed_log_id(sd)}
                   >
-                    {if expanded_seed_log?(@expanded_seed_logs, sd.seed.sid),
+                    {if expanded_seed_log?(@expanded_seed_logs, seed_log_id(sd)),
                       do: "Hide log",
                       else: "View log"}
                   </.button>
                 </div>
               </div>
               <pre
-                :if={log && expanded_seed_log?(@expanded_seed_logs, sd.seed.sid)}
-                id={"seed-log-content-#{sd.seed.sid}"}
+                :if={log && expanded_seed_log?(@expanded_seed_logs, seed_log_id(sd))}
+                id={"seed-log-content-#{seed_log_id(sd)}"}
                 class="mt-3 p-3 rounded-md border border-hairline bg-surface-hover text-xs text-content overflow-x-auto whitespace-pre-wrap"
               >{log}</pre>
             </article>
@@ -242,12 +251,17 @@ defmodule SowerWeb.DeploymentLive.Show do
         end)
 
       logs =
-        if {chunk.seed_sid, chunk.sequence} in chunk.evicted do
+        if {log_key(chunk.seed_sid, Map.get(chunk, :subscription_sid)), chunk.sequence} in chunk.evicted do
           logs
         else
-          Map.update(logs, chunk.seed_sid, %{chunk.sequence => chunk.output}, fn chunks ->
-            Map.put_new(chunks, chunk.sequence, chunk.output)
-          end)
+          Map.update(
+            logs,
+            log_key(chunk.seed_sid, Map.get(chunk, :subscription_sid)),
+            %{chunk.sequence => chunk.output},
+            fn chunks ->
+              Map.put_new(chunks, chunk.sequence, chunk.output)
+            end
+          )
         end
 
       {:noreply,
@@ -383,7 +397,7 @@ defmodule SowerWeb.DeploymentLive.Show do
 
     logs =
       chunks
-      |> Enum.group_by(& &1.seed_sid)
+      |> Enum.group_by(&log_key(&1.seed_sid, Map.get(&1, :subscription_sid)))
       |> Map.new(fn {seed_sid, chunks} ->
         {seed_sid, Map.new(chunks, &{&1.sequence, &1.output})}
       end)
@@ -403,7 +417,8 @@ defmodule SowerWeb.DeploymentLive.Show do
        do: seed_deployment.log
 
   defp seed_log(%Orchestration.SeedDeployment{} = seed_deployment, logs) do
-    case Map.get(logs, seed_deployment.seed.sid, %{}) |> Enum.sort() do
+    case Map.get(logs, log_key(seed_deployment.seed.sid, seed_deployment.subscription_sid), %{})
+         |> Enum.sort() do
       [] ->
         seed_deployment.log
 
@@ -411,6 +426,16 @@ defmodule SowerWeb.DeploymentLive.Show do
         chunks |> Enum.map(&elem(&1, 1)) |> IO.iodata_to_binary()
     end
   end
+
+  defp seed_log_id(%Orchestration.SeedDeployment{} = seed_deployment) do
+    case seed_deployment.subscription_sid do
+      nil -> seed_deployment.seed.sid
+      subscription_sid -> "#{seed_deployment.seed.sid}-#{subscription_sid}"
+    end
+  end
+
+  defp log_key(seed_sid, nil), do: seed_sid
+  defp log_key(seed_sid, subscription_sid), do: {seed_sid, subscription_sid}
 
   defp live_log_interrupted?(logs, interrupted?) do
     interrupted? ||

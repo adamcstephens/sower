@@ -4,6 +4,33 @@ defmodule Garden.AdminTest do
   alias SowerClient.Admin.{Deploy, Reload, Reregister, Status, StatusReport}
 
   describe "handle/1" do
+    test "subscribed uninstall is unavailable offline without mutating the local binding" do
+      storage = Garden.Storage.read()
+      on_exit(fn -> Garden.Storage.write(storage) end)
+
+      subscription =
+        SowerClient.Orchestration.Subscription.cast!(%{
+          name: "offline-application",
+          sid: "offline-subscription",
+          seed_name: "application",
+          seed_type: "package"
+        })
+
+      Garden.Storage.put(:subscriptions, [subscription])
+
+      command =
+        SowerClient.Admin.Profile.cast!(%{
+          action: "uninstall",
+          profile_name: subscription.name,
+          preview: false
+        })
+
+      assert {:profile, result} = Garden.Admin.handle({"offline-uninstall", command})
+      assert result.status == "failed"
+      assert result.error =~ "disconnected"
+      assert Enum.member?(Garden.Storage.read().subscriptions, subscription)
+    end
+
     test "reload requests a reload and reports back" do
       on_exit(fn -> Garden.take_pending_reload() end)
 

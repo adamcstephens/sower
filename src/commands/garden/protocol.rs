@@ -46,6 +46,30 @@ struct DeployPayload<'a> {
     force: bool,
 }
 
+#[derive(Debug, Serialize)]
+pub struct ProfilePayload<'a> {
+    pub action: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile_name: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub generation_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seed_sid: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subscription_sid: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preview: Option<bool>,
+}
+
+pub fn profile_request(id: &str, payload: ProfilePayload<'_>) -> Result<String> {
+    encode(&Envelope {
+        v: PROTOCOL_VERSION,
+        id,
+        kind: "profile",
+        payload: Some(payload),
+    })
+}
+
 /// Encode a `deploy` request to a single JSON line.
 pub fn deploy_request(
     id: &str,
@@ -114,6 +138,8 @@ pub struct Reply {
     pub exit_code: Option<i32>,
     #[serde(default)]
     pub status: Option<StatusReport>,
+    #[serde(default)]
+    pub profile_result: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]

@@ -137,7 +137,8 @@ defmodule VMManager.RestartPolicyTest do
        context do
     File.mkdir_p!(context.directory)
     formatter = Path.join(context.directory, "stop-formatter")
-    File.write!(formatter, "#!/usr/bin/env sh\nexec sleep 60\n")
+    ready = Path.join(context.directory, "stop-formatter-ready")
+    File.write!(formatter, "#!/usr/bin/env sh\nprintf ready > '#{ready}'\nexec sleep 60\n")
     File.chmod!(formatter, 0o700)
     disk = Path.join(context.directory, "persistent.img")
     File.write!(disk, "owned persistent data")
@@ -153,6 +154,7 @@ defmodule VMManager.RestartPolicyTest do
 
     assert {:ok, _} = VMManager.define(config, context.manager)
     assert :ok = VMManager.start(config.id, context.manager)
+    assert_eventually(fn -> File.read(ready) == {:ok, "ready"} end)
     :ok = :sys.suspend(context.runtime)
     stopping = Task.async(fn -> VMManager.stop(config.id, context.manager) end)
 

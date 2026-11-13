@@ -1,6 +1,8 @@
 defmodule SowerWeb.SubscriptionLive.Index do
   use SowerWeb, :live_view
 
+  @moduledoc "Garden subscription inventory; managed removals remain visible until acknowledged."
+
   alias Sower.Orchestration
   alias Sower.Orchestration.Subscription
 
@@ -52,8 +54,22 @@ defmodule SowerWeb.SubscriptionLive.Index do
   @impl true
   def handle_event("delete", %{"id" => id}, socket) do
     subscription = Orchestration.get_subscription!(id)
-    {:ok, _} = Orchestration.delete_subscription(subscription)
 
-    {:noreply, stream_delete(socket, :subscriptions, subscription)}
+    case Orchestration.delete_subscription(subscription) do
+      {:ok, subscription} when subscription.seed_type in ["package", "devshell"] ->
+        {:noreply,
+         socket
+         |> stream_insert(:subscriptions, subscription)
+         |> put_flash(
+           :info,
+           "Uninstall pending Garden acknowledgement. External services are not stopped."
+         )}
+
+      {:ok, subscription} ->
+        {:noreply, stream_delete(socket, :subscriptions, subscription)}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Subscription removal failed: #{inspect(reason)}")}
+    end
   end
 end

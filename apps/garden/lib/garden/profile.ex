@@ -1,6 +1,9 @@
 defmodule Garden.Profile do
   @moduledoc """
-  Collects Nix profile generation data for reporting to the server.
+  Reports legacy Nix profiles and durable owned package/devshell inventory.
+
+  Managed inventory is independent of live subscriptions. Observation errors
+  produce incomplete reports rather than an authoritative empty inventory.
   """
 
   require Logger
@@ -24,13 +27,19 @@ defmodule Garden.Profile do
       %SowerClient.Orchestration.GardenSeedsReport{profiles: [...]}
   """
   def collect_profiles(targets) when is_list(targets) do
-    profiles =
-      targets
-      |> Enum.map(&collect_target/1)
-      |> Enum.reject(fn {result, _} -> result == :error end)
-      |> Enum.map(fn {_, profile} -> profile end)
+    {profiles, failed} =
+      Enum.reduce(targets, {[], []}, fn target, {profiles, failed} ->
+        case collect_target(target) do
+          {:ok, profile} -> {[profile | profiles], failed}
+          {:error, _reason} -> {profiles, [target.path | failed]}
+        end
+      end)
 
-    GardenSeedsReport.cast!(%{profiles: profiles})
+    GardenSeedsReport.cast!(%{
+      profiles: Enum.reverse(profiles),
+      complete: failed == [],
+      failed_profile_paths: Enum.reverse(failed)
+    })
   end
 
   @doc """
@@ -95,8 +104,8 @@ defmodule Garden.Profile do
   @doc """
   Collects profiles for the given subscriptions.
 
-  Builds profile targets from subscriptions and collects profiles for each target.
-  Returns an empty report if no subscriptions exist (allowing server cleanup).
+  Legacy profiles are discovered from subscriptions; managed profiles come from
+  the private ownership ledger even when there are no live subscriptions.
 
   ## Examples
 
@@ -107,9 +116,28 @@ defmodule Garden.Profile do
       iex> Garden.Profile.collect_profiles_for_subscriptions([])
       %SowerClient.Orchestration.GardenSeedsReport{profiles: []}
   """
-  def collect_profiles_for_subscriptions(subscriptions) when is_list(subscriptions) do
-    targets = build_profile_targets(subscriptions)
-    collect_profiles(targets)
+  def collect_profiles_for_subscriptions(
+        subscriptions,
+        managed_inventory \\ &Garden.ManagedProfiles.list/0
+      )
+      when is_list(subscriptions) do
+    report = subscriptions |> build_profile_targets() |> collect_profiles()
+
+    case managed_inventory.() do
+      {:ok, profiles} ->
+        %{report | profiles: report.profiles ++ profiles}
+
+      {:error, reason} ->
+        Logger.error(msg: "Failed to observe managed profiles", error: inspect(reason))
+
+        %{
+          report
+          | complete: false,
+            failed_profile_paths:
+              report.failed_profile_paths ++
+                [Garden.Config.get().managed_profiles_directory]
+        }
+    end
   end
 
   @doc """

@@ -1,9 +1,32 @@
 defmodule Garden.Scheduler do
+  @moduledoc """
+  Schedules subscription deployments and daily local managed-profile retention.
+
+  Retention is restored at scheduler startup and is independent of server
+  connectivity, configured endpoints and subscription schedule refreshes.
+  """
   use Quantum, otp_app: :garden
 
   require Logger
 
   @sub_prefix "subsched_"
+
+  @impl Quantum
+  def init(config) do
+    {:ok, schedule} = Crontab.CronExpression.Parser.parse("0 3 * * *")
+
+    job =
+      __new_job__([], config)
+      |> Quantum.Job.set_name(:managed_profile_retention)
+      |> Quantum.Job.set_timezone(get_timezone())
+      |> Quantum.Job.set_schedule(schedule)
+      |> Quantum.Job.set_overlap(false)
+      |> Quantum.Job.set_task({Garden.ManagedProfiles, :retain_all, []})
+
+    Keyword.update(config, :jobs, [job], fn jobs ->
+      [job | Enum.reject(jobs, &(&1.name == :managed_profile_retention))]
+    end)
+  end
 
   def refresh_subscriptions(subscriptions) do
     existing_jobs =
@@ -19,6 +42,9 @@ defmodule Garden.Scheduler do
 
     new_jobs
   end
+
+  def add_subscription_schedule(%SowerClient.Orchestration.Subscription{uninstall_pending: true}),
+    do: nil
 
   def add_subscription_schedule(%SowerClient.Orchestration.Subscription{
         sid: sid,
@@ -136,6 +162,9 @@ defmodule Garden.Scheduler do
               subscription_sid: sid
             )
 
+          %SowerClient.Orchestration.Subscription{uninstall_pending: true} ->
+            :skipped
+
           subscription ->
             alias SowerClient.Orchestration.Subscription.Policy
 
@@ -171,12 +200,15 @@ defmodule Garden.Scheduler do
     end
   end
 
-  def get_timezone() do
-    with timedatectl when not is_nil(timedatectl) <- System.find_executable("timedatectl"),
-         {tz, 0} <- System.cmd(timedatectl, ["show", "--property=Timezone", "--value"]) do
-      String.trim(tz)
-    else
-      {error, 1} ->
+  def get_timezone(timedatectl \\ System.find_executable("timedatectl"))
+  def get_timezone(nil), do: :utc
+
+  def get_timezone(timedatectl) do
+    case System.cmd(timedatectl, ["show", "--property=Timezone", "--value"]) do
+      {tz, 0} ->
+        String.trim(tz)
+
+      {error, _exit_code} ->
         Logger.error(
           msg: "Failed to run timedatectl to get tz, falling back to UTC",
           error: error

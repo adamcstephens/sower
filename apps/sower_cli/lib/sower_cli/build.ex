@@ -320,7 +320,7 @@ defmodule SowerCli.Build do
   defp seed_job?(attr) when is_binary(attr) do
     # Match components without treating dots inside quoted names as path separators.
     Regex.match?(
-      ~r{^(?:(?:[^/"]+|"(?:[^"\\]|\\.)*")\.)*(?:(?:nixos|home|seed)/.+|"(?:nixos|home|seed)/(?:[^"\\]|\\.)+")$},
+      ~r{^(?:(?:[^/"]+|"(?:[^"\\]|\\.)*")\.)*(?:(?:nixos|home|seed|package|devshell)/.+|"(?:nixos|home|seed|package|devshell)/(?:[^"\\]|\\.)+")$},
       attr
     )
   end

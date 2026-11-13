@@ -1,4 +1,10 @@
 defmodule Garden.Deployer do
+  @moduledoc """
+  Executes deployment policy through legacy activators or owned managed profiles.
+
+  Package and devshell realization, selection and retention share the profile
+  lock; their registered destination is never inferred from seed identity.
+  """
   require Logger
 
   alias Garden.Socket
@@ -88,8 +94,9 @@ defmodule Garden.Deployer do
   defp upgrade_with_actions(%Deployment{} = deployment, opts) do
     logs =
       Map.new(deployment.seed_deployments, fn seed_deploy ->
-        {seed_deploy.seed.sid,
+        {deployment_log_key(seed_deploy),
          Garden.DeploymentLog.start(deployment.sid, seed_deploy.seed.sid,
+           subscription_sid: seed_deploy.subscription_sid,
            send_fun: Keyword.get(opts, :send_log_fun, &Socket.send_deployment_log/1)
          )}
       end)
@@ -102,6 +109,75 @@ defmodule Garden.Deployer do
   end
 
   defp do_upgrade_with_actions(%Deployment{} = deployment, opts, logs) do
+    {managed, legacy} =
+      Enum.split_with(
+        deployment.seed_deployments,
+        &Garden.ManagedProfiles.managed?(&1.seed.seed_type)
+      )
+
+    managed_results =
+      Keyword.get(opts, :async_stream_fun, &async_stream/2).(managed, fn seed_deploy ->
+        deploy_managed(deployment, seed_deploy, opts, logs)
+      end)
+      |> Enum.to_list()
+
+    managed_results ++
+      do_upgrade_legacy(%{deployment | seed_deployments: legacy}, opts, logs)
+  end
+
+  defp deployment_log_key(%SeedDeployment{} = seed_deploy) do
+    if Garden.ManagedProfiles.managed?(seed_deploy.seed.seed_type),
+      do: {seed_deploy.seed.sid, seed_deploy.subscription_sid},
+      else: seed_deploy.seed.sid
+  end
+
+  defp deploy_managed(%Deployment{} = deployment, %SeedDeployment{} = seed_deploy, opts, logs) do
+    seed = seed_deploy.seed
+    log = Map.fetch!(logs, deployment_log_key(seed_deploy))
+    find_subscription = Keyword.get(opts, :find_subscription_fun, &find_subscription/1)
+    subscription = find_subscription.(seed_deploy.subscription_sid)
+    config = Keyword.get(opts, :garden_config_fun, &Garden.Config.get/0)
+    manager = Keyword.get(opts, :managed_deploy_fun, &Garden.ManagedProfiles.deploy/4)
+
+    report_status =
+      Keyword.get(opts, :report_seed_status_fun, fn deployment, seed, status ->
+        report_seed_status(deployment, seed, status, seed_deploy.subscription_sid)
+      end)
+
+    report_result =
+      Keyword.get(opts, :report_seed_result_fun, fn deployment, seed, result, output ->
+        report_seed_result(deployment, seed, result, output, seed_deploy.subscription_sid)
+      end)
+
+    result =
+      with %Subscription{} <- subscription,
+           true <- subscription.name == seed_deploy.profile_name,
+           action when action in [:stage, :activate] <-
+             resolve_action(seed_deploy, subscription, config) do
+        report_status.(deployment, seed, :downloading)
+        manager.(subscription, seed, action, on_output: &Garden.DeploymentLog.output(log, &1))
+      else
+        {:error, reason} -> {:error, reason}
+        _ -> {:error, :invalid_managed_destination}
+      end
+
+    Garden.DeploymentLog.flush(log)
+
+    case result do
+      {:ok, profile} ->
+        output = [decision_line("managed profile #{profile.name}: #{profile.profile_path}")]
+        report_status.(deployment, seed, :completed)
+        report_result.(deployment, seed, :success, output)
+        {:resolved_action, {:ok, output}, nil}
+
+      {:error, reason} ->
+        output = [decision_line("managed profile update failed: #{inspect(reason)}")]
+        report_result.(deployment, seed, :failure, output)
+        {:resolved_action, {:error, reason}, nil}
+    end
+  end
+
+  defp do_upgrade_legacy(%Deployment{} = deployment, opts, logs) do
     async_stream_fun = Keyword.get(opts, :async_stream_fun, &async_stream/2)
     realize_seed_fun = Keyword.get(opts, :realize_seed_fun, &realize_seed/2)
 
@@ -540,18 +616,29 @@ defmodule Garden.Deployer do
   defp action_to_mode(:stage, _seed_type), do: nil
   defp action_to_mode(nil, _seed_type), do: "switch"
 
-  defp report_seed_status(%Deployment{} = deployment, seed, status) do
+  defp report_seed_status(deployment, seed, status, subscription_sid \\ nil)
+
+  defp report_seed_status(%Deployment{} = deployment, seed, status, subscription_sid) do
     seed_status =
       SeedDeploymentStatus.cast!(%{
         deployment_sid: deployment.sid,
         seed_sid: seed.sid,
-        status: status
+        status: status,
+        subscription_sid: subscription_sid
       })
 
     Socket.cast(:seed_status, seed_status)
   end
 
-  defp report_seed_result(%Deployment{} = deployment, seed, result, output_lines) do
+  defp report_seed_result(deployment, seed, result, output_lines, subscription_sid \\ nil)
+
+  defp report_seed_result(
+         %Deployment{} = deployment,
+         seed,
+         result,
+         output_lines,
+         subscription_sid
+       ) do
     log =
       output_lines
       |> Enum.reject(&is_nil/1)
@@ -562,6 +649,7 @@ defmodule Garden.Deployer do
       SeedDeploymentResult.cast!(%{
         deployment_sid: deployment.sid,
         seed_sid: seed.sid,
+        subscription_sid: subscription_sid,
         result: result,
         log: log
       })

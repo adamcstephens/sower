@@ -18,6 +18,14 @@
     </:actions>
   </.header>
 
+  <.live_component
+    :if={@subscription.seed_type in ["package", "devshell"]}
+    module={SowerWeb.ManagedProfilesComponent}
+    id="subscription-managed-profile"
+    garden={@garden}
+    subscription={@subscription}
+  />
+
   <div class="mt-8 space-y-10">
     <.detail_field label="Garden">
       <.link
@@ -31,6 +39,8 @@
     <.detail_field label="Seed Name">{@subscription.seed_name}</.detail_field>
 
     <.detail_field label="Seed Type">{@subscription.seed_type}</.detail_field>
+
+    <.detail_field label="Origin">{@subscription.origin || "declared"}</.detail_field>
 
     <.detail_field :if={@subscription.schedule} label="Schedule">
       {@subscription.schedule}

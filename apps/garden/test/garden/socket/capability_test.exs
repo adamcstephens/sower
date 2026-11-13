@@ -9,13 +9,14 @@ defmodule Garden.Socket.CapabilityTest do
 
     Garden.Storage.write(%Garden.Storage{garden_sid: "override-capable-garden"})
     socket = %{Slipstream.new_socket() | channel_pid: self()}
+    capabilities = Garden.Socket.managed_capabilities()
 
     assert {:ok, _socket} =
              Garden.Socket.handle_join("garden:lobby", %{"conn_sid" => "connection"}, socket)
 
     assert_received command(%Slipstream.Commands.JoinTopic{
                       topic: "garden:override-capable-garden",
-                      payload: %{direct_override: true}
+                      payload: %{direct_override: true, capabilities: ^capabilities}
                     })
   end
 end

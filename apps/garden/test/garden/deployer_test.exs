@@ -80,6 +80,102 @@ defmodule Garden.DeployerTest do
   end
 
   describe "upgrade/2" do
+    test "keeps equal-artifact managed destinations distinct and bypasses legacy realization" do
+      seed = %Seed{
+        sid: "same-seed",
+        name: "tools",
+        seed_type: "package",
+        artifact: "/nix/store/00000000000000000000000000000000-tools"
+      }
+
+      subscriptions = [
+        %Subscription{
+          sid: "first",
+          name: "first-tools",
+          seed_name: "tools",
+          seed_type: "package"
+        },
+        %Subscription{
+          sid: "second",
+          name: "second-tools",
+          seed_name: "tools",
+          seed_type: "package"
+        }
+      ]
+
+      deployment = %Deployment{
+        sid: "managed-two",
+        seed_deployments:
+          Enum.map(subscriptions, fn sub ->
+            %SeedDeployment{
+              seed: seed,
+              subscription_sid: sub.sid,
+              profile_name: sub.name,
+              action: :activate,
+              override: true
+            }
+          end)
+      }
+
+      parent = self()
+
+      results =
+        Deployer.upgrade(deployment,
+          async_stream_fun: fn values, fun -> Enum.map(values, &{:ok, fun.(&1)}) end,
+          find_subscription_fun: fn sid -> Enum.find(subscriptions, &(&1.sid == sid)) end,
+          realize_seed_fun: fn _ -> flunk("managed realization must retain a root") end,
+          activate_seed_fun: fn _, _, _ ->
+            flunk("managed profile must not invoke legacy activation")
+          end,
+          managed_deploy_fun: fn sub, actual_seed, action, opts ->
+            send(parent, {:managed, sub.name, actual_seed.artifact, action})
+            opts[:on_output].("rooted #{sub.name}")
+
+            {:ok,
+             %SowerClient.Orchestration.GardenSeedProfile{
+               name: sub.name,
+               profile_path: "/profiles/#{sub.name}/profile",
+               generations: []
+             }}
+          end,
+          report_seed_status_fun: fn _, _, _ -> :ok end,
+          report_seed_result_fun: fn _, _, _, _ -> :ok end,
+          send_log_fun: fn log -> send(parent, {:managed_log, log}) end
+        )
+
+      assert Enum.all?(results, &match?({:ok, {:ok, _}}, &1))
+      assert_received {:managed, "first-tools", _, :activate}
+      assert_received {:managed, "second-tools", _, :activate}
+      assert_received {:managed_log, %{subscription_sid: "first", output: "rooted first-tools\n"}}
+
+      assert_received {:managed_log,
+                       %{subscription_sid: "second", output: "rooted second-tools\n"}}
+    end
+
+    test "rejects a managed destination whose explicit name does not match the subscription" do
+      deployment = %Deployment{
+        sid: "wrong-destination",
+        seed_deployments: [
+          %SeedDeployment{
+            subscription_sid: "owned",
+            profile_name: "another",
+            seed: %Seed{sid: "seed", name: "tools", seed_type: "package"}
+          }
+        ]
+      }
+
+      assert [{:ok, {:error, :invalid_managed_destination}}] =
+               Deployer.upgrade(deployment,
+                 async_stream_fun: fn values, fun -> Enum.map(values, &{:ok, fun.(&1)}) end,
+                 find_subscription_fun: fn _ -> %Subscription{sid: "owned", name: "owned"} end,
+                 managed_deploy_fun: fn _, _, _, _ ->
+                   flunk("wrong destination must not mutate")
+                 end,
+                 report_seed_result_fun: fn _, _, _, _ -> :ok end,
+                 send_log_fun: fn _ -> :ok end
+               )
+    end
+
     test "reports failure with fatal log line when activator is unavailable" do
       deployment = %Deployment{
         sid: "dep_1",

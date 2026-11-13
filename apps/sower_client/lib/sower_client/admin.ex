@@ -17,12 +17,14 @@ defmodule SowerClient.Admin do
   use TypedStruct
 
   alias SowerClient.Admin.Deploy
+  alias SowerClient.Admin.Profile
   alias SowerClient.Admin.Reload
   alias SowerClient.Admin.Reregister
   alias SowerClient.Admin.Status
 
   @kinds %{
     deploy: Deploy,
+    profile: Profile,
     reload: Reload,
     reregister: Reregister,
     status: Status

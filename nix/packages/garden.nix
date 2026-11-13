@@ -2,9 +2,11 @@
   bashNonInteractive,
   beamPackages,
   callPackages,
+  cli,
   e2fsprogs,
   getent,
   lib,
+  nix,
   version,
   tzdata,
   stockImage ? null,
@@ -57,6 +59,8 @@ beamPackages.mixRelease {
 
   doCheck = true;
   nativeCheckInputs = [
+    cli
+    (lib.getBin nix)
     e2fsprogs
     getent
   ];
@@ -64,6 +68,12 @@ beamPackages.mixRelease {
     runHook preCheck
 
     export MIX_ENV=test
+    export NIX_REMOTE=local
+    export NIX_STATE_DIR="$TMPDIR/nix-state"
+    export NIX_LOG_DIR="$TMPDIR/nix-log"
+    export NIX_CONF_DIR="$TMPDIR/nix-conf"
+    export NIX_CONFIG='build-users-group ='
+    mkdir --parents "$NIX_CONF_DIR"
     ln -sv $PWD/_build/prod _build/test
 
     for app in vm_manager garden; do

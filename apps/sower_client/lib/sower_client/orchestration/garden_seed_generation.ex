@@ -8,6 +8,11 @@ defmodule SowerClient.Orchestration.GardenSeedGeneration do
     title: "GardenSeedGeneration",
     type: :object,
     properties: %{
+      generation_id: %Schema{type: :string, nullable: true},
+      seed_sid: %Schema{type: :string, nullable: true},
+      generation_path: %Schema{type: :string, nullable: true},
+      is_staged: %Schema{type: :boolean, default: false},
+      pinned: %Schema{type: :boolean, default: false},
       path: %Schema{
         type: :string,
         description: "The Nix store path (e.g., /nix/store/abc-nixos-system)"

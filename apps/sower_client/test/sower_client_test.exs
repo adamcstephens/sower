@@ -18,6 +18,73 @@ defmodule SowerClientTest do
     end
   end
 
+  test "managed retention is opt-in with nonempty nonnegative criteria" do
+    alias SowerClient.Orchestration.ProfileRetention
+
+    assert {:ok, subscription} =
+             SowerClient.Orchestration.Subscription.cast(%{
+               "name" => "package",
+               "seed_name" => "package",
+               "seed_type" => "package",
+               "retention" => nil
+             })
+
+    assert is_nil(subscription.retention)
+    assert {:ok, _} = ProfileRetention.cast(%{"keep_generations" => 0})
+    assert {:ok, _} = ProfileRetention.cast(%{"keep_days" => 30})
+    assert {:error, _} = ProfileRetention.cast(%{})
+    assert {:error, _} = ProfileRetention.cast(%{"keep_days" => -1})
+    assert {:error, _} = ProfileRetention.cast(%{"keep_days" => nil, "keep_generations" => nil})
+    assert {:error, _} = ProfileRetention.cast(%ProfileRetention{})
+  end
+
+  test "legacy garden reports and deployments omit managed capability and destination" do
+    assert {:ok, report} =
+             SowerClient.Orchestration.GardenReport.cast(%{"version" => "legacy"})
+
+    assert report.capabilities == []
+    assert {:ok, deployment} = SowerClient.Orchestration.SeedDeployment.cast(%{})
+    assert is_nil(deployment.profile_name)
+  end
+
+  test "failed profile operations round-trip without an observed profile" do
+    alias SowerClient.Orchestration.ProfileOperationResult
+
+    payload = %ProfileOperationResult{
+      request_id: "request",
+      status: "failed",
+      error: "unknown_profile"
+    }
+
+    assert {:ok, result} =
+             payload |> Jason.encode!() |> Jason.decode!() |> ProfileOperationResult.cast()
+
+    assert is_nil(result.profile)
+    assert result.error == "unknown_profile"
+  end
+
+  test "typed profile retention survives direct and JSON operation result casting" do
+    alias SowerClient.Orchestration.{GardenSeedProfile, ProfileRetention, ProfileOperationResult}
+
+    profile = %GardenSeedProfile{
+      name: "package",
+      managed: true,
+      profile_path: "/profiles/package/profile",
+      generations: [],
+      retention: %ProfileRetention{keep_generations: 3}
+    }
+
+    payload = %{request_id: "request", status: "completed", profile: profile}
+    assert {:ok, direct} = ProfileOperationResult.cast(payload)
+    assert %GardenSeedProfile{retention: %ProfileRetention{keep_generations: 3}} = direct.profile
+
+    assert {:ok, decoded} =
+             payload |> Jason.encode!() |> Jason.decode!() |> ProfileOperationResult.cast()
+
+    assert %GardenSeedProfile{retention: %ProfileRetention{keep_generations: 3, keep_days: nil}} =
+             decoded.profile
+  end
+
   describe "built seed manifests" do
     alias SowerClient.SeedManifest
 
@@ -33,7 +100,7 @@ defmodule SowerClientTest do
     end
 
     test "casts every supported seed type and preserves string-keyed tags", %{payload: payload} do
-      for seed_type <- ["nixos", "home-manager", "nix-darwin", "service"],
+      for seed_type <- ["nixos", "home-manager", "nix-darwin", "service", "package", "devshell"],
           tags <- [payload["tags"], %{}, %{"empty" => "", "" => "value"}] do
         input = %{payload | "seed_type" => seed_type, "tags" => tags}
 

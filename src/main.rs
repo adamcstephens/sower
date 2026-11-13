@@ -30,6 +30,9 @@ enum Command {
     /// Drive the garden admin socket (deploy, reload, status).
     Garden(commands::garden::GardenArgs),
 
+    #[command(hide = true)]
+    Internal(commands::internal::InternalArgs),
+
     /// Generate shell completion scripts.
     Completions {
         /// Shell to generate completions for
@@ -82,6 +85,7 @@ fn run(command: Command) -> Result<()> {
             init_default_tracing();
             commands::garden::run(args)
         }
+        Command::Internal(args) => commands::internal::run(args),
         Command::Completions { shell } => {
             let mut cmd = Cli::command();
             clap_complete::generate(shell, &mut cmd, "sower", &mut std::io::stdout());

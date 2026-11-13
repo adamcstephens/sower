@@ -1,4 +1,5 @@
 defmodule Sower.Orchestration.Garden do
+  @moduledoc "Garden registration, reported capabilities and organization-scoped inventory."
   use Ecto.Schema
   use Flop.Schema
   import Ecto.Changeset
@@ -35,6 +36,7 @@ defmodule Sower.Orchestration.Garden do
     field :oauth_client_id, :string
     field :version, :string
     field :timezone, :string
+    field :capabilities, {:array, :string}, default: []
 
     embeds_many :policy, Sower.Orchestration.Subscription.PolicyRule, on_replace: :delete
 
@@ -50,7 +52,7 @@ defmodule Sower.Orchestration.Garden do
   @doc false
   def changeset(garden, attrs) do
     garden
-    |> cast(attrs, [:name, :org_id, :oauth_client_id, :version, :timezone])
+    |> cast(attrs, [:name, :org_id, :oauth_client_id, :version, :timezone, :capabilities])
     |> cast_embed(:policy, with: &Sower.Orchestration.Subscription.PolicyRule.changeset/2)
     |> validate_required([:name])
   end
@@ -151,6 +153,16 @@ defmodule Sower.Orchestration.Garden do
     |> Repo.update()
   end
 
+  def managed_profiles_supported?(%__MODULE__{} = garden) do
+    case SowerWeb.Presence.get_by_key("garden:presence", garden.sid) do
+      %{metas: metas} ->
+        metas != [] and Enum.all?(metas, &(Map.get(&1, :managed_profiles_v1) == true))
+
+      _ ->
+        false
+    end
+  end
+
   def update_garden_report(
         %__MODULE__{} = garden,
         %SowerClient.Orchestration.GardenReport{} = report
@@ -158,6 +170,7 @@ defmodule Sower.Orchestration.Garden do
     attrs = %{
       version: report.version,
       timezone: report.timezone,
+      capabilities: report.capabilities || [],
       policy: policy_to_list(report.policy)
     }
 

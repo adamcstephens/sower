@@ -4,7 +4,6 @@ defmodule SowerClient.Orchestration.Subscription.Window do
   OpenApiSpex.schema(%{
     title: "SubscriptionWindow",
     type: :object,
-    nullable: true,
     properties: %{
       days: %Schema{
         type: :array,

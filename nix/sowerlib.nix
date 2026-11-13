@@ -81,6 +81,38 @@ rec {
       };
     });
 
+  mkSeedPackage =
+    {
+      pkgs,
+      name,
+      target,
+      tags ? { },
+    }:
+    lib.nameValuePair "package/${name}" (mkSeed {
+      inherit pkgs name target;
+      type = "package";
+      tags = {
+        inherit (pkgs.stdenv.hostPlatform) system;
+      }
+      // tags;
+    });
+
+  mkSeedDevshell =
+    {
+      pkgs,
+      name,
+      target,
+      tags ? { },
+    }:
+    lib.nameValuePair "devshell/${name}" (mkSeed {
+      inherit pkgs name target;
+      type = "devshell";
+      tags = {
+        inherit (pkgs.stdenv.hostPlatform) system;
+      }
+      // tags;
+    });
+
   genNixosPackages =
     nixosConfigurations:
     let

@@ -1,4 +1,5 @@
 defmodule SowerClient do
+  @moduledoc "Shared wire schema registry for server, Garden and operator clients."
   # Schemas the server pushes TO gardens (broadcasts + replies).
   # Changes to these can break old gardens that haven't upgraded.
   # Used by contract evolution tests and baseline generation.
@@ -25,6 +26,7 @@ defmodule SowerClient do
     }
     |> OpenApiSpex.add_schemas([
       SowerClient.Admin.Deploy,
+      SowerClient.Admin.Profile,
       SowerClient.Admin.Reload,
       SowerClient.Admin.Reregister,
       SowerClient.Admin.Status,
@@ -33,6 +35,9 @@ defmodule SowerClient do
       SowerClient.GardenRegistration,
       SowerClient.Auth.OAuthCredentials,
       SowerClient.Auth.TokenInfo,
+      SowerClient.Orchestration.ProfileRetention,
+      SowerClient.Orchestration.ProfileOperation,
+      SowerClient.Orchestration.ProfileOperationResult,
       SowerClient.Orchestration.GardenSeedGeneration,
       SowerClient.Orchestration.GardenSeedProfile,
       SowerClient.Orchestration.GardenSeedsReport,
@@ -67,6 +72,7 @@ defmodule SowerClient do
 end
 
 defmodule SowerClient.Orchestration.SeedDeploymentLog do
+  @moduledoc "A bounded log chunk addressed to a seed and optional subscription destination."
   use SowerClient.Schema
   use SowerClient.ChannelMessage, event: "deployment:seed_log"
 
@@ -77,6 +83,7 @@ defmodule SowerClient.Orchestration.SeedDeploymentLog do
     properties: %{
       deployment_sid: %Schema{type: :string},
       seed_sid: %Schema{type: :string},
+      subscription_sid: %Schema{type: :string, nullable: true},
       sequence: %Schema{type: :integer, minimum: 1},
       output: %Schema{
         type: :string,
@@ -101,6 +108,7 @@ defmodule SowerClient.Orchestration.SeedDeploymentLog do
 end
 
 defmodule SowerClient.SeedManifest do
+  @moduledoc "Versioned producer manifest for an opaque built seed store artifact."
   use SowerClient.Schema
 
   OpenApiSpex.schema(%{
@@ -114,7 +122,7 @@ defmodule SowerClient.SeedManifest do
       name: %Schema{type: :string, minLength: 1},
       seed_type: %Schema{
         type: :string,
-        enum: ["nixos", "home-manager", "nix-darwin", "service"]
+        enum: ["nixos", "home-manager", "nix-darwin", "service", "package", "devshell"]
       },
       artifact: %Schema{
         type: :string,
@@ -214,5 +222,103 @@ defmodule SowerClient.Activator.NetworkLease do
       dns: %Schema{type: :string}
     },
     required: [:lease, :tap, :mac, :address, :gateway, :dns]
+  })
+end
+
+defmodule SowerClient.Orchestration.ProfileRetention do
+  @moduledoc "Retention criteria for owned profile generations; absent policy keeps all generations."
+  use SowerClient.Schema
+
+  OpenApiSpex.schema(%{
+    title: "ProfileRetention",
+    type: :object,
+    minProperties: 1,
+    additionalProperties: false,
+    "x-validate": __MODULE__.Criteria,
+    properties: %{
+      keep_generations: %Schema{type: :integer, minimum: 0, nullable: true},
+      keep_days: %Schema{type: :integer, minimum: 0, nullable: true}
+    }
+  })
+
+  defmodule Criteria do
+    @moduledoc false
+    alias OpenApiSpex.Cast
+
+    def cast(%Cast{value: value} = ctx) when is_map(value) do
+      configured? =
+        Enum.any?([:keep_generations, :keep_days], fn key ->
+          not is_nil(Map.get(value, key, Map.get(value, Atom.to_string(key))))
+        end)
+
+      if configured? do
+        Cast.cast(%{ctx | schema: %{ctx.schema | "x-validate": nil}})
+      else
+        Cast.error(ctx, {:invalid_type, :object})
+      end
+    end
+
+    def cast(%Cast{} = ctx), do: Cast.error(ctx, {:invalid_type, :object})
+  end
+end
+
+defmodule SowerClient.Orchestration.ProfileOperation do
+  @moduledoc "An explicitly addressed operation on a Garden-owned named profile."
+  use SowerClient.Schema
+  use SowerClient.ChannelMessage, event: "profile:operation"
+
+  OpenApiSpex.schema(%{
+    title: "ProfileOperation",
+    type: :object,
+    properties: %{
+      request_id: %Schema{type: :string},
+      profile_name: %Schema{type: :string},
+      action: %Schema{
+        type: :string,
+        enum: ["inspect", "stage", "select", "rollback", "pin", "unpin", "discard", "uninstall"]
+      },
+      generation_id: %Schema{type: :string, nullable: true},
+      seed_sid: %Schema{type: :string, nullable: true},
+      subscription_sid: %Schema{type: :string, nullable: true},
+      preview: %Schema{type: :boolean, default: false}
+    },
+    required: [:request_id, :profile_name, :action]
+  })
+end
+
+defmodule SowerClient.Orchestration.ProfileOperationResult do
+  @moduledoc "Observed outcome of a named-profile operation; only completed acknowledges uninstall."
+  use SowerClient.Schema
+  use SowerClient.ChannelMessage, event: "profile:operation_result"
+
+  OpenApiSpex.schema(%{
+    title: "ProfileOperationResult",
+    type: :object,
+    properties: %{
+      request_id: %Schema{type: :string},
+      profile_name: %Schema{type: :string, nullable: true},
+      warning: %Schema{type: :string, nullable: true},
+      status: %Schema{
+        type: :string,
+        enum: ["completed", "pending", "blocked", "failed", "preview"]
+      },
+      profile: %Schema{
+        anyOf: [SowerClient.Orchestration.GardenSeedProfile],
+        nullable: true,
+        "x-struct": SowerClient.Orchestration.GardenSeedProfile
+      },
+      profiles: %Schema{
+        type: :array,
+        items: SowerClient.Orchestration.GardenSeedProfile,
+        default: []
+      },
+      affected_generations: %Schema{
+        type: :array,
+        items: SowerClient.Orchestration.GardenSeedGeneration,
+        default: []
+      },
+      error: %Schema{type: :string, nullable: true}
+    },
+    required: [:request_id, :status]
   })
 end

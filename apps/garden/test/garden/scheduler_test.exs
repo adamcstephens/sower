@@ -6,6 +6,40 @@ defmodule Garden.SchedulerTest do
   alias Garden.Scheduler
   alias SowerClient.Orchestration.Subscription
 
+  defmodule LocalScheduler do
+    use Quantum, otp_app: :garden
+
+    @impl Quantum
+    def init(config), do: Garden.Scheduler.init(config)
+  end
+
+  test "local schedules use UTC when timedatectl is unavailable" do
+    assert Scheduler.get_timezone(nil) == :utc
+  end
+
+  test "daily local retention is available at startup and restored after scheduler restart" do
+    start_supervised!(LocalScheduler)
+    job = LocalScheduler.find_job(:managed_profile_retention)
+    assert job.task == {Garden.ManagedProfiles, :retain_all, []}
+    assert job.overlap == false
+    assert job.schedule.hour == [3]
+    assert job.schedule.minute == [0]
+
+    stop_supervised!(LocalScheduler)
+    start_supervised!(LocalScheduler)
+
+    assert LocalScheduler.find_job(:managed_profile_retention).task ==
+             {Garden.ManagedProfiles, :retain_all, []}
+  end
+
+  test "subscription refresh does not remove the fixed local retention job" do
+    assert Garden.Scheduler.find_job(:managed_profile_retention)
+    Garden.Scheduler.refresh_subscriptions([])
+
+    assert Garden.Scheduler.find_job(:managed_profile_retention).task ==
+             {Garden.ManagedProfiles, :retain_all, []}
+  end
+
   defp start_cooldown(_context) do
     {:ok, agent} = Agent.start_link(fn -> %{} end)
     cooldown_seconds = 60
@@ -29,6 +63,26 @@ defmodule Garden.SchedulerTest do
 
   describe "deploy_if_not_cooled_down/3" do
     setup [:start_cooldown]
+
+    test "pending uninstall cannot register or execute a scheduled update", %{
+      check_cooldown: cooldown
+    } do
+      sub = %Subscription{
+        sid: "removing",
+        name: "tools",
+        seed_type: "package",
+        uninstall_pending: true,
+        schedule: "* * * * *"
+      }
+
+      assert Scheduler.add_subscription_schedule(sub) == nil
+
+      assert Scheduler.deploy_if_not_cooled_down(sub.sid, sub.schedule,
+               check_cooldown: cooldown,
+               read_subscriptions: fn -> [sub] end,
+               deploy_fun: fn _ -> flunk("pending uninstall must stop updates") end
+             ) == :skipped
+    end
 
     test "deploys on first call", %{check_cooldown: check_cooldown} do
       sid = "sub_first_#{System.unique_integer([:positive])}"

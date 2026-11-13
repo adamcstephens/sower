@@ -88,7 +88,11 @@ defmodule Garden.Config do
       )
     end
 
-    # Expand state_directory path
-    %{config | state_directory: Path.expand(config.state_directory)}
+    %{
+      config
+      | state_directory: Path.expand(config.state_directory),
+        managed_profiles_directory: Path.expand(config.managed_profiles_directory),
+        nix_state_directory: Path.expand(config.nix_state_directory)
+    }
   end
 end

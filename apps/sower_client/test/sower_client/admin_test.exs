@@ -2,9 +2,31 @@ defmodule SowerClient.AdminTest do
   use ExUnit.Case, async: true
 
   alias SowerClient.Admin
-  alias SowerClient.Admin.{Deploy, Reload, Reply, Request, Status, StatusReport}
+  alias SowerClient.Admin.{Deploy, Profile, Reload, Reply, Request, Status, StatusReport}
 
   describe "decode_request/1" do
+    test "decodes local profile inventory without a subscription" do
+      assert {:ok, %Request{id: "profile-list", message: %Profile{action: :list}}} =
+               Admin.decode_request(%{
+                 "id" => "profile-list",
+                 "kind" => "profile",
+                 "payload" => %{"action" => "list"}
+               })
+    end
+
+    test "preserves opaque generation identity and previews uninstall by default" do
+      assert {:ok, %Request{message: %Profile{generation_id: "generation-uuid", preview: true}}} =
+               Admin.decode_request(%{
+                 "id" => "pin",
+                 "kind" => "profile",
+                 "payload" => %{
+                   "action" => "pin",
+                   "profile_name" => "tools",
+                   "generation_id" => "generation-uuid"
+                 }
+               })
+    end
+
     test "decodes a deploy envelope into a typed command" do
       assert {:ok, %Request{v: 1, id: "abc", message: %Deploy{} = deploy}} =
                Admin.decode_request(%{
@@ -65,7 +87,14 @@ defmodule SowerClient.AdminTest do
   test "admin schemas are registered in the spec but excluded from server-pushed titles" do
     spec = SowerClient.spec()
 
-    for title <- ["AdminDeploy", "AdminReload", "AdminStatus", "AdminStatusReport", "AdminReply"] do
+    for title <- [
+          "AdminDeploy",
+          "AdminProfile",
+          "AdminReload",
+          "AdminStatus",
+          "AdminStatusReport",
+          "AdminReply"
+        ] do
       assert Map.has_key?(spec.components.schemas, title), "#{title} missing from spec()"
       refute title in SowerClient.server_pushed_schema_titles()
     end

@@ -11,6 +11,91 @@ defmodule SowerWeb.DeploymentLive.ShowTest do
 
   setup [:register_and_log_in_user]
 
+  test "shared seeds retain independent profile rows, expansion and live history", %{
+    conn: conn,
+    user: user
+  } do
+    Sower.Repo.put_org_id(user.org_id)
+    garden = garden_fixture()
+    seed = seed_fixture(%{seed_type: "package"})
+    deployment = deployment_fixture(%{garden_id: garden.id, seeds: [], state: :acknowledged})
+
+    destinations =
+      for name <- ["tools", "editor"] do
+        Sower.Repo.insert!(%Sower.Orchestration.SeedDeployment{
+          deployment_id: deployment.id,
+          seed_id: seed.id,
+          subscription_sid: SowerClient.Sid.generate("sub"),
+          profile_name: name
+        })
+      end
+
+    deployment =
+      deployment
+      |> Sower.Repo.reload!()
+      |> Sower.Repo.preload([:seeds, seed_deployments: :seed])
+
+    [tools, editor] = destinations
+    start_log_buffer(deployment, 3)
+
+    record = fn destination, sequence, output ->
+      DeploymentLog.record(
+        %SowerClient.Orchestration.SeedDeploymentLog{
+          deployment_sid: deployment.sid,
+          seed_sid: seed.sid,
+          subscription_sid: destination.subscription_sid,
+          sequence: sequence,
+          output: output
+        },
+        garden
+      )
+    end
+
+    assert {:ok, _} = record.(tools, 1, "old tools\n")
+    assert {:ok, _} = record.(editor, 1, "editor output\n")
+    {:ok, view, html} = live(conn, ~p"/deployments/#{deployment.sid}")
+    assert html =~ "tools"
+    assert html =~ "editor"
+    tools_id = "#{seed.sid}-#{tools.subscription_sid}"
+    editor_id = "#{seed.sid}-#{editor.subscription_sid}"
+    view |> element("#seed-log-#{tools_id} button", "View log") |> render_click()
+    assert element(view, "#seed-log-content-#{tools_id}") |> render() =~ "old tools"
+    refute has_element?(view, "#seed-log-content-#{editor_id}")
+    view |> element("#seed-log-#{editor_id} button", "View log") |> render_click()
+
+    assert {:ok, _} = record.(tools, 2, "retained tools\n")
+    assert {:ok, _} = record.(tools, 3, "latest tools\n")
+    tools_html = element(view, "#seed-log-content-#{tools_id}") |> render()
+    refute tools_html =~ "old tools"
+    assert tools_html =~ "retained tools\nlatest tools"
+    refute tools_html =~ "editor output"
+    assert element(view, "#seed-log-content-#{editor_id}") |> render() =~ "editor output"
+
+    GenServer.stop(view.pid)
+    {:ok, view, _html} = live(conn, ~p"/deployments/#{deployment.sid}")
+    view |> element("#seed-log-#{tools_id} button", "View log") |> render_click()
+    view |> element("#seed-log-#{editor_id} button", "View log") |> render_click()
+
+    assert element(view, "#seed-log-content-#{tools_id}") |> render() =~
+             "retained tools\nlatest tools"
+
+    assert element(view, "#seed-log-content-#{editor_id}") |> render() =~ "editor output"
+
+    for destination <- destinations do
+      destination
+      |> change(%{result: :success, log: "final #{destination.profile_name}"})
+      |> Sower.Repo.update!()
+    end
+
+    deployment =
+      deployment |> change(%{state: :completed, result: :success}) |> Sower.Repo.update!()
+
+    DeploymentPubSub.broadcast_deployment_change(deployment, :updated)
+    assert element(view, "#seed-log-content-#{tools_id}") |> render() =~ "final tools"
+    refute element(view, "#seed-log-content-#{tools_id}") |> render() =~ "final editor"
+    assert element(view, "#seed-log-content-#{editor_id}") |> render() =~ "final editor"
+  end
+
   test "loads running history, appends ordered live chunks and switches to final logs", %{
     conn: conn,
     user: user

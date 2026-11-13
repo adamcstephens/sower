@@ -48,6 +48,8 @@ enum GardenCommand {
     /// Discard this garden's identity and enroll a new one. The recovery path
     /// for a garden the server no longer knows.
     Reregister,
+    /// Inspect and manage named package and devshell profiles.
+    Profile(ProfileArgs),
 }
 
 #[derive(Debug, Args)]
@@ -65,6 +67,120 @@ struct TriggerArgs {
     force: bool,
 }
 
+#[derive(Debug, Args)]
+struct ProfileArgs {
+    #[command(subcommand)]
+    command: ProfileCommand,
+}
+
+#[derive(Debug, Subcommand)]
+enum ProfileCommand {
+    /// List durable locally owned profiles, including pending removal.
+    List,
+    /// Inspect selected/staged paths, generations, pins and retention.
+    Show { name: String },
+    /// Stage a seed through the subscription deployment policy.
+    Stage {
+        name: String,
+        #[arg(long)]
+        subscription_sid: String,
+        #[arg(long)]
+        seed_sid: Option<String>,
+    },
+    /// Select a retained generation. External services are not restarted.
+    Select {
+        name: String,
+        #[arg(allow_hyphen_values = true)]
+        generation: String,
+    },
+    /// Roll back to a retained generation without changing external processes.
+    Rollback {
+        name: String,
+        #[arg(allow_hyphen_values = true)]
+        generation: String,
+    },
+    /// Protect an immutable generation until external consumers transition.
+    Pin {
+        name: String,
+        #[arg(allow_hyphen_values = true)]
+        generation: String,
+    },
+    /// Release an explicit generation pin.
+    Unpin {
+        name: String,
+        #[arg(allow_hyphen_values = true)]
+        generation: String,
+    },
+    /// Discard intentionally staged state without changing the selection.
+    Discard {
+        name: String,
+        #[arg(allow_hyphen_values = true)]
+        generation: String,
+    },
+    /// Preview removal; --confirm requests uninstall. Unpin generations first.
+    Uninstall {
+        name: String,
+        /// External services are not stopped and published paths disappear.
+        #[arg(long)]
+        confirm: bool,
+        /// Only preview affected generations; this is the default.
+        #[arg(long, conflicts_with = "confirm")]
+        preview: bool,
+    },
+}
+
+fn profile_payload(command: &ProfileCommand) -> protocol::ProfilePayload<'_> {
+    let mut payload = protocol::ProfilePayload {
+        action: "list",
+        profile_name: None,
+        generation_id: None,
+        seed_sid: None,
+        subscription_sid: None,
+        preview: None,
+    };
+    match command {
+        ProfileCommand::List => {}
+        ProfileCommand::Show { name } => {
+            payload.action = "inspect";
+            payload.profile_name = Some(name);
+        }
+        ProfileCommand::Stage {
+            name,
+            subscription_sid,
+            seed_sid,
+        } => {
+            payload.action = "stage";
+            payload.profile_name = Some(name);
+            payload.subscription_sid = Some(subscription_sid);
+            payload.seed_sid = seed_sid.as_deref();
+        }
+        ProfileCommand::Select { name, generation }
+        | ProfileCommand::Rollback { name, generation }
+        | ProfileCommand::Pin { name, generation }
+        | ProfileCommand::Unpin { name, generation } => {
+            payload.action = match command {
+                ProfileCommand::Select { .. } => "select",
+                ProfileCommand::Rollback { .. } => "rollback",
+                ProfileCommand::Pin { .. } => "pin",
+                _ => "unpin",
+            };
+            payload.profile_name = Some(name);
+            payload.generation_id = Some(generation);
+        }
+        ProfileCommand::Discard { name, generation } => {
+            payload.action = "discard";
+            payload.profile_name = Some(name);
+            payload.generation_id = Some(generation);
+        }
+        ProfileCommand::Uninstall { name, confirm, .. } => {
+            payload.action = "uninstall";
+            payload.profile_name = Some(name);
+            payload.preview = Some(!confirm);
+        }
+    }
+    payload
+}
+
 pub fn run(args: GardenArgs) -> Result<()> {
     let GardenArgs {
         socket,
@@ -73,6 +189,16 @@ pub fn run(args: GardenArgs) -> Result<()> {
     } = args;
 
     let socket = config::resolve_socket(socket, &config_file)?;
+    if matches!(
+        command,
+        GardenCommand::Profile(ProfileArgs {
+            command: ProfileCommand::Uninstall { confirm: true, .. }
+        })
+    ) {
+        eprintln!(
+            "Warning: external services are not stopped; published profile paths will disappear. Pinned generations must be unpinned explicitly."
+        );
+    }
     let line = build_request_line(&request_id(), &command)?;
 
     let exit_code = client::run_request(&socket, &line)?;
@@ -98,6 +224,9 @@ fn build_request_line(id: &str, command: &GardenCommand) -> Result<String> {
         GardenCommand::Reload => protocol::reload_request(id),
         GardenCommand::Status => protocol::status_request(id),
         GardenCommand::Reregister => protocol::reregister_request(id),
+        GardenCommand::Profile(profile) => {
+            protocol::profile_request(id, profile_payload(&profile.command))
+        }
     }
 }
 
@@ -168,5 +297,137 @@ mod tests {
         let v = json(&build_request_line("1", &GardenCommand::Status).unwrap());
         assert_eq!(v["kind"], "status");
         assert!(v.get("payload").is_none());
+    }
+}
+
+#[cfg(test)]
+mod profile_tests {
+    use super::*;
+    use clap::Parser;
+    use serde_json::{Value, json};
+
+    #[derive(Parser)]
+    struct ProfileCli {
+        #[command(flatten)]
+        garden: GardenArgs,
+    }
+
+    #[test]
+    fn generation_operands_accept_generated_leading_hyphen_ids() {
+        let generation = "-_z080SRawQZ90rupcWcpg";
+        for action in ["select", "rollback", "pin", "unpin", "discard"] {
+            let parsed = ProfileCli::try_parse_from([
+                "sower-garden",
+                "profile",
+                action,
+                "shell-a",
+                generation,
+            ])
+            .unwrap();
+            let value: Value = serde_json::from_str(
+                &build_request_line("hyphen-id", &parsed.garden.command).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(value["payload"]["generation_id"], generation);
+            assert_eq!(value["payload"]["action"], action);
+        }
+    }
+
+    fn request(command: ProfileCommand) -> Value {
+        serde_json::from_str(
+            &build_request_line(
+                "profile-test",
+                &GardenCommand::Profile(ProfileArgs { command }),
+            )
+            .unwrap(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn list_reads_local_inventory_without_a_subscription() {
+        assert_eq!(
+            request(ProfileCommand::List),
+            json!({"v": 1, "id": "profile-test", "kind": "profile",
+                   "payload": {"action": "list"}})
+        );
+    }
+
+    #[test]
+    fn stage_preserves_explicit_destination_and_seed() {
+        let value = request(ProfileCommand::Stage {
+            name: "tools".into(),
+            subscription_sid: "subscription".into(),
+            seed_sid: Some("seed".into()),
+        });
+        assert_eq!(
+            value["payload"],
+            json!({
+                "action": "stage", "profile_name": "tools",
+                "subscription_sid": "subscription", "seed_sid": "seed"
+            })
+        );
+    }
+
+    #[test]
+    fn generation_operations_keep_profile_local_identity() {
+        for (action, command) in [
+            (
+                "select",
+                ProfileCommand::Select {
+                    name: "tools".into(),
+                    generation: "generation-id".into(),
+                },
+            ),
+            (
+                "rollback",
+                ProfileCommand::Rollback {
+                    name: "tools".into(),
+                    generation: "generation-id".into(),
+                },
+            ),
+            (
+                "pin",
+                ProfileCommand::Pin {
+                    name: "tools".into(),
+                    generation: "generation-id".into(),
+                },
+            ),
+            (
+                "unpin",
+                ProfileCommand::Unpin {
+                    name: "tools".into(),
+                    generation: "generation-id".into(),
+                },
+            ),
+            (
+                "discard",
+                ProfileCommand::Discard {
+                    name: "tools".into(),
+                    generation: "generation-id".into(),
+                },
+            ),
+        ] {
+            assert_eq!(
+                request(command)["payload"],
+                json!({
+                    "action": action, "profile_name": "tools", "generation_id": "generation-id"
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn uninstall_requires_separate_confirmation_and_never_releases_pins() {
+        for confirm in [false, true] {
+            assert_eq!(
+                request(ProfileCommand::Uninstall {
+                    name: "tools".into(),
+                    confirm,
+                    preview: false
+                })["payload"],
+                json!({"action": "uninstall", "profile_name": "tools", "preview": !confirm})
+            );
+        }
     }
 }

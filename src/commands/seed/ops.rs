@@ -13,6 +13,8 @@ pub enum SeedType {
     HomeManager,
     NixDarwin,
     Service,
+    Package,
+    Devshell,
 }
 
 impl SeedType {
@@ -22,6 +24,8 @@ impl SeedType {
             SeedType::HomeManager => "home-manager",
             SeedType::NixDarwin => "nix-darwin",
             SeedType::Service => "service",
+            SeedType::Package => "package",
+            SeedType::Devshell => "devshell",
         }
     }
 
@@ -31,6 +35,8 @@ impl SeedType {
             SeedType::HomeManager => types::SeedSeedType::HomeManager,
             SeedType::NixDarwin => types::SeedSeedType::NixDarwin,
             SeedType::Service => types::SeedSeedType::Service,
+            SeedType::Package => types::SeedSeedType::Package,
+            SeedType::Devshell => types::SeedSeedType::Devshell,
         }
     }
 }
@@ -50,8 +56,10 @@ impl FromStr for SeedType {
             "home-manager" => Ok(SeedType::HomeManager),
             "nix-darwin" => Ok(SeedType::NixDarwin),
             "service" => Ok(SeedType::Service),
+            "package" => Ok(SeedType::Package),
+            "devshell" => Ok(SeedType::Devshell),
             other => Err(anyhow!(
-                "unsupported seed type {other:?} (expected nixos | home-manager | nix-darwin | service)"
+                "unsupported seed type {other:?} (expected nixos | home-manager | nix-darwin | service | package | devshell)"
             )),
         }
     }
@@ -65,6 +73,7 @@ pub fn precheck(artifact: &Path, seed_type: SeedType) -> Result<()> {
         SeedType::Nixos => artifact.join("nixos-version"),
         SeedType::Service => artifact.join(".sower/systemd"),
         SeedType::NixDarwin => bail!("nix-darwin submission is not supported"),
+        SeedType::Package | SeedType::Devshell => artifact.to_path_buf(),
     };
     std::fs::metadata(&marker)
         .with_context(|| format!("missing artifact marker {}", marker.display()))?;
@@ -134,7 +143,7 @@ pub fn activate(seed_type: SeedType, store_path: &str, mode: &str) -> Result<()>
             cmd.arg(mode);
             run_inherited(cmd).context("switch-to-configuration")
         }
-        SeedType::NixDarwin | SeedType::Service => {
+        SeedType::NixDarwin | SeedType::Service | SeedType::Package | SeedType::Devshell => {
             bail!("activate for {seed_type} is not supported by this CLI")
         }
     }
@@ -182,6 +191,8 @@ mod tests {
             ("home-manager", SeedType::HomeManager),
             ("nix-darwin", SeedType::NixDarwin),
             ("service", SeedType::Service),
+            ("package", SeedType::Package),
+            ("devshell", SeedType::Devshell),
         ] {
             let parsed: SeedType = s.parse().unwrap();
             assert_eq!(parsed.as_str(), t.as_str());
@@ -210,6 +221,21 @@ mod tests {
             types::SeedSeedType::NixDarwin
         );
         assert_eq!(SeedType::Service.into_api(), types::SeedSeedType::Service);
+        assert_eq!(SeedType::Package.into_api(), types::SeedSeedType::Package);
+        assert_eq!(SeedType::Devshell.into_api(), types::SeedSeedType::Devshell);
+    }
+
+    #[test]
+    fn opaque_artifacts_accept_files_and_directories_without_activation_markers() {
+        let dir = tempdir("opaque-artifacts");
+        let file = dir.join("shell");
+        std::fs::write(&file, "opaque build output").unwrap();
+        for kind in [SeedType::Package, SeedType::Devshell] {
+            precheck(&dir, kind).unwrap();
+            precheck(&file, kind).unwrap();
+            assert!(precheck(&dir.join("missing"), kind).is_err());
+        }
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

@@ -9,7 +9,13 @@ let
   json = pkgs.formats.json { };
   jsonType = json.type;
 
-  jsonConfig = json.generate "sower-client.json" cfg.settings;
+  jsonConfig = json.generate "sower-client.json" (
+    cfg.settings
+    // {
+      managed_profiles_directory = cfg.managedProfilesDirectory;
+      nix_state_directory = cfg.nixStateDirectory;
+    }
+  );
 
   stateDir = "${config.xdg.stateHome}/sower-garden";
 
@@ -39,6 +45,18 @@ in
       enable = lib.mkEnableOption "Sower garden";
 
       package = lib.mkOption { type = lib.types.package; };
+
+      managedProfilesDirectory = lib.mkOption {
+        type = lib.types.str;
+        default = "${config.xdg.stateHome}/sower-profiles";
+        description = "User-owned publication directory for named package and devshell profiles.";
+      };
+
+      nixStateDirectory = lib.mkOption {
+        type = lib.types.str;
+        default = "/nix/var/nix";
+        description = "Actual local Nix daemon state directory. Must match a custom daemon state directory; this is not Garden's private state directory.";
+      };
 
       activatorPackage = lib.mkOption { type = lib.types.package; };
 
@@ -78,7 +96,11 @@ in
       {
         home.packages = [ cfg.package ];
 
-        xdg.configFile."sower/client.json".source = lib.mkIf (cfg.settings != { }) jsonConfig;
+        xdg.configFile."sower/client.json".source = jsonConfig;
+
+        home.activation.sowerProfiles = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          run ${pkgs.coreutils}/bin/mkdir --parents --mode=0700 ${lib.escapeShellArg cfg.managedProfilesDirectory}
+        '';
       }
 
       (lib.mkIf pkgs.stdenv.hostPlatform.isLinux {
@@ -113,8 +135,15 @@ in
 
             LoadCredential = [ "vm-manager-boot-id:/proc/sys/kernel/random/boot_id" ];
 
-            ExecStartPre =
-              if cfg.distribution then lib.getExe secretsScript else "${pkgs.coreutils}/bin/mkdir -p ${stateDir}";
+            ExecStartPre = [
+              "${pkgs.coreutils}/bin/mkdir --parents --mode=0700 ${lib.escapeShellArg cfg.managedProfilesDirectory}"
+            ]
+            ++ (
+              if cfg.distribution then
+                [ (lib.getExe secretsScript) ]
+              else
+                [ "${pkgs.coreutils}/bin/mkdir --parents ${stateDir}" ]
+            );
             ExecStart = if cfg.distribution then lib.getExe startScript else "${lib.getExe cfg.package} start";
             ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
 

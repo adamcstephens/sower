@@ -13,7 +13,13 @@ defmodule SowerClient.Config do
   require OpenApiSpex
 
   @config_file_env "SOWER_CONFIG_FILE"
-  @path_setting_keys ["state_directory", "admin_socket", "activator_socket"]
+  @path_setting_keys [
+    "state_directory",
+    "managed_profiles_directory",
+    "nix_state_directory",
+    "admin_socket",
+    "activator_socket"
+  ]
   @env_var_pattern ~r/\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\})/
 
   OpenApiSpex.schema(%{
@@ -59,6 +65,17 @@ defmodule SowerClient.Config do
       state_directory: %Schema{
         type: :string,
         description: "Directory where state files are written (garden-only)"
+      },
+      managed_profiles_directory: %Schema{
+        type: :string,
+        description:
+          "Publicly traversable directory for Garden-owned named profiles, separate from private state"
+      },
+      nix_state_directory: %Schema{
+        type: :string,
+        default: "/nix/var/nix",
+        description:
+          "Actual local Nix daemon/store state directory; custom stores must configure this explicitly"
       },
       policy: %Schema{
         type: :object,
@@ -135,6 +152,8 @@ defmodule SowerClient.Config do
     %{
       "name" => default_client_name(),
       "state_directory" => default_state_dir(),
+      "managed_profiles_directory" => default_managed_profiles_directory(),
+      "nix_state_directory" => "/nix/var/nix",
       "admin_socket" => default_admin_socket(),
       "vm_capacity" => %{},
       "default" => "/var/lib/sower-garden"
@@ -224,6 +243,14 @@ defmodule SowerClient.Config do
 
   def default_state_dir do
     SowerClient.Config.xdg_state_path("sower-garden")
+  end
+
+  def default_managed_profiles_directory do
+    if System.get_env("USER") == "root" do
+      "/var/lib/sower-profiles"
+    else
+      xdg_path_file(:state, "sower-profiles", nil)
+    end
   end
 
   @doc """
@@ -487,6 +514,10 @@ defmodule SowerClient.Config do
 
   defp override_env({"SOWER_ENDPOINT", token}, acc) do
     Map.put(acc, "endpoint", token)
+  end
+
+  defp override_env({"SOWER_MANAGED_PROFILES_DIRECTORY", directory}, acc) do
+    Map.put(acc, "managed_profiles_directory", directory)
   end
 
   defp override_env(_, acc), do: acc

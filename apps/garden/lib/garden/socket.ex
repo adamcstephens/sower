@@ -1,4 +1,10 @@
 defmodule Garden.Socket do
+  @moduledoc """
+  Connects Garden to Sower and dispatches explicitly addressed deployments and
+  managed-profile operations. Managed-profile messages require peer capability;
+  legacy deployment and inventory reporting remain available without it.
+  """
+
   use Garden.ChannelClient, lobby_topic: "garden:lobby"
 
   require Logger
@@ -13,6 +19,17 @@ defmodule Garden.Socket do
   def deploy(%SowerClient.Orchestration.Subscription{} = sub, opts \\ []) do
     force? = Keyword.get(opts, :force, false)
     GenServer.cast(__MODULE__, {:deployment_request, sub, force?})
+  end
+
+  def profile_operation(%SowerClient.Orchestration.ProfileOperation{} = operation) do
+    case GenServer.whereis(__MODULE__) do
+      nil -> {:error, :disconnected}
+      pid -> GenServer.call(pid, {:profile_operation, operation}, 15_000)
+    end
+  end
+
+  def managed_capabilities do
+    if Garden.ManagedProfiles.supported?(), do: ["managed_profiles_v1"], else: []
   end
 
   def send_deployment_log(%SowerClient.Orchestration.SeedDeploymentLog{} = chunk) do
@@ -92,9 +109,16 @@ defmodule Garden.Socket do
     result =
       case Map.get(socket.assigns, :private_topic) do
         topic when is_binary(topic) ->
-          if joined?(socket, topic),
-            do: push_message(socket, chunk),
-            else: {:error, :disconnected}
+          if joined?(socket, topic) do
+            if Map.get(socket.assigns, :managed_profiles_supported, false) do
+              push_message(socket, chunk)
+            else
+              payload = chunk |> Map.from_struct() |> Map.delete(:subscription_sid)
+              push(socket, topic, SowerClient.Orchestration.SeedDeploymentLog.event(), payload)
+            end
+          else
+            {:error, :disconnected}
+          end
 
         _ ->
           {:error, :disconnected}
@@ -105,6 +129,23 @@ defmodule Garden.Socket do
 
   def handle_call({:deployment_log, _chunk}, _from, socket) do
     {:reply, {:error, :unsupported}, socket}
+  end
+
+  def handle_call({:profile_operation, operation}, _from, socket) do
+    result =
+      if Map.get(socket.assigns, :managed_profiles_supported, false) do
+        with {:ok, ref} <- push_message(socket, operation),
+             {:ok, payload} <- await_reply(ref),
+             {:ok, result} <- SowerClient.Orchestration.ProfileOperationResult.cast(payload) do
+          {:ok, result}
+        else
+          {:error, reason} -> {:error, reason}
+        end
+      else
+        {:error, :unsupported}
+      end
+
+    {:reply, result, socket}
   end
 
   @impl Slipstream
@@ -145,12 +186,59 @@ defmodule Garden.Socket do
     end
   end
 
+  def handle_call(
+        {event, %SowerClient.Orchestration.SeedDeploymentResult{} = result},
+        from,
+        socket
+      ) do
+    payload =
+      Lifecycle.payload_for_peer(
+        result,
+        Map.get(socket.assigns, :managed_profiles_supported, false)
+      )
+
+    super({event, payload}, from, socket)
+  end
+
   def handle_call(message, from, socket), do: super(message, from, socket)
 
   @impl Slipstream
-  def handle_cast({:deployment_request, %{sid: sid}, force?}, socket) do
-    {:ok, upgrade_request} = Lifecycle.build_deployment_request(sid, force?)
-    {:ok, _ref} = push_message(socket, upgrade_request)
+  def handle_cast(
+        {:deployment_request, %SowerClient.Orchestration.Subscription{} = subscription, force?},
+        socket
+      ) do
+    cond do
+      subscription.sid in Storage.read().removed_subscription_sids ->
+        Logger.error(
+          msg: "Subscription was explicitly uninstalled",
+          subscription_sid: subscription.sid
+        )
+
+      subscription.uninstall_pending ->
+        Logger.error(msg: "Subscription uninstall is pending", subscription_sid: subscription.sid)
+
+      subscription.seed_type in ["package", "devshell"] and
+          not Map.get(socket.assigns, :managed_profiles_supported, false) ->
+        Logger.error(
+          msg: "Server does not support managed profile deployments",
+          subscription_sid: subscription.sid
+        )
+
+      true ->
+        {:ok, upgrade_request} = Lifecycle.build_deployment_request(subscription.sid, force?)
+
+        case push_message(socket, upgrade_request) do
+          {:ok, _ref} ->
+            :ok
+
+          {:error, reason} ->
+            Logger.warning(
+              msg: "Deployment request could not be sent",
+              subscription_sid: subscription.sid,
+              error: inspect(reason)
+            )
+        end
+    end
 
     {:noreply, socket}
   end
@@ -167,13 +255,26 @@ defmodule Garden.Socket do
         )
 
       {:report, report} ->
+        report =
+          if Map.get(socket.assigns, :managed_profiles_supported, false) do
+            report
+          else
+            %{
+              report
+              | profiles: Enum.reject(report.profiles, &(&1.seed_type in ["package", "devshell"]))
+            }
+          end
+
         Logger.debug(
           msg: "Reporting seed profiles",
           profile_count: length(report.profiles),
           subscription_count: length(subscriptions)
         )
 
-        {:ok, _ref} = push(socket, private_channel(socket), "garden:seeds:report", report)
+        unless not Map.get(socket.assigns, :managed_profiles_supported, false) and
+                 (report.complete == false or report.profiles == []) do
+          {:ok, _ref} = push(socket, private_channel(socket), "garden:seeds:report", report)
+        end
     end
 
     {:noreply, socket}
@@ -186,7 +287,8 @@ defmodule Garden.Socket do
     report = %GardenReport{
       version: to_string(Application.spec(:garden, :vsn)),
       policy: config.policy || %{},
-      timezone: config.timezone || Scheduler.get_timezone()
+      timezone: config.timezone || Scheduler.get_timezone(),
+      capabilities: managed_capabilities()
     }
 
     Logger.debug(msg: "Reporting garden facts", version: report.version)
@@ -198,7 +300,13 @@ defmodule Garden.Socket do
 
   @impl Slipstream
   def handle_cast({:seed_status, %SeedDeploymentStatus{} = status}, socket) do
-    {:ok, _} = push(socket, private_channel(socket), SeedDeploymentStatus.event(), status)
+    payload =
+      Lifecycle.payload_for_peer(
+        status,
+        Map.get(socket.assigns, :managed_profiles_supported, false)
+      )
+
+    {:ok, _} = push(socket, private_channel(socket), SeedDeploymentStatus.event(), payload)
     {:noreply, socket}
   end
 
@@ -212,6 +320,23 @@ defmodule Garden.Socket do
         if sub.schedule, do: %{sub | timezone: tz}, else: sub
       end)
 
+    config_subscriptions =
+      if Map.get(socket.assigns, :managed_profiles_supported, false) do
+        config_subscriptions
+      else
+        {unsupported, supported} =
+          Enum.split_with(config_subscriptions, &(&1.seed_type in ["package", "devshell"]))
+
+        if unsupported != [] do
+          Logger.error(
+            msg: "Server does not support managed profile subscriptions",
+            subscriptions: Enum.map_join(unsupported, ",", & &1.name)
+          )
+        end
+
+        supported
+      end
+
     sync_payload = %{subscriptions: Enum.map(config_subscriptions, &Map.from_struct/1)}
 
     topic = private_channel(socket)
@@ -220,17 +345,50 @@ defmodule Garden.Socket do
     subscriptions =
       case await_reply(ref) do
         {:ok, %{"subscriptions" => registered}} ->
-          Lifecycle.merge_subscriptions(config_subscriptions, registered)
+          subscriptions =
+            Lifecycle.merge_subscriptions(
+              config_subscriptions,
+              registered,
+              Map.get(socket.assigns, :managed_profiles_supported, false)
+            )
+
+          case Garden.ManagedProfiles.sync_subscriptions(subscriptions) do
+            :ok ->
+              :ok
+
+            {:error, reason} ->
+              Logger.error(
+                msg: "Failed to persist managed profile policy",
+                error: inspect(reason)
+              )
+          end
+
+          subscriptions
 
         {:error, error} ->
           Logger.error(msg: "Failed to sync subscriptions", error: error)
-          []
+          Storage.read().subscriptions
       end
 
-    Scheduler.refresh_subscriptions(subscriptions)
-    Garden.Storage.put(:subscriptions, subscriptions)
+    retained =
+      Enum.filter(Storage.read().subscriptions, fn existing ->
+        existing.seed_type in ["package", "devshell"] and
+          not Enum.any?(subscriptions, &(&1.name == existing.name))
+      end)
 
-    Lifecycle.poll_on_connect_subscriptions(subscriptions)
+    subscriptions = subscriptions ++ retained
+
+    Garden.Storage.put(:subscriptions, subscriptions)
+    subscriptions = Storage.read().subscriptions
+    Scheduler.refresh_subscriptions(subscriptions)
+
+    subscriptions
+    |> Enum.filter(fn sub ->
+      not sub.uninstall_pending and
+        (Map.get(socket.assigns, :managed_profiles_supported, false) or
+           sub.seed_type not in ["package", "devshell"])
+    end)
+    |> Lifecycle.poll_on_connect_subscriptions()
     |> Enum.each(fn sub ->
       Task.Supervisor.start_child(Garden.TaskSupervisor, fn ->
         deploy(sub)
@@ -545,7 +703,10 @@ defmodule Garden.Socket do
       |> assign(:conn_sid, conn_sid)
       |> assign(:garden_sid, garden_sid)
       |> maybe_schedule_existing_reauth(storage.oauth_credentials)
-      |> join("garden:#{garden_sid}", %{direct_override: true})
+      |> join("garden:#{garden_sid}", %{
+        direct_override: true,
+        capabilities: managed_capabilities()
+      })
 
     {:ok, socket}
   end
@@ -563,6 +724,10 @@ defmodule Garden.Socket do
       |> assign(:conn_sid, conn_sid)
       |> assign(:pending_deployments_supported, Map.get(reply, "pending_deployments", false))
       |> assign(:deployment_logs_supported, Map.get(reply, "deployment_logs", false))
+      |> assign(
+        :managed_profiles_supported,
+        Garden.ManagedProfiles.supported?() and Map.get(reply, "managed_profiles_v1", false)
+      )
 
     {:ok, socket}
   end
@@ -634,6 +799,55 @@ defmodule Garden.Socket do
     {:ok, socket}
   end
 
+  def handle_message(
+        "garden:" <> topic,
+        "subscriptions:refresh",
+        %{"subscriptions" => snapshot, "complete" => true},
+        %{assigns: %{garden_sid: garden_sid, managed_profiles_supported: true}} = socket
+      )
+      when topic == garden_sid do
+    storage = Storage.read()
+
+    with {:ok, subscriptions} <-
+           Lifecycle.refresh_managed_subscriptions(
+             storage.subscriptions,
+             snapshot,
+             storage.removed_subscription_sids
+           ),
+         :ok <- Garden.ManagedProfiles.sync_subscriptions(subscriptions) do
+      Storage.put(:subscriptions, subscriptions)
+      Scheduler.refresh_subscriptions(Storage.read().subscriptions)
+    else
+      {:error, reason} ->
+        Logger.error(msg: "Failed to refresh managed subscriptions", error: inspect(reason))
+    end
+
+    {:ok, socket}
+  end
+
+  def handle_message(
+        "garden:" <> topic,
+        "profile:operation",
+        payload,
+        %{assigns: %{garden_sid: garden_sid, managed_profiles_supported: true}} = socket
+      )
+      when topic == garden_sid do
+    case SowerClient.Orchestration.ProfileOperation.cast(payload) do
+      {:ok, operation} ->
+        socket_pid = self()
+
+        Task.Supervisor.start_child(Garden.TaskSupervisor, fn ->
+          result = Lifecycle.profile_operation(operation)
+          send(socket_pid, {:profile_operation_completed, result})
+        end)
+
+      {:error, reason} ->
+        Logger.error(msg: "Invalid managed profile operation", error: inspect(reason))
+    end
+
+    {:ok, socket}
+  end
+
   def handle_message(topic, message, _params, socket) do
     Logger.debug(msg: "Received unknown message", topic: topic, message: message)
     {:noreply, socket}
@@ -650,6 +864,12 @@ defmodule Garden.Socket do
   end
 
   @impl Slipstream
+  def handle_info({:profile_operation_completed, result}, socket) do
+    push_message(socket, result)
+    cast(:report_seeds)
+    {:noreply, socket}
+  end
+
   def handle_info({:run_deployment, sid}, socket) do
     case Lifecycle.lookup_deployment(sid, socket.assigns.active_deployments) do
       :not_found ->

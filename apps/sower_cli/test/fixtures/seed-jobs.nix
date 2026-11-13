@@ -7,15 +7,21 @@ let
     mkdir --parents "$out"
     echo ready > "$out/ready"
   '';
-  seed = pkgs.writeTextDir "seed.json" (builtins.toJSON {
-    version = 1;
-    name = "manifest-host";
-    seed_type = "nixos";
-    artifact = "${target}";
-    tags.origin = "manifest";
-  });
+  seed = pkgs.writeTextDir "seed.json" (
+    builtins.toJSON {
+      version = 1;
+      name = "manifest-host";
+      seed_type = "nixos";
+      artifact = "${target}";
+      tags.origin = "manifest";
+    }
+  );
 in
 {
-  "seed/host" = seed // { meta = throw "evaluation must not force seed metadata"; };
-  "package/tool" = target // { meta = throw "evaluation must not force ordinary metadata"; };
+  "seed/host" = seed // {
+    meta = throw "evaluation must not force seed metadata";
+  };
+  tool = target // {
+    meta = throw "evaluation must not force ordinary metadata";
+  };
 }

@@ -1,4 +1,5 @@
 defmodule Sower.Orchestration.Deployment do
+  @moduledoc "Authorizes and dispatches deployments with durable, explicit subscription destinations."
   use Sower.Schema
   use Flop.Schema
   import Ecto.Changeset
@@ -55,6 +56,7 @@ defmodule Sower.Orchestration.Deployment do
 
     field :last_dispatched_at, :utc_datetime_usec
     field :content_hash, :string
+    field :request_id, :string
     field :retry_ordinal, :integer
     field :direct_action, :string
     field :direct_override, :boolean, default: false
@@ -72,15 +74,30 @@ defmodule Sower.Orchestration.Deployment do
       :last_dispatched_at,
       :garden_id,
       :content_hash,
+      :request_id,
       :parent_deployment_id,
       :retry_ordinal,
       :direct_action,
       :direct_override
     ])
-    |> put_assoc(:seeds, Map.get(attrs, :seeds, deployment.seeds))
+    |> put_deployment_seeds(attrs, deployment)
     |> put_assoc(:subscriptions, Map.get(attrs, :subscriptions, deployment.subscriptions))
     |> validate_number(:retry_ordinal, greater_than: 0)
     |> validate_required([])
+    |> unique_constraint([:garden_id, :request_id])
+  end
+
+  defp put_deployment_seeds(changeset, attrs, _deployment) do
+    cond do
+      Map.has_key?(attrs, :seed_deployments) ->
+        put_assoc(changeset, :seed_deployments, attrs.seed_deployments)
+
+      Map.has_key?(attrs, :seeds) ->
+        put_assoc(changeset, :seeds, attrs.seeds)
+
+      true ->
+        changeset
+    end
   end
 
   # CRUD
@@ -234,7 +251,7 @@ defmodule Sower.Orchestration.Deployment do
       deployment =
         from(d in __MODULE__, where: d.id == ^deployment.id, lock: "FOR UPDATE")
         |> Repo.one()
-        |> Repo.preload([:seeds, :subscriptions])
+        |> Repo.preload([:seeds, :subscriptions, :seed_deployments])
 
       cond do
         is_nil(deployment) ->
@@ -245,6 +262,20 @@ defmodule Sower.Orchestration.Deployment do
 
         deployment.result not in [:success, :failure] ->
           Repo.rollback(:deployment_not_retryable)
+
+        Enum.any?(deployment.seed_deployments, fn row ->
+          if row.profile_name do
+            sub = Subscription.get_subscription_sid(row.subscription_sid)
+            is_nil(sub) or sub.uninstall_pending
+          else
+            false
+          end
+        end) ->
+          Repo.rollback(:subscription_uninstall_pending)
+
+        Enum.any?(deployment.seed_deployments, & &1.profile_name) and
+            not Garden.managed_profiles_supported?(Repo.get!(Garden, deployment.garden_id)) ->
+          Repo.rollback(:garden_upgrade_required)
 
         true ->
           retry_in_progress? =
@@ -270,7 +301,16 @@ defmodule Sower.Orchestration.Deployment do
             attrs = %{
               garden_id: deployment.garden_id,
               content_hash: deployment.content_hash,
-              seeds: deployment.seeds,
+              seed_deployments:
+                Enum.map(deployment.seed_deployments, fn row ->
+                  %Orchestration.SeedDeployment{
+                    seed_id: row.seed_id,
+                    subscription_sid: row.subscription_sid,
+                    profile_name: row.profile_name
+                  }
+                end),
+              direct_action: deployment.direct_action,
+              direct_override: deployment.direct_override,
               subscriptions: deployment.subscriptions,
               parent_deployment_id: deployment.id,
               retry_ordinal: max_retry_ordinal + 1,
@@ -312,6 +352,22 @@ defmodule Sower.Orchestration.Deployment do
     overdue = Subscription.catch_up_overdue_schedules(garden, now: now)
     overdue_sub_ids = MapSet.new(overdue, & &1.id)
     unresolved = list_unresolved_deployments_for_garden(garden)
+
+    unresolved =
+      Enum.filter(unresolved, fn deployment ->
+        deployment = Repo.preload(deployment, :seed_deployments)
+
+        Enum.all?(deployment.seed_deployments, fn row ->
+          if row.profile_name do
+            sub = Subscription.get_subscription_sid(row.subscription_sid)
+
+            Garden.managed_profiles_supported?(garden) and not is_nil(sub) and
+              not sub.uninstall_pending
+          else
+            true
+          end
+        end)
+      end)
 
     # 2. Partition unresolved: replay those not superseded, cancel those that are
     {to_cancel, to_replay} =
@@ -461,17 +517,34 @@ defmodule Sower.Orchestration.Deployment do
         trigger = if event_reason, do: Policy.trigger_for_reason(event_reason), else: :manual
         now = DateTime.utc_now()
 
-        case Policy.evaluate(
-               subscription.policy,
-               trigger,
-               now,
-               subscription.seed_type,
-               subscription.timezone
-             ) do
-          {:allow, _action} ->
+        decision =
+          case Keyword.get(opts, :action) do
+            nil ->
+              Policy.evaluate(
+                subscription.policy,
+                trigger,
+                now,
+                subscription.seed_type,
+                subscription.timezone
+              )
+
+            action ->
+              Policy.evaluate_action(
+                subscription.policy,
+                action,
+                trigger,
+                now,
+                subscription.seed_type,
+                subscription.timezone
+              )
+          end
+
+        case decision do
+          {:allow, action} ->
             case resolve_seed(subscription, opts) do
               {:ok, opts} ->
-                request_id = SowerClient.Sid.generate("req")
+                opts = Keyword.put(opts, :direct_action, to_string(action))
+                request_id = Keyword.get(opts, :request_id) || SowerClient.Sid.generate("req")
 
                 {:ok, request_id, pid} =
                   process_deployment(request_id, [subscription], garden, opts)
@@ -502,6 +575,14 @@ defmodule Sower.Orchestration.Deployment do
   dedupe only.
   """
   def deploy_direct(%Garden{} = garden, %Seed{} = seed, opts \\ []) do
+    if seed.seed_type in ["package", "devshell"] do
+      {:error, :subscription_required}
+    else
+      do_deploy_direct(garden, seed, opts)
+    end
+  end
+
+  defp do_deploy_direct(%Garden{} = garden, %Seed{} = seed, opts) do
     case authorize_direct(garden, seed, opts) do
       {:ok, action, event_reason} ->
         subscription = Subscription.find_for_garden_seed(garden, seed.name, seed.seed_type)
@@ -652,16 +733,24 @@ defmodule Sower.Orchestration.Deployment do
             )
 
           {:error, reason} ->
+            error =
+              case reason do
+                value when is_atom(value) or is_binary(value) -> to_string(value)
+                value -> inspect(value)
+              end
+
+            Orchestration.ManagedProfile.complete_stage(garden, request_id, error)
+
             Logger.error(
               msg: "Deployment processing failed",
               request_id: request_id,
-              reason: to_string(reason)
+              reason: error
             )
 
             SowerWeb.Endpoint.broadcast(
               "garden:#{garden.sid}",
               "deployment:error",
-              %{request_id: request_id, reason: to_string(reason)}
+              %{request_id: request_id, reason: error}
             )
         end
       end)
@@ -821,7 +910,9 @@ defmodule Sower.Orchestration.Deployment do
             [
               %SowerClient.Orchestration.SeedDeployment{
                 seed: seed,
-                subscription_sid: sub.sid
+                subscription_sid: sub.sid,
+                profile_name: if(sub.seed_type in ["package", "devshell"], do: sub.name),
+                action: Keyword.get(opts, :direct_action)
               }
               | acc
             ]
@@ -844,93 +935,127 @@ defmodule Sower.Orchestration.Deployment do
     note = Keyword.get(opts, :note)
 
     seeds = Enum.map(seed_deploys, & &1.seed)
+    garden = Repo.get!(Garden, garden_id)
 
-    if seeds == [] do
-      Logger.warning(
-        msg: "No matching seeds found for deployment request",
-        request_id: request_id,
-        subscription_count: length(subscriptions)
-      )
+    invalid_destination? =
+      Enum.any?(subscriptions, fn sub ->
+        current = Repo.get(Subscription, sub.id)
+        is_nil(current) or current.uninstall_pending
+      end)
 
-      {:error, :seeds_not_found}
-    else
-      content_hash = compute_content_hash(seeds)
+    unsupported? =
+      Enum.any?(seeds, &(&1.seed_type in ["package", "devshell"])) and
+        not Garden.managed_profiles_supported?(garden)
 
-      Logger.debug(
-        msg: "Processing deployment with matched seeds",
-        request_id: request_id,
-        seed_count: length(seeds),
-        content_hash: content_hash
-      )
+    cond do
+      invalid_destination? ->
+        {:error, :subscription_uninstall_pending}
 
-      case find_duplicate_deployment(garden_id, content_hash, force?) do
-        {:skip, existing} ->
-          existing = Repo.preload(existing, [:seeds])
+      unsupported? ->
+        {:error, :garden_upgrade_required}
 
-          Logger.info(
-            msg: "Skipping deployment - duplicate found",
-            request_id: request_id,
-            deployment_sid: existing.sid,
-            content_hash: content_hash
-          )
+      seeds == [] ->
+        Logger.warning(
+          msg: "No matching seeds found for deployment request",
+          request_id: request_id,
+          subscription_count: length(subscriptions)
+        )
 
-          {:ok,
-           %SowerClient.Orchestration.Deployment{
-             request_id: request_id,
-             sid: existing.sid,
-             seed_deployments: seed_deploys,
-             skipped: true
-           }}
+        {:error, :seeds_not_found}
 
-        :proceed ->
-          Logger.debug(
-            msg: "Creating new deployment record",
-            request_id: request_id,
-            garden_id: garden_id
-          )
+      true ->
+        content_hash = compute_destination_hash(seed_deploys)
 
-          case create_deployment(%{
-                 garden_id: garden_id,
-                 content_hash: content_hash,
-                 last_dispatched_at: DateTime.utc_now(),
-                 state: :dispatched,
-                 direct_action: Keyword.get(opts, :direct_action),
-                 direct_override: Keyword.get(opts, :direct_override, false),
-                 seeds: seeds,
-                 subscriptions: subscriptions
-               }) do
-            {:ok, deploy} ->
-              if actor_sid && event_reason do
-                DeploymentEvent.record_event(deploy, :created, event_reason, actor_sid, note)
-              end
+        Logger.debug(
+          msg: "Processing deployment with matched seeds",
+          request_id: request_id,
+          seed_count: length(seeds),
+          content_hash: content_hash
+        )
 
-              subscription_ids = Enum.map(subscriptions, & &1.id)
-              cancel_stale_for_subscriptions(subscription_ids)
+        existing_request = Repo.get_by(__MODULE__, garden_id: garden_id, request_id: request_id)
 
-              Logger.info(
-                msg: "Deployment record created successfully",
-                request_id: request_id,
-                deployment_sid: deploy.sid
-              )
+        duplicate =
+          if existing_request,
+            do: {:skip, existing_request},
+            else: find_duplicate_deployment(garden_id, content_hash, force?)
 
-              {:ok,
-               %SowerClient.Orchestration.Deployment{
-                 request_id: request_id,
-                 sid: deploy.sid,
-                 seed_deployments: seed_deploys,
-                 skipped: false
-               }}
+        case duplicate do
+          {:skip, existing} ->
+            existing = Repo.preload(existing, [:seeds])
 
-            {:error, reason} ->
-              Logger.error(
-                msg: "Failed to create deployment record",
-                request_id: request_id,
-                reason: inspect(reason)
-              )
+            Logger.info(
+              msg: "Skipping deployment - duplicate found",
+              request_id: request_id,
+              deployment_sid: existing.sid,
+              content_hash: content_hash
+            )
 
-              {:error, reason}
-          end
-      end
+            {:ok,
+             %SowerClient.Orchestration.Deployment{
+               request_id: request_id,
+               sid: existing.sid,
+               seed_deployments: seed_deploys,
+               skipped: true
+             }}
+
+          :proceed ->
+            Logger.debug(
+              msg: "Creating new deployment record",
+              request_id: request_id,
+              garden_id: garden_id
+            )
+
+            case create_deployment(%{
+                   garden_id: garden_id,
+                   content_hash: content_hash,
+                   request_id: request_id,
+                   last_dispatched_at: DateTime.utc_now(),
+                   state: :dispatched,
+                   direct_action: Keyword.get(opts, :direct_action),
+                   direct_override: Keyword.get(opts, :direct_override, false),
+                   seed_deployments:
+                     Enum.map(seed_deploys, fn sd ->
+                       %Orchestration.SeedDeployment{
+                         seed_id: sd.seed.id,
+                         subscription_sid: sd.subscription_sid,
+                         profile_name: sd.profile_name
+                       }
+                     end),
+                   subscriptions: subscriptions
+                 }) do
+              {:ok, deploy} ->
+                if actor_sid && event_reason do
+                  DeploymentEvent.record_event(deploy, :created, event_reason, actor_sid, note)
+                end
+
+                subscription_ids = Enum.map(subscriptions, & &1.id)
+                cancel_stale_for_subscriptions(subscription_ids)
+
+                Logger.info(
+                  msg: "Deployment record created successfully",
+                  request_id: request_id,
+                  deployment_sid: deploy.sid
+                )
+
+                {:ok,
+                 %SowerClient.Orchestration.Deployment{
+                   request_id: request_id,
+                   sid: deploy.sid,
+                   seed_deployments: seed_deploys,
+                   skipped: false
+                 }}
+
+              {:error, reason} ->
+                Logger.error(
+                  msg: "Failed to create deployment record",
+                  request_id: request_id,
+                  reason: inspect(reason)
+                )
+
+                {:error, reason}
+            end
+        end
     end
   end
 
@@ -941,6 +1066,19 @@ defmodule Sower.Orchestration.Deployment do
     |> Enum.join(":")
     |> then(&:crypto.hash(:sha256, &1))
     |> Base.encode16(case: :lower)
+  end
+
+  defp compute_destination_hash(seed_deploys) do
+    if Enum.any?(seed_deploys, & &1.profile_name) do
+      seed_deploys
+      |> Enum.map(&{&1.seed.id, &1.subscription_sid, &1.profile_name, &1.action})
+      |> Enum.sort()
+      |> :erlang.term_to_binary()
+      |> then(&:crypto.hash(:sha256, &1))
+      |> Base.encode16(case: :lower)
+    else
+      compute_content_hash(Enum.map(seed_deploys, & &1.seed))
+    end
   end
 
   defp find_duplicate_deployment(_garden_id, _content_hash, true), do: :proceed
@@ -972,20 +1110,24 @@ defmodule Sower.Orchestration.Deployment do
   end
 
   defp build_seed_deployments(%__MODULE__{} = deployment) do
-    Enum.map(deployment.seeds, fn seed ->
+    deployment = Repo.preload(deployment, [:subscriptions, seed_deployments: [seed: :tags]])
+
+    Enum.map(deployment.seed_deployments, fn row ->
       subscription_sid =
-        deployment.subscriptions
-        |> Enum.find(fn sub ->
-          sub.seed_name == seed.name and sub.seed_type == seed.seed_type
-        end)
-        |> case do
-          nil -> nil
-          sub -> sub.sid
-        end
+        row.subscription_sid ||
+          if is_nil(row.profile_name) do
+            subscription =
+              Enum.find(deployment.subscriptions, fn sub ->
+                sub.seed_name == row.seed.name and sub.seed_type == row.seed.seed_type
+              end)
+
+            get_in(subscription.sid)
+          end
 
       %SowerClient.Orchestration.SeedDeployment{
-        seed: seed,
+        seed: row.seed,
         subscription_sid: subscription_sid,
+        profile_name: row.profile_name,
         action: deployment.direct_action,
         override: deployment.direct_override
       }

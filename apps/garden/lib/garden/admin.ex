@@ -1,6 +1,8 @@
 defmodule Garden.Admin do
   @moduledoc """
-  Admin tools for the garden. Useful on local repl
+  Dispatches authenticated local operator commands, including offline managed-profile
+  inventory and generation operations. Staging uses the server deployment-policy
+  boundary; uninstall previews unless explicitly confirmed.
   """
 
   require Logger
@@ -17,13 +19,91 @@ defmodule Garden.Admin do
   Dispatch a decoded admin socket command struct.
 
   Returns one of `{:ok, message}`, `{:error, message}`, or
-  `{:status, %StatusReport{}}` for `Garden.AdminSocket` to encode into reply
-  frames.
+  `{:status, %StatusReport{}}`, or `{:profile, %ProfileOperationResult{}}` for
+  `Garden.AdminSocket` to encode into reply frames.
   """
   def handle(%Deploy{} = command), do: deploy_command(command)
   def handle(%Reload{}), do: reload()
   def handle(%Reregister{}), do: reregister()
   def handle(%Status{}), do: status()
+
+  def handle({request_id, %SowerClient.Admin.Profile{} = command}) do
+    profile(command, request_id)
+  end
+
+  def profile(%SowerClient.Admin.Profile{action: :list}, request_id) do
+    result =
+      case Garden.ManagedProfiles.list() do
+        {:ok, profiles} ->
+          SowerClient.Orchestration.ProfileOperationResult.cast!(%{
+            request_id: request_id,
+            status: "completed",
+            profiles: profiles
+          })
+
+        {:error, reason} ->
+          SowerClient.Orchestration.ProfileOperationResult.cast!(%{
+            request_id: request_id,
+            status: "failed",
+            error: inspect(reason)
+          })
+      end
+
+    {:profile, result}
+  end
+
+  def profile(%SowerClient.Admin.Profile{} = command, request_id) do
+    operation =
+      command
+      |> Map.from_struct()
+      |> Map.put(:request_id, request_id)
+      |> Map.put(:action, Atom.to_string(command.action))
+      |> SowerClient.Orchestration.ProfileOperation.cast!()
+
+    binding =
+      Enum.find(Garden.Storage.read().subscriptions, &(&1.name == command.profile_name))
+
+    operation =
+      cond do
+        binding ->
+          %{operation | subscription_sid: binding.sid}
+
+        command.action == :uninstall ->
+          case Garden.ManagedProfiles.inspect(command.profile_name) do
+            {:ok, profile} -> %{operation | subscription_sid: profile.subscription_sid}
+            {:error, _reason} -> operation
+          end
+
+        true ->
+          operation
+      end
+
+    result =
+      if command.action == :stage or
+           (command.action == :uninstall and not command.preview and binding) do
+        case Garden.Socket.profile_operation(operation) do
+          {:ok, result} ->
+            result
+
+          {:error, reason} ->
+            Garden.Socket.Lifecycle.profile_operation_result(operation, {:error, reason})
+        end
+      else
+        Garden.Socket.Lifecycle.profile_operation(operation)
+      end
+
+    result =
+      if command.action == :uninstall and command.preview do
+        %{
+          result
+          | warning: "Local inventory preview; server state may have changed. " <> result.warning
+        }
+      else
+        result
+      end
+
+    {:profile, result}
+  end
 
   @doc """
   Request a service reload, the same path as a SIGHUP.

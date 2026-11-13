@@ -12,7 +12,9 @@ defmodule SowerClient.Orchestration.Subscription.Policy do
     "nixos" => ["stage", "activate", "restart"],
     "nix-darwin" => ["stage", "activate", "restart"],
     "home-manager" => ["stage", "activate"],
-    "service" => ["stage", "activate"]
+    "service" => ["stage", "activate"],
+    "package" => ["stage", "activate"],
+    "devshell" => ["stage", "activate"]
   }
 
   # Highest disruption first
@@ -38,7 +40,7 @@ defmodule SowerClient.Orchestration.Subscription.Policy do
         description: "Triggers this rule applies to. Omit for all.",
         nullable: true
       },
-      window: Window,
+      window: %Schema{anyOf: [Window], nullable: true, "x-struct": Window},
       confirm: %Schema{
         type: :boolean,
         description: "Require explicit confirmation before proceeding",

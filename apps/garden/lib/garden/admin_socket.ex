@@ -7,6 +7,8 @@ defmodule Garden.AdminSocket do
   spawned by systemd socket activation. The `sower` CLI connects, sends a single
   newline-delimited compact JSON request envelope, and streams reply frames back
   (`ok`/`error` then a terminal `complete` carrying an exit code).
+  Profile replies carry structured operation outcomes, preserving the envelope ID
+  as operation identity for local and server-authorized requests.
 
   Auth is SO_PEERCRED, mirroring the activator: a peer is authorized when its uid
   is root or the socket owner, or its gid matches the socket group. The listener
@@ -214,6 +216,9 @@ defmodule Garden.AdminSocket do
 
   defp authorized_outcome(client, handler) do
     case read_request(client) do
+      {:ok, %Admin.Request{id: id, message: %Admin.Profile{} = message}} ->
+        {:dispatch, id, handler.({id, message})}
+
       {:ok, %Admin.Request{id: id, message: message}} ->
         {:dispatch, id, handler.(message)}
 
@@ -245,6 +250,11 @@ defmodule Garden.AdminSocket do
 
   defp emit(client, {:dispatch, id, {:status, %Admin.StatusReport{} = status}}),
     do: send_frames(client, id, :ok, %{"status" => status_map(status)})
+
+  defp emit(client, {:dispatch, id, {:profile, result}}) do
+    status = if result.status in ["failed", "blocked", :failed, :blocked], do: :error, else: :ok
+    send_frames(client, id, status, %{"profile_result" => result})
+  end
 
   defp emit(client, {:reply_error, id, message}),
     do: send_frames(client, id, :error, %{"data" => message})

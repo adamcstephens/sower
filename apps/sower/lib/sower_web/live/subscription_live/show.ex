@@ -1,6 +1,8 @@
 defmodule SowerWeb.SubscriptionLive.Show do
   use SowerWeb, :live_view
 
+  @moduledoc "Subscription selection, deployment and managed-profile operator details."
+
   alias Sower.Orchestration
 
   @impl Phoenix.LiveView
@@ -102,6 +104,10 @@ defmodule SowerWeb.SubscriptionLive.Show do
   @impl Phoenix.LiveView
   def handle_info({:deployment, _event, _deployment}, socket) do
     {:noreply, refresh_seeds(socket)}
+  end
+
+  def handle_info({SowerWeb.SubscriptionLive.FormComponent, {:saved, subscription}}, socket) do
+    {:noreply, assign(socket, :subscription, Sower.Repo.preload(subscription, :garden))}
   end
 
   defp load_seeds(%Orchestration.Subscription{} = subscription, garden, flop_params) do

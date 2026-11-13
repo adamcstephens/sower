@@ -119,6 +119,13 @@ defmodule SowerWeb.Router do
 
     post "/gardens/register", GardenController, :register
     get "/gardens/:garden/latest-seed", GardenController, :latest_seed
+    get "/gardens/:garden/profiles", ProfileController, :index
+    post "/gardens/:garden/profiles/operations", ProfileController, :create
+    get "/gardens/:garden/profiles/operations/:request_id", ProfileController, :show
+    get "/gardens/:garden/subscriptions", SubscriptionController, :index
+    post "/gardens/:garden/subscriptions", SubscriptionController, :create
+    patch "/gardens/:garden/subscriptions/:sid", SubscriptionController, :update
+    delete "/gardens/:garden/subscriptions/:sid", SubscriptionController, :delete
 
     get "/nix/caches", Nix.CacheController, :list
     get "/seeds", SeedController, :list

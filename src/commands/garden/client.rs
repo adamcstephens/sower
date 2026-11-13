@@ -47,8 +47,24 @@ fn stream_replies<R: BufRead, O: Write, E: Write>(
     while let Some(line) = read_line_capped(reader, MAX_LINE_BYTES)? {
         let reply = protocol::parse_reply(&line).context("decode reply frame")?;
         match reply.kind {
-            ReplyKind::Ok => emit_ok(&reply, out)?,
-            ReplyKind::Error => emit_error(&reply, err)?,
+            ReplyKind::Ok => {
+                if let Some(result) = &reply.profile_result {
+                    serde_json::to_writer(&mut *out, result)?;
+                    writeln!(out)?;
+                    if let Some(data) = reply.data.as_deref().filter(|data| !data.is_empty()) {
+                        writeln!(err, "{data}")?;
+                    }
+                } else {
+                    emit_ok(&reply, out)?;
+                }
+            }
+            ReplyKind::Error => {
+                if let Some(result) = &reply.profile_result {
+                    serde_json::to_writer(&mut *out, result)?;
+                    writeln!(out)?;
+                }
+                emit_error(&reply, err)?;
+            }
             ReplyKind::Complete => {
                 return reply
                     .exit_code
@@ -181,6 +197,35 @@ mod tests {
             String::from_utf8(out).unwrap(),
             String::from_utf8(err).unwrap(),
         )
+    }
+
+    #[test]
+    fn profile_result_preserves_pending_state_and_keeps_stdout_json() {
+        let input = concat!(
+            "{\"kind\":\"ok\",\"data\":\"Awaiting Garden acknowledgement\",",
+            "\"profile_result\":{\"request_id\":\"1\",\"status\":\"pending\",\"profiles\":[]}}\n",
+            "{\"kind\":\"complete\",\"exit_code\":0}\n"
+        );
+        let (code, out, err) = stream(input);
+        assert_eq!(code, 0);
+        let result: serde_json::Value = serde_json::from_str(out.trim()).unwrap();
+        assert_eq!(result["status"], "pending");
+        assert_eq!(result["profiles"], serde_json::json!([]));
+        assert_eq!(err, "Awaiting Garden acknowledgement\n");
+    }
+
+    #[test]
+    fn profile_error_keeps_structured_blocked_result_visible() {
+        let input = concat!(
+            "{\"kind\":\"error\",\"data\":\"Unpin generations first\",",
+            "\"profile_result\":{\"request_id\":\"1\",\"status\":\"blocked\"}}\n",
+            "{\"kind\":\"complete\",\"exit_code\":1}\n"
+        );
+        let (code, out, err) = stream(input);
+        assert_eq!(code, 1);
+        let result: serde_json::Value = serde_json::from_str(out.trim()).unwrap();
+        assert_eq!(result["status"], "blocked");
+        assert_eq!(err, "Unpin generations first\n");
     }
 
     #[test]

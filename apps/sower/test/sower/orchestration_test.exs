@@ -505,7 +505,7 @@ defmodule Sower.OrchestrationTest do
     end
 
     @tag :capture_log
-    test "upsert_from_report/4 updates existing profile on conflict" do
+    test "upsert preserves repeated selections of the same artifact as different generations" do
       garden = garden_fixture()
       seed = seed_fixture()
       profile = nix_profile_fixture()
@@ -527,13 +527,13 @@ defmodule Sower.OrchestrationTest do
       }
 
       {:ok, asp2} = Orchestration.upsert_garden_generation(garden.id, profile.id, seed.id, attrs2)
-      assert asp2.id == asp1.id
+      refute asp2.id == asp1.id
       assert asp2.generation_number == 42
       assert asp2.is_current == true
     end
 
     @tag :capture_log
-    test "unique constraint on garden_id and seed_id" do
+    test "unique constraint on garden, profile and generation identity" do
       garden = garden_fixture()
       seed = seed_fixture()
       profile = nix_profile_fixture()
@@ -557,7 +557,7 @@ defmodule Sower.OrchestrationTest do
           garden_id: garden.id,
           seed_id: seed.id,
           profile_id: profile.id,
-          generation_number: 2,
+          generation_number: 1,
           is_current: true,
           created_at_generation: now
         })
@@ -565,6 +565,52 @@ defmodule Sower.OrchestrationTest do
 
       assert {:error, changeset} = result
       assert "has already been taken" in errors_on(changeset).garden_id
+    end
+
+    test "managed staging identities preserve one artifact in independent profiles" do
+      garden = garden_fixture()
+      seed = seed_fixture()
+      first = nix_profile_fixture(%{profile_path: "/managed/first/profile"})
+      second = nix_profile_fixture(%{profile_path: "/managed/second/profile"})
+
+      attrs = %{
+        generation_id: "stage-one",
+        generation_number: nil,
+        is_current: false,
+        is_staged: true,
+        managed: true,
+        pinned: true,
+        created_at_generation: DateTime.utc_now()
+      }
+
+      assert {:ok, one} =
+               Orchestration.upsert_garden_generation(garden.id, first.id, seed.id, attrs)
+
+      assert {:ok, two} =
+               Orchestration.upsert_garden_generation(garden.id, second.id, seed.id, attrs)
+
+      assert {:ok, three} =
+               Orchestration.upsert_garden_generation(garden.id, first.id, seed.id, %{
+                 attrs
+                 | generation_id: "stage-two"
+               })
+
+      assert length(Enum.uniq([one.id, two.id, three.id])) == 3
+
+      report = %SowerClient.Orchestration.GardenSeedsReport{profiles: []}
+      assert {:ok, :ok} = Orchestration.update_garden_seed_generations(report, garden)
+      assert length(Orchestration.list_garden_seed_generation(garden)) == 3
+
+      assert {:ok, selected} =
+               Orchestration.upsert_garden_generation(garden.id, first.id, seed.id, %{
+                 attrs
+                 | is_staged: false,
+                   is_current: true,
+                   generation_number: 1
+               })
+
+      assert selected.id == one.id
+      assert selected.pinned
     end
 
     test "deleting garden cascades to garden_seed_generations" do

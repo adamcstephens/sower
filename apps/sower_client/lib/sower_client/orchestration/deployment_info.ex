@@ -5,6 +5,7 @@ defmodule SowerClient.Orchestration.DeploymentInfo do
   use SowerClient.Schema
 
   defmodule SeedInfo do
+    @moduledoc "A seed deployment outcome with its explicit subscription and managed profile destination."
     use SowerClient.Schema
 
     OpenApiSpex.schema(%{
@@ -12,6 +13,8 @@ defmodule SowerClient.Orchestration.DeploymentInfo do
       type: :object,
       properties: %{
         seed_sid: %Schema{type: :string},
+        subscription_sid: %Schema{type: :string, nullable: true},
+        profile_name: %Schema{type: :string, nullable: true},
         name: %Schema{type: :string},
         seed_type: %Schema{type: :string},
         state: %Schema{type: :string, nullable: true},

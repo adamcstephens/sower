@@ -5,6 +5,36 @@ defmodule Garden.ProfileTest do
   alias Garden.Profile
   alias SowerClient.Orchestration.{GardenSeedGeneration, GardenSeedProfile}
 
+  test "durable owned profiles remain reportable without live subscriptions" do
+    profile = %GardenSeedProfile{
+      name: "detached",
+      managed: true,
+      profile_path: "/profiles/detached/profile",
+      generations: []
+    }
+
+    report = Profile.collect_profiles_for_subscriptions([], fn -> {:ok, [profile]} end)
+    assert report.profiles == [profile]
+    assert report.complete
+    assert report.failed_profile_paths == []
+  end
+
+  test "failed durable inventory is not an authoritative empty report" do
+    ExUnit.CaptureLog.capture_log(fn ->
+      report = Profile.collect_profiles_for_subscriptions([], fn -> {:error, :eacces} end)
+      refute report.complete
+      assert report.profiles == []
+      assert report.failed_profile_paths == [Garden.Config.get().managed_profiles_directory]
+    end)
+  end
+
+  test "successful empty durable inventory is authoritative" do
+    report = Profile.collect_profiles_for_subscriptions([], fn -> {:ok, []} end)
+    assert report.complete
+    assert report.profiles == []
+    assert report.failed_profile_paths == []
+  end
+
   describe "do_collect_profile/2" do
     test "collects profile with generations from module state" do
       profile_path = "/nix/var/nix/profiles/system"

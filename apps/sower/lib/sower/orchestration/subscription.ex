@@ -1,4 +1,5 @@
 defmodule Sower.Orchestration.Subscription do
+  @moduledoc "Subscription selection and policy, retaining managed uninstall tombstones until acknowledgement."
   use Sower.Schema
   import Ecto.Changeset
   import Ecto.Query, warn: false
@@ -24,14 +25,21 @@ defmodule Sower.Orchestration.Subscription do
     field :seed_type, :string
     field :schedule, :string
     field :timezone, :string
-    embeds_many :rules, __MODULE__.Rule
-    embeds_many :policy, __MODULE__.PolicyRule
+    field :retention, :map
+    field :origin, :string, default: "declared"
+    field :configured_retention, :map
+    field :retention_config_observed, :boolean, default: false
+    field :uninstall_pending, :boolean, default: false
+    embeds_many :rules, __MODULE__.Rule, on_replace: :delete
+    embeds_many :policy, __MODULE__.PolicyRule, on_replace: :delete
 
     timestamps(type: :utc_datetime)
   end
 
   @doc false
   def changeset(subscription, attrs) do
+    attrs = normalize_attrs(attrs)
+
     subscription
     |> cast(attrs, [
       :garden_id,
@@ -39,11 +47,64 @@ defmodule Sower.Orchestration.Subscription do
       :seed_name,
       :seed_type,
       :schedule,
-      :timezone
+      :timezone,
+      :retention,
+      :origin,
+      :configured_retention,
+      :retention_config_observed,
+      :uninstall_pending
     ])
     |> cast_embed(:rules, with: &__MODULE__.Rule.changeset/2)
     |> cast_embed(:policy, with: &__MODULE__.PolicyRule.changeset/2)
+    |> validate_retention()
     |> unique_constraint([:garden_id, :org_id, :name])
+  end
+
+  defp normalize_attrs(attrs) do
+    Enum.reduce(
+      [
+        :garden_id,
+        :name,
+        :seed_name,
+        :seed_type,
+        :schedule,
+        :timezone,
+        :retention,
+        :configured_retention,
+        :retention_config_observed,
+        :uninstall_pending,
+        :origin,
+        :rules,
+        :policy
+      ],
+      %{},
+      fn key, result ->
+        case Map.fetch(attrs, key) do
+          {:ok, value} ->
+            Map.put(result, key, value)
+
+          :error ->
+            case Map.fetch(attrs, to_string(key)) do
+              {:ok, value} -> Map.put(result, key, value)
+              :error -> result
+            end
+        end
+      end
+    )
+  end
+
+  defp validate_retention(changeset) do
+    validate_change(changeset, :retention, fn :retention, retention ->
+      if is_map(retention) and map_size(retention) > 0 and
+           Enum.all?(retention, fn {key, value} ->
+             to_string(key) in ["keep_generations", "keep_days"] and is_integer(value) and
+               value >= 0
+           end) do
+        []
+      else
+        [retention: "must contain nonnegative keep_generations or keep_days"]
+      end
+    end)
   end
 
   def list_subscriptions do
@@ -54,6 +115,7 @@ defmodule Sower.Orchestration.Subscription do
   def list_subscriptions_for_garden(%Garden{} = garden) do
     __MODULE__
     |> where([s], s.garden_id == ^garden.id)
+    |> where([s], not s.uninstall_pending)
     |> Repo.all()
   end
 
@@ -64,6 +126,7 @@ defmodule Sower.Orchestration.Subscription do
   def find_for_garden_seed(%Garden{} = garden, name, seed_type) do
     from(s in __MODULE__,
       where: s.garden_id == ^garden.id and s.seed_name == ^name and s.seed_type == ^seed_type,
+      where: not s.uninstall_pending,
       order_by: [asc: s.inserted_at, asc: s.id],
       limit: 1
     )
@@ -130,6 +193,7 @@ defmodule Sower.Orchestration.Subscription do
       end)
 
     from(s in __MODULE__,
+      where: not s.uninstall_pending,
       where: s.seed_name == ^seed.name,
       where: s.seed_type == ^seed.seed_type,
       where:
@@ -159,8 +223,47 @@ defmodule Sower.Orchestration.Subscription do
   end
 
   def create_subscription(attrs \\ %{}) do
+    attrs
+    |> normalize_attrs()
+    |> Map.put(:origin, "operator")
+    |> create_owned_subscription()
+  end
+
+  defp create_owned_subscription(attrs) do
     attrs = Map.put_new_lazy(attrs, :name, fn -> attrs[:seed_name] end)
 
+    case Repo.get_by(__MODULE__, garden_id: attrs[:garden_id], name: attrs[:name]) do
+      %__MODULE__{uninstall_pending: true} ->
+        {:error, :uninstall_pending}
+
+      %__MODULE__{seed_type: type, origin: origin}
+      when type in ["package", "devshell"] and origin != attrs.origin ->
+        {:error, :ownership_conflict}
+
+      %__MODULE__{seed_type: type, seed_name: name}
+      when type in ["package", "devshell"] and
+             (name != attrs.seed_name or type != attrs.seed_type) ->
+        {:error, :ownership_conflict}
+
+      nil ->
+        removed =
+          attrs.origin == "declared" and
+            Repo.exists?(
+              from(o in Sower.Orchestration.ManagedProfileOperation,
+                where:
+                  o.garden_id == ^attrs.garden_id and o.profile_name == ^attrs.name and
+                    o.action == "uninstall" and o.status == "completed"
+              )
+            )
+
+        if removed, do: {:error, :uninstall_pending}, else: insert_subscription(attrs)
+
+      _ ->
+        insert_subscription(attrs)
+    end
+  end
+
+  defp insert_subscription(attrs) do
     case %__MODULE__{
            org_id: Repo.get_org_id(),
            sid: SowerClient.Sid.generate("sub")
@@ -176,29 +279,60 @@ defmodule Sower.Orchestration.Subscription do
                 :rules,
                 :schedule,
                 :timezone,
+                :retention,
+                :configured_retention,
+                :retention_config_observed,
                 :policy
               ]},
            conflict_target: [:garden_id, :org_id, :name],
            returning: true
          ) do
-      {:ok, sub} -> {:ok, Repo.reload(sub)}
-      err -> err
+      {:ok, sub} ->
+        sub = Repo.reload(sub)
+        broadcast_managed_snapshot(sub.garden_id)
+        {:ok, sub}
+
+      err ->
+        err
     end
   end
 
   def register_subscription(%SowerClient.Orchestration.Subscription{} = sub, garden_id) do
+    configured =
+      if sub.retention do
+        sub.retention
+        |> Jason.encode!()
+        |> Jason.decode!()
+        |> Map.reject(fn {_key, value} -> is_nil(value) end)
+      end
+
+    existing = Repo.get_by(__MODULE__, garden_id: garden_id, name: sub.name)
+
+    retention =
+      case existing do
+        %__MODULE__{retention_config_observed: true, configured_retention: ^configured} ->
+          existing.retention
+
+        _ ->
+          configured
+      end
+
     attrs = %{
       garden_id: garden_id,
+      origin: "declared",
       name: sub.name,
       seed_name: sub.seed_name,
       seed_type: sub.seed_type,
       rules: sub.rules,
       schedule: sub.schedule,
       timezone: sub.timezone,
+      retention: retention,
+      configured_retention: configured,
+      retention_config_observed: true,
       policy: policy_to_list(sub.policy)
     }
 
-    case create_subscription(attrs) do
+    case create_owned_subscription(attrs) do
       {:ok, subscription} ->
         castable = Map.update!(subscription, :policy, &policy_list_to_map/1)
         {:ok, SowerClient.Orchestration.Subscription.cast!(castable)}
@@ -206,6 +340,29 @@ defmodule Sower.Orchestration.Subscription do
       {:error, _} = error ->
         error
     end
+  end
+
+  def managed_snapshot(%Garden{} = garden) do
+    Repo.all(
+      from(s in __MODULE__,
+        where: s.garden_id == ^garden.id and s.seed_type in ["package", "devshell"]
+      )
+    )
+    |> Enum.map(fn subscription ->
+      subscription
+      |> Map.update!(:policy, &policy_list_to_map/1)
+      |> SowerClient.Orchestration.Subscription.cast!()
+    end)
+  end
+
+  def broadcast_managed_snapshot(garden_id) do
+    garden = Repo.get!(Garden, garden_id)
+
+    Phoenix.PubSub.broadcast(
+      Sower.PubSub,
+      "managed_profile_dispatch:#{garden.sid}",
+      :refresh_managed_subscriptions
+    )
   end
 
   defp policy_list_to_map(rules) when is_list(rules) do
@@ -226,9 +383,10 @@ defmodule Sower.Orchestration.Subscription do
   def sync_subscriptions(subscriptions, garden_id) do
     Repo.transaction(fn ->
       registered =
-        Enum.map(subscriptions, fn sub ->
+        Enum.flat_map(subscriptions, fn sub ->
           case register_subscription(sub, garden_id) do
-            {:ok, s} -> s
+            {:ok, s} -> [s]
+            {:error, :uninstall_pending} -> []
             {:error, reason} -> Repo.rollback(reason)
           end
         end)
@@ -237,7 +395,8 @@ defmodule Sower.Orchestration.Subscription do
 
       from(s in __MODULE__,
         where: s.garden_id == ^garden_id,
-        where: s.sid not in ^registered_sids
+        where: s.sid not in ^registered_sids,
+        where: s.seed_type not in ["package", "devshell"]
       )
       |> Repo.delete_all()
 
@@ -246,14 +405,62 @@ defmodule Sower.Orchestration.Subscription do
   end
 
   def update_subscription(%__MODULE__{} = subscription, attrs) do
-    subscription
-    |> changeset(attrs)
-    |> Repo.update()
+    subscription = Repo.reload!(subscription)
+
+    attrs =
+      attrs
+      |> normalize_attrs()
+      |> Map.drop([
+        :origin,
+        :configured_retention,
+        :retention_config_observed,
+        :uninstall_pending
+      ])
+
+    changeset = changeset(subscription, attrs)
+
+    changeset =
+      cond do
+        subscription.uninstall_pending ->
+          add_error(changeset, :name, "has a pending uninstall")
+
+        subscription.seed_type in ["package", "devshell"] and
+            get_change(changeset, :name) != nil ->
+          add_error(changeset, :name, "cannot rename an owned profile; uninstall it first")
+
+        true ->
+          changeset
+      end
+
+    case Repo.update(changeset) do
+      {:ok, updated} ->
+        broadcast_managed_snapshot(updated.garden_id)
+        {:ok, updated}
+
+      error ->
+        error
+    end
   end
 
-  def delete_subscription(%__MODULE__{} = subscription) do
-    Repo.delete(subscription)
+  def delete_subscription(%__MODULE__{seed_type: type} = subscription)
+      when type in ["package", "devshell"] do
+    garden = Repo.get!(Garden, subscription.garden_id)
+
+    operation = %SowerClient.Orchestration.ProfileOperation{
+      request_id: SowerClient.Sid.generate("pop"),
+      profile_name: subscription.name,
+      subscription_sid: subscription.sid,
+      action: "uninstall",
+      preview: false
+    }
+
+    case Sower.Orchestration.ManagedProfile.request(garden, operation) do
+      {:ok, _result} -> {:ok, Repo.reload!(subscription)}
+      {:error, reason} -> {:error, reason}
+    end
   end
+
+  def delete_subscription(%__MODULE__{} = subscription), do: Repo.delete(subscription)
 
   def change_subscription(%__MODULE__{} = subscription, attrs \\ %{}) do
     subscription

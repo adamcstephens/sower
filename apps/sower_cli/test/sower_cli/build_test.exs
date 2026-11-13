@@ -48,6 +48,22 @@ defmodule SowerCli.BuildTest do
     end
   end
 
+  test "package and devshell wrappers register opaque build artifacts", %{dir: dir} do
+    for type <- ["package", "devshell"],
+        attr <- [
+          "#{type}/tool",
+          "packages.x86_64-linux.#{type}/tool",
+          ~s(packages.x86_64-linux."#{type}/tool.example")
+        ] do
+      write_manifest(dir, 1, type)
+      assert [{:ok, seed}] = Build.seed_candidates(state([build(attr, dir)]), [])
+      assert seed.name == "host"
+      assert seed.seed_type == type
+      assert seed.artifact == @artifact
+      assert seed.artifact != dir
+    end
+  end
+
   test "qualified canonical jobs are recognized", %{dir: dir} do
     write_manifest(dir)
 
@@ -111,15 +127,11 @@ defmodule SowerCli.BuildTest do
 
     for attr <- [
           nil,
-          "package/tool",
           "custom/service",
           "manifest/nixos/host",
           "packages.x86_64-linux.manifest/home/host",
           "packages.x86_64-linux.notseed/service",
-          "packages.x86_64-linux.package/nixos/host",
-          ~s("package/nixos/host"),
           ~s("manifest/nixos/host"),
-          ~s(packages.x86_64-linux."package/nixos/host"),
           ~s(packages.x86_64-linux."notseed/service"),
           ~s(packages.x86_64-linux."nixos/"),
           ~s(packages.x86_64-linux."nixos/host".outPath),
@@ -161,13 +173,13 @@ defmodule SowerCli.BuildTest do
     end)
   end
 
-  defp write_manifest(dir, version \\ 1) do
+  defp write_manifest(dir, version \\ 1, type \\ "nixos") do
     File.write!(
       Path.join(dir, "seed.json"),
       Jason.encode!(%{
         version: version,
         name: "host",
-        seed_type: "nixos",
+        seed_type: type,
         artifact: @artifact,
         tags: %{system: "x86_64-linux"}
       })

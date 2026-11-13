@@ -72,6 +72,12 @@
             "x-struct": null,
             "x-validate": null
           },
+          "profile_name": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
           "result": {
             "nullable": true,
             "type": "string",
@@ -89,6 +95,12 @@
             "x-validate": null
           },
           "state": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "subscription_sid": {
             "nullable": true,
             "type": "string",
             "x-struct": null,
@@ -189,6 +201,188 @@
         "x-struct": "Elixir.SowerClient.GardenRegistration",
         "x-validate": null
       },
+      "GardenSeedGeneration": {
+        "properties": {
+          "created": {
+            "description": "When the Nix generation was created",
+            "format": "date-time",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "generation_id": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "generation_number": {
+            "description": "Nix generation number (extracted from link)",
+            "nullable": true,
+            "type": "integer",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "generation_path": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "is_current": {
+            "default": false,
+            "description": "Is this the active generation?",
+            "type": "boolean",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "is_staged": {
+            "default": false,
+            "type": "boolean",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "link": {
+            "description": "The symlink path (e.g., /nix/var/nix/profiles/system-42-link)",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "path": {
+            "description": "The Nix store path (e.g., /nix/store/abc-nixos-system)",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "pinned": {
+            "default": false,
+            "type": "boolean",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "seed_sid": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          }
+        },
+        "required": [
+          "path",
+          "link",
+          "created",
+          "is_current"
+        ],
+        "title": "GardenSeedGeneration",
+        "type": "object",
+        "x-struct": "Elixir.SowerClient.Orchestration.GardenSeedGeneration",
+        "x-validate": null
+      },
+      "GardenSeedProfile": {
+        "properties": {
+          "generations": {
+            "description": "All available generations for this profile",
+            "items": {
+              "$ref": "#/components/schemas/GardenSeedGeneration"
+            },
+            "type": "array",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "last_error": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "lifecycle_status": {
+            "enum": [
+              "installed",
+              "staged",
+              "uninstall_pending",
+              "uninstall_blocked"
+            ],
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "managed": {
+            "default": false,
+            "type": "boolean",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "name": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "observed_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "profile_path": {
+            "description": "The Nix profile path (e.g., /nix/var/nix/profiles/system)",
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "retention": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProfileRetention"
+              }
+            ],
+            "nullable": true,
+            "x-struct": "Elixir.SowerClient.Orchestration.ProfileRetention",
+            "x-validate": null
+          },
+          "seed_type": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "stale": {
+            "default": false,
+            "type": "boolean",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "subscription_sid": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "tags": {
+            "additionalProperties": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            },
+            "default": {},
+            "description": "Profile tags (e.g., %{user: alice} for HomeManager)",
+            "type": "object",
+            "x-struct": null,
+            "x-validate": null
+          }
+        },
+        "required": [
+          "profile_path",
+          "generations"
+        ],
+        "title": "GardenSeedProfile",
+        "type": "object",
+        "x-struct": "Elixir.SowerClient.Orchestration.GardenSeedProfile",
+        "x-validate": null
+      },
       "Nix Cache": {
         "description": "A Nix binary cache",
         "example": {
@@ -245,6 +439,167 @@
         "x-struct": "Elixir.SowerClient.Auth.OAuthCredentials",
         "x-validate": null
       },
+      "ProfileOperation": {
+        "properties": {
+          "action": {
+            "enum": [
+              "inspect",
+              "stage",
+              "select",
+              "rollback",
+              "pin",
+              "unpin",
+              "discard",
+              "uninstall"
+            ],
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "generation_id": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "preview": {
+            "default": false,
+            "type": "boolean",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "profile_name": {
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "request_id": {
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "seed_sid": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "subscription_sid": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          }
+        },
+        "required": [
+          "request_id",
+          "profile_name",
+          "action"
+        ],
+        "title": "ProfileOperation",
+        "type": "object",
+        "x-struct": "Elixir.SowerClient.Orchestration.ProfileOperation",
+        "x-validate": null
+      },
+      "ProfileOperationResult": {
+        "properties": {
+          "affected_generations": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GardenSeedGeneration"
+            },
+            "type": "array",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "error": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GardenSeedProfile"
+              }
+            ],
+            "nullable": true,
+            "x-struct": "Elixir.SowerClient.Orchestration.GardenSeedProfile",
+            "x-validate": null
+          },
+          "profile_name": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "profiles": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GardenSeedProfile"
+            },
+            "type": "array",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "request_id": {
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "status": {
+            "enum": [
+              "completed",
+              "pending",
+              "blocked",
+              "failed",
+              "preview"
+            ],
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "warning": {
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          }
+        },
+        "required": [
+          "request_id",
+          "status"
+        ],
+        "title": "ProfileOperationResult",
+        "type": "object",
+        "x-struct": "Elixir.SowerClient.Orchestration.ProfileOperationResult",
+        "x-validate": null
+      },
+      "ProfileRetention": {
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "keep_days": {
+            "minimum": 0,
+            "nullable": true,
+            "type": "integer",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "keep_generations": {
+            "minimum": 0,
+            "nullable": true,
+            "type": "integer",
+            "x-struct": null,
+            "x-validate": null
+          }
+        },
+        "title": "ProfileRetention",
+        "type": "object",
+        "x-struct": "Elixir.SowerClient.Orchestration.ProfileRetention",
+        "x-validate": "Elixir.SowerClient.Orchestration.ProfileRetention.Criteria"
+      },
       "Seed": {
         "description": "A seed is an installable unit",
         "example": {
@@ -273,7 +628,9 @@
               "nixos",
               "home-manager",
               "nix-darwin",
-              "service"
+              "service",
+              "package",
+              "devshell"
             ],
             "type": "string",
             "x-struct": null,
@@ -335,6 +692,288 @@
         "title": "SeedTag",
         "type": "object",
         "x-struct": "Elixir.SowerClient.SeedTag",
+        "x-validate": null
+      },
+      "Subscription": {
+        "example": {
+          "rules": [
+            {
+              "key": "branch",
+              "op": "eq",
+              "value": "main"
+            },
+            {
+              "key": "repo",
+              "op": "eq",
+              "value": "https://github.com/example/repo"
+            }
+          ],
+          "seed_name": "myhost",
+          "seed_type": "nixos"
+        },
+        "properties": {
+          "name": {
+            "description": "Human-readable subscription name",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "origin": {
+            "default": "declared",
+            "enum": [
+              "declared",
+              "operator"
+            ],
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "policy": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SubscriptionPolicy"
+            },
+            "default": {},
+            "description": "Policy rules controlling when and how deployment actions are permitted, keyed by rule name",
+            "type": "object",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "retention": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProfileRetention"
+              }
+            ],
+            "nullable": true,
+            "x-struct": "Elixir.SowerClient.Orchestration.ProfileRetention",
+            "x-validate": null
+          },
+          "rules": {
+            "default": [],
+            "description": "Tag-based rules to filter seeds",
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionRule"
+            },
+            "type": "array",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "schedule": {
+            "description": "Cron expression for polling schedule",
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "seed_name": {
+            "description": "Name of the seed",
+            "example": "myhost",
+            "nullable": false,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "seed_type": {
+            "description": "Type of the seed",
+            "enum": [
+              "nixos",
+              "home-manager",
+              "nix-darwin",
+              "service",
+              "package",
+              "devshell"
+            ],
+            "example": "nixos",
+            "nullable": false,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "sid": {
+            "description": "subscription sid allocated by Sower",
+            "nullable": true,
+            "readOnly": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "timezone": {
+            "description": "IANA timezone for schedule evaluation",
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "uninstall_pending": {
+            "default": false,
+            "type": "boolean",
+            "x-struct": null,
+            "x-validate": null
+          }
+        },
+        "required": [
+          "name",
+          "seed_name",
+          "seed_type"
+        ],
+        "title": "Subscription",
+        "type": "object",
+        "x-struct": "Elixir.SowerClient.Orchestration.Subscription",
+        "x-validate": null
+      },
+      "SubscriptionPolicy": {
+        "description": "A deployment policy rule controlling when and how actions are permitted",
+        "properties": {
+          "actions": {
+            "description": "Actions this rule permits",
+            "items": {
+              "enum": [
+                "stage",
+                "activate",
+                "restart"
+              ],
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            },
+            "type": "array",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "confirm": {
+            "default": false,
+            "description": "Require explicit confirmation before proceeding",
+            "type": "boolean",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "triggers": {
+            "description": "Triggers this rule applies to. Omit for all.",
+            "items": {
+              "enum": [
+                "manual",
+                "scheduled",
+                "realtime",
+                "poll_on_connect",
+                "direct"
+              ],
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            },
+            "nullable": true,
+            "type": "array",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "window": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubscriptionWindow"
+              }
+            ],
+            "nullable": true,
+            "x-struct": "Elixir.SowerClient.Orchestration.Subscription.Window",
+            "x-validate": null
+          }
+        },
+        "required": [
+          "actions"
+        ],
+        "title": "SubscriptionPolicy",
+        "type": "object",
+        "x-struct": "Elixir.SowerClient.Orchestration.Subscription.Policy",
+        "x-validate": null
+      },
+      "SubscriptionRule": {
+        "properties": {
+          "key": {
+            "description": "tag key",
+            "example": "branch",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "op": {
+            "description": "operation to apply",
+            "enum": [
+              "eq"
+            ],
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "value": {
+            "description": "value",
+            "example": "main",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          }
+        },
+        "required": [
+          "key",
+          "op",
+          "value"
+        ],
+        "title": "SubscriptionRule",
+        "type": "object",
+        "x-struct": "Elixir.SowerClient.Orchestration.Subscription.Rule",
+        "x-validate": null
+      },
+      "SubscriptionWindow": {
+        "properties": {
+          "days": {
+            "description": "Days of the week when deployments are allowed. Omit to apply every day of the week.",
+            "items": {
+              "enum": [
+                "mon",
+                "tue",
+                "wed",
+                "thu",
+                "fri",
+                "sat",
+                "sun"
+              ],
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            },
+            "nullable": true,
+            "type": "array",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "time_end": {
+            "description": "End of deployment window (HH:MM)",
+            "example": "17:00",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "time_start": {
+            "description": "Start of deployment window (HH:MM)",
+            "example": "09:00",
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          },
+          "tz": {
+            "description": "IANA timezone for window evaluation",
+            "example": "America/New_York",
+            "nullable": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
+          }
+        },
+        "required": [
+          "time_start",
+          "time_end"
+        ],
+        "title": "SubscriptionWindow",
+        "type": "object",
+        "x-struct": "Elixir.SowerClient.Orchestration.Subscription.Window",
         "x-validate": null
       },
       "TokenInfo": {
@@ -849,6 +1488,340 @@
         "tags": []
       }
     },
+    "/api/v1/gardens/{garden}/profiles": {
+      "get": {
+        "callbacks": {},
+        "operationId": "ListManagedProfiles",
+        "parameters": [
+          {
+            "description": "",
+            "in": "path",
+            "name": "garden",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "profiles": {
+                      "items": {
+                        "$ref": "#/components/schemas/GardenSeedProfile"
+                      },
+                      "type": "array",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Profiles"
+          }
+        },
+        "tags": []
+      }
+    },
+    "/api/v1/gardens/{garden}/profiles/operations": {
+      "post": {
+        "callbacks": {},
+        "operationId": "RequestProfileOperation",
+        "parameters": [
+          {
+            "description": "",
+            "in": "path",
+            "name": "garden",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileOperation"
+              }
+            }
+          },
+          "description": "Operation",
+          "required": false
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileOperationResult"
+                }
+              }
+            },
+            "description": "Operation result"
+          }
+        },
+        "tags": []
+      }
+    },
+    "/api/v1/gardens/{garden}/profiles/operations/{request_id}": {
+      "get": {
+        "callbacks": {},
+        "operationId": "GetProfileOperation",
+        "parameters": [
+          {
+            "description": "",
+            "in": "path",
+            "name": "garden",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileOperationResult"
+                }
+              }
+            },
+            "description": "Operation result"
+          }
+        },
+        "tags": []
+      }
+    },
+    "/api/v1/gardens/{garden}/subscriptions": {
+      "get": {
+        "callbacks": {},
+        "operationId": "ListGardenSubscriptions",
+        "parameters": [
+          {
+            "description": "",
+            "in": "path",
+            "name": "garden",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "subscriptions": {
+                      "items": {
+                        "$ref": "#/components/schemas/Subscription"
+                      },
+                      "type": "array",
+                      "x-struct": null,
+                      "x-validate": null
+                    }
+                  },
+                  "type": "object",
+                  "x-struct": null,
+                  "x-validate": null
+                }
+              }
+            },
+            "description": "Subscriptions"
+          }
+        },
+        "tags": []
+      },
+      "post": {
+        "callbacks": {},
+        "operationId": "CreateGardenSubscription",
+        "parameters": [
+          {
+            "description": "",
+            "in": "path",
+            "name": "garden",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Subscription"
+              }
+            }
+          },
+          "description": "Subscription",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Subscription"
+                }
+              }
+            },
+            "description": "Subscription"
+          }
+        },
+        "tags": []
+      }
+    },
+    "/api/v1/gardens/{garden}/subscriptions/{sid}": {
+      "delete": {
+        "callbacks": {},
+        "operationId": "DeleteGardenSubscription",
+        "parameters": [
+          {
+            "description": "",
+            "in": "path",
+            "name": "garden",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileOperationResult"
+                }
+              }
+            },
+            "description": "Completed deletion"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileOperationResult"
+                }
+              }
+            },
+            "description": "Pending uninstall"
+          }
+        },
+        "tags": []
+      },
+      "patch": {
+        "callbacks": {},
+        "operationId": "UpdateGardenSubscription",
+        "parameters": [
+          {
+            "description": "",
+            "in": "path",
+            "name": "garden",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          },
+          {
+            "description": "",
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "x-struct": null,
+              "x-validate": null
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "retention": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/ProfileRetention"
+                      }
+                    ],
+                    "nullable": true,
+                    "x-struct": "Elixir.SowerClient.Orchestration.ProfileRetention",
+                    "x-validate": null
+                  }
+                },
+                "type": "object",
+                "x-struct": null,
+                "x-validate": null
+              }
+            }
+          },
+          "description": "Subscription fields",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Subscription"
+                }
+              }
+            },
+            "description": "Subscription"
+          }
+        },
+        "tags": []
+      }
+    },
     "/api/v1/nix/caches": {
       "get": {
         "callbacks": {},
@@ -912,7 +1885,7 @@
             }
           },
           {
-            "description": "Seed type, one of [nixos, home-manager, nix-darwin, service]",
+            "description": "Seed type, one of [nixos, home-manager, nix-darwin, service, package, devshell]",
             "example": "nixos",
             "in": "query",
             "name": "seed_type",

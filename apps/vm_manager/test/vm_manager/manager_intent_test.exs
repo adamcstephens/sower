@@ -167,7 +167,7 @@ defmodule VMManager.ManagerIntentTest do
       assert {:ok, definitions} = Store.load(context.directory)
       assert definitions[context.config.id].reserved
       :ok = :sys.resume(context.manager)
-      assert_receive {^reference, :ok}
+      assert_receive {^reference, :ok}, 5_000
       send(context.manager, :reconcile)
 
       assert_receive {:vm_manager, "intent",

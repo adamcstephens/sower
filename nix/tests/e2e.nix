@@ -18,7 +18,9 @@ let
   delayedActivatorPkg = pkgs.writeShellApplication {
     name = "sower";
     text = ''
-      ${pkgs.lib.getExe' pkgs.coreutils "sleep"} 2
+      if [ "''${1-}" = activator ]; then
+        ${pkgs.lib.getExe' pkgs.coreutils "sleep"} 2
+      fi
       exec ${pkgs.lib.getExe activatorPkg} "$@"
     '';
   };
@@ -53,6 +55,34 @@ testers.runNixOSTest {
           system.switch.enable = true;
           # without trying to install grub
           boot.loader.grub.enable = false;
+
+          systemd.services.epmd = {
+            wantedBy = [ "multi-user.target" ];
+            serviceConfig = {
+              Type = "simple";
+              DynamicUser = true;
+              ExecStart = "${pkgs.beamMinimal29Packages.erlang}/bin/epmd";
+              ExecStartPost = pkgs.writeShellScript "wait-for-epmd" ''
+                until ${pkgs.beamMinimal29Packages.erlang}/bin/epmd -names; do
+                  ${pkgs.coreutils}/bin/sleep 0.05
+                done
+              '';
+              TimeoutStartSec = 10;
+              Restart = "on-failure";
+            };
+          };
+          systemd.services.sower = {
+            after = [ "epmd.service" ];
+            wants = [ "epmd.service" ];
+          };
+          systemd.services.sower-garden = {
+            after = [ "epmd.service" ];
+            wants = [ "epmd.service" ];
+          };
+          systemd.services."user@" = {
+            after = [ "epmd.service" ];
+            wants = [ "epmd.service" ];
+          };
 
           # expose more paths to test vm
           virtualisation.additionalPaths = [
@@ -93,7 +123,10 @@ testers.runNixOSTest {
                 name = "server";
                 policy = {
                   direct = {
-                    actions = [ "activate" ];
+                    actions = [
+                      "activate"
+                      "stage"
+                    ];
                     triggers = [ "direct" ];
                   };
                 };
@@ -146,6 +179,17 @@ testers.runNixOSTest {
           # Home-manager test user
           users.users.testuser = {
             isNormalUser = true;
+          };
+
+          users.users.profile-consumer.isSystemUser = true;
+          users.users.profile-consumer.group = "profile-consumer";
+          users.groups.profile-consumer = { };
+          systemd.services.sower-profile-consumer = {
+            serviceConfig = {
+              User = "profile-consumer";
+              Group = "profile-consumer";
+              ExecStart = "/var/lib/sower-profiles/package-a/profile/bin/profile-fixture serve";
+            };
           };
 
           home-manager.users.testuser = {
@@ -273,19 +317,69 @@ testers.runNixOSTest {
               };
             }).${system}
         '';
+        profileJobs =
+          version:
+          pkgs.writeText "sower-profile-jobs-${version}.nix" ''
+            {}:
+            let
+              pkgs = import ${pkgs.path} { system = "${system}"; };
+              sowerLib = import ${../.}/sowerlib.nix { inputs = {}; lib = pkgs.lib; };
+              shared = pkgs.runCommand "profile-shared-input" {} "mkdir --parents $out; echo shared > $out/value";
+              unique = pkgs.runCommand "profile-input-${version}" {} "mkdir --parents $out; echo ${version} > $out/value";
+              package = pkgs.writeShellScriptBin "profile-fixture" '''
+                printf '%s\n' '${version}'
+                cat ${"$"}{shared}/value
+                if [ "$#" -gt 0 ]; then
+                  while true; do
+                    ${"$"}{pkgs.coreutils}/bin/sleep 3600
+                  done
+                fi
+              ''';
+              shell = pkgs.mkShell {
+                name = "profile-shell-${version}";
+                buildInputs = [ shared unique ];
+              };
+            in builtins.listToAttrs [
+              (sowerLib.mkSeedPackage {
+                inherit pkgs;
+                name = "package-fixture";
+                target = package;
+                tags.version = "${version}";
+              })
+              (sowerLib.mkSeedDevshell {
+                inherit pkgs;
+                name = "devshell-fixture";
+                target = shell;
+                tags.version = "${version}";
+              })
+            ]
+          '';
       in
       {
         environment.systemPackages = [
           sowerPkg
           pkgs.python3
         ];
-        environment.etc."sower/client.json".source =
-          (pkgs.formats.json { }).generate "builder-client.json"
-            {
-              endpoint = "http://server:4000";
-              access_token_file = "/run/sower/test_token";
-            };
-        environment.etc."sower/wrapper-jobs.nix".source = jobs;
+        environment.etc = {
+          "sower/client.json".source = (pkgs.formats.json { }).generate "builder-client.json" {
+            endpoint = "http://server:4000";
+            access_token_file = "/run/sower/test_token";
+          };
+          "sower/wrapper-jobs.nix".source = jobs;
+        }
+        // builtins.listToAttrs (
+          map
+            (version: {
+              name = "sower/profile-jobs-${version}.nix";
+              value.source = profileJobs version;
+            })
+            [
+              "one"
+              "two"
+              "three"
+              "four"
+            ]
+        );
         virtualisation = {
           useNixStoreImage = true;
           writableStore = true;
@@ -385,6 +479,24 @@ testers.runNixOSTest {
               "systemctl show --property=MainPID --value sower-garden.service"
           ).strip()
           assert_host_boot_identity(server, pid)
+
+      with subtest("publication permissions preserve private Garden state"):
+          server.succeed(
+              "test \"$(stat --format='%a:%U:%G' /var/lib/sower-profiles)\""
+              " = 755:sower-garden:sower-garden"
+          )
+          server.succeed(
+              "test \"$(stat --format='%a' /var/lib/sower-garden)\" = 700"
+          )
+          server.succeed(
+              "runuser --user profile-consumer -- test -x /var/lib/sower-profiles"
+          )
+          server.fail(
+              "runuser --user profile-consumer -- test -w /var/lib/sower-profiles"
+          )
+          server.fail(
+              "runuser --user profile-consumer -- test -x /var/lib/sower-garden"
+          )
 
       with subtest("activator socket activation"):
           server.succeed("test -S /run/sower-activator/activator.sock")
@@ -533,6 +645,10 @@ testers.runNixOSTest {
       with subtest("start home-manager garden"):
           server.wait_for_unit("home-manager-testuser.service")
           start_user_garden("testuser")
+          server.succeed(
+              "test \"$(stat --format='%a:%U' /home/testuser/.local/state/sower-profiles)\""
+              " = 700:testuser"
+          )
 
       with subtest("home-manager garden registration"):
           server.wait_until_succeeds(
@@ -663,6 +779,433 @@ testers.runNixOSTest {
           server.succeed(f"nix-store --check-validity {shlex.quote(nixos_target)}")
           server.succeed(f"test ! -e {shlex.quote(wrappers['nixos/server'])}")
 
+      def publish_profile_revision(version):
+          jobs = f"/etc/sower/profile-jobs-{version}.nix"
+          wrappers = json.loads(builder.succeed(
+              f"nix eval --impure --json --file {jobs}"
+              " --apply 'jobs: builtins.mapAttrs (_: job: job.outPath) (jobs {})'"
+          ))
+          builder.succeed(
+              "timeout --signal=KILL 900s"
+              " sower build --eval-type path --eval-jobs 1 --build-jobs 1 --seed"
+              " --cache 'file:///srv/sower-cache?secret-key=${cacheSecretKey}&compression=zstd&compression-level=1'"
+              f" {jobs}",
+              timeout=960,
+          )
+          result = {}
+          for attr, wrapper in wrappers.items():
+              manifest = json.loads(builder.succeed(f"cat {shlex.quote(wrapper)}/seed.json"))
+              seed = json.loads(server.succeed(api(
+                  "GET",
+                  f"/seeds/latest?name={manifest['name']}&seed_type={manifest['seed_type']}",
+              )))
+              assert seed["artifact"] == manifest["artifact"]
+              assert seed["artifact"] != wrapper
+              artifact = seed["artifact"]
+              closure = set(builder.succeed(
+                  f"nix path-info --recursive {shlex.quote(artifact)}"
+              ).splitlines())
+              cached = set(server.succeed(
+                  "nix path-info --store http://builder:8080 --recursive "
+                  + shlex.quote(artifact)
+              ).splitlines())
+              assert closure == cached, f"incomplete published closure for {attr}"
+              result[manifest["seed_type"]] = {
+                  "seed": seed,
+                  "artifact": artifact,
+                  "closure": closure,
+              }
+          shell = result["devshell"]
+          shell["unique"] = next(
+              path for path in shell["closure"] if path.endswith(f"-profile-input-{version}")
+          )
+          shell["shared"] = next(
+              path for path in shell["closure"] if path.endswith("-profile-shared-input")
+          )
+          assert shell["shared"] in result["package"]["closure"]
+          return result
+
+      with subtest("ordinary package and devshell outputs publish through the real cache"):
+          profile_one = publish_profile_revision("one")
+          for fixture in profile_one.values():
+              server.fail(f"nix-store --check-validity {shlex.quote(fixture['artifact'])}")
+          server.fail(f"nix-store --check-validity {shlex.quote(profile_one['devshell']['unique'])}")
+
+      def profile_operation(name, action, expected="completed", **fields):
+          import uuid
+          request_id = str(uuid.uuid4())
+          body = dict(request_id=request_id, profile_name=name, action=action, **fields)
+          result = json.loads(server.succeed(api(
+              "POST", "/gardens/server/profiles/operations", json.dumps(body)
+          )))
+          if result["status"] == "pending":
+              endpoint = f"/gardens/server/profiles/operations/{request_id}"
+              server.wait_until_succeeds(
+                  api("GET", endpoint)
+                  + " | python3 -c 'import json,sys; result=json.load(sys.stdin);"
+                  + f' assert result["status"] == "{expected}", result' + "'",
+                  timeout=120,
+              )
+              result = json.loads(server.succeed(api("GET", endpoint)))
+          assert result["status"] == expected, result
+          return result
+
+      def profile_inventory(name):
+          return profile_operation(name, "inspect")["profile"]
+
+      def stage_profile(name, fixture):
+          profile_operation(
+              name, "stage",
+              subscription_sid=profile_subscriptions[name]["sid"],
+              seed_sid=fixture["seed"]["sid"],
+          )
+          profile = profile_inventory(name)
+          return next(g for g in profile["generations"] if g["path"] == fixture["artifact"])
+
+      def select_profile(name, generation):
+          profile_operation(name, "select", generation_id=generation["generation_id"])
+          path = f"/var/lib/sower-profiles/{name}/profile"
+          assert server.succeed(f"readlink --canonicalize {path}").strip() == generation["path"]
+          generation.update(next(
+              g for g in profile_inventory(name)["generations"]
+              if g["generation_id"] == generation["generation_id"]
+          ))
+
+      def vm_gc():
+          server.succeed("nix-store --gc", timeout=120)
+
+      def unrelated_profile_snapshot():
+          paths = {
+              "system": "/nix/var/nix/profiles/system",
+              "home": "/home/testuser/.local/state/home-manager/gcroots/current-home",
+          }
+          return {
+              name: {
+                  "raw": server.succeed(f"readlink {path}").strip(),
+                  "resolved": server.succeed(f"readlink --canonicalize {path}").strip(),
+              }
+              for name, path in paths.items()
+          }
+
+      def assert_unrelated_profiles(expected):
+          actual = unrelated_profile_snapshot()
+          assert actual == expected, {"expected": expected, "actual": actual}
+
+      with subtest("independent subscriptions select ordinary outputs with native roots"):
+          unrelated_profiles = unrelated_profile_snapshot()
+          profile_subscriptions = {}
+          for name, seed_type in (("package-a", "package"), ("package-b", "package"), ("shell-a", "devshell")):
+              subscription = {
+                  "name": name,
+                  "seed_name": f"{seed_type}-fixture",
+                  "seed_type": seed_type,
+                  "policy": {"manual": {"actions": ["stage", "activate"], "triggers": ["manual"]}},
+              }
+              profile_subscriptions[name] = json.loads(server.succeed(api(
+                  "POST", "/gardens/server/subscriptions", json.dumps(subscription)
+              )))
+          package_a_one = stage_profile("package-a", profile_one["package"])
+          server.fail("test -e /var/lib/sower-profiles/package-a/profile")
+          select_profile("package-a", package_a_one)
+          package_b_one = stage_profile("package-b", profile_one["package"])
+          select_profile("package-b", package_b_one)
+          shell_one = stage_profile("shell-a", profile_one["devshell"])
+          select_profile("shell-a", shell_one)
+          assert profile_inventory("shell-a")["retention"] is None
+          before = profile_inventory("package-a")["generations"]
+          stage_profile("package-a", profile_one["package"])
+          select_profile("package-a", package_a_one)
+          assert profile_inventory("package-a")["generations"] == before
+          server.succeed(
+              "sower-garden rpc "
+              + shlex.quote(
+                  "{_, 0} = System.cmd(System.find_executable(\"sower\"), "
+                  "[\"internal\", \"sync-directory\", \"/nix/var/nix/gcroots/auto\"])"
+              )
+          )
+          vm_gc()
+          for path in profile_one["devshell"]["closure"]:
+              server.succeed(f"nix-store --check-validity {shlex.quote(path)}")
+          server.succeed(
+              "runuser --user profile-consumer -- "
+              "/var/lib/sower-profiles/package-a/profile/bin/profile-fixture"
+          )
+          server.systemctl("start sower-profile-consumer.service")
+          server.wait_for_unit("sower-profile-consumer.service")
+          consumer_pid = server.succeed(
+              "systemctl show --property=MainPID --value sower-profile-consumer.service"
+          ).strip()
+          assert consumer_pid != "0"
+          consumer_invocation = server.succeed(
+              "systemctl show --property=InvocationID --value sower-profile-consumer.service"
+          ).strip()
+          consumer_unit = server.succeed("systemctl cat sower-profile-consumer.service")
+          profile_operation("package-a", "pin", generation_id=package_a_one["generation_id"])
+
+      with subtest("stage preserves selection and pinned immutable generations survive update"):
+          profile_two = publish_profile_revision("two")
+          package_a_two = stage_profile("package-a", profile_two["package"])
+          assert server.succeed(
+              "readlink --canonicalize /var/lib/sower-profiles/package-a/profile"
+          ).strip() == profile_one["package"]["artifact"]
+          vm_gc()
+          server.succeed(f"nix-store --check-validity {shlex.quote(profile_two['package']['artifact'])}")
+          select_profile("package-a", package_a_two)
+          assert server.succeed(
+              "readlink --canonicalize /var/lib/sower-profiles/package-b/profile"
+          ).strip() == profile_one["package"]["artifact"]
+          assert server.succeed(
+              "systemctl show --property=InvocationID --value sower-profile-consumer.service"
+          ).strip() == consumer_invocation
+          assert server.succeed(
+              "systemctl show --property=MainPID --value sower-profile-consumer.service"
+          ).strip() == consumer_pid
+          assert server.succeed("systemctl cat sower-profile-consumer.service") == consumer_unit
+          server.succeed(
+              "runuser --user profile-consumer -- "
+              + shlex.quote(package_a_one["generation_path"] + "/bin/profile-fixture")
+          )
+          profile_operation("package-a", "rollback", generation_id=package_a_one["generation_id"])
+          assert server.succeed(
+              "readlink --canonicalize /var/lib/sower-profiles/package-a/profile"
+          ).strip() == profile_one["package"]["artifact"]
+          select_profile("package-a", package_a_two)
+          shell_two = stage_profile("shell-a", profile_two["devshell"])
+          select_profile("shell-a", shell_two)
+          assert len(profile_inventory("shell-a")["generations"]) == 2
+          assert_unrelated_profiles(unrelated_profiles)
+
+      def local_profile(command):
+          return json.loads(server.succeed(
+              "sower garden --socket /run/sower-garden/admin.sock profile " + command
+          ))
+
+      def local_uninstall(name):
+          result = local_profile(f"uninstall {shlex.quote(name)} --confirm")
+          if result["status"] == "pending":
+              endpoint = f"/gardens/server/profiles/operations/{result['request_id']}"
+              server.wait_until_succeeds(
+                  api("GET", endpoint)
+                  + " | python3 -c 'import json,sys; result=json.load(sys.stdin);"
+                  + ' assert result["status"] != "pending", result' + "'",
+                  timeout=120,
+              )
+              result = json.loads(server.succeed(api("GET", endpoint)))
+          assert result["status"] == "completed", result
+          path = shlex.quote(f"/var/lib/sower-profiles/{name}/profile")
+          server.succeed(f"test ! -e {path} && test ! -L {path}")
+
+      def daily_retention():
+          server.succeed(
+              "sower-garden rpc "
+              + shlex.quote(
+                  "job = Garden.Scheduler.find_job(:managed_profile_retention); "
+                  "true = not is_nil(job); "
+                  "true = job.schedule == Crontab.CronExpression.Parser.parse!(\"0 3 * * *\"); "
+                  "{m, f, a} = job.task; apply(m, f, a)"
+              )
+          )
+
+      with subtest("omitted retention keeps old generations after the daily callback"):
+          assert server.succeed("timedatectl show --property=NTP --value").strip() == "no"
+          server.succeed("date --set='+2 days'")
+          daily_retention()
+          assert len(profile_inventory("shell-a")["generations"]) == 2
+          vm_gc()
+          server.succeed(f"nix-store --check-validity {shlex.quote(profile_one['devshell']['unique'])}")
+          server.succeed(f"nix-store --check-validity {shlex.quote(profile_two['devshell']['unique'])}")
+
+      with subtest("post-update retention combines count and local age and preserves pins"):
+          profile_operation("shell-a", "pin", generation_id=shell_one["generation_id"])
+          subscription = profile_subscriptions["shell-a"]
+          subscription["retention"] = {"keep_generations": 1, "keep_days": 1}
+          server.succeed(api(
+              "PATCH", f"/gardens/server/subscriptions/{subscription['sid']}",
+              json.dumps({key: value for key, value in subscription.items() if key != "sid"}),
+          ))
+          profile_three = publish_profile_revision("three")
+          shell_three = stage_profile("shell-a", profile_three["devshell"])
+          select_profile("shell-a", shell_three)
+          generations = profile_inventory("shell-a")["generations"]
+          assert {g["path"] for g in generations} == {
+              profile_one["devshell"]["artifact"], profile_three["devshell"]["artifact"]
+          }
+          assert next(g for g in generations if g["path"] == profile_one["devshell"]["artifact"])["pinned"]
+          vm_gc()
+          server.fail(f"nix-store --check-validity {shlex.quote(profile_two['devshell']['unique'])}")
+          server.succeed(f"nix-store --check-validity {shlex.quote(profile_one['devshell']['unique'])}")
+          server.succeed(f"nix-store --check-validity {shlex.quote(profile_one['devshell']['shared'])}")
+
+      with subtest("staged roots and selected generations survive abrupt Garden stop and reboot"):
+          profile_four = publish_profile_revision("four")
+          shell_four = stage_profile("shell-a", profile_four["devshell"])
+          server.systemctl("kill --signal=KILL sower-garden.service")
+          server.systemctl("reset-failed sower-garden.service")
+          server.systemctl("start sower-garden.service")
+          server.wait_for_unit("sower-garden.service")
+          assert any(g["generation_id"] == shell_four["generation_id"] and g["is_staged"]
+                     for g in local_profile("show shell-a")["profile"]["generations"])
+          assert_unrelated_profiles(unrelated_profiles)
+          retention_time = server.succeed("date +%s").strip()
+          server.shutdown()
+          server.start()
+          server.wait_for_unit("sower.service")
+          server.wait_for_unit("sower-garden.service")
+          server.wait_for_unit("home-manager-testuser.service")
+          reboot_profiles = unrelated_profile_snapshot()
+          assert reboot_profiles["system"] == unrelated_profiles["system"], {
+              "expected": unrelated_profiles, "actual": reboot_profiles,
+          }
+          assert reboot_profiles["home"]["resolved"] == hm_generation, {
+              "expected_home": hm_generation, "actual": reboot_profiles,
+          }
+          unrelated_profiles["home"] = reboot_profiles["home"]
+          server.succeed(f"date --set=@{retention_time}")
+          assert server.succeed(
+              "readlink --canonicalize /var/lib/sower-profiles/shell-a/profile"
+          ).strip() == profile_three["devshell"]["artifact"]
+          vm_gc()
+          server.succeed(f"nix-store --check-validity {shlex.quote(profile_four['devshell']['unique'])}")
+          server.succeed(f"nix-store --check-validity {shlex.quote(profile_three['devshell']['unique'])}")
+
+      with subtest("daily retention runs offline without new seeds and preserves staged and shared roots"):
+          server.wait_for_unit("epmd.service")
+          epmd_pid = server.succeed("systemctl show --property=MainPID --value epmd.service").strip()
+          assert epmd_pid != "0"
+          assert "epmd.service" in server.succeed(f"cat /proc/{epmd_pid}/cgroup")
+          garden_pid = server.succeed("systemctl show --property=MainPID --value sower-garden.service").strip()
+          epmd_names = "${pkgs.beamMinimal29Packages.erlang}/bin/epmd -names"
+          assert "name garden " in server.succeed(epmd_names)
+          server.systemctl("stop sower.service")
+          assert server.succeed("systemctl show --property=MainPID --value epmd.service").strip() == epmd_pid
+          assert server.succeed("systemctl show --property=MainPID --value sower-garden.service").strip() == garden_pid
+          assert "name garden " in server.succeed(epmd_names)
+          server.succeed("date --set='+2 days'")
+          result = local_profile(f"unpin shell-a {shell_one['generation_id']}")
+          assert result["status"] == "completed"
+          daily_retention()
+          generations = local_profile("show shell-a")["profile"]["generations"]
+          assert {g["path"] for g in generations} == {
+              profile_three["devshell"]["artifact"], profile_four["devshell"]["artifact"]
+          }
+          vm_gc()
+          server.fail(f"nix-store --check-validity {shlex.quote(profile_one['devshell']['unique'])}")
+          server.succeed(f"nix-store --check-validity {shlex.quote(profile_one['devshell']['shared'])}")
+          server.succeed(f"nix-store --check-validity {shlex.quote(profile_four['devshell']['unique'])}")
+          result = local_profile(f"discard shell-a {shell_four['generation_id']}")
+          assert result["status"] == "completed"
+          vm_gc()
+          server.fail(f"nix-store --check-validity {shlex.quote(profile_four['devshell']['unique'])}")
+          server.succeed(f"nix-store --check-validity {shlex.quote(profile_three['devshell']['unique'])}")
+          server.systemctl("start sower.service")
+          server.wait_for_unit("sower.service")
+
+      with subtest("offline subscription deletion waits for acknowledgement and blocks on pins"):
+          preview = profile_operation("package-a", "uninstall", expected="preview", preview=True)
+          assert preview["affected_generations"]
+          assert "external" in preview["warning"].lower()
+          assert any(g["pinned"] for g in preview["affected_generations"])
+          server.systemctl("stop sower-garden.service")
+          removal = json.loads(server.succeed(api(
+              "DELETE",
+              f"/gardens/server/subscriptions/{profile_subscriptions['package-a']['sid']}",
+          )))
+          assert removal["status"] == "pending"
+          assert "external" in removal["warning"].lower()
+          server.succeed("test -e /var/lib/sower-profiles/package-a/profile")
+          removal_endpoint = f"/gardens/server/profiles/operations/{removal['request_id']}"
+          assert json.loads(server.succeed(api("GET", removal_endpoint)))["status"] == "pending"
+          server.systemctl("start sower-garden.service")
+          server.wait_for_unit("sower-garden.service")
+          server.wait_until_succeeds(
+              api("GET", removal_endpoint)
+              + " | python3 -c 'import json,sys; assert json.load(sys.stdin)[\"status\"] == \"blocked\"'",
+              timeout=120,
+          )
+          blocked = local_profile("show package-a")["profile"]
+          assert blocked["lifecycle_status"] == "uninstall_blocked"
+          result = local_profile(f"unpin package-a {package_a_one['generation_id']}")
+          assert result["status"] == "completed"
+          server.wait_until_succeeds(
+              api("GET", removal_endpoint)
+              + " | python3 -c 'import json,sys; assert json.load(sys.stdin)[\"status\"] == \"completed\"'",
+              timeout=120,
+          )
+          server.fail("test -e /var/lib/sower-profiles/package-a/profile")
+          assert server.succeed(
+              "readlink --canonicalize /var/lib/sower-profiles/package-b/profile"
+          ).strip() == profile_one["package"]["artifact"]
+          vm_gc()
+          server.fail(f"nix-store --check-validity {shlex.quote(profile_two['package']['artifact'])}")
+          server.succeed(f"nix-store --check-validity {shlex.quote(profile_one['package']['artifact'])}")
+
+      with subtest("explicit uninstall releases only owned roots and leaves unrelated profiles intact"):
+          result = local_profile("uninstall shell-a")
+          assert result["status"] == "preview"
+          assert result["affected_generations"]
+          assert "external" in result["warning"].lower()
+          local_uninstall("shell-a")
+          vm_gc()
+          server.fail(f"nix-store --check-validity {shlex.quote(profile_three['devshell']['unique'])}")
+          server.succeed(f"nix-store --check-validity {shlex.quote(profile_one['devshell']['shared'])}")
+          assert_unrelated_profiles(unrelated_profiles)
+          local_uninstall("package-b")
+          vm_gc()
+          server.fail(f"nix-store --check-validity {shlex.quote(profile_one['package']['artifact'])}")
+          server.fail(f"nix-store --check-validity {shlex.quote(profile_one['devshell']['shared'])}")
+          assert_unrelated_profiles(unrelated_profiles)
+
+      with subtest("Garden death during real cache realization preserves selection and accounts recovered roots"):
+          import uuid
+          name = "package-interrupted"
+          profile_subscriptions[name] = json.loads(server.succeed(api(
+              "POST", "/gardens/server/subscriptions",
+              json.dumps({
+                  "name": name, "seed_name": "package-fixture", "seed_type": "package",
+                  "policy": {"manual": {"actions": ["stage", "activate"], "triggers": ["manual"]}},
+              }),
+          )))
+          previous = stage_profile(name, profile_one["package"])
+          select_profile(name, previous)
+          target = profile_two["package"]["artifact"]
+          server.fail(f"nix-store --check-validity {shlex.quote(target)}")
+          builder.systemctl("kill --signal=STOP sower-test-cache.service")
+          interrupted = json.loads(server.succeed(api(
+              "POST", "/gardens/server/profiles/operations",
+              json.dumps({
+                  "request_id": str(uuid.uuid4()), "profile_name": name, "action": "stage",
+                  "subscription_sid": profile_subscriptions[name]["sid"],
+                  "seed_sid": profile_two["package"]["seed"]["sid"],
+              }),
+          )))
+          assert interrupted["status"] == "pending"
+          child_query = "pgrep --uid sower-garden --full " + shlex.quote("nix-store.*" + target)
+          server.wait_until_succeeds(child_query, timeout=30)
+          native_pids = server.succeed(child_query).split()
+          server.systemctl("kill --signal=KILL sower-garden.service")
+          for pid in native_pids:
+              server.wait_until_succeeds(f"test ! -e /proc/{pid}", timeout=30)
+          builder.systemctl("kill --signal=CONT sower-test-cache.service")
+          server.systemctl("reset-failed sower-garden.service")
+          server.systemctl("start sower-garden.service")
+          server.wait_for_unit("sower-garden.service")
+          recovered = local_profile(f"show {name}")["profile"]
+          assert server.succeed(
+              f"readlink --canonicalize /var/lib/sower-profiles/{name}/profile"
+          ).strip() == previous["path"]
+          accounted = {recovered["profile_path"]}
+          for generation in recovered["generations"]:
+              accounted.update(
+                  generation[key] for key in ("link", "generation_path") if generation.get(key)
+              )
+          roots = set(server.succeed(
+              f"find /var/lib/sower-profiles/{name} -maxdepth 1 -type l -printf '%p\\n'"
+          ).splitlines())
+          assert roots == accounted
+          vm_gc()
+          server.succeed(f"nix-store --check-validity {shlex.quote(previous['path'])}")
+          local_uninstall(name)
+
       def assert_lifecycle(machine, unit, user=None):
           ctl = f"systemctl --machine={user}@.host --user" if user else "systemctl"
           if user:
@@ -710,7 +1253,7 @@ testers.runNixOSTest {
           assert_lifecycle(server, "sower-garden.service", "nodist-user")
 
       with subtest("home-manager signal-driven lifecycle (distribution on)"):
-          # testuser's garden is still running from prior subtests.
+          start_user_garden("testuser")
           assert_lifecycle(server, "sower-garden.service", "testuser")
 
       with subtest("nixos signal-driven lifecycle (distribution on)"):

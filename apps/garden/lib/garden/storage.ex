@@ -1,4 +1,11 @@
 defmodule Garden.Storage do
+  @moduledoc """
+  Serializes Garden identity and subscription-state persistence.
+
+  Explicit uninstall removes only the captured name/SID binding atomically, so
+  a replacement subscription is not removed by a delayed completion.
+  """
+
   use GenServer
   use TypedStruct
 
@@ -8,10 +15,11 @@ defmodule Garden.Storage do
 
   typedstruct do
     field :garden_sid, String.t()
-    field :subscriptions, list(SowerClient.Orchestration.Subscription)
+    field :subscriptions, list(SowerClient.Orchestration.Subscription), default: []
     field :oauth_credentials, map()
     field :private_key_pem, String.t()
     field :credentials_rejected_at, String.t()
+    field :removed_subscription_sids, list(String.t()), default: []
   end
 
   @cooldown_seconds 60
@@ -24,6 +32,10 @@ defmodule Garden.Storage do
 
   def put(garden, value) do
     GenServer.call(__MODULE__, {:put, garden, value})
+  end
+
+  def remove_subscription(name, sid) do
+    GenServer.call(__MODULE__, {:remove_subscription, name, sid})
   end
 
   def write(struct) do
@@ -57,7 +69,7 @@ defmodule Garden.Storage do
         Logger.debug(msg: "Creating storage parent directory", dir: parent_dir)
       end
 
-      File.write!(file, :erlang.term_to_binary(default()))
+      persist(default(), file)
       Logger.debug(msg: "Wrote initial storage", file: file)
     end
 
@@ -76,7 +88,7 @@ defmodule Garden.Storage do
           )
 
           data = default()
-          File.write!(file, :erlang.term_to_binary(data))
+          persist(data, file)
           data
       end
 
@@ -85,7 +97,7 @@ defmodule Garden.Storage do
       |> ensure_fields()
 
     if data != raw do
-      File.write!(file, :erlang.term_to_binary(data))
+      persist(data, file)
       Logger.debug(msg: "Persisted migrated storage", file: file)
     end
 
@@ -103,9 +115,35 @@ defmodule Garden.Storage do
   end
 
   @impl GenServer
+  def handle_call({:put, :subscriptions, subscriptions}, _from, state) do
+    active = Enum.reject(subscriptions, &(&1.sid in state.data.removed_subscription_sids))
+
+    retained =
+      Enum.filter(state.data.subscriptions || [], fn existing ->
+        existing.seed_type in ["package", "devshell"] and
+          existing.sid not in state.data.removed_subscription_sids and
+          not Enum.any?(active, &(&1.name == existing.name))
+      end)
+
+    {:reply, :ok, do_write(%{state.data | subscriptions: active ++ retained}, state)}
+  end
+
   def handle_call({:put, garden, value}, _from, state) do
     new_data = Map.put(state.data, garden, value)
     {:reply, :ok, do_write(new_data, state)}
+  end
+
+  def handle_call({:remove_subscription, name, sid}, _from, state) do
+    subscriptions =
+      Enum.reject(state.data.subscriptions, &(&1.name == name and &1.sid == sid))
+
+    updated = %{
+      state.data
+      | subscriptions: subscriptions,
+        removed_subscription_sids: Enum.uniq([sid | state.data.removed_subscription_sids])
+    }
+
+    {:reply, subscriptions, do_write(updated, state)}
   end
 
   @impl GenServer
@@ -122,14 +160,41 @@ defmodule Garden.Storage do
   end
 
   defp do_write(data, %{file: file} = state) do
-    File.write!(file, :erlang.term_to_binary(data))
+    removed = Enum.uniq(state.data.removed_subscription_sids ++ data.removed_subscription_sids)
+
+    subscriptions =
+      case data.subscriptions do
+        nil -> []
+        subscriptions -> Enum.reject(subscriptions, &(&1.sid in removed))
+      end
+
+    data = %{data | subscriptions: subscriptions, removed_subscription_sids: removed}
+    persist(data, file)
     Logger.debug(msg: "Wrote storage", file: file)
     %{state | data: data}
   end
 
+  defp persist(%__MODULE__{} = data, file) do
+    temporary = file <> ".tmp"
+    File.write!(temporary, :erlang.term_to_binary(data), [:sync])
+    File.rename!(temporary, file)
+
+    if data.removed_subscription_sids != [] do
+      executable = System.find_executable("sower") || raise "directory sync helper unavailable"
+
+      case System.cmd(executable, ["internal", "sync-directory", Path.dirname(file)],
+             stderr_to_stdout: true
+           ) do
+        {_output, 0} -> :ok
+        {output, code} -> raise "storage directory sync failed (#{code}): #{output}"
+      end
+    end
+  end
+
   # Ensure deserialized structs have all current fields (handles schema evolution)
   defp ensure_fields(%{__struct__: __MODULE__} = data) do
-    struct(__MODULE__, Map.from_struct(data))
+    current = struct(__MODULE__, Map.from_struct(data))
+    %{current | subscriptions: current.subscriptions || []}
   end
 
   defp default() do

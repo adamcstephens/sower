@@ -8,6 +8,151 @@ defmodule Garden.Socket.LifecycleTest do
   alias SowerClient.Orchestration.GardenSeedsReport
   alias SowerClient.Orchestration.Subscription
 
+  test "old-peer log payload omits destination keys entirely while capable peers retain them" do
+    log = %SowerClient.Orchestration.SeedDeploymentLog{
+      deployment_sid: "deployment",
+      seed_sid: "seed",
+      subscription_sid: "subscription",
+      sequence: 1,
+      output: "realizing"
+    }
+
+    legacy = log |> Lifecycle.payload_for_peer(false) |> Jason.encode!() |> Jason.decode!()
+    refute Map.has_key?(legacy, "subscription_sid")
+    assert legacy["output"] == "realizing"
+    assert Lifecycle.payload_for_peer(log, true).subscription_sid == "subscription"
+  end
+
+  describe "refresh_managed_subscriptions/2" do
+    test "merges only retention into exact local destinations without removing missing entries" do
+      legacy = Subscription.cast!(%{name: "host", seed_name: "host", seed_type: "nixos"})
+
+      frontend =
+        Subscription.cast!(%{
+          name: "frontend",
+          sid: "sub_frontend",
+          seed_name: "application",
+          seed_type: "package",
+          schedule: "0 * * * *"
+        })
+
+      missing =
+        Subscription.cast!(%{
+          name: "missing",
+          sid: "sub_missing",
+          seed_name: "application",
+          seed_type: "package",
+          retention: %{keep_days: 30}
+        })
+
+      snapshot = [
+        %{
+          name: "frontend",
+          sid: "sub_frontend",
+          seed_name: "application",
+          seed_type: "package",
+          retention: %{keep_generations: 3}
+        },
+        %{name: "worker", sid: "sub_worker", seed_name: "application", seed_type: "package"}
+      ]
+
+      assert {:ok, [^legacy, refreshed, ^missing]} =
+               Lifecycle.refresh_managed_subscriptions([legacy, frontend, missing], snapshot)
+
+      assert refreshed == %{frontend | retention: refreshed.retention}
+      assert refreshed.retention.keep_generations == 3
+    end
+
+    test "materializes operator bindings, updates their fields, and preserves omitted bindings" do
+      incoming = %{
+        name: "operator-app",
+        sid: "operator-sub",
+        seed_name: "application",
+        seed_type: "package",
+        origin: "operator"
+      }
+
+      assert {:ok, [created]} = Lifecycle.refresh_managed_subscriptions([], [incoming])
+      assert created.origin == "operator"
+
+      changed = Map.put(incoming, :seed_name, "new-application")
+      assert {:ok, [updated]} = Lifecycle.refresh_managed_subscriptions([created], [changed])
+      assert updated.seed_name == "new-application"
+      assert {:ok, [^updated]} = Lifecycle.refresh_managed_subscriptions([updated], [])
+    end
+
+    test "operator bindings cannot take over declared destinations" do
+      declared =
+        Subscription.cast!(%{
+          name: "application",
+          sid: "declared-sub",
+          seed_name: "application",
+          seed_type: "package"
+        })
+
+      incoming = %{
+        name: "application",
+        sid: "operator-sub",
+        seed_name: "application",
+        seed_type: "package",
+        origin: "operator"
+      }
+
+      assert {:error, {:ownership_conflict, "application"}} =
+               Lifecycle.refresh_managed_subscriptions([declared], [incoming])
+    end
+
+    test "an invalid snapshot is rejected rather than partially applied" do
+      assert {:error, :not_managed_subscription} =
+               Lifecycle.refresh_managed_subscriptions([], [
+                 %{name: "host", seed_name: "host", seed_type: "nixos"}
+               ])
+    end
+  end
+
+  describe "profile operation outcomes" do
+    test "uninstall preview never acknowledges completed removal" do
+      operation =
+        SowerClient.Orchestration.ProfileOperation.cast!(%{
+          request_id: "preview",
+          profile_name: "application",
+          action: "uninstall",
+          preview: true
+        })
+
+      profile =
+        SowerClient.Orchestration.GardenSeedProfile.cast!(%{
+          name: "application",
+          profile_path: "/var/lib/sower-profiles/application/profile",
+          generations: []
+        })
+
+      result = Lifecycle.profile_operation_result(operation, {:ok, profile})
+
+      assert result.status == "preview"
+      assert result.request_id == "preview"
+      assert result.warning =~ "External services are not stopped"
+    end
+
+    test "pinned generations block removal rather than acknowledging success" do
+      operation =
+        SowerClient.Orchestration.ProfileOperation.cast!(%{
+          request_id: "uninstall",
+          profile_name: "application",
+          action: "uninstall",
+          preview: false
+        })
+
+      result = Lifecycle.profile_operation_result(operation, {:error, :pinned_generations})
+
+      assert result.status == "blocked"
+      assert result.error == "pinned_generations"
+
+      completed = Lifecycle.profile_operation_result(operation, {:ok, :uninstalled})
+      assert completed.status == "completed"
+    end
+  end
+
   describe "build_deployment_request/2" do
     test "builds request with subscription sid" do
       {:ok, %DeploymentRequest{} = request} = Lifecycle.build_deployment_request("sub_123", false)
@@ -54,6 +199,20 @@ defmodule Garden.Socket.LifecycleTest do
 
       assert {:report, ^report} = Lifecycle.build_seed_report([], fn _subs -> report end)
     end
+
+    test "reports an inventory failure even when no profiles were observed" do
+      report =
+        GardenSeedsReport.cast!(%{
+          profiles: [],
+          complete: false,
+          failed_profile_paths: ["/var/lib/sower-profiles"]
+        })
+
+      subscriptions = [%{name: "application", seed_type: "package", seed_name: "application"}]
+
+      assert {:report, ^report} =
+               Lifecycle.build_seed_report(subscriptions, fn _subscriptions -> report end)
+    end
   end
 
   describe "merge_subscriptions/2" do
@@ -85,6 +244,32 @@ defmodule Garden.Socket.LifecycleTest do
       assert Enum.find(result, &(&1.seed_name == "user")).sid == "sub_def"
     end
 
+    test "uses effective retention only with a capable peer without changing declared config" do
+      configured =
+        Subscription.cast!(%{
+          name: "application",
+          seed_name: "application",
+          seed_type: "package",
+          retention: %{keep_generations: 3}
+        })
+
+      registered = [
+        %{
+          name: "application",
+          seed_name: "application",
+          seed_type: "package",
+          sid: "subscription",
+          retention: nil
+        }
+      ]
+
+      assert [effective] = Lifecycle.merge_subscriptions([configured], registered, true)
+      assert effective.retention == nil
+      assert configured.retention.keep_generations == 3
+      assert [legacy] = Lifecycle.merge_subscriptions([configured], registered, false)
+      assert legacy.retention == configured.retention
+    end
+
     test "drops config subscriptions not registered on server" do
       config_subs = [
         Subscription.cast!(%{name: "host", seed_name: "host", seed_type: "nixos"}),
@@ -99,6 +284,31 @@ defmodule Garden.Socket.LifecycleTest do
 
       assert length(result) == 1
       assert hd(result).seed_name == "host"
+    end
+
+    test "keeps distinct destinations for subscriptions sharing a seed" do
+      config_subs =
+        Enum.map(["frontend", "worker"], fn name ->
+          Subscription.cast!(%{name: name, seed_name: "application", seed_type: "package"})
+        end)
+
+      registered = [
+        %{
+          "name" => "worker",
+          "seed_name" => "application",
+          "seed_type" => "package",
+          "sid" => "sub_worker"
+        },
+        %{
+          "name" => "frontend",
+          "seed_name" => "application",
+          "seed_type" => "package",
+          "sid" => "sub_frontend"
+        }
+      ]
+
+      assert Enum.map(Lifecycle.merge_subscriptions(config_subs, registered), &{&1.name, &1.sid}) ==
+               [{"frontend", "sub_frontend"}, {"worker", "sub_worker"}]
     end
 
     test "returns empty list for empty registered" do

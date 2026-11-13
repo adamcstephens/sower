@@ -51,7 +51,7 @@
         };
 
         garden = pkgs.callPackage ./garden.nix {
-          inherit beamPackages version;
+          inherit beamPackages cli version;
           inherit stockImage;
         };
 

@@ -7,7 +7,7 @@
   "properties": {
     "version": {"type": "integer", "const": 1},
     "name": {"type": "string", "minLength": 1},
-    "seed_type": {"type": "string", "enum": ["nixos", "home-manager", "nix-darwin", "service"]},
+    "seed_type": {"type": "string", "enum": ["nixos", "home-manager", "nix-darwin", "service", "package", "devshell"]},
     "artifact": {
       "type": "string",
       "pattern": "^/nix/store/[0-9abcdfghijklmnpqrsvwxyz]{32}-[^/]+$"

@@ -13,6 +13,7 @@ defmodule SowerWeb.GardenChannel.Impl do
 end
 
 defmodule SowerWeb.GardenChannel do
+  @moduledoc "Authenticated Garden protocol with current-session capability negotiation and durable profile operation replay."
   use Phoenix.Channel
   use SowerWeb, :verified_routes
 
@@ -67,15 +68,28 @@ defmodule SowerWeb.GardenChannel do
 
     case authorize_private_join(topic_sid, params, access_token) do
       {:ok, garden} ->
+        capabilities = Map.get(params, "capabilities", [])
+        {:ok, garden} = Orchestration.Garden.update_garden(garden, %{capabilities: capabilities})
+        Phoenix.PubSub.subscribe(Sower.PubSub, "managed_profile_dispatch:#{garden.sid}")
+
         socket =
           assign(socket,
             garden: garden,
-            direct_override: Map.get(params, "direct_override") == true
+            direct_override: Map.get(params, "direct_override") == true,
+            managed_profiles: "managed_profiles_v1" in capabilities
           )
 
         send(self(), :track_presence)
         send(self(), :reconcile_deployments)
-        {:ok, %{conn_sid: conn_sid, pending_deployments: true, deployment_logs: true}, socket}
+        send(self(), :reconcile_profiles)
+
+        {:ok,
+         %{
+           conn_sid: conn_sid,
+           pending_deployments: true,
+           deployment_logs: true,
+           managed_profiles_v1: true
+         }, socket}
 
       :error ->
         {:error, %{reason: "unauthorized"}}
@@ -179,8 +193,34 @@ defmodule SowerWeb.GardenChannel do
     end
   end)
 
+  handle_schema(SowerClient.Orchestration.ProfileOperation, fn operation, socket ->
+    Orchestration.ManagedProfile.request(socket.assigns.garden, operation)
+  end)
+
+  handle_schema(SowerClient.Orchestration.ProfileOperationResult, fn result, socket ->
+    Orchestration.ManagedProfile.acknowledge(socket.assigns.garden, result)
+  end)
+
   handle_schema(SowerClient.Orchestration.GardenSeedsReport, fn report, socket ->
-    Orchestration.update_garden_seed_generations(report, socket.assigns.garden)
+    Sower.Repo.transaction(fn ->
+      case Orchestration.update_garden_seed_generations(report, socket.assigns.garden) do
+        {:ok, result} ->
+          if report.complete != false do
+            profiles =
+              Enum.reject(
+                report.profiles,
+                &(&1.profile_path in (report.failed_profile_paths || []))
+              )
+
+            Orchestration.ManagedProfile.observe(socket.assigns.garden, profiles)
+          end
+
+          result
+
+        {:error, reason} ->
+          Sower.Repo.rollback(reason)
+      end
+    end)
   end)
 
   handle_schema(SowerClient.Orchestration.GardenReport, fn report, socket ->
@@ -194,7 +234,8 @@ defmodule SowerWeb.GardenChannel do
     {:ok, _} =
       Presence.track(self(), "garden:presence", socket.assigns.garden.sid, %{
         online_at: DateTime.utc_now(),
-        direct_override: socket.assigns.direct_override
+        direct_override: socket.assigns.direct_override,
+        managed_profiles_v1: socket.assigns.managed_profiles
       })
 
     {:noreply, socket}
@@ -208,6 +249,46 @@ defmodule SowerWeb.GardenChannel do
       Sower.Repo.put_org_id(garden.org_id)
       Orchestration.Deployment.reconcile_deployments_on_connect(garden)
     end)
+
+    {:noreply, socket}
+  end
+
+  def handle_info(:reconcile_profiles, socket) do
+    if socket.assigns.managed_profiles do
+      for operation <- Orchestration.ManagedProfile.pending(socket.assigns.garden) do
+        if operation.action == "stage" do
+          Orchestration.ManagedProfile.replay_stage(socket.assigns.garden, operation)
+        else
+          push(socket, SowerClient.Orchestration.ProfileOperation.event(), operation)
+        end
+      end
+
+      push(socket, "subscriptions:refresh", %{
+        subscriptions: Orchestration.Subscription.managed_snapshot(socket.assigns.garden),
+        complete: true
+      })
+
+      Process.send_after(self(), :reconcile_profiles, 30_000)
+    end
+
+    {:noreply, socket}
+  end
+
+  def handle_info({:profile_operation, operation}, socket) do
+    if socket.assigns.managed_profiles do
+      push(socket, SowerClient.Orchestration.ProfileOperation.event(), operation)
+    end
+
+    {:noreply, socket}
+  end
+
+  def handle_info(:refresh_managed_subscriptions, socket) do
+    if socket.assigns.managed_profiles do
+      push(socket, "subscriptions:refresh", %{
+        subscriptions: Orchestration.Subscription.managed_snapshot(socket.assigns.garden),
+        complete: true
+      })
+    end
 
     {:noreply, socket}
   end

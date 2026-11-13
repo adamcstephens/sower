@@ -30,9 +30,16 @@
       </div>
       <.link patch={~p"/gardens/#{@garden}/subscriptions/#{subscription}/edit"}>Edit</.link>
     </:action>
-    <:action :let={{id, subscription}}>
+    <:action :let={{_id, subscription}}>
       <.link
-        phx-click={JS.push("delete", value: %{id: subscription.id}) |> hide("##{id}")}
+        :if={subscription.seed_type in ["package", "devshell"]}
+        navigate={~p"/gardens/#{@garden}/subscriptions/#{subscription}"}
+      >
+        Inspect / uninstall
+      </.link>
+      <.link
+        :if={subscription.seed_type not in ["package", "devshell"]}
+        phx-click={JS.push("delete", value: %{id: subscription.id})}
         data-confirm="Are you sure?"
       >
         Delete

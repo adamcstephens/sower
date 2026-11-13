@@ -50,6 +50,32 @@ defmodule Garden.AdminSocketTest do
       assert complete == %{"v" => 1, "id" => "req-1", "kind" => "complete", "exit_code" => 0}
     end
 
+    test "preserves request identity and structured blocked profile outcomes" do
+      path =
+        start_socket(fn {"profile-request", %Admin.Profile{action: :uninstall}} ->
+          {:profile,
+           SowerClient.Orchestration.ProfileOperationResult.cast!(%{
+             request_id: "profile-request",
+             status: "blocked",
+             profile_name: "application",
+             error: "pinned_generations"
+           })}
+        end)
+
+      assert [error, complete] =
+               request(path, %{
+                 "v" => 1,
+                 "id" => "profile-request",
+                 "kind" => "profile",
+                 "payload" => %{"action" => "uninstall", "profile_name" => "application"}
+               })
+
+      assert error["kind"] == "error"
+      assert error["profile_result"]["request_id"] == "profile-request"
+      assert error["profile_result"]["status"] == "blocked"
+      assert complete["exit_code"] == 1
+    end
+
     test "streams an error then non-zero complete for an error result" do
       path = start_socket(fn _ -> {:error, "subscription not found"} end)
 
