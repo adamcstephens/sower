@@ -1,6 +1,6 @@
 defmodule SowerClient.Admin.DeployWait do
   @moduledoc """
-  Opt-in deployment-start observation on the local garden admin socket.
+  Deployment-start observation on the local garden admin socket.
 
   A distinct command makes older gardens reject waiting without enqueuing work.
   The timeout bounds observation only; it never cancels deployment work.
