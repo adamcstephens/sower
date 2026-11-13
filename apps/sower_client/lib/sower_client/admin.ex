@@ -17,18 +17,21 @@ defmodule SowerClient.Admin do
   use TypedStruct
 
   alias SowerClient.Admin.Deploy
+  alias SowerClient.Admin.DeployWait
   alias SowerClient.Admin.Reload
   alias SowerClient.Admin.Reregister
   alias SowerClient.Admin.Status
 
   @kinds %{
     deploy: Deploy,
+    deploy_wait: DeployWait,
     reload: Reload,
     reregister: Reregister,
     status: Status
   }
 
   typedstruct module: Request do
+    @moduledoc "Decoded local admin envelope and its typed command."
     field(:v, integer(), default: 1)
     field(:id, String.t())
     field(:message, struct(), enforce: true)

@@ -22,6 +22,7 @@ pub const MAX_LINE_BYTES: usize = 65_536;
 
 const KIND_DEPLOY: &str = "deploy";
 const KIND_RELOAD: &str = "reload";
+const KIND_DEPLOY_WAIT: &str = "deploy_wait";
 const KIND_REREGISTER: &str = "reregister";
 const KIND_STATUS: &str = "status";
 
@@ -61,6 +62,36 @@ pub fn deploy_request(
             seed_type,
             sid,
             force,
+        }),
+    })
+}
+
+#[derive(Debug, Serialize)]
+struct DeployWaitPayload<'a> {
+    #[serde(flatten)]
+    deploy: DeployPayload<'a>,
+    timeout: u32,
+}
+
+/// Encode an observed deployment without changing the legacy deploy contract.
+pub fn deploy_wait_request(
+    id: &str,
+    seed_type: Option<&str>,
+    sid: Option<&str>,
+    force: bool,
+    timeout: u32,
+) -> Result<String> {
+    encode(&Envelope {
+        v: PROTOCOL_VERSION,
+        id,
+        kind: KIND_DEPLOY_WAIT,
+        payload: Some(DeployWaitPayload {
+            deploy: DeployPayload {
+                seed_type,
+                sid,
+                force,
+            },
+            timeout,
         }),
     })
 }
@@ -177,6 +208,16 @@ mod tests {
             value(&line),
             json!({"v": 1, "id": "7", "kind": "deploy",
                    "payload": {"sid": "abc", "force": true}})
+        );
+    }
+
+    #[test]
+    fn deploy_wait_carries_scope_force_and_timeout() {
+        let line = deploy_wait_request("7", Some("nixos"), Some("abc"), true, 75).unwrap();
+        assert_eq!(
+            value(&line),
+            json!({"v": 1, "id": "7", "kind": "deploy_wait",
+                   "payload": {"seed_type": "nixos", "sid": "abc", "force": true, "timeout": 75}})
         );
     }
 

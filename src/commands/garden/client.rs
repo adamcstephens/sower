@@ -10,18 +10,16 @@ use anyhow::{Context, Result, anyhow, bail};
 
 use super::protocol::{self, MAX_LINE_BYTES, Reply, ReplyKind, StatusReport};
 
-/// Bound how long we wait on a single reply frame. The garden replies promptly
-/// (commands enqueue and return), so a stall means it is wedged or gone — fail
-/// with a clear error rather than blocking the caller indefinitely.
+/// Bound idle reads for immediate admin commands.
 const REPLY_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Send `line` to the socket and stream replies until the `complete` frame,
 /// returning its exit code.
-pub fn run_request(socket: &Path, line: &str) -> Result<i32> {
+pub fn run_request(socket: &Path, line: &str, wait_timeout: Option<u32>) -> Result<i32> {
     let stream = UnixStream::connect(socket)
         .with_context(|| format!("connect to garden admin socket {}", socket.display()))?;
     stream
-        .set_read_timeout(Some(REPLY_TIMEOUT))
+        .set_read_timeout(Some(reply_timeout(wait_timeout)))
         .context("set admin socket read timeout")?;
 
     write_request(&stream, line).context("send admin request")?;
@@ -30,6 +28,12 @@ pub fn run_request(socket: &Path, line: &str) -> Result<i32> {
     let mut out = std::io::stdout();
     let mut err = std::io::stderr();
     stream_replies(&mut reader, &mut out, &mut err)
+}
+
+fn reply_timeout(wait_timeout: Option<u32>) -> Duration {
+    wait_timeout.map_or(REPLY_TIMEOUT, |seconds| {
+        REPLY_TIMEOUT.max(Duration::from_secs(u64::from(seconds) + 5))
+    })
 }
 
 fn write_request(mut stream: &UnixStream, line: &str) -> Result<()> {
@@ -68,6 +72,7 @@ fn emit_ok<O: Write>(reply: &Reply, out: &mut O) -> Result<()> {
     if let Some(data) = reply.data.as_deref().filter(|d| !d.is_empty()) {
         writeln!(out, "{data}")?;
     }
+    out.flush()?;
     Ok(())
 }
 
@@ -75,6 +80,7 @@ fn emit_error<E: Write>(reply: &Reply, err: &mut E) -> Result<()> {
     if let Some(data) = reply.data.as_deref().filter(|d| !d.is_empty()) {
         writeln!(err, "{data}")?;
     }
+    err.flush()?;
     Ok(())
 }
 
@@ -181,6 +187,49 @@ mod tests {
             String::from_utf8(out).unwrap(),
             String::from_utf8(err).unwrap(),
         )
+    }
+
+    #[test]
+    fn observation_timeout_includes_grace_period() {
+        assert_eq!(reply_timeout(None), Duration::from_secs(30));
+        assert_eq!(reply_timeout(Some(1)), Duration::from_secs(30));
+        assert_eq!(reply_timeout(Some(75)), Duration::from_secs(80));
+        assert_eq!(reply_timeout(Some(86_400)), Duration::from_secs(86_405));
+    }
+
+    #[test]
+    fn streamed_frames_flush_before_completion() {
+        #[derive(Default)]
+        struct Output {
+            bytes: Vec<u8>,
+            flushes: usize,
+        }
+
+        impl Write for Output {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                self.bytes.extend_from_slice(bytes);
+                Ok(bytes.len())
+            }
+
+            fn flush(&mut self) -> std::io::Result<()> {
+                self.flushes += 1;
+                Ok(())
+            }
+        }
+
+        let mut reader = Cursor::new(concat!(
+            "{\"kind\":\"ok\",\"data\":\"starting\"}\n",
+            "{\"kind\":\"ok\",\"data\":\"output\"}\n",
+            "{\"kind\":\"error\",\"data\":\"failed\"}\n",
+            "{\"kind\":\"complete\",\"exit_code\":1}\n",
+        ));
+        let mut out = Output::default();
+        let mut err = Output::default();
+        assert_eq!(stream_replies(&mut reader, &mut out, &mut err).unwrap(), 1);
+        assert_eq!(out.bytes, b"starting\noutput\n");
+        assert_eq!(err.bytes, b"failed\n");
+        assert_eq!(out.flushes, 2);
+        assert_eq!(err.flushes, 1);
     }
 
     #[test]

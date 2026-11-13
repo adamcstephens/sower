@@ -1,4 +1,11 @@
 defmodule Garden.Deployer do
+  @moduledoc """
+  Runs deployment seed realization, activation and optional restart.
+
+  An optional local observer receives each seed's actual worker start before
+  realization, independently of websocket status delivery or deployment completion.
+  """
+
   require Logger
 
   alias Garden.Socket
@@ -14,8 +21,8 @@ defmodule Garden.Deployer do
 
   @rebootable_seed_types ["nixos"]
 
-  def run(%Deployment{} = deployment) do
-    run_with_opts(deployment, upgrade_opts: [], reboot_opts: [])
+  def run(%Deployment{} = deployment, observer \\ nil) do
+    run_with_opts(deployment, upgrade_opts: [start_observer: observer], reboot_opts: [])
   end
 
   def run_with_opts(%Deployment{} = deployment, opts) do
@@ -121,6 +128,7 @@ defmodule Garden.Deployer do
       Keyword.get(opts, :report_seed_status_fun, &report_seed_status/3)
 
     garden_config_fun = Keyword.get(opts, :garden_config_fun, &Garden.Config.get/0)
+    observer = Keyword.get(opts, :start_observer)
 
     async_stream_fun.(deployment.seed_deployments, fn %{seed: seed} = seed_deploy ->
       Logger.debug(
@@ -130,6 +138,10 @@ defmodule Garden.Deployer do
         seed_type: seed.seed_type,
         artifact: seed.artifact
       )
+
+      if observer do
+        send(observer, {:deployment_wait, deployment.request_id, {:started, seed.sid}})
+      end
 
       downloading_line = decision_line("downloading #{seed.name} (#{seed.seed_type})")
       report_seed_status_fun.(deployment, seed, :downloading)

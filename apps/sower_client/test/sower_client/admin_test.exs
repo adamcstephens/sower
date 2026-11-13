@@ -5,6 +5,22 @@ defmodule SowerClient.AdminTest do
   alias SowerClient.Admin.{Deploy, Reload, Reply, Request, Status, StatusReport}
 
   describe "decode_request/1" do
+    test "decodes opt-in waiting separately with bounded timeout" do
+      assert {:ok, %Request{message: %Admin.DeployWait{timeout: 30}}} =
+               Admin.decode_request(%{
+                 "kind" => "deploy_wait",
+                 "payload" => %{"seed_type" => "nixos"}
+               })
+
+      for timeout <- [0, -1, 86401] do
+        assert {:error, _} =
+                 Admin.decode_request(%{
+                   "kind" => "deploy_wait",
+                   "payload" => %{"timeout" => timeout}
+                 })
+      end
+    end
+
     test "decodes a deploy envelope into a typed command" do
       assert {:ok, %Request{v: 1, id: "abc", message: %Deploy{} = deploy}} =
                Admin.decode_request(%{
@@ -65,7 +81,14 @@ defmodule SowerClient.AdminTest do
   test "admin schemas are registered in the spec but excluded from server-pushed titles" do
     spec = SowerClient.spec()
 
-    for title <- ["AdminDeploy", "AdminReload", "AdminStatus", "AdminStatusReport", "AdminReply"] do
+    for title <- [
+          "AdminDeploy",
+          "AdminDeployWait",
+          "AdminReload",
+          "AdminStatus",
+          "AdminStatusReport",
+          "AdminReply"
+        ] do
       assert Map.has_key?(spec.components.schemas, title), "#{title} missing from spec()"
       refute title in SowerClient.server_pushed_schema_titles()
     end

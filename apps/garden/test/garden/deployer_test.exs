@@ -80,6 +80,36 @@ defmodule Garden.DeployerTest do
   end
 
   describe "upgrade/2" do
+    test "reports local start from each worker before realization and remote status" do
+      deployment = %Deployment{
+        sid: "dep_start",
+        request_id: "request_start",
+        seed_deployments: [seed_deploy_with_identity("seed_start")]
+      }
+
+      capture_log(fn ->
+        Deployer.upgrade(deployment,
+          start_observer: self(),
+          async_stream_fun: fn enumerable, func ->
+            Enum.map(enumerable, fn item -> {:ok, func.(item)} end)
+          end,
+          report_seed_status_fun: fn _, _, status ->
+            if status == :downloading do
+              assert_received {:deployment_wait, "request_start", {:started, "seed_start"}}
+              send(self(), :start_witnessed)
+            end
+          end,
+          realize_seed_fun: fn seed_deploy ->
+            assert_received :start_witnessed
+            {:ok, seed_deploy, []}
+          end,
+          find_subscription_fun: fn _ -> %Subscription{} end,
+          activate_seed_fun: fn _, _ -> {:ok, []} end,
+          report_seed_result_fun: fn _, _, _, _ -> :ok end
+        )
+      end)
+    end
+
     test "reports failure with fatal log line when activator is unavailable" do
       deployment = %Deployment{
         sid: "dep_1",
