@@ -54,7 +54,7 @@ defmodule VMManager.ReconnectionTest do
       end)
 
     on_exit(fn -> Process.exit(io, :kill) end)
-    assert_receive {:guest_ready, _}
+    assert_receive {:guest_ready, _}, 2_000
 
     command =
       spawn(fn ->
@@ -111,7 +111,7 @@ defmodule VMManager.ReconnectionTest do
       end)
 
     on_exit(fn -> Process.exit(io, :kill) end)
-    assert_receive {:guest_ready, _}
+    assert_receive {:guest_ready, _}, 2_000
     command = self()
 
     send(
@@ -183,7 +183,7 @@ defmodule VMManager.ReconnectionTest do
       File.rm(path)
     end)
 
-    assert_receive {:guest_ready, _}
+    assert_receive {:guest_ready, _}, 2_000
     command = %VMManager.Command{path: "/bin/work"}
     assert {:ok, handle} = GenServer.call(session, {:execute, command, [], self()})
     assert :ok = VMManager.cancel_command(handle)
@@ -263,7 +263,7 @@ defmodule VMManager.ReconnectionTest do
         File.rm(path)
       end)
 
-      assert_receive {:guest_ready, _}
+      assert_receive {:guest_ready, _}, 2_000
       command = %VMManager.Command{path: "/bin/work"}
       assert {:ok, handle} = GenServer.call(session, {:execute, command, [], self()})
 

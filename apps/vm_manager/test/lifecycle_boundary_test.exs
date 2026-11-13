@@ -33,7 +33,7 @@ defmodule VMManager.LifecycleBoundaryTest do
   } do
     {config, peer} = attached_vm(directory, true)
     execution = start_supervised!({VMManager.Execution, Config.to_options(config)})
-    assert_receive {:native_info_waiting, server}
+    assert_receive {:native_info_waiting, server}, 2_000
     waiter = Task.async(fn -> GenServer.call(execution, :await_running, :infinity) end)
     assert Task.yield(waiter, 100) == nil
     GenServer.cast(execution, {:finish, :ok})
@@ -80,6 +80,8 @@ defmodule VMManager.LifecycleBoundaryTest do
     assert File.exists?(lease <> ".revoked")
     refute File.exists?(lease)
     stop_supervised!(:recovery)
+    assert_receive :native_info_polled, 2_000
+    assert_receive :native_info_polled, 2_000
     assert :ok = VMManager.stop(id, manager)
     Task.await(peer)
   end
@@ -153,23 +155,23 @@ defmodule VMManager.LifecycleBoundaryTest do
 
     parent = self()
 
-    peer =
-      Task.async(fn ->
-        for {{method, endpoint, body}, index} <-
-              Enum.with_index([
-                {"GET", "vm.info", info.("Running")},
-                {"GET", "vm.info", info.("Running")},
-                {"PUT", "vm.shutdown", ""},
-                {"GET", "vm.info", info.("Created")}
-              ]) do
-          {:ok, socket} = :gen_tcp.accept(listener, 5_000)
+    peer = Task.async(fn -> serve_attached(listener, info, gated, parent, :initial) end)
 
-          assert {:ok, "#{method} /api/v1/#{endpoint} HTTP/1.1\r\n"} ==
-                   :gen_tcp.recv(socket, 0, 5_000)
+    {config, peer}
+  end
 
-          headers(socket)
+  defp serve_attached(listener, info, gated, parent, state) do
+    {:ok, socket} = :gen_tcp.accept(listener, 5_000)
+    {:ok, request} = :gen_tcp.recv(socket, 0, 5_000)
+    headers(socket)
 
-          if index == 0 and gated do
+    {body, next_state} =
+      case {state, request} do
+        {:shutdown, "GET /api/v1/vm.info HTTP/1.1\r\n"} ->
+          {info.("Created"), :finished}
+
+        {state, "GET /api/v1/vm.info HTTP/1.1\r\n"} when state in [:initial, :running] ->
+          if state == :initial and gated do
             send(parent, {:native_info_waiting, self()})
 
             receive do
@@ -177,19 +179,27 @@ defmodule VMManager.LifecycleBoundaryTest do
             end
           end
 
-          :ok =
-            :gen_tcp.send(socket, [
-              "HTTP/1.1 200 OK\r\ncontent-length: ",
-              to_string(byte_size(body)),
-              "\r\nconnection: close\r\n\r\n",
-              body
-            ])
+          if state == :running, do: send(parent, :native_info_polled)
 
-          :gen_tcp.close(socket)
-        end
-      end)
+          {info.("Running"), :running}
 
-    {config, peer}
+        {:running, "PUT /api/v1/vm.shutdown HTTP/1.1\r\n"} ->
+          {"", :shutdown}
+      end
+
+    :ok =
+      :gen_tcp.send(socket, [
+        "HTTP/1.1 200 OK\r\ncontent-length: ",
+        to_string(byte_size(body)),
+        "\r\nconnection: close\r\n\r\n",
+        body
+      ])
+
+    :gen_tcp.close(socket)
+
+    unless next_state == :finished do
+      serve_attached(listener, info, gated, parent, next_state)
+    end
   end
 
   defp headers(socket) do
