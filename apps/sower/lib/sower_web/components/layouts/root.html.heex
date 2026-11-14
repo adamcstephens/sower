@@ -3,6 +3,11 @@
   <head>
     {Application.get_env(:live_debugger, :live_debugger_tags)}
     <link rel="icon" href="/lemmling-Cartoon-acorn.svg" />
+    <link rel="manifest" href={~p"/manifest.webmanifest"} />
+    <link rel="apple-touch-icon" sizes="180x180" href={~p"/images/apple-touch-icon.png"} />
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Sower" />
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="csrf-token" content={get_csrf_token()} />
