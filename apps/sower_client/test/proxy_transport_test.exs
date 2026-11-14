@@ -10,8 +10,11 @@ defmodule SowerClient.ProxyTransportTest do
     {:ok, tls: Fixture.tls_config()}
   end
 
-  for {destination, scheme} <- [{:http, :ws}, {:https, :wss}],
-      proxy <- [:http, :https],
+  for {destination, scheme, proxy} <- [
+        {:http, :ws, :http},
+        {:https, :wss, :http},
+        {:https, :wss, :https}
+      ],
       mode <- [:active, :passive] do
     test "#{destination} WebSocket exchanges #{mode} frames through authenticated #{proxy} proxy",
          %{tls: tls} do
