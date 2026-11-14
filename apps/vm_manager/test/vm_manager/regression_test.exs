@@ -221,8 +221,11 @@ defmodule VMManager.RegressionTest do
         send(parent, {:started, id})
       end)
 
-    assert_receive {:started, id}
-    assert_receive {:DOWN, ^monitor, :process, ^caller, :normal}
+    receive do
+      {:DOWN, ^monitor, :process, ^caller, reason} -> assert reason == :normal
+    end
+
+    assert_received {:started, id}
     before = preparing(id, context.manager)
     restart_manager(context.manager)
     after_restart = preparing(id, context.manager)

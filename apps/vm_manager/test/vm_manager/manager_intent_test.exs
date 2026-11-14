@@ -82,8 +82,14 @@ defmodule VMManager.ManagerIntentTest do
         assert definitions[context.config.id].reserved
         assert [{_, execution, :worker, _}] = DynamicSupervisor.which_children(context.runtime)
         assert execution == context.execution
+        execution_monitor = Process.monitor(execution)
 
         true = :erlang.resume_process(context.guard)
+
+        receive do
+          {:DOWN, ^execution_monitor, :process, ^execution, reason} ->
+            assert reason == :shutdown
+        end
 
         assert_receive {:vm_manager, "intent",
                         %VMManager.Status{execution: replacement, phase: :booting}}
