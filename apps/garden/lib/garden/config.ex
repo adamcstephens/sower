@@ -1,9 +1,10 @@
 defmodule Garden.Config do
   @moduledoc """
-  Loads garden configuration and maintains runtime WebSocket settings.
+  Loads garden configuration and stores WebSocket settings in application config.
 
-  Socket settings are refreshed for each connection attempt so environment proxy
-  changes, bypass rules, and endpoint reloads cannot retain stale proxy credentials.
+  Proxy routing is resolved at boot or explicit configuration reload. Reconnects
+  reuse those settings; malformed proxy configuration fails loading without
+  exposing credentials or replacing the stored socket settings.
   """
 
   require Logger
@@ -12,22 +13,6 @@ defmodule Garden.Config do
 
   def get do
     Application.get_env(@app, :config)
-  end
-
-  def socket_config do
-    config = Application.get_env(@app, Garden.Socket, [])
-    uri = Keyword.fetch!(config, :uri)
-    mint_opts = Keyword.get(config, :mint_opts, [])
-
-    case SowerClient.Proxy.mint_options(uri, mint_opts) do
-      {:ok, mint_opts} ->
-        config = Keyword.put(config, :mint_opts, mint_opts)
-        Application.put_env(@app, Garden.Socket, config)
-        {:ok, config}
-
-      {:error, error} ->
-        {:error, error}
-    end
   end
 
   def load(config_map \\ %{}, opts \\ []) do
@@ -103,7 +88,22 @@ defmodule Garden.Config do
         |> Keyword.put(:uri, uri)
         |> Keyword.put(:reconnect_after_msec, Garden.Socket.Lifecycle.default_backoff())
 
-      Application.put_env(@app, Garden.Socket, socket_config)
+      mint_opts =
+        socket_config
+        |> Keyword.get(:mint_opts, [])
+        |> Keyword.put_new(:protocols, [:http1])
+
+      case SowerClient.Proxy.mint_options(uri, mint_opts) do
+        {:ok, mint_opts} ->
+          Application.put_env(
+            @app,
+            Garden.Socket,
+            Keyword.put(socket_config, :mint_opts, mint_opts)
+          )
+
+        {:error, error} ->
+          raise error
+      end
     end
 
     # Expand state_directory path

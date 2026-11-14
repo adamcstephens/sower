@@ -109,8 +109,8 @@ defmodule SowerClient.ProxyTransportFixture do
             :ok = transport.send(socket, "HTTP/1.1 200 Connection Established\r\n\r\n")
           end
 
-          set_active(transport, socket)
-          :inet.setopts(upstream, active: :once)
+          :ok = set_active(transport, socket)
+          :ok = :inet.setopts(upstream, active: true)
           relay(transport, socket, upstream)
           :gen_tcp.close(upstream)
         else
@@ -127,21 +127,17 @@ defmodule SowerClient.ProxyTransportFixture do
   defp relay(transport, socket, upstream) do
     receive do
       {tag, ^socket, bytes} when tag in [:tcp, :ssl] ->
-        with :ok <- :gen_tcp.send(upstream, bytes),
-             :ok <- set_active(transport, socket) do
-          relay(transport, socket, upstream)
-        else
+        case :gen_tcp.send(upstream, bytes) do
+          :ok -> relay(transport, socket, upstream)
           {:error, :closed} -> :ok
-          {:error, reason} -> flunk("proxy upstream relay failed: #{inspect(reason)}")
+          {:error, reason} -> flunk("proxy upstream send failed: #{inspect(reason)}")
         end
 
       {:tcp, ^upstream, bytes} ->
-        with :ok <- transport.send(socket, bytes),
-             :ok <- :inet.setopts(upstream, active: :once) do
-          relay(transport, socket, upstream)
-        else
+        case transport.send(socket, bytes) do
+          :ok -> relay(transport, socket, upstream)
           {:error, :closed} -> :ok
-          {:error, reason} -> flunk("proxy downstream relay failed: #{inspect(reason)}")
+          {:error, reason} -> flunk("proxy downstream send failed: #{inspect(reason)}")
         end
 
       {tag, _} when tag in [:tcp_closed, :ssl_closed] ->
@@ -154,8 +150,8 @@ defmodule SowerClient.ProxyTransportFixture do
     end
   end
 
-  defp set_active(:ssl, socket), do: :ssl.setopts(socket, active: :once)
-  defp set_active(:gen_tcp, socket), do: :inet.setopts(socket, active: :once)
+  defp set_active(:ssl, socket), do: :ssl.setopts(socket, active: true)
+  defp set_active(:gen_tcp, socket), do: :inet.setopts(socket, active: true)
 
   def read_headers(transport, socket, bytes \\ "") do
     if String.ends_with?(bytes, "\r\n\r\n") do

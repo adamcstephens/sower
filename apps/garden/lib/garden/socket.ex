@@ -3,8 +3,9 @@ defmodule Garden.Socket do
   Maintains the garden control channel, registration, authentication lifecycle,
   and local deployment dispatch.
 
-  HTTP registration uses runtime Req defaults. WebSocket connection settings are
-  refreshed through Garden.Config. Proxy failures preserve the existing identity.
+  HTTP registration uses runtime Req defaults. WebSocket connections reuse the
+  application settings established at boot or explicit configuration reload.
+  Proxy failures preserve the existing identity.
 
   Explicit start observers are correlated by request ID before submission;
   deployment workers report starts directly, independently of server connectivity.
@@ -259,7 +260,7 @@ defmodule Garden.Socket do
   @impl Slipstream
   def handle_cast(:sync_subscriptions, socket) do
     config_subscriptions = Garden.Config.get().subscriptions
-    tz = Scheduler.get_timezone()
+    tz = if Enum.any?(config_subscriptions, & &1.schedule), do: Scheduler.get_timezone()
 
     config_subscriptions =
       Enum.map(config_subscriptions, fn sub ->
@@ -390,8 +391,8 @@ defmodule Garden.Socket do
   end
 
   defp build_connect_config do
-    with {:ok, token} <- resolve_connect_token(),
-         {:ok, config} <- Garden.Config.socket_config() do
+    with {:ok, token} <- resolve_connect_token() do
+      config = Application.get_env(:garden, __MODULE__, [])
       uri = Keyword.fetch!(config, :uri)
       Logger.info(msg: "Connecting to server socket", endpoint: uri)
 

@@ -61,8 +61,5 @@ if config_env() == :test do
 end
 
 if config_env() in [:dev, :test] do
-  config :garden,
-         Garden.Socket,
-         Application.get_env(:garden, Garden.Socket, [])
-         |> Keyword.put_new(:mint_opts, protocols: [:http1])
+  config :garden, Garden.Socket, Application.get_env(:garden, Garden.Socket, [])
 end

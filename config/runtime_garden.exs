@@ -9,10 +9,7 @@ config :garden, Garden.Scheduler, timezone: Garden.Scheduler.get_timezone()
 
 garden = Garden.Config.load()
 
-config :garden,
-       Garden.Socket,
-       Application.get_env(:garden, Garden.Socket, [])
-       |> Keyword.put_new(:mint_opts, protocols: [:http1])
+config :garden, Garden.Socket, Application.get_env(:garden, Garden.Socket, [])
 
 config :garden, :activator_socket, garden.activator_socket
 
