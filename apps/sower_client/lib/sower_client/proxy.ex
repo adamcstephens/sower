@@ -1,12 +1,15 @@
 defmodule SowerClient.Proxy do
   @moduledoc """
   Routes outbound Req and Mint connections using the process proxy environment.
+  Client releases register this Req plugin through runtime application defaults;
+  garden configuration uses the same resolver for Mint connection options.
 
   HTTP and WebSocket destinations use HTTP_PROXY/http_proxy; TLS destinations use
   HTTPS_PROXY/https_proxy. Uppercase variables take precedence, even when empty.
   NO_PROXY/no_proxy accepts comma-separated hosts, domain suffixes with label
   boundaries, IP literals, and `*`. Credentials are decoded only into proxy-hop
   headers. Req routing is evaluated again for each redirected destination.
+  Unix-socket requests retain their local transport and bypass proxy routing.
   Explicit CA trust roots apply to both TLS hops; origin client certificates and
   verification overrides are never copied to the proxy.
   """
@@ -58,11 +61,17 @@ defmodule SowerClient.Proxy do
     end
   end
 
+  defp configure_request(%Req.Request{options: %{unix_socket: socket}} = request)
+       when is_binary(socket) do
+    Req.Request.delete_header(request, "proxy-authorization")
+  end
+
   defp configure_request(%Req.Request{} = request) do
     options = Req.Request.get_option(request, :connect_options, [])
     request = Req.Request.delete_header(request, "proxy-authorization")
 
     case mint_options(request.url, options) do
+      {:ok, []} -> Req.Request.delete_option(request, :connect_options)
       {:ok, options} -> Req.Request.put_option(request, :connect_options, options)
       {:error, error} -> {request, error}
     end

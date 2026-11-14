@@ -38,6 +38,13 @@ defmodule SowerCli.BuildProxyTest do
     end)
   end
 
+  test "CLI runtime enables proxy routing for ordinary Req requests" do
+    runtime = Path.expand("../../config/runtime.exs", __DIR__)
+    config = Config.Reader.read!(runtime, env: :test)
+
+    assert SowerClient.Proxy in config[:req][:default_options][:plugins]
+  end
+
   test "registers built seed manifests through an authenticated proxy", %{tmp_dir: dir} do
     owner = self()
 

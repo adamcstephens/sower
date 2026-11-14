@@ -3,8 +3,8 @@ defmodule Garden.Socket do
   Maintains the garden control channel, registration, authentication lifecycle,
   and local deployment dispatch.
 
-  HTTP registration and each WebSocket connection resolve proxy routing from the
-  process environment. Proxy failures preserve the existing garden identity.
+  HTTP registration uses runtime Req defaults. WebSocket connection settings are
+  refreshed through Garden.Config. Proxy failures preserve the existing identity.
 
   Explicit start observers are correlated by request ID before submission;
   deployment workers report starts directly, independently of server connectivity.
@@ -368,7 +368,8 @@ defmodule Garden.Socket do
     counter = Map.get(socket.assigns, :reconnect_counter, 0)
 
     backoff_times =
-      Application.get_env(__MODULE__, :reconnect_after_msec, Lifecycle.default_backoff())
+      Application.get_env(:garden, __MODULE__, [])
+      |> Keyword.get(:reconnect_after_msec, Lifecycle.default_backoff())
 
     delay = Lifecycle.reconnect_delay(counter, backoff_times)
 
@@ -389,15 +390,9 @@ defmodule Garden.Socket do
   end
 
   defp build_connect_config do
-    config = Application.get_all_env(__MODULE__)
-    uri = Keyword.get(config, :uri)
-
     with {:ok, token} <- resolve_connect_token(),
-         {:ok, mint_opts} <-
-           SowerClient.Proxy.mint_options(
-             uri,
-             config |> Keyword.get(:mint_opts, []) |> Keyword.put(:protocols, [:http1])
-           ) do
+         {:ok, config} <- Garden.Config.socket_config() do
+      uri = Keyword.fetch!(config, :uri)
       Logger.info(msg: "Connecting to server socket", endpoint: uri)
 
       auth_header = {"x-auth-token", token}
@@ -406,7 +401,6 @@ defmodule Garden.Socket do
       connect_config =
         config
         |> Keyword.put(:uri, uri)
-        |> Keyword.put(:mint_opts, mint_opts)
         |> Keyword.update(:headers, [auth_header], fn headers ->
           [auth_header | headers]
         end)
@@ -543,7 +537,6 @@ defmodule Garden.Socket do
         auth: {:bearer, config.access_token},
         retry: false
       )
-      |> SowerClient.Proxy.attach()
 
     case SowerClient.Registration.register(req, config.name, public_key_pem) do
       {:ok, %{garden_sid: garden_sid, client_id: client_id}} ->

@@ -1,5 +1,9 @@
 import Config
 
+if config_env() in [:dev, :test] do
+  config :req, default_options: [plugins: [SowerClient.Proxy]]
+end
+
 if config_env() == :dev do
   if Code.ensure_loaded?(Garden.Config) and Code.ensure_loaded?(Garden.Scheduler) do
     Code.ensure_loaded!(Garden.VM.Network)
@@ -54,4 +58,11 @@ if config_env() == :test do
   if Code.loaded?(SowerCli.Config) do
     SowerCli.Config.load(skip_config_file: true)
   end
+end
+
+if config_env() in [:dev, :test] do
+  config :garden,
+         Garden.Socket,
+         Application.get_env(:garden, Garden.Socket, [])
+         |> Keyword.put_new(:mint_opts, protocols: [:http1])
 end

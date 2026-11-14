@@ -3,7 +3,6 @@ Code.require_file("fixtures/proxy_transport.ex", __DIR__)
 defmodule SowerClient.ProxyReqTest do
   use ExUnit.Case, async: false
 
-  alias SowerClient.Proxy
   alias SowerClient.ProxyTransportFixture, as: Fixture
 
   @variables [
@@ -34,6 +33,40 @@ defmodule SowerClient.ProxyReqTest do
     end)
 
     :ok
+  end
+
+  test "Unix-socket requests retain their Finch pool despite proxy environment" do
+    path = Path.join(System.tmp_dir!(), "proxy-#{System.unique_integer([:positive])}.sock")
+    {:ok, listener} = :gen_tcp.listen(0, [:binary, active: false, ifaddr: {:local, path}])
+
+    on_exit(fn ->
+      :gen_tcp.close(listener)
+      File.rm(path)
+    end)
+
+    origin =
+      Task.async(fn ->
+        {:ok, socket} = :gen_tcp.accept(listener)
+        {line, headers} = Fixture.read_headers(:gen_tcp, socket)
+        :ok = :gen_tcp.send(socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
+        :gen_tcp.close(socket)
+        {line, headers}
+      end)
+
+    System.put_env("HTTP_PROXY", "invalid://user:secret@proxy.test")
+
+    assert {:ok, %Req.Response{status: 200, body: "ok"}} =
+             Req.get("http://localhost/", unix_socket: path, finch: [size: 1], retry: false)
+
+    assert {"GET / HTTP/1.1", headers} = Task.await(origin)
+    refute Map.has_key?(headers, "proxy-authorization")
+  end
+
+  test "direct requests preserve an explicitly configured Finch pool", %{tls: tls} do
+    port = origin(:http, tls)
+
+    assert {:ok, %Req.Response{status: 200, body: "origin"}} =
+             Req.get("http://localhost:#{port}", finch: [size: 1], retry: false)
   end
 
   for origin_scheme <- [:http, :https], proxy_scheme <- [:http, :https] do
@@ -139,7 +172,6 @@ defmodule SowerClient.ProxyReqTest do
                retry: false,
                connect_options: [transport_opts: origin_tls, protocols: [:http1]]
              )
-             |> Proxy.attach()
              |> Req.get()
 
     assert_receive {:proxy_peer_certificate, {:error, :no_peercert}}
@@ -177,7 +209,6 @@ defmodule SowerClient.ProxyReqTest do
       retry: false,
       connect_options: [transport_opts: Fixture.trust(tls), protocols: [:http1]]
     )
-    |> Proxy.attach()
     |> Req.get()
   end
 

@@ -5,6 +5,8 @@ defmodule Garden.ChannelClient do
   Use this module from a consumer-specific socket client to get the default
   client interface along with generic Slipstream callbacks. Override the
   callbacks you need in the consumer module to customize behavior.
+  The default initializer reads connection settings from the consumer module's
+  key in the `:garden` application configuration.
   """
 
   defmacro __using__(opts) do
@@ -82,7 +84,7 @@ defmodule Garden.ChannelClient do
 
       @impl Slipstream
       def init(_args) do
-        config = Application.get_all_env(__MODULE__)
+        config = Application.get_env(:garden, __MODULE__, [])
 
         case connect(config) do
           {:ok, socket} ->

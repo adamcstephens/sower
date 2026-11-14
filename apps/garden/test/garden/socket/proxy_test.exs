@@ -20,7 +20,7 @@ defmodule Garden.Socket.ProxyTest do
     environment = Map.new(@proxy_keys, &{&1, System.get_env(&1)})
     Enum.each(@proxy_keys, &System.delete_env/1)
     config = Garden.Config.get()
-    socket_config = Application.get_all_env(Garden.Socket)
+    socket_config = Application.get_env(:garden, Garden.Socket, [])
     storage = Garden.Storage.read()
 
     on_exit(fn ->
@@ -31,13 +31,7 @@ defmodule Garden.Socket.ProxyTest do
 
       Application.put_env(:garden, :config, config)
 
-      Enum.each(Application.get_all_env(Garden.Socket), fn {key, _} ->
-        Application.delete_env(Garden.Socket, key)
-      end)
-
-      Enum.each(socket_config, fn {key, value} ->
-        Application.put_env(Garden.Socket, key, value)
-      end)
+      Application.put_env(:garden, Garden.Socket, socket_config)
 
       Garden.Storage.write(storage)
     end)
@@ -57,18 +51,133 @@ defmodule Garden.Socket.ProxyTest do
         timezone: "Etc/UTC"
     })
 
-    Application.put_env(
-      Garden.Socket,
-      :uri,
-      URI.parse("ws://localhost:#{origin}/garden/websocket")
+    configure_socket(
+      uri: URI.parse("ws://localhost:#{origin}/garden/websocket"),
+      reconnect_after_msec: [60_000]
     )
 
-    Application.put_env(Garden.Socket, :reconnect_after_msec, [60_000])
     %{proxy: proxy}
   end
 
+  test "socket configuration refreshes proxy credentials and preserves unrelated Mint options" do
+    options = [protocols: [:http1], transport_opts: [timeout: 1_234]]
+    configure_socket(mint_opts: options)
+    System.put_env("HTTP_PROXY", "http://first:secret@proxy-one.test:8080")
+
+    assert {:ok, first} = Garden.Config.socket_config()
+    assert first[:mint_opts][:proxy] == {:http, "proxy-one.test", 8080, []}
+
+    assert first[:mint_opts][:proxy_headers] == [
+             {"proxy-authorization", "Basic " <> Base.encode64("first:secret")}
+           ]
+
+    assert Application.get_env(:garden, Garden.Socket)[:mint_opts] == first[:mint_opts]
+
+    System.put_env("HTTP_PROXY", "http://proxy-two.test:8081")
+    assert {:ok, second} = Garden.Config.socket_config()
+    assert second[:mint_opts][:proxy] == {:http, "proxy-two.test", 8081, []}
+    assert second[:mint_opts][:proxy_headers] == []
+
+    System.put_env("NO_PROXY", "localhost")
+    assert {:ok, direct} = Garden.Config.socket_config()
+    assert direct[:mint_opts] == options
+    assert Application.get_env(:garden, Garden.Socket)[:mint_opts] == options
+  end
+
+  test "socket configuration resolves the current destination scheme on every access" do
+    configure_socket(mint_opts: [protocols: [:http1]])
+    System.put_env("HTTP_PROXY", "http://plain.test:8080")
+    System.put_env("HTTPS_PROXY", "http://secure:secret@tls.test:8081")
+    assert {:ok, plain} = Garden.Config.socket_config()
+    assert plain[:mint_opts][:proxy] == {:http, "plain.test", 8080, []}
+
+    uri = URI.parse("wss://secure-origin.test/garden/websocket")
+    configure_socket(uri: uri)
+    assert {:ok, secure} = Garden.Config.socket_config()
+    assert secure[:uri] == uri
+    assert secure[:mint_opts][:proxy] == {:http, "tls.test", 8081, []}
+
+    assert secure[:mint_opts][:proxy_headers] == [
+             {"proxy-authorization", "Basic " <> Base.encode64("secure:secret")}
+           ]
+
+    assert secure[:mint_opts][:protocols] == [:http1]
+  end
+
+  test "socket configuration returns invalid proxy errors without credentials" do
+    System.put_env("HTTP_PROXY", "ftp://private-user:private-password@proxy.test:8080")
+    assert {:error, error} = Garden.Config.socket_config()
+    assert Exception.message(error) =~ "proxy"
+    refute inspect(error) =~ "private-user"
+    refute inspect(error) =~ "private-password"
+  end
+
+  @tag :tmp_dir
+  test "garden release runtime enables the Req proxy plugin and static HTTP1 options", %{
+    tmp_dir: dir
+  } do
+    keys = [
+      "SOWER_CONFIG_FILE",
+      "SOWER_ENDPOINT",
+      "SOWER_ACCESS_TOKEN",
+      "SOWER_ACCESS_TOKEN_FILE"
+    ]
+
+    environment = Map.new(keys, &{&1, System.get_env(&1)})
+    api_config = Application.get_all_env(SowerClient.ApiClient)
+    Enum.each(keys, &System.delete_env/1)
+
+    on_exit(fn ->
+      Enum.each(environment, fn
+        {key, nil} -> System.delete_env(key)
+        {key, value} -> System.put_env(key, value)
+      end)
+
+      Enum.each(Application.get_all_env(SowerClient.ApiClient), fn {key, _} ->
+        Application.delete_env(SowerClient.ApiClient, key)
+      end)
+
+      Enum.each(api_config, fn {key, value} ->
+        Application.put_env(SowerClient.ApiClient, key, value)
+      end)
+    end)
+
+    path = Path.join(dir, "client.json")
+
+    File.write!(
+      path,
+      Jason.encode!(%{
+        state_directory: dir,
+        endpoint: "https://runtime-origin.test",
+        access_token: "runtime-token"
+      })
+    )
+
+    Application.put_env(:garden, Garden.Socket,
+      uri: URI.parse("ws://stale-origin.test/garden/websocket"),
+      reconnect_after_msec: [42]
+    )
+
+    System.put_env("SOWER_CONFIG_FILE", path)
+    runtime = Path.expand("../../../../../config/runtime_garden.exs", __DIR__)
+    config = Config.Reader.read!(runtime, env: :prod)
+
+    assert SowerClient.Proxy in config[:req][:default_options][:plugins]
+    assert config[:garden][Garden.Socket][:mint_opts][:protocols] == [:http1]
+
+    assert config[:garden][Garden.Socket][:uri] ==
+             URI.parse("wss://runtime-origin.test/garden/websocket")
+
+    assert config[:garden][Garden.Socket][:reconnect_after_msec] ==
+             Garden.Socket.Lifecycle.default_backoff()
+  end
+
+  test "test runtime enables the Req proxy plugin for ordinary requests" do
+    assert SowerClient.Proxy in Application.fetch_env!(:req, :default_options)[:plugins]
+  end
+
   test "registers, exchanges and refreshes tokens, joins and reconnects through the proxy" do
-    Application.put_env(Garden.Socket, :reconnect_after_msec, [20])
+    configure_socket(reconnect_after_msec: [20])
     start_supervised!(Garden.Scheduler)
     socket = start_supervised!({Garden.Socket, []})
 
@@ -149,6 +258,11 @@ defmodule Garden.Socket.ProxyTest do
       refute_receive {:http_request, _, _, _}, 100
       refute_receive {:joined, _, _, _}, 100
     end
+  end
+
+  defp configure_socket(options) do
+    config = Application.get_env(:garden, Garden.Socket, [])
+    Application.put_env(:garden, Garden.Socket, Keyword.merge(config, options))
   end
 
   defp serve(transport, socket, owner) do
