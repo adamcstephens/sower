@@ -27,7 +27,10 @@ sower-*.tar
 
 # Ignore assets that are produced by build tools.
 /priv/static/assets/
-/priv/static/images/
+/priv/static/images/*
+!/priv/static/images/apple-touch-icon.png
+!/priv/static/images/icon-192.png
+!/priv/static/images/icon-512.png
 
 # Ignore digested assets cache.
 /priv/static/cache_manifest.json
