@@ -23,10 +23,9 @@ defmodule Garden.DeploymentWaitTest do
     send(waiter, {:deployment_wait, "other-request", {:started, "seed-a"}})
     send(waiter, {:deployment_wait, request, :accepted})
     send(waiter, {:deployment_wait, request, {:deployment, deployment}})
-    assert_receive {:ok, "accepted host (nixos)" <> _}
-    assert_receive {:ok, "waiting host (nixos)" <> _}
-    assert_receive {:ok, "accepted user (home-manager)" <> _}
-    assert_receive {:ok, "waiting user (home-manager)" <> _}
+    assert_receive {:ok, "enqueued 2 seeds"}
+    assert_receive {:ok, "enqueued host (nixos), deployment dep-1, seed seed-a"}
+    assert_receive {:ok, "enqueued user (home-manager), deployment dep-1, seed seed-b"}
     refute_receive {:finished, _}, 20
     send(waiter, {:deployment_wait, request, {:started, "seed-a"}})
     assert_receive {:ok, "started host (nixos), deployment dep-1"}
@@ -120,6 +119,7 @@ defmodule Garden.DeploymentWaitTest do
                      "failed-to-start user (home-manager), deployment dep-1: skipped; already deployed"}
 
     refute_received {:ok, "started" <> _}
+    refute_received {:ok, "enqueued" <> _}
   end
 
   test "client disconnect stops observation without cancelling work" do
@@ -127,6 +127,45 @@ defmodule Garden.DeploymentWaitTest do
 
     assert 1 =
              Garden.DeploymentWait.observe("request-1", subscription(), 1000, fn _, _ -> :ok end)
+  end
+
+  test "no-wait requires the actual manifest but does not wait for workers" do
+    parent = self()
+
+    waiter =
+      spawn(fn ->
+        result =
+          Garden.DeploymentWait.observe(
+            "request-1",
+            nil,
+            1000,
+            fn kind, text -> send(parent, {kind, text}) end,
+            false
+          )
+
+        send(parent, {:finished, result})
+      end)
+
+    send(waiter, {:deployment_wait, "request-1", :accepted})
+    refute_receive {:finished, _}, 20
+    refute_receive {:ok, "enqueued" <> _}, 20
+    send(waiter, {:deployment_wait, "request-1", {:deployment, deployment("request-1")}})
+    assert_receive {:ok, "enqueued 2 seeds"}
+    assert_receive {:finished, 0}
+    refute_receive {:ok, "started" <> _}
+  end
+
+  test "empty pending plan terminates successfully without a manifest" do
+    send(self(), {:deployment_wait, "request-1", :empty})
+    parent = self()
+
+    assert 0 =
+             Garden.DeploymentWait.observe("request-1", nil, 1000, fn kind, text ->
+               send(parent, {kind, text})
+             end)
+
+    assert_received {:ok, "no pending deployments"}
+    refute_received {:ok, "enqueued" <> _}
   end
 
   defp subscription do

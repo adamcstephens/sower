@@ -34,6 +34,9 @@ defmodule SowerWeb.GardenChannelHandleInTest do
       assert_reply ref, :ok, %{pending_deployments: [pending]}, 1_000
       assert pending.seed_sid == seed.sid
       assert pending.seed_url == SowerWeb.Endpoint.url() <> "/seeds/#{seed.sid}"
+      assert pending.name == seed.name
+      assert pending.seed_type == seed.seed_type
+      assert pending.updated_at == seed.updated_at
       refute_push "deployment", _
       assert Sower.Repo.aggregate(Sower.Orchestration.Deployment, :count) == 0
     end
@@ -58,6 +61,139 @@ defmodule SowerWeb.GardenChannelHandleInTest do
   end
 
   describe "deployment:request" do
+    test "bare force selects each pending seed once and excludes inflight and successful work" do
+      %{socket: socket, garden: garden} = connect_and_join_garden()
+      seeds = for name <- ["first", "second", "current"], do: seed_fixture(%{name: name})
+
+      subscriptions =
+        Enum.map(seeds, fn seed ->
+          subscription_fixture(%{
+            garden_id: garden.id,
+            seed_name: seed.name,
+            seed_type: seed.seed_type
+          })
+        end)
+
+      subscription_fixture(%{
+        garden_id: garden.id,
+        name: "duplicate",
+        seed_name: hd(seeds).name,
+        seed_type: hd(seeds).seed_type
+      })
+
+      current = List.last(seeds)
+
+      deployment_fixture(%{
+        garden_id: garden.id,
+        seeds: [current],
+        subscriptions: [List.last(subscriptions)],
+        state: :completed,
+        result: :success
+      })
+
+      request_id = SowerClient.Sid.generate("req")
+
+      ref =
+        push(socket, "deployment:request", %{
+          "request_id" => request_id,
+          "subscription_sids" => [],
+          "force" => true
+        })
+
+      assert_reply ref, :ok, %{request_id: ^request_id}, 1_000
+      assert_push "deployment", manifest, 5_000
+
+      assert Enum.sort(Enum.map(manifest.seed_deployments, & &1.seed.sid)) ==
+               Enum.sort(Enum.map(Enum.take(seeds, 2), & &1.sid))
+
+      assert manifest.skipped == false
+
+      ref =
+        push(socket, "deployment:request", %{
+          "request_id" => SowerClient.Sid.generate("req"),
+          "subscription_sids" => [],
+          "force" => true
+        })
+
+      assert_reply ref, :ok, %{no_pending: true}, 1_000
+      refute_push "deployment", _
+    end
+
+    test "pending selection filters denied and confirmation policies before deduplicating seeds" do
+      %{socket: socket, garden: garden} = connect_and_join_garden()
+      shared = seed_fixture(%{name: "shared"})
+      denied = seed_fixture(%{name: "denied"})
+      confirmation = seed_fixture(%{name: "confirmation"})
+
+      for seed <- [shared, denied] do
+        subscription_fixture(%{
+          garden_id: garden.id,
+          seed_name: seed.name,
+          seed_type: seed.seed_type,
+          name: "denied-#{seed.name}",
+          policy: [%{actions: ["activate"], triggers: ["scheduled"]}]
+        })
+      end
+
+      subscription_fixture(%{
+        garden_id: garden.id,
+        seed_name: confirmation.name,
+        seed_type: confirmation.seed_type,
+        policy: [%{actions: ["activate"], triggers: ["manual"], confirm: true}]
+      })
+
+      allowed =
+        subscription_fixture(%{
+          garden_id: garden.id,
+          seed_name: shared.name,
+          seed_type: shared.seed_type,
+          name: "allowed",
+          policy: [%{actions: ["activate"], triggers: ["manual"]}]
+        })
+
+      ref = push(socket, "deployments:pending", %{})
+      assert_reply ref, :ok, %{pending_deployments: [pending]}, 1_000
+      assert pending.seed_sid == shared.sid
+
+      request_id = SowerClient.Sid.generate("req")
+
+      ref =
+        push(socket, "deployment:request", %{
+          "request_id" => request_id,
+          "subscription_sids" => [],
+          "force" => true
+        })
+
+      assert_reply ref, :ok, %{request_id: ^request_id}, 1_000
+      assert_push "deployment", manifest, 5_000
+      assert [accepted] = manifest.seed_deployments
+      assert accepted.seed.sid == shared.sid
+      assert accepted.subscription_sid == allowed.sid
+
+      ref =
+        push(socket, "deployment:request", %{
+          "request_id" => SowerClient.Sid.generate("req"),
+          "subscription_sids" => [],
+          "force" => true
+        })
+
+      assert_reply ref, :ok, %{no_pending: true}, 1_000
+      refute_push "deployment", _
+    end
+
+    test "empty pending requests reply immediately without dispatch" do
+      %{socket: socket} = connect_and_join_garden()
+
+      ref =
+        push(socket, "deployment:request", %{
+          "request_id" => SowerClient.Sid.generate("req"),
+          "subscription_sids" => []
+        })
+
+      assert_reply ref, :ok, %{no_pending: true}, 1_000
+      refute_push "deployment", _
+    end
+
     test "returns request_id for valid deployment request" do
       %{socket: socket, garden: garden} = connect_and_join_garden()
 

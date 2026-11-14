@@ -11,7 +11,9 @@ defmodule SowerClientTest do
     }
 
     assert {:ok, pending} = PendingDeployment.cast(payload)
-    assert Jason.decode!(Jason.encode!(pending)) == payload
+
+    assert Jason.decode!(Jason.encode!(pending)) ==
+             Map.merge(payload, %{"name" => nil, "seed_type" => nil, "updated_at" => nil})
 
     for field <- ["seed_sid", "seed_url"] do
       assert {:error, _} = PendingDeployment.cast(Map.delete(payload, field))

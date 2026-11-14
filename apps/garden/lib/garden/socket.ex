@@ -7,8 +7,8 @@ defmodule Garden.Socket do
   application settings established at boot or explicit configuration reload.
   Proxy failures preserve the existing identity.
 
-  Explicit start observers are correlated by request ID before submission;
-  deployment workers report starts directly, independently of server connectivity.
+  Deployment observers are correlated by request ID before submission, including
+  pending-only requests. Workers report starts independently of server connectivity.
   """
 
   use Garden.ChannelClient, lobby_topic: "garden:lobby"
@@ -27,7 +27,7 @@ defmodule Garden.Socket do
     GenServer.cast(__MODULE__, {:deployment_request, sub, force?})
   end
 
-  def observe_deployment(%SowerClient.Orchestration.Subscription{} = sub, force?, timeout_ms) do
+  def observe_deployment(sub, force?, timeout_ms) do
     case GenServer.whereis(__MODULE__) do
       nil ->
         {:error, :not_running}
@@ -179,7 +179,7 @@ defmodule Garden.Socket do
     topic = if garden_sid, do: "garden:#{garden_sid}"
 
     if is_binary(topic) and joined?(socket, topic) do
-      {:ok, request} = Lifecycle.build_deployment_request(sub.sid, force?)
+      {:ok, request} = Lifecycle.build_deployment_request(get_in(sub.sid), force?)
       monitor = Process.monitor(observer)
 
       case push_message(socket, request) do
@@ -707,6 +707,7 @@ defmodule Garden.Socket do
       if watch.ref == ref do
         event =
           case payload do
+            {:ok, %{"no_pending" => true}} -> :empty
             :ok -> :accepted
             {:ok, _} -> :accepted
             {:error, reason} -> {:rejected, inspect(reason)}

@@ -435,6 +435,7 @@ async fn resolve_seed(client: &Client, args: &DeployArgs) -> Result<String> {
         seed_type: prepared.seed_type.into_api(),
         sid: None,
         tags: prepared.tags,
+        updated_at: None,
     };
 
     let seed = client

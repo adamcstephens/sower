@@ -93,6 +93,43 @@ defmodule SowerClient.AdminTest do
                StatusReport.cast(%{"version" => "1.2.3"})
     end
 
+    test "status preserves old pending rows and optional server metadata" do
+      legacy = %{"seed_sid" => "seed", "seed_url" => "https://sower.example/seeds/seed"}
+
+      assert {:ok, report} =
+               StatusReport.cast(%{
+                 "version" => "1.2.3",
+                 "pending_deployments" => [legacy]
+               })
+
+      assert report.running_deployments == nil
+      assert hd(report.pending_deployments).name == nil
+      assert hd(report.pending_deployments).updated_at == nil
+
+      seed =
+        Map.merge(legacy, %{
+          "name" => "host",
+          "seed_type" => "nixos",
+          "updated_at" => "2026-11-14T18:00:00Z"
+        })
+
+      assert {:ok, report} =
+               StatusReport.cast(%{
+                 "version" => "1.2.3",
+                 "running_deployments" => [
+                   %{
+                     "deployment_sid" => "deployment",
+                     "deployment_url" => "https://sower.example/deployments/deployment",
+                     "seeds" => [seed]
+                   }
+                 ]
+               })
+
+      running_seed = report.running_deployments |> hd() |> Map.fetch!(:seeds) |> hd()
+      assert running_seed.name == "host"
+      assert running_seed.updated_at == "2026-11-14T18:00:00Z"
+    end
+
     test "Reply casts a complete frame with an exit code" do
       assert {:ok, %Reply{kind: "complete", exit_code: 0}} =
                Reply.cast(%{"id" => "a", "kind" => "complete", "exit_code" => 0})
@@ -107,6 +144,7 @@ defmodule SowerClient.AdminTest do
           "AdminReload",
           "AdminStatus",
           "AdminStatusReport",
+          "AdminRunningDeployment",
           "AdminReply"
         ] do
       assert Map.has_key?(spec.components.schemas, title), "#{title} missing from spec()"

@@ -1,4 +1,6 @@
 defmodule Sower.Orchestration.Seed do
+  @moduledoc "Persists seed artifacts and metadata and resolves subscription matches."
+
   use Sower.Schema
   use Flop.Schema
 
@@ -19,7 +21,7 @@ defmodule Sower.Orchestration.Seed do
 
   alias Ecto.Multi
 
-  @derive {Jason.Encoder, only: [:sid, :name, :seed_type, :artifact, :tags]}
+  @derive {Jason.Encoder, only: [:sid, :name, :seed_type, :artifact, :tags, :updated_at]}
 
   @derive {Phoenix.Param, key: :sid}
 

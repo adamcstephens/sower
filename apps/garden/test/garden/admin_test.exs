@@ -21,8 +21,8 @@ defmodule Garden.AdminTest do
         command = Deploy.cast!(selector)
         assert {:wait, ^sub, ^command} = Garden.Admin.handle(command)
 
-        assert {:ok, "deployment enqueued"} =
-                 Garden.Admin.handle(%{command | wait: false})
+        no_wait = %{command | wait: false}
+        assert {:wait, ^sub, ^no_wait} = Garden.Admin.handle(no_wait)
       end
     end
 
@@ -33,10 +33,15 @@ defmodule Garden.AdminTest do
       assert Garden.take_pending_reload() == true
     end
 
-    test "status reports the garden version" do
+    test "status reports the garden version without a configured server endpoint" do
+      config = Garden.Config.get()
+      on_exit(fn -> Application.put_env(:garden, :config, config) end)
+      Application.put_env(:garden, :config, %SowerClient.Config{endpoint: nil})
+
       assert {:status, %StatusReport{} = report} = Garden.Admin.handle(%Status{})
       assert report.version == to_string(Application.spec(:garden, :vsn))
       assert report.active_deployments == []
+      assert report.running_deployments == []
       assert report.credentials_rejected_at == nil
       assert report.pending_deployments == nil
     end
@@ -56,9 +61,11 @@ defmodule Garden.AdminTest do
       assert message =~ "not running"
     end
 
-    test "deploy without a seed_type or sid is an error" do
-      assert {:error, message} = Garden.Admin.handle(%Deploy{})
-      assert message =~ "seed_type or sid"
+    test "bare deploy observes pending work, including force and no-wait" do
+      for attrs <- [%{}, %{force: true}, %{wait: false}] do
+        command = Deploy.cast!(attrs)
+        assert {:wait, nil, ^command} = Garden.Admin.handle(command)
+      end
     end
   end
 end

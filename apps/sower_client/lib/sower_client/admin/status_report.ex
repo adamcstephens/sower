@@ -19,6 +19,12 @@ defmodule SowerClient.Admin.StatusReport do
         default: [],
         description: "Sids of deployments currently inflight"
       },
+      running_deployments: %Schema{
+        type: :array,
+        items: SowerClient.Admin.RunningDeployment,
+        nullable: true,
+        description: "Running deployments with seed metadata, absent on older gardens"
+      },
       pending_deployments: %Schema{
         type: :array,
         items: SowerClient.Orchestration.PendingDeployment,

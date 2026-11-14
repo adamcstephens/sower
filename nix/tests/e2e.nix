@@ -361,6 +361,7 @@ testers.runNixOSTest {
   testScript = # python
     ''
       import json
+      import re
       import shlex
       start_all()
       server.wait_for_unit("postgresql.service")
@@ -558,17 +559,38 @@ testers.runNixOSTest {
           # testuser's garden binds its socket under its own XDG_RUNTIME_DIR;
           # root connects to it explicitly (authorized as uid 0).
           hm_uid = server.succeed("id -u testuser").strip()
-          server.wait_until_succeeds(
-              f"sower garden trigger --type home-manager"
-              f" --socket /run/user/{hm_uid}/sower-garden/admin.sock",
-              timeout=30,
+          hm_socket = f"/run/user/{hm_uid}/sower-garden/admin.sock"
+          hm_seed_sid = api_field(
+              "GET", "/seeds/latest?name=testuser&seed_type=home-manager", "sid"
           )
+          status = server.succeed(f"sower garden status --socket {hm_socket}")
+          assert "SEED" in status and "TYPE" in status and "STATE" in status
+          assert "SEED UPDATED" in status
+          pending_row = next(line for line in status.splitlines() if hm_seed_sid in line)
+          assert "testuser" in pending_row and "home-manager" in pending_row
+          assert "pending" in pending_row
+          assert "unknown" not in pending_row
+          assert re.search(
+              r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})",
+              pending_row,
+          )
+          assert chr(27) + "]8;;" in pending_row
+          feedback = server.succeed(f"sower garden trigger --socket {hm_socket}")
+          assert "enqueued 1 seeds" in feedback
+          assert "started testuser (home-manager)" in feedback
+          assert "testuser" in feedback and "home-manager" in feedback
+          assert hm_seed_sid in feedback
           server.wait_until_succeeds(
               "su -l testuser -c '"
               "journalctl --user --no-pager -u sower-garden"
               " --grep=Completed.activation'",
               timeout=15,
           )
+          feedback = server.succeed(f"sower garden trigger --socket {hm_socket}")
+          assert "no pending deployments" in feedback.lower()
+          assert "enqueued" not in feedback.lower()
+          status = server.succeed(f"sower garden status --socket {hm_socket}")
+          assert "pending deployments: none" in status
 
       with subtest("canonical wrappers are built, published, and register their targets"):
           # Stop consumers while publishing so absence cannot race a deployment.

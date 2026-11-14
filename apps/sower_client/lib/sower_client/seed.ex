@@ -1,4 +1,6 @@
 defmodule SowerClient.Seed do
+  @moduledoc "Seed artifact, identity, and optional server metadata shared with gardens."
+
   use SowerClient.Schema
   use SowerClient.ChannelMessage, event: "get:seed"
 
@@ -24,6 +26,7 @@ defmodule SowerClient.Seed do
         description: "Type of the seed",
         enum: @seed_types
       },
+      updated_at: %Schema{type: :string, format: :date_time, nullable: true, readOnly: true},
       artifact: %Schema{
         type: :string,
         description: "Artifact of the seed"

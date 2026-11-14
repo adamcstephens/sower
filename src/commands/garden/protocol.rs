@@ -35,8 +35,7 @@ struct Envelope<'a, P: Serialize> {
     payload: Option<P>,
 }
 
-/// `deploy` payload. Either `seed_type` or `sid` scopes the deployment; the
-/// garden rejects a deploy carrying neither.
+/// `deploy` payload. Without a scope, the garden deploys pending seeds.
 #[derive(Debug, Serialize)]
 struct DeployPayload<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -135,6 +134,20 @@ pub enum ReplyKind {
 pub struct PendingDeployment {
     pub seed_sid: String,
     pub seed_url: String,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub seed_type: Option<String>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RunningDeployment {
+    pub deployment_sid: String,
+    pub deployment_url: String,
+    #[serde(default)]
+    pub seeds: Vec<PendingDeployment>,
 }
 
 /// Garden status returned on the ok frame of a `status` request.
@@ -143,6 +156,8 @@ pub struct StatusReport {
     pub version: String,
     #[serde(default)]
     pub active_deployments: Vec<String>,
+    #[serde(default)]
+    pub running_deployments: Option<Vec<RunningDeployment>>,
     /// Missing or null means pending deployments could not be determined.
     #[serde(default)]
     pub pending_deployments: Option<Vec<PendingDeployment>>,
@@ -225,6 +240,24 @@ mod tests {
         let status = reply.status.unwrap();
         assert_eq!(status.version, "1.2.3");
         assert_eq!(status.active_deployments, vec!["a", "b"]);
+    }
+
+    #[test]
+    fn parse_pending_metadata_and_legacy_rows() {
+        let reply = parse_reply(
+            r#"{"kind":"ok","status":{"version":"1.2.3","pending_deployments":[{"seed_sid":"old","seed_url":"https://sower.example/seeds/old"},{"seed_sid":"new","seed_url":"https://sower.example/seeds/new","name":"新しい seed","seed_type":"nixos","updated_at":"2026-11-14T19:00:00Z"}]}}"#,
+        )
+        .unwrap();
+        let pending = reply.status.unwrap().pending_deployments.unwrap();
+        assert!(pending[0].name.is_none());
+        assert!(pending[0].seed_type.is_none());
+        assert!(pending[0].updated_at.is_none());
+        assert_eq!(pending[1].name.as_deref(), Some("新しい seed"));
+        assert_eq!(pending[1].seed_type.as_deref(), Some("nixos"));
+        assert_eq!(
+            pending[1].updated_at.as_deref(),
+            Some("2026-11-14T19:00:00Z")
+        );
     }
 
     #[test]

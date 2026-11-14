@@ -296,6 +296,14 @@
             "type": "array",
             "x-struct": null,
             "x-validate": null
+          },
+          "updated_at": {
+            "format": "date_time",
+            "nullable": true,
+            "readOnly": true,
+            "type": "string",
+            "x-struct": null,
+            "x-validate": null
           }
         },
         "required": [
@@ -403,7 +411,7 @@
   },
   "info": {
     "title": "sower",
-    "version": "0.13.4"
+    "version": "0.13.5"
   },
   "openapi": "3.0.0",
   "paths": {

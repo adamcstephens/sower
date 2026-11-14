@@ -263,19 +263,20 @@ defmodule Garden.AdminSocket do
         end
 
         remaining = max(deadline - System.monotonic_time(:millisecond), 0)
-        exit_code = Garden.DeploymentWait.observe(request_id, sub, remaining, emit)
+        exit_code = Garden.DeploymentWait.observe(request_id, sub, remaining, emit, command.wait)
         Process.demonitor(monitor, [:flush])
         write_frame(client, complete_frame(id, exit_code))
 
       {:error, :unconfirmed} ->
         send_frames(client, id, :error, %{
           "data" =>
-            "start unconfirmed #{sub.seed_name} (#{sub.seed_type}), deployment unavailable: submission interrupted or timed out; work may still run"
+            "start unconfirmed #{Garden.DeploymentWait.request_identity(sub)}, deployment unavailable: submission interrupted or timed out; work may still run"
         })
 
       {:error, reason} ->
         send_frames(client, id, :error, %{
-          "data" => "failed-to-start #{sub.seed_name} (#{sub.seed_type}): #{inspect(reason)}"
+          "data" =>
+            "failed-to-start #{Garden.DeploymentWait.request_identity(sub)}: #{inspect(reason)}"
         })
     end
   end
@@ -310,6 +311,7 @@ defmodule Garden.AdminSocket do
     %{
       "version" => status.version,
       "active_deployments" => status.active_deployments,
+      "running_deployments" => status.running_deployments,
       "pending_deployments" => status.pending_deployments,
       "credentials_rejected_at" => status.credentials_rejected_at
     }

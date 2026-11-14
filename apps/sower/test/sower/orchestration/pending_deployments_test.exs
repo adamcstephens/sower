@@ -95,4 +95,78 @@ defmodule Sower.Orchestration.PendingDeploymentsTest do
     assert Enum.map(Deployment.pending_seeds(garden), & &1.sid) == [seed.sid]
     assert Repo.all(Deployment) == before
   end
+
+  test "successful multi-seed deployments keep every member current", %{garden: garden} do
+    seeds = for name <- ["host-a", "host-b"], do: seed_fixture(%{name: name})
+
+    subscriptions =
+      Enum.map(seeds, fn seed ->
+        subscription_fixture(%{
+          garden_id: garden.id,
+          seed_name: seed.name,
+          seed_type: seed.seed_type
+        })
+      end)
+
+    request =
+      SowerClient.Orchestration.DeploymentRequest.cast!(%{
+        request_id: SowerClient.Sid.generate("req"),
+        subscription_sids: Enum.map(subscriptions, & &1.sid)
+      })
+
+    assert {:ok, dispatched} = Deployment.request_deployment(request)
+    deployment = Deployment.get_deployment_sid!(dispatched.sid)
+
+    assert {:ok, _} =
+             Deployment.update_deployment(deployment, %{state: :completed, result: :success})
+
+    assert Deployment.pending_seeds(garden) == []
+
+    assert {:ok, :no_pending} =
+             Deployment.handle_deployment_request(
+               %{request | subscription_sids: [], force: true},
+               garden
+             )
+  end
+
+  test "partial success keeps successful seeds current and failed seeds pending", %{
+    garden: garden
+  } do
+    seeds = for name <- ["successful", "failed"], do: seed_fixture(%{name: name})
+
+    subscriptions =
+      Enum.map(seeds, fn seed ->
+        subscription_fixture(%{
+          garden_id: garden.id,
+          seed_name: seed.name,
+          seed_type: seed.seed_type
+        })
+      end)
+
+    request =
+      SowerClient.Orchestration.DeploymentRequest.cast!(%{
+        request_id: SowerClient.Sid.generate("req"),
+        subscription_sids: Enum.map(subscriptions, & &1.sid)
+      })
+
+    assert {:ok, dispatched} = Deployment.request_deployment(request)
+    deployment = Deployment.get_deployment_sid!(dispatched.sid)
+
+    for {seed, result} <- Enum.zip(seeds, [:success, :failure]) do
+      assert {:ok, %{}} =
+               Sower.Orchestration.SeedDeployment.record_seed_result(
+                 %SowerClient.Orchestration.SeedDeploymentResult{
+                   deployment_sid: deployment.sid,
+                   seed_sid: seed.sid,
+                   result: result
+                 },
+                 garden
+               )
+    end
+
+    assert {:ok, _} =
+             Deployment.update_deployment(deployment, %{state: :completed, result: :partial})
+
+    assert Enum.map(Deployment.pending_seeds(garden), & &1.sid) == [List.last(seeds).sid]
+  end
 end

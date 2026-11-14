@@ -29,6 +29,7 @@ defmodule SowerClient do
       SowerClient.Admin.Reregister,
       SowerClient.Admin.Status,
       SowerClient.Admin.StatusReport,
+      SowerClient.Admin.RunningDeployment,
       SowerClient.Admin.Reply,
       SowerClient.GardenRegistration,
       SowerClient.Auth.OAuthCredentials,
@@ -214,5 +215,22 @@ defmodule SowerClient.Activator.NetworkLease do
       dns: %Schema{type: :string}
     },
     required: [:lease, :tap, :mac, :address, :gateway, :dns]
+  })
+end
+
+defmodule SowerClient.Admin.RunningDeployment do
+  @moduledoc "Running deployment identity and seed metadata for local garden status."
+
+  use SowerClient.Schema
+
+  OpenApiSpex.schema(%{
+    title: "AdminRunningDeployment",
+    type: :object,
+    properties: %{
+      deployment_sid: %Schema{type: :string},
+      deployment_url: %Schema{type: :string},
+      seeds: %Schema{type: :array, items: SowerClient.Orchestration.PendingDeployment}
+    },
+    required: [:deployment_sid, :deployment_url, :seeds]
   })
 end
