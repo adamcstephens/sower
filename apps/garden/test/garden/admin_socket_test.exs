@@ -63,8 +63,16 @@ defmodule Garden.AdminSocketTest do
       assert Task.yield(result, 20) == nil
       send(observer, {:deployment_wait, "request-1", {:started, "seed-1"}})
       frames = Task.await(result)
-      assert Enum.any?(frames, &(&1["data"] == "accepted host (nixos), deployment dep-1"))
-      assert Enum.any?(frames, &(&1["data"] == "waiting host (nixos), deployment dep-1"))
+      assert Enum.any?(frames, &(&1["data"] == "enqueued 1 seeds"))
+
+      assert Enum.any?(
+               frames,
+               &String.starts_with?(
+                 &1["data"] || "",
+                 "enqueued host (nixos), deployment dep-1, seed "
+               )
+             )
+
       assert Enum.any?(frames, &(&1["data"] == "started host (nixos), deployment dep-1"))
 
       assert List.last(frames) == %{
@@ -89,10 +97,10 @@ defmodule Garden.AdminSocketTest do
 
       client = connect(path)
       :ok = :gen_tcp.send(client, [Jason.encode!(%{"kind" => "deploy"}), "\n"])
-      assert_receive {:observer, observer}
+      assert_receive {:observer, observer}, 1_000
       monitor = Process.monitor(observer)
       :gen_tcp.close(client)
-      assert_receive {:DOWN, ^monitor, :process, ^observer, :normal}
+      assert_receive {:DOWN, ^monitor, :process, ^observer, :normal}, 1_000
     end
 
     test "passes the typed command to the handler and streams ok then complete" do
@@ -156,10 +164,14 @@ defmodule Garden.AdminSocketTest do
                "status" => %{
                  "version" => "9.9.9",
                  "active_deployments" => ["dep-1"],
+                 "running_deployments" => nil,
                  "pending_deployments" => [
                    %{
                      "seed_sid" => "seed_pending",
-                     "seed_url" => "https://sower.example/seeds/seed_pending"
+                     "seed_url" => "https://sower.example/seeds/seed_pending",
+                     "name" => nil,
+                     "seed_type" => nil,
+                     "updated_at" => nil
                    }
                  ],
                  "credentials_rejected_at" => "2026-08-29T00:00:00Z"

@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
 
-use super::protocol::{self, MAX_LINE_BYTES, Reply, ReplyKind, StatusReport};
+use super::protocol::{self, MAX_LINE_BYTES, PendingDeployment, Reply, ReplyKind, StatusReport};
 
 /// Bound idle reads for immediate admin commands.
 const REPLY_TIMEOUT: Duration = Duration::from_secs(30);
@@ -86,32 +86,52 @@ fn emit_error<E: Write>(reply: &Reply, err: &mut E) -> Result<()> {
 
 fn write_status<O: Write>(status: &StatusReport, out: &mut O) -> Result<()> {
     writeln!(out, "version: {}", status.version)?;
-    if status.active_deployments.is_empty() {
-        writeln!(out, "active deployments: none")?;
-    } else {
-        writeln!(
-            out,
-            "active deployments: {}",
-            status.active_deployments.join(", ")
-        )?;
+    let mut table = comfy_table::Table::new();
+    table
+        .load_style(comfy_table::presets::NOTHING)
+        .set_content_arrangement(comfy_table::ContentArrangement::Disabled)
+        .set_header(["SEED", "TYPE", "STATE", "SEED UPDATED"]);
+    match &status.running_deployments {
+        Some(running) => {
+            for deployment in running {
+                let state = format!(
+                    "running {}",
+                    hyperlink(&deployment.deployment_url, &deployment.deployment_sid)
+                );
+                if deployment.seeds.is_empty() {
+                    table.add_row(["unknown", "unknown", &state, "unknown"]);
+                } else {
+                    for seed in &deployment.seeds {
+                        table.add_row(seed_row(seed, &state));
+                    }
+                }
+            }
+        }
+        None => {
+            for sid in &status.active_deployments {
+                table.add_row(["unknown", "unknown", &format!("running {sid}"), "unknown"]);
+            }
+        }
+    }
+    if let Some(pending) = &status.pending_deployments {
+        for seed in pending {
+            table.add_row(seed_row(seed, "pending"));
+        }
+    }
+    writeln!(out, "{}", table.trim_fmt())?;
+    if status
+        .running_deployments
+        .as_ref()
+        .map_or(status.active_deployments.is_empty(), |running| {
+            running.is_empty()
+        })
+    {
+        writeln!(out, "running deployments: none")?;
     }
     match status.pending_deployments.as_deref() {
         None => writeln!(out, "pending deployments: unknown")?,
         Some([]) => writeln!(out, "pending deployments: none")?,
-        Some(pending) => {
-            write!(out, "pending deployments: ")?;
-            for (index, deployment) in pending.iter().enumerate() {
-                if index > 0 {
-                    write!(out, ", ")?;
-                }
-                write!(
-                    out,
-                    "\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\",
-                    deployment.seed_url, deployment.seed_sid
-                )?;
-            }
-            writeln!(out)?;
-        }
+        Some(_) => {}
     }
     match &status.credentials_rejected_at {
         Some(at) => writeln!(
@@ -121,6 +141,24 @@ fn write_status<O: Write>(status: &StatusReport, out: &mut O) -> Result<()> {
         None => writeln!(out, "credentials: ok")?,
     }
     Ok(())
+}
+
+fn hyperlink(url: &str, label: &str) -> String {
+    format!("\x1b]8;;{url}\x1b\\{label}\x1b]8;;\x1b\\")
+}
+
+fn seed_row(seed: &PendingDeployment, state: &str) -> [String; 4] {
+    let sid = hyperlink(&seed.seed_url, &seed.seed_sid);
+    let label = match seed.name.as_deref() {
+        Some(name) => format!("{} ({sid})", hyperlink(&seed.seed_url, name)),
+        None => sid,
+    };
+    [
+        label,
+        seed.seed_type.as_deref().unwrap_or("unknown").to_owned(),
+        state.to_owned(),
+        seed.updated_at.as_deref().unwrap_or("unknown").to_owned(),
+    ]
 }
 
 /// Read a single newline-terminated line, capping its length at `max` bytes so
@@ -263,20 +301,95 @@ mod tests {
         let (code, out, err) = stream(input);
         assert_eq!(code, 0);
         assert!(err.is_empty());
-        let pending = out
-            .lines()
-            .find(|line| line.starts_with("pending deployments: "))
-            .unwrap();
-        assert_eq!(
-            pending.as_bytes(),
-            concat!(
-                "pending deployments: ",
-                "\x1b]8;;https://sower.example/seeds/seed-a\x1b\\seed-a\x1b]8;;\x1b\\",
-                ", ",
-                "\x1b]8;;https://sower.example/seeds/seed-b\x1b\\seed-b\x1b]8;;\x1b\\"
-            )
-            .as_bytes()
+        assert!(out.contains(&hyperlink("https://sower.example/seeds/seed-a", "seed-a")));
+        assert!(out.contains(&hyperlink("https://sower.example/seeds/seed-b", "seed-b")));
+        assert_eq!(out.matches("pending").count(), 2);
+    }
+
+    #[test]
+    fn unified_table_preserves_links_and_aligns_unicode_display_width() {
+        let status = serde_json::json!({
+            "version": "1.2.3",
+            "active_deployments": ["deploy-a"],
+            "running_deployments": [{
+                "deployment_sid": "deploy-a",
+                "deployment_url": "https://sower.example/deployments/deploy-a",
+                "seeds": [{
+                    "seed_sid": "seed-a",
+                    "seed_url": "https://sower.example/seeds/seed-a",
+                    "name": "庭🌱",
+                    "seed_type": "nixos",
+                    "updated_at": "2026-11-14T19:00:00Z"
+                }]
+            }],
+            "pending_deployments": [{
+                "seed_sid": "seed-b",
+                "seed_url": "https://sower.example/seeds/seed-b",
+                "name": "cafe\u{301}",
+                "seed_type": "nixos",
+                "updated_at": "2026-11-14T20:00:00+01:00"
+            }]
+        });
+        let input = format!(
+            "{{\"kind\":\"ok\",\"status\":{status}}}\n{{\"kind\":\"complete\",\"exit_code\":0}}\n"
         );
+        let (_, out, err) = stream(&input);
+        assert!(err.is_empty());
+        for (url, text) in [
+            ("https://sower.example/seeds/seed-a", "庭🌱"),
+            ("https://sower.example/seeds/seed-a", "seed-a"),
+            ("https://sower.example/seeds/seed-b", "cafe\u{301}"),
+            ("https://sower.example/seeds/seed-b", "seed-b"),
+            ("https://sower.example/deployments/deploy-a", "deploy-a"),
+        ] {
+            assert!(out.contains(&hyperlink(url, text)));
+        }
+        let header = out
+            .lines()
+            .find(|line| line.contains("SEED UPDATED"))
+            .unwrap();
+        let type_column = console::measure_text_width(&header[..header.find("TYPE").unwrap()]);
+        let state_column = console::measure_text_width(&header[..header.find("STATE").unwrap()]);
+        let updated_column =
+            console::measure_text_width(&header[..header.find("SEED UPDATED").unwrap()]);
+        for (row, state, updated) in [
+            ("庭🌱", "running ", "2026-11-14T19:00:00Z"),
+            ("cafe\u{301}", "pending", "2026-11-14T20:00:00+01:00"),
+        ] {
+            let line = out.lines().find(|line| line.contains(row)).unwrap();
+            assert_eq!(
+                console::measure_text_width(&line[..line.find("nixos").unwrap()]),
+                type_column
+            );
+            assert_eq!(
+                console::measure_text_width(&line[..line.find(state).unwrap()]),
+                state_column
+            );
+            assert_eq!(
+                console::measure_text_width(&line[..line.find(updated).unwrap()]),
+                updated_column
+            );
+        }
+        assert_eq!(out.matches("SEED UPDATED").count(), 1);
+        assert!(!out.contains("active"));
+        assert!(out.contains("version: 1.2.3"));
+        assert!(out.contains("credentials: ok"));
+    }
+
+    #[test]
+    fn legacy_running_and_pending_rows_remain_readable() {
+        let input = concat!(
+            r#"{"kind":"ok","status":{"version":"old","active_deployments":["deploy-old"],"pending_deployments":[{"seed_sid":"seed-old","seed_url":"https://sower.example/seeds/seed-old"}]}}"#,
+            "\n{\"kind\":\"complete\",\"exit_code\":0}\n"
+        );
+        let (_, out, _) = stream(input);
+        assert!(out.contains("running deploy-old"));
+        assert!(out.contains(&hyperlink(
+            "https://sower.example/seeds/seed-old",
+            "seed-old"
+        )));
+        assert!(out.contains("unknown"));
+        assert!(!out.contains("pending deployments: none"));
     }
 
     #[test]

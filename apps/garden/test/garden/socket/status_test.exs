@@ -47,6 +47,18 @@ defmodule Garden.Socket.StatusTest do
     assert Map.has_key?(cleaned.assigns.active_deployments, "dep")
   end
 
+  test "empty pending replies finish observation without accepting deployment work" do
+    watch = %Garden.DeploymentWait.Watch{pid: self(), monitor: make_ref(), ref: "ref"}
+
+    socket =
+      Slipstream.new_socket()
+      |> Slipstream.Socket.assign(:start_observers, %{"request-1" => watch})
+
+    Garden.Socket.handle_reply("ref", {:ok, %{"no_pending" => true}}, socket)
+    assert_received {:deployment_wait, "request-1", :empty}
+    refute_received {:deployment_wait, "request-1", :accepted}
+  end
+
   test "forwards server rejection only to the matching request" do
     watch = %Garden.DeploymentWait.Watch{pid: self(), monitor: make_ref(), ref: "ref"}
 

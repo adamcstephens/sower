@@ -1,4 +1,6 @@
 defmodule SowerClient.Orchestration.DeploymentRequest do
+  @moduledoc "Requests scoped deployment or server-selected pending work for a garden."
+
   use SowerClient.Schema
   use SowerClient.ChannelMessage, event: "deployment:request"
 

@@ -13,6 +13,8 @@ defmodule SowerWeb.GardenChannel.Impl do
 end
 
 defmodule SowerWeb.GardenChannel do
+  @moduledoc "Authenticated garden channel for deployment requests, status, and reports."
+
   use Phoenix.Channel
   use SowerWeb, :verified_routes
 
@@ -126,7 +128,10 @@ defmodule SowerWeb.GardenChannel do
           |> Enum.map(fn seed ->
             %SowerClient.Orchestration.PendingDeployment{
               seed_sid: seed.sid,
-              seed_url: url(~p"/seeds/#{seed.sid}")
+              seed_url: url(~p"/seeds/#{seed.sid}"),
+              name: seed.name,
+              seed_type: seed.seed_type,
+              updated_at: seed.updated_at
             }
           end)
 
@@ -142,6 +147,9 @@ defmodule SowerWeb.GardenChannel do
            req,
            socket.assigns.garden
          ) do
+      {:ok, :no_pending} ->
+        {:ok, %{request_id: req.request_id, no_pending: true}}
+
       {:ok, request_id, _pid} ->
         {:ok, %{request_id: request_id}}
 

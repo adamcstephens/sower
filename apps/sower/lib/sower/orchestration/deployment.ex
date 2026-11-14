@@ -1,4 +1,13 @@
 defmodule Sower.Orchestration.Deployment do
+  @moduledoc """
+  Persists, plans, and dispatches garden deployments.
+
+  Pending plans select manually permitted subscriptions and use seed membership
+  across successful and unresolved deployments, including multi-seed deployments.
+  Requests use the existing asynchronous dispatch path; empty selectors select
+  only pending work.
+  """
+
   use Sower.Schema
   use Flop.Schema
   import Ecto.Changeset
@@ -431,18 +440,58 @@ defmodule Sower.Orchestration.Deployment do
   end
 
   @doc """
-  Returns the newest matching seeds not skipped by a normal subscription deployment.
+  Returns the newest matching seeds permitted for manual deployment and not current or inflight.
   This only reads deployment state; it does not create, dispatch, or cancel deployments.
   """
   def pending_seeds(%Garden{} = garden) do
     garden
-    |> Subscription.list_subscriptions_for_garden()
-    |> Enum.map(&match_seed/1)
-    |> Enum.reject(&is_nil/1)
+    |> pending_plan()
+    |> Enum.map(fn {_subscription, seed} -> seed end)
     |> Enum.uniq_by(& &1.id)
-    |> Enum.filter(fn seed ->
-      find_duplicate_deployment(garden.id, compute_content_hash([seed]), false) == :proceed
+  end
+
+  defp pending_plan(%Garden{} = garden) do
+    now = DateTime.utc_now()
+
+    deployed_seed_ids =
+      from(d in __MODULE__,
+        join: sd in assoc(d, :seed_deployments),
+        where:
+          d.garden_id == ^garden.id and
+            (sd.result == :success or d.result == :success or
+               d.state in [:created, :dispatched, :acknowledged]),
+        select: sd.seed_id
+      )
+      |> Repo.all()
+      |> MapSet.new()
+
+    from(s in Subscription,
+      where: s.garden_id == ^garden.id,
+      order_by: [asc: s.inserted_at, asc: s.id]
+    )
+    |> Repo.all()
+    |> Enum.filter(fn subscription ->
+      match?(
+        {:allow, _},
+        SowerClient.Orchestration.Subscription.Policy.evaluate(
+          subscription.policy,
+          :manual,
+          now,
+          subscription.seed_type,
+          subscription.timezone
+        )
+      )
     end)
+    |> Enum.flat_map(fn subscription ->
+      case match_seed(subscription) do
+        nil ->
+          []
+
+        seed ->
+          if MapSet.member?(deployed_seed_ids, seed.id), do: [], else: [{subscription, seed}]
+      end
+    end)
+    |> Enum.uniq_by(fn {_subscription, seed} -> seed.id end)
   end
 
   # Deployment request handling
@@ -611,6 +660,33 @@ defmodule Sower.Orchestration.Deployment do
   end
 
   def handle_deployment_request(
+        %SowerClient.Orchestration.DeploymentRequest{subscription_sids: []} = request,
+        %Garden{} = garden
+      ) do
+    case pending_plan(garden) do
+      [] ->
+        {:ok, :no_pending}
+
+      plan ->
+        subscriptions = Enum.map(plan, fn {subscription, _seed} -> subscription end)
+
+        seed_deployments =
+          Enum.map(plan, fn {subscription, seed} ->
+            %SowerClient.Orchestration.SeedDeployment{
+              seed: seed,
+              subscription_sid: subscription.sid
+            }
+          end)
+
+        process_deployment(request.request_id, subscriptions, garden,
+          seed_deployments: seed_deployments,
+          actor_sid: garden.sid,
+          event_reason: :realtime_triggered
+        )
+    end
+  end
+
+  def handle_deployment_request(
         %SowerClient.Orchestration.DeploymentRequest{} = request,
         garden
       ) do
@@ -622,6 +698,8 @@ defmodule Sower.Orchestration.Deployment do
              event_reason: :realtime_triggered
            ) do
       {:ok, request_id, pid}
+    else
+      {:error, _} = error -> error
     end
   end
 
@@ -811,21 +889,23 @@ defmodule Sower.Orchestration.Deployment do
 
   defp do_deployment(request_id, subscriptions, opts) do
     seed_deploys =
-      subscriptions
-      |> Enum.reduce([], fn sub, acc ->
-        case Keyword.get(opts, :seed) || match_seed(sub) do
-          nil ->
-            acc
+      Keyword.get_lazy(opts, :seed_deployments, fn ->
+        subscriptions
+        |> Enum.reduce([], fn sub, acc ->
+          case Keyword.get(opts, :seed) || match_seed(sub) do
+            nil ->
+              acc
 
-          seed ->
-            [
-              %SowerClient.Orchestration.SeedDeployment{
-                seed: seed,
-                subscription_sid: sub.sid
-              }
-              | acc
-            ]
-        end
+            seed ->
+              [
+                %SowerClient.Orchestration.SeedDeployment{
+                  seed: seed,
+                  subscription_sid: sub.sid
+                }
+                | acc
+              ]
+          end
+        end)
       end)
 
     dispatch_seed_deploys(

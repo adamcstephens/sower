@@ -5,7 +5,7 @@
 //! `UnixStream`, sends one `{v, id, kind, payload}` request envelope, streams
 //! the reply frames, and exits with the terminal `complete` frame's exit code.
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 use clap::{Args, Subcommand};
 use std::path::PathBuf;
 
@@ -38,12 +38,12 @@ pub struct GardenArgs {
 
 #[derive(Debug, Subcommand)]
 enum GardenCommand {
-    /// Trigger deployment by seed type or subscription sid.
+    /// Trigger pending deployments, or scope deployment by type or subscription.
     /// Wait up to 30 seconds for execution starts, not completion.
     Trigger(TriggerArgs),
     /// Request a reload (the same path as a SIGHUP).
     Reload,
-    /// Report the garden version, active deployments, and linked pending seeds.
+    /// Report the garden version, running deployments, and pending seeds.
     Status,
     /// Discard this garden's identity and enroll a new one. The recovery path
     /// for a garden the server no longer knows.
@@ -97,19 +97,14 @@ pub fn run(args: GardenArgs) -> Result<()> {
 
 fn build_request_line(id: &str, command: &GardenCommand) -> Result<String> {
     match command {
-        GardenCommand::Trigger(trigger) => {
-            if trigger.seed_type.is_none() && trigger.sid.is_none() {
-                bail!("trigger requires --type or --sid");
-            }
-            protocol::deploy_request(
-                id,
-                trigger.seed_type.map(SeedType::as_str),
-                trigger.sid.as_deref(),
-                trigger.force,
-                !trigger.no_wait,
-                trigger.timeout.unwrap_or(30),
-            )
-        }
+        GardenCommand::Trigger(trigger) => protocol::deploy_request(
+            id,
+            trigger.seed_type.map(SeedType::as_str),
+            trigger.sid.as_deref(),
+            trigger.force,
+            !trigger.no_wait,
+            trigger.timeout.unwrap_or(30),
+        ),
         GardenCommand::Reload => protocol::reload_request(id),
         GardenCommand::Status => protocol::status_request(id),
         GardenCommand::Reregister => protocol::reregister_request(id),
@@ -137,7 +132,7 @@ mod tests {
     }
 
     #[test]
-    fn trigger_without_type_or_sid_is_rejected() {
+    fn trigger_without_type_or_sid_requests_pending_deployments() {
         let cmd = GardenCommand::Trigger(TriggerArgs {
             seed_type: None,
             sid: None,
@@ -145,7 +140,12 @@ mod tests {
             no_wait: false,
             timeout: None,
         });
-        assert!(build_request_line("1", &cmd).is_err());
+        let v = json(&build_request_line("1", &cmd).unwrap());
+        assert_eq!(v["kind"], "deploy");
+        assert!(v["payload"].get("seed_type").is_none());
+        assert!(v["payload"].get("sid").is_none());
+        assert_eq!(v["payload"]["wait"], true);
+        assert_eq!(v["payload"]["timeout"], 30);
     }
 
     #[test]

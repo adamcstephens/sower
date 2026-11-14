@@ -1,11 +1,11 @@
 defmodule Garden.DeploymentWait do
   @moduledoc """
-  Observes one explicitly requested deployment until every seed worker starts.
+  Observes scoped or pending deployment requests through the existing manifest.
 
   The admin connection owns the observation. Request IDs isolate concurrent
-  triggers; the deployment manifest fixes the expected seed membership. Only
-  worker start messages resolve a seed successfully. Deadlines and disconnects
-  end observation, never deployment work.
+  triggers; the deployment manifest fixes accepted seed membership. By default,
+  worker start messages resolve each seed; no-wait returns on the manifest.
+  Deadlines and disconnects end observation, never deployment work.
   """
 
   use TypedStruct
@@ -22,17 +22,19 @@ defmodule Garden.DeploymentWait do
   typedstruct module: State do
     @moduledoc "Connection-owned observation with an absolute monotonic deadline."
     field :request_id, String.t(), enforce: true
-    field :subscription, Subscription.t(), enforce: true
+    field :subscription, Subscription.t()
+    field :wait, boolean(), default: true
     field :deadline, integer(), enforce: true
     field :emit, function(), enforce: true
     field :deployment, struct()
     field :pending, map(), default: %{}
   end
 
-  def observe(request_id, %Subscription{} = subscription, timeout_ms, emit) do
+  def observe(request_id, subscription, timeout_ms, emit, wait \\ true) do
     state = %State{
       request_id: request_id,
       subscription: subscription,
+      wait: wait,
       deadline: System.monotonic_time(:millisecond) + timeout_ms,
       emit: emit
     }
@@ -47,22 +49,35 @@ defmodule Garden.DeploymentWait do
 
     receive do
       {:deployment_wait, ^request_id, :accepted} ->
-        state.emit.(:ok, "accepted request #{state.request_id}; waiting for execution start")
+        state.emit.(:ok, "request received #{state.request_id}; waiting for deployment")
         await(state)
+
+      {:deployment_wait, ^request_id, :empty} ->
+        state.emit.(:ok, "no pending deployments")
+        0
 
       {:deployment_wait, ^request_id, {:deployment, deployment}} ->
         pending = Map.new(deployment.seed_deployments, &{&1.seed.sid, &1.seed})
         state = %{state | deployment: deployment, pending: pending}
 
-        Enum.each(pending, fn {_sid, seed} ->
-          state.emit.(:ok, "accepted #{seed_identity(seed, deployment.sid)}")
-          state.emit.(:ok, "waiting #{seed_identity(seed, deployment.sid)}")
-        end)
-
         cond do
-          deployment.skipped -> fail(state, "failed-to-start", "skipped; already deployed")
-          map_size(pending) == 0 -> fail(state, "failed-to-start", "no seeds accepted")
-          true -> await(state)
+          deployment.skipped ->
+            fail(state, "failed-to-start", "skipped; already deployed")
+
+          map_size(pending) == 0 ->
+            fail(state, "failed-to-start", "no seeds accepted")
+
+          true ->
+            state.emit.(:ok, "enqueued #{map_size(pending)} seeds")
+
+            Enum.each(pending, fn {_sid, seed} ->
+              state.emit.(
+                :ok,
+                "enqueued #{seed_identity(seed, deployment.sid)}, seed #{seed.sid}"
+              )
+            end)
+
+            if state.wait, do: await(state), else: 0
         end
 
       {:deployment_wait, ^request_id, {:started, sid}} when not is_nil(state.deployment) ->
@@ -115,8 +130,13 @@ defmodule Garden.DeploymentWait do
   end
 
   defp identity(%State{} = state) do
-    "#{state.subscription.seed_name} (#{state.subscription.seed_type}), request #{state.request_id}, deployment unavailable"
+    "#{request_identity(state.subscription)}, request #{state.request_id}, deployment unavailable"
   end
+
+  def request_identity(nil), do: "pending deployments"
+
+  def request_identity(%Subscription{} = subscription),
+    do: "#{subscription.seed_name} (#{subscription.seed_type})"
 
   defp seed_identity(seed, deployment_sid) do
     "#{seed.name} (#{seed.seed_type}), deployment #{deployment_sid}"

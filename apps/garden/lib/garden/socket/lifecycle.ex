@@ -44,6 +44,10 @@ defmodule Garden.Socket.Lifecycle do
   def rejection_action({:server_rejected, _status, :unknown_client}), do: :await_operator
   def rejection_action(_reason), do: :retry
 
+  def build_deployment_request(nil, _force?) do
+    DeploymentRequest.new(%{subscription_sids: []})
+  end
+
   def build_deployment_request(sid, force?) do
     payload = %{subscription_sids: [sid]}
 

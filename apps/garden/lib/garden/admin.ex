@@ -56,12 +56,35 @@ defmodule Garden.Admin do
   """
   def status do
     version = to_string(Application.spec(:garden, :vsn))
-    active = Garden.Socket.active_deployments() |> Map.keys()
+    active = Garden.Socket.active_deployments()
+
+    running =
+      Enum.map(active, fn {sid, deployment} ->
+        endpoint = String.trim_trailing(Garden.Config.get().endpoint, "/")
+
+        %SowerClient.Admin.RunningDeployment{
+          deployment_sid: sid,
+          deployment_url: "#{endpoint}/deployments/#{sid}",
+          seeds:
+            Enum.map(deployment.seed_deployments, fn seed_deployment ->
+              seed = seed_deployment.seed
+
+              %SowerClient.Orchestration.PendingDeployment{
+                seed_sid: seed.sid,
+                seed_url: "#{endpoint}/seeds/#{seed.sid}",
+                name: seed.name,
+                seed_type: seed.seed_type,
+                updated_at: seed.updated_at
+              }
+            end)
+        }
+      end)
 
     {:status,
      StatusReport.cast!(%{
        version: version,
-       active_deployments: active,
+       active_deployments: Map.keys(active),
+       running_deployments: running,
        pending_deployments: Garden.Socket.pending_deployments(),
        credentials_rejected_at: Garden.Storage.read().credentials_rejected_at
      })}
@@ -82,16 +105,9 @@ defmodule Garden.Admin do
     end
   end
 
-  defp deploy_command(%Deploy{}) do
-    {:error, "deploy requires a seed_type or sid"}
-  end
+  defp deploy_command(%Deploy{} = command), do: dispatch_deploy(nil, command)
 
-  defp dispatch_deploy(sub, %Deploy{wait: true} = command), do: {:wait, sub, command}
-
-  defp dispatch_deploy(sub, %Deploy{wait: false} = command) do
-    :ok = Garden.Socket.deploy(sub, force: command.force)
-    {:ok, "deployment enqueued"}
-  end
+  defp dispatch_deploy(sub, %Deploy{} = command), do: {:wait, sub, command}
 
   def subs(seed_type) do
     Garden.Storage.read().subscriptions

@@ -34,6 +34,7 @@ pub async fn run(ctx: &Ctx, args: Args) -> Result<()> {
         seed_type: ctx.seed_type.into_api(),
         sid: None,
         tags,
+        updated_at: None,
     };
 
     let seed = ctx
