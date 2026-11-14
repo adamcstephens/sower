@@ -8,6 +8,7 @@
   version,
   tzdata,
   stockImage ? null,
+  systemd,
 }:
 
 beamPackages.mixRelease {
@@ -59,6 +60,7 @@ beamPackages.mixRelease {
   nativeCheckInputs = [
     e2fsprogs
     getent
+    systemd
   ];
   checkPhase = ''
     runHook preCheck

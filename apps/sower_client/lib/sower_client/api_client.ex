@@ -1,4 +1,8 @@
 defmodule SowerClient.ApiClient do
+  @moduledoc """
+  Builds authenticated Sower API requests with destination-aware environment proxy routing.
+  """
+
   @type t :: Req.Request.t()
 
   def new() do
@@ -8,5 +12,6 @@ defmodule SowerClient.ApiClient do
       # default is to retry, but let's be selective with that
       retry: false
     )
+    |> SowerClient.Proxy.attach()
   end
 end

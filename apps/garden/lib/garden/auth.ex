@@ -1,4 +1,11 @@
 defmodule Garden.Auth do
+  @moduledoc """
+  Manages garden signing keys and exchanges assertions for OAuth tokens.
+
+  Token requests honor the process proxy environment without changing credential
+  rejection or transport-error classification.
+  """
+
   require Logger
 
   @jws_alg "RS512"
@@ -55,7 +62,9 @@ defmodule Garden.Auth do
     endpoint = Garden.Config.get().endpoint
     assertion = build_assertion(client_id, private_key_pem)
 
-    case post_fun.("#{endpoint}/api/oauth/token",
+    request = Req.new(url: "#{endpoint}/api/oauth/token") |> SowerClient.Proxy.attach()
+
+    case post_fun.(request,
            json: %{
              grant_type: "client_credentials",
              client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
