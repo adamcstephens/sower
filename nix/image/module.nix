@@ -65,7 +65,6 @@ in
     ];
     loader.grub.enable = lib.mkForce false;
     initrd = {
-      systemd.enable = lib.mkForce true;
       systemd.root = lib.mkForce "fstab";
       includeDefaultModules = lib.mkForce false;
       availableKernelModules = lib.mkForce [ ];
