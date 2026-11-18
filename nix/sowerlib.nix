@@ -194,6 +194,14 @@ rec {
                 systemd = {
                   package = mkPackageOption pkgs "systemd" { };
 
+                  defaultPath = mkOption {
+                    type = types.listOf types.package;
+                    default = [ ];
+                    description = ''
+                      Packages appended to the PATH environment variable of services.
+                    '';
+                  };
+
                   enableStrictShellChecks = mkEnableOption "" // {
                     description = "Whether to run shellcheck on the generated scripts for systemd units.";
                   };
@@ -310,6 +318,13 @@ rec {
                   package = pkgs.systemd;
                   defaultUnit = "default.target";
                   ctrlAltDelUnit = "reboot.target";
+                  defaultPath = [
+                    pkgs.coreutils
+                    pkgs.findutils
+                    pkgs.gnugrep
+                    pkgs.gnused
+                    cfg.package
+                  ];
 
                   units =
                     let
