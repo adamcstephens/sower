@@ -24,10 +24,7 @@ defmodule CloudHypervisor.MixProject do
       {:jason, "~> 1.0"},
       {:req, "~> 0.6"},
       {:rexec, git: "https://github.com/adamcstephens/rexec.git", branch: "main"},
-      {:typedstruct, "0.5.4",
-       git: "https://github.com/saleyn/typedstruct.git",
-       ref: "343c6435a7ef06dd2662e950d33cb957f81bf68d",
-       runtime: false}
+      {:typedstruct, "~> 0.6", runtime: false}
     ]
   end
 end

@@ -30,7 +30,7 @@ defmodule SowerCli.MixProject do
       {:optimus, "~> 0.5"},
       {:owl, "~> 0.13"},
       {:sower_client, in_umbrella: true},
-      {:typedstruct, "~> 0.5.4"}
+      {:typedstruct, "~> 0.6", runtime: false}
     ]
   end
 end

@@ -49,11 +49,7 @@ defmodule SowerUmbrella.MixProject do
        git: "https://github.com/code-supply/deps_nix.git",
        ref: "8ecd7ff6ab480fb8ee10768d60c7bb8e08978c29",
        override: true},
-      {:igniter, "~> 0.8", only: [:dev, :test], override: true},
-      {:typedstruct, "0.5.4",
-       git: "https://github.com/saleyn/typedstruct.git",
-       ref: "343c6435a7ef06dd2662e950d33cb957f81bf68d",
-       override: true}
+      {:igniter, "~> 0.8", only: [:dev, :test], override: true}
     ]
   end
 end

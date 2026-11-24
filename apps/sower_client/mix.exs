@@ -32,7 +32,7 @@ defmodule SowerClient.MixProject do
       {:open_api_spex, "~> 3.22"},
       {:req, "~> 0.6"},
       {:slipstream, "~> 1.0"},
-      {:typedstruct, "~> 0.5", runtime: false}
+      {:typedstruct, "~> 0.6", runtime: false}
     ]
   end
 end

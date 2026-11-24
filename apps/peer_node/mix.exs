@@ -27,7 +27,7 @@ defmodule PeerNode.MixProject do
     [
       {:incus_client, in_umbrella: true},
       {:nix, in_umbrella: true},
-      {:typedstruct, "~> 0.5"}
+      {:typedstruct, "~> 0.6", runtime: false}
     ]
   end
 end
